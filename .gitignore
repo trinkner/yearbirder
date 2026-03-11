@@ -1,0 +1,17 @@
+# macOS
+.DS_Store
+
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual environment
+venv/
+
+# PyInstaller build artifacts
+build/
+dist/
+
+# IDE
+.idea/

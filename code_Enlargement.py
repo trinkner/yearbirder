@@ -83,8 +83,8 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
             if e.key() == Qt.Key_F9:
                 self.mdiParent.toggleCameraDetails()
     
-            # F11 is pressed, so toggle display of camera details 
-            if e.key() == Qt.Key_F11:
+            # F10 is pressed, so toggle display of camera details
+            if e.key() == Qt.Key_F10:
                 self.mdiParent.toggleFullScreen()
     
             # Esc is pressed, so exit full screen mode, if we're in it 
@@ -129,9 +129,9 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
                 actionToggleCameraDetails = menu.addAction("Show details (F9)")
                 
             if self.mdiParent.isMaximized() and self.mdiParent.mdiParent.mdiParent.isFullScreen():
-                actionToggleFullScreen = menu.addAction("Exit full screen (F11)")
+                actionToggleFullScreen = menu.addAction("Exit full screen (F10)")
             else:
-                actionToggleFullScreen = menu.addAction("Full screen (F11)")
+                actionToggleFullScreen = menu.addAction("Full screen (F10)")
                 
             menu.addSeparator()
             actionDetachFile = menu.addAction("Detach photo from Yearbird")
@@ -315,12 +315,11 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
         if e.key() == Qt.Key_F9:
             self.toggleCameraDetails()
 
-        # F11 is pressed, so toggle display of camera details 
-        if e.key() == Qt.Key_F11:
+        # F10 is pressed, so toggle full screen
+        if e.key() == Qt.Key_F10:
             self.toggleFullScreen()
 
-        # Esc is pressed, so exit full screen mode, if we're in it 
-        if e.key() == Qt.Key_Escape and self.mdiParent.mdiParent.statusBar.isVisible() is False:
+        if e.key() == Qt.Key_Escape and not self.mdiParent.mdiParent.statusBar.isVisible():
             self.toggleFullScreen()
 
         # 1-5 pressed, so rate the photo 
@@ -551,8 +550,8 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
             
     def toggleFullScreen(self):
         
-        
         # toggle visibility of filter and menu bar
+        # if app is not full screen, then go to full screen and then hide the furniture
         if not self.mdiParent.mdiParent.isFullScreen() is True:
             
             self.mdiParent.mdiParent.dckFilter.setVisible(False)
@@ -564,23 +563,20 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
             self.mdiParent.mdiParent.showFullScreen()
             self.showMaximized()
             
-            
         else:
             
+            # we are in full screen mode, so need to show furniture, restore photo window, and then maximize MDI window again
             self.mdiParent.mdiParent.dckFilter.setVisible(True)
             self.mdiParent.mdiParent.dckPhotoFilter.setVisible(True)
             self.mdiParent.mdiParent.menuBar.setVisible(True)
             self.mdiParent.mdiParent.toolBar.setVisible(True)
             self.mdiParent.mdiParent.statusBar.setVisible(True)
-            self.mdiParent.mdiParent.showNormal()
             self.mdiParent.mdiParent.showMaximized()
             self.setWindowFlags(Qt.SubWindow)
             self.showNormal()
+            self.fitEnlargement
             QApplication.restoreOverrideCursor()           
-            
-
-        QTimer.singleShot(10, self.fitEnlargement)   
-
+                    
             
     def setCameraDetails(self):
         
@@ -640,6 +636,16 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
         except:
             photoExifISO = ""
         
+        # get pixel dimensions
+
+        from PyQt5.QtGui import QImage
+        qimg = QImage(currentPhoto)
+        if not qimg.isNull():
+            photoDimensions = f"{qimg.width()} x {qimg.height()}"
+        else:
+            photoDimensions = ""
+
+        
         try:
             photoExifFocalLength = exif_dict["Exif"][piexif.ExifIFD.FocalLength]
             photoExifFocalLength = floor(photoExifFocalLength[0] / photoExifFocalLength[1])
@@ -662,7 +668,8 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
         detailsText = detailsText + "Focal Length: " + str(photoExifFocalLength) + "\n"
         detailsText = detailsText + str(photoExifExposureTime) + "\n"
         detailsText = detailsText + "Aperture: " + str(photoExifAperture) + "\n"
-        detailsText = detailsText + "ISO: " + str(photoExifISO)
+        detailsText = detailsText + "ISO: " + str(photoExifISO) + "\n"
+        detailsText = detailsText + "Dimensions: " + str(photoDimensions) + " pixels\n"
         detailsText = detailsText + "\n\n" + ntpath.basename(currentPhoto)
         detailsText = detailsText + "\n\n\n"  #add space to separate rating stars from text
         

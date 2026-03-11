@@ -181,8 +181,11 @@ class Location(QMdiSubWindow, form_Location.Ui_frmLocation):
             dateItem.setText(date[1])
             totalSpeciesItem = QTableWidgetItem()
             totalSpeciesItem.setData(Qt.DisplayRole, date[0])
+            totalSpeciesItem.setTextAlignment(Qt.AlignCenter|Qt.AlignVCenter)
             totalChecklistsItem = QTableWidgetItem()
             totalChecklistsItem.setData(Qt.DisplayRole, date[2])
+            totalChecklistsItem.setTextAlignment(Qt.AlignCenter|Qt.AlignVCenter)
+            
             self.tblDates.setItem(R, 0, rankItem)  
             self.tblDates.setItem(R, 1, dateItem)
             self.tblDates.setItem(R, 2, totalSpeciesItem)
@@ -242,7 +245,7 @@ class Location(QMdiSubWindow, form_Location.Ui_frmLocation):
         self.tblSpecies.setColumnCount(6)
         self.tblSpecies.setRowCount(len(thisWindowList)+1)
         self.tblSpecies.horizontalHeader().setVisible(True)
-        self.tblSpecies.setHorizontalHeaderLabels(['Tax', 'Species', 'First',  'Last', 'Chlists', '% of Chlists'])
+        self.tblSpecies.setHorizontalHeaderLabels(['Tax', 'Species', 'First',  'Last', 'Checklists', '% of Chlists'])
         header = self.tblSpecies.horizontalHeader()
         header.setSectionResizeMode(1, QHeaderView.Stretch)
         self.tblSpecies.setShowGrid(False)
@@ -265,8 +268,10 @@ class Location(QMdiSubWindow, form_Location.Ui_frmLocation):
             lastItem.setData(Qt.DisplayRole, species[2])
             checklistsItem = QTableWidgetItem()
             checklistsItem.setData(Qt.DisplayRole, species[5])
+            checklistsItem.setTextAlignment(Qt.AlignCenter|Qt.AlignVCenter)
             percentageItem = QTableWidgetItem()
             percentageItem.setData(Qt.DisplayRole, species[6])
+            percentageItem.setTextAlignment(Qt.AlignCenter|Qt.AlignVCenter)
             
             self.tblSpecies.setItem(R, 0, taxItem)    
             self.tblSpecies.setItem(R, 1, speciesItem)
@@ -513,8 +518,8 @@ class Location(QMdiSubWindow, form_Location.Ui_frmLocation):
     def scaleMe(self):
                
         scaleFactor = self.mdiParent.scaleFactor
-        windowWidth =  800  * scaleFactor
-        windowHeight = 600 * scaleFactor            
+        windowWidth =  int(800  * scaleFactor)
+        windowHeight = int(600 * scaleFactor)      
         self.resize(windowWidth, windowHeight)
         
         fontSize = self.mdiParent.fontSize
@@ -526,7 +531,7 @@ class Location(QMdiSubWindow, form_Location.Ui_frmLocation):
             except:
                 pass 
         
-        baseFont = QFont(QFont("Helvetica", fontSize))
+        baseFont = QFont(QFont("Helvetica", floor(fontSize * 1.2)))
         locationFont = QFont(QFont("Helvetica", floor(fontSize * 1.4)))
         locationFont.setBold(True)
         self.lblLocation.setFont(locationFont)
@@ -536,21 +541,22 @@ class Location(QMdiSubWindow, form_Location.Ui_frmLocation):
         header = self.tblSpecies.horizontalHeader()
         metrics = self.tblSpecies.fontMetrics()
 
-        dateTextWidth = metrics.boundingRect("2222-22-22").width()
-        dateTextHeight = metrics.boundingRect("2222-22-22").height()
+        dateTextWidth = int(metrics.boundingRect("2222-22-22").width())
+        dateTextHeight = int(metrics.boundingRect("2222-22-22").height())
+        
         taxText = str(self.tblSpecies.rowCount())
-        taxTextWidth = metrics.boundingRect(taxText).width()
-        header.resizeSection(0,  floor(1.7 * taxTextWidth))
-        header.resizeSection(2,  floor(1.3 * dateTextWidth))
-        header.resizeSection(3,  floor(1.3 * dateTextWidth))                
+        taxTextWidth = int(metrics.boundingRect(taxText).width())
+        header.resizeSection(0,  floor(2 * taxTextWidth))
+        header.resizeSection(2,  floor(1.5 * dateTextWidth))
+        header.resizeSection(3,  floor(1.5 * dateTextWidth))                
         for R in range(self.tblSpecies.rowCount()):
-            self.tblSpecies.setRowHeight(R, dateTextHeight)
+            self.tblSpecies.setRowHeight(R, int(dateTextHeight * 1.75))
 
         header = self.tblDates.horizontalHeader()         
-        textWidth = metrics.boundingRect("Rank").width()
-        header.resizeSection(0,  floor(1.5 * textWidth))
+        textWidth = int(metrics.boundingRect("Rank").width())
+        header.resizeSection(0,  floor(1.75 * textWidth))
         header.resizeSection(1,  floor(1.5 * dateTextWidth))
         for R in range(self.tblDates.rowCount()):
-            self.tblDates.setRowHeight(R, dateTextHeight)
+            self.tblDates.setRowHeight(R, int(dateTextHeight * 1.75))
         
         self.FillMap()

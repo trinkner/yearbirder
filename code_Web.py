@@ -1,3 +1,7 @@
+from PyQt5.QtCore import QLibraryInfo
+import os
+import sys
+
 # import the GUI forms that we create with Qt Creator
 import form_Web
 import code_MapHtml
@@ -123,8 +127,8 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
         settings.setFontSize(QWebEngineSettings.DefaultFontSize, floor(fontSize * 1.6))        
         
         scaleFactor = self.mdiParent.scaleFactor
-        windowWidth =  800 * scaleFactor
-        windowHeight = 580 * scaleFactor            
+        windowWidth =  int(800 * scaleFactor)
+        windowHeight = int(580 * scaleFactor)       
         self.resize(windowWidth, windowHeight)
 
 
@@ -196,12 +200,27 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
         return(True)
 
 
+    def loadUserGuide(self):
+
+        self.title = "User Guide"
+        self.contentType = "User Guide"
+        if getattr(sys, 'frozen', False):
+            base_path = sys._MEIPASS
+        else:
+            base_path = os.path.dirname(os.path.abspath(__file__))
+        guide_path = os.path.join(base_path, "guide", "guide_Yearbird.html")
+        self.webView.load(QUrl.fromLocalFile(guide_path))
+        self.resizeMe()
+        self.scaleMe()
+        self.setWindowTitle("User Guide")
+        return True
+
+
     def LoadWebPage(self,  url):
 #         QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
         self.webView.load(QUrl(url))
         self.resizeMe()
         self.scaleMe()
-        
         
     def LoadFinished(self):
 #         QApplication.restoreOverrideCursor()
@@ -237,60 +256,9 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
         html = thisMap.html()
         
         self.webView.setHtml(html)
-        
-        # set window title to descriptive map name
-        
-        locationName = filter.getLocationName()                         # str   name of region or location  or ""
-        locationType = filter.getLocationType()
-        startDate = filter.getStartDate()                                           # str   format yyyy-mm-dd  or ""
-        endDate = filter.getEndDate()                                               # str   format yyyy-mm-dd  or ""
-        startSeasonalMonth = filter.getStartSeasonalMonth() # str   format mm
-        startSeasonalDay = filter.getStartSeasonalDay()            # str   format dd
-        endSeasonalMonth  = filter.getEndSeasonalMonth()    # str   format  dd
-        endSeasonalDay  = filter.getEndSeasonalDay()               # str   format dd
-        speciesName = filter.getSpeciesName()                           # str   speciesName
-        family = filter.getFamily()                                                         # str family name
-        
-        # set main location label, using "All Locations" if none others are selected
-        
-        windowTitle = speciesName
-        
-        if locationName != "":
-            if locationType == "Country":
-                locationName = self.mdiParent.db.GetCountryName(locationName)
-            if locationType == "State":
-                locationName = self.mdiParent.db.GetStateName(locationName)
-            windowTitle = windowTitle + "; " + locationName
-        
-        if startDate != "":
-            dateTitle = startDate + " to " + endDate
-            if startDate == endDate:
-                dateTitle = startDate
-            windowTitle = windowTitle + "; " + dateTitle
 
-        # set main seasonal range label, if specified
-        if not ((startSeasonalMonth == "") or (endSeasonalMonth == "")):
-            monthRange = ["Jan",  "Feb",  "Mar",  "Apr", "May",   "Jun",  "Jul",  "Aug",  "Sep",  "Oct",  "Nov",  "Dec"]
-            rangeTitle = monthRange[int(startSeasonalMonth)-1] + "-" + startSeasonalDay + " to " + monthRange[int(endSeasonalMonth)-1] + "-" + endSeasonalDay
-            windowTitle = windowTitle + "; " + rangeTitle
-        
-        if family != "":
-            family = family[0:family.index("(") - 1]
-            windowTitle = windowTitle + "; " + family
-            
-        if windowTitle  == "":
-            windowTitle  = "All species, locations, dates and families"
-            
-        #remove leading "; " if needed
-        if windowTitle[0:2] == "; ":
-            windowTitle = windowTitle [2:]
-            
-        # add location count to window title
-        windowTitle = "Map: " + windowTitle + " (" + str(len(coordinatesDict.keys())) + ")"
-        
-        self.setWindowTitle(windowTitle) 
-        self.title = windowTitle
-       
+        self._buildFilterTitle(filter, "Map", count=len(coordinatesDict.keys()))
+
         icon = QIcon()
         icon.addPixmap(QPixmap(":/icon_map.png"), QIcon.Normal, QIcon.Off)
         self.setWindowIcon(icon) 
@@ -298,11 +266,32 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
         return(True)
 
 
+    def _buildFilterTitle(self, filter, prefix, count=None, countUnit=""):
+        """Build and set the MDI child window title from a filter and a content-type prefix.
+
+        Delegates title construction to filter.buildWindowTitle(), then stores the
+        result in self.title (used by showLoadProgress during page load) and applies
+        it as the visible window title.
+        """
+        self.title = filter.buildWindowTitle(prefix, self.mdiParent.db, count=count, countUnit=countUnit)
+        self.setWindowTitle(self.title)
+
+
+    def _lerp_orange(self, value, max_value):
+        """Return a hex color interpolated from cream to orange based on value/max_value."""
+        if value == 0 or max_value == 0:
+            return '#f0f0f0'
+        t = min(value / (max_value * 0.75), 1.0)
+        r = 255
+        g = int(240 + t * (119 - 240))
+        b = int(227 + t * (0 - 227))
+        return f'#{r:02x}{g:02x}{b:02x}'
+
+
     def loadChoroplethUSStates(self, filter):
 
         from copy import deepcopy
         import folium
-        from branca.colormap import LinearColormap
 
         self.title= "US States Choropleth"
         
@@ -351,22 +340,14 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
                 f["properties"]["speciesTotal"] = 0
                 stateTotals[f["id"]] = 0
                     
-        #create color range for map, using the maximum state value found above
-        colormap = LinearColormap(
-            colors=[(255, 240, 227), (255, 119, 0)], 
-            index=[0, round(largestTotal * .75)],   
-            vmin=0, 
-            vmax=largestTotal,
-            )
-        
         # Initialize the folium map
         state_map = folium.Map(location=[39.5, -98.3], zoom_start=4)
-         
+
         # Configure the chloropleth layer and add to map
         folium.GeoJson(
             geo_file,
             style_function=lambda feature: {
-                'fillColor': 'rgb(240, 240, 240)' if stateTotals[feature['id']] == 0 else colormap(stateTotals[feature['id']]),
+                'fillColor': self._lerp_orange(stateTotals[feature['id']], largestTotal),
                 'color': 'black',
                 'weight': .2,
                 'fillOpacity': .8,
@@ -380,11 +361,12 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
         # make the layer control box visible
         folium.LayerControl().add_to(state_map)
                  
-        # get the html string from the map               
+        # get the html string from the map
         html = state_map.get_root().render()
-        
+
         self.webView.setHtml(html)
-        
+        self._buildFilterTitle(filter, "US States Choropleth", count=len(stateDict), countUnit="States")
+
         return(True)
 
 
@@ -392,7 +374,6 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
 
         from copy import deepcopy
         import folium
-        from branca.colormap import LinearColormap
 
         self.title= "US Counties Choropleth"
         
@@ -449,22 +430,14 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
                 f["properties"]["speciesTotal"] = 0
                 countyTotals[f["id"]] = 0
                     
-        #create color range for map, using the maximum state value found above
-        colormap = LinearColormap(
-            colors=[(255, 240, 227), (255, 119, 0)], 
-            index=[0, round(largestTotal * .75)],   
-            vmin=0, 
-            vmax=largestTotal,
-            )
-        
         # Initialize the folium map
         county_map = folium.Map(location=[39.5, -98.3], zoom_start=4)
-         
+
         # Configure the chloropleth layer and add to map
         folium.GeoJson(
             geo_file,
             style_function=lambda feature: {
-                'fillColor': 'rgb(240, 240, 240)' if countyTotals[feature['id']] == 0 else colormap(countyTotals[feature['id']]),
+                'fillColor': self._lerp_orange(countyTotals[feature['id']], largestTotal),
                 'color': 'black',
                 'weight': 1,
                 'fillOpacity': .8,
@@ -479,19 +452,19 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
         # make the layer control box visible
         folium.LayerControl().add_to(county_map)
                  
-        # get the html string from the map               
+        # get the html string from the map
         html = county_map.get_root().render()
-        
+
         self.webView.setHtml(html)
-        
-        return(True)        
+        self._buildFilterTitle(filter, "US Counties Choropleth", count=len(countyDict), countUnit="Counties")
+
+        return(True)
 
 
     def loadChoroplethWorldCountries(self, filter):
 
         from copy import deepcopy
         import folium
-        from branca.colormap import LinearColormap
 
         self.title= "World Choropleth"
         
@@ -540,22 +513,14 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
                 f["properties"]["speciesTotal"] = 0
                 countryTotals[f["id"]] = 0
                     
-        #create color range for map, using the maximum country value found above
-        colormap = LinearColormap(
-            colors=[(255, 240, 227), (255, 119, 0)], 
-            index=[0, round(largestTotal * .75)],  
-            vmin=0, 
-            vmax=largestTotal,
-            )
-        
         # Initialize the folium map
         choro_map = folium.Map(location=[1, 1], zoom_start=1)
-         
+
         # Configure the chloropleth layer and add to map
         folium.GeoJson(
             geo_file,
             style_function=lambda feature: {
-                'fillColor': 'rgb(240, 240, 240)' if countryTotals[feature['id']] == 0 else colormap(countryTotals[feature['id']]),
+                'fillColor': self._lerp_orange(countryTotals[feature['id']], largestTotal),
                 'color': 'black',
                 'weight': 1,
                 'fillOpacity': .8,
@@ -570,11 +535,12 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
         # make the layer control box visible
         folium.LayerControl().add_to(choro_map)
                  
-        # get the html string from the map               
+        # get the html string from the map
         html = choro_map.get_root().render()
-        
+
         self.webView.setHtml(html)
-        
+        self._buildFilterTitle(filter, "World Choropleth", count=len(countryDict), countUnit="Countries")
+
         return(True)
 
 

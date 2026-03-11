@@ -175,8 +175,8 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
             if "QLabel" in str(c):
                 c.setFont(QFont("Helvetica", fontSize))
          
-        windowWidth =  1200  * scaleFactor
-        windowHeight = 800 * scaleFactor  
+        windowWidth =  int(1200  * scaleFactor)
+        windowHeight = int(800 * scaleFactor)
         self.resize(windowWidth, windowHeight)
 
 

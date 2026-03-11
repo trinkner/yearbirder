@@ -27,7 +27,8 @@ from PyQt5.QtWidgets import (
     QApplication, 
     QTableWidgetItem, 
     QHeaderView,
-    QMdiSubWindow
+    QMdiSubWindow,
+    QItemDelegate
     )
     
 
@@ -55,7 +56,7 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         self.actionSetStateFilter.triggered.connect(self.setStateFilter)
         self.actionSetCountyFilter.triggered.connect(self.setCountyFilter)
         self.actionSetLocationFilter.triggered.connect(self.setLocationFilter)
-        self.tblList.horizontalHeader().sortIndicatorChanged.connect(self.tblList.resizeRowsToContents)
+        self.tblList.horizontalHeader().sortIndicatorChanged.connect(self.afterSort)
         self.resized.connect(self.resizeMe)    
         
         self.btnShowLocation.setVisible(False)
@@ -91,6 +92,7 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
    
    
     def setCountryFilter(self):
+        
         if self.listType in ["Checklists"]:
             if self.listType == "Checklists":
                 countryName= self.tblList.item(self.tblList.currentRow(), 0).text()
@@ -167,8 +169,8 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
           
         # scale the find text box and show location button
         metrics = self.btnShowLocation.fontMetrics()
-        buttonWidth = metrics.boundingRect(self.btnShowLocation.text()).width() * 1.25
-        buttonHeight = metrics.boundingRect(self.btnShowLocation.text()).height() * 1.25
+        buttonWidth = int(metrics.boundingRect(self.btnShowLocation.text()).width() * 1.25)
+        buttonHeight = int(metrics.boundingRect(self.btnShowLocation.text()).height() * 1.25)
         self.btnShowLocation.setMinimumWidth(buttonWidth)
         self.btnShowLocation.setMaximumWidth(buttonWidth)
         self.btnShowLocation.setMinimumHeight(buttonHeight)
@@ -183,81 +185,122 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         metrics = self.tblList.fontMetrics()
 
         if self.listType == "Species":
-            dateTextWidth = metrics.boundingRect("2222-22-22").width()
-            dateTextHeight = metrics.boundingRect("2222-22-22").height()
-            taxTextWidth = metrics.boundingRect("Tax").width()
-            header.resizeSection(0,  floor(1.75 * taxTextWidth))
-            header.resizeSection(2,  floor(1.3 * dateTextWidth))
-            header.resizeSection(3,  floor(1.3 * dateTextWidth))                
-            header.resizeSection(4,  floor(1.3 * dateTextWidth))                
-            header.resizeSection(5,  floor(1.7 * dateTextWidth))                
+            dateTextWidth = int(metrics.boundingRect("2222-22-22").width())
+            dateTextHeight = int(metrics.boundingRect("2222-22-22").height())
+            
+            #find the width of the widest integer in the Tax column
+            maxWidth = 0
             for R in range(self.tblList.rowCount()):
-                self.tblList.setRowHeight(R, dateTextHeight * 1.1)
+                item = self.tblList.item(R, 0)
+                if item is not None:
+                    text = item.text()
+                    w = metrics.boundingRect(text).width()
+                    if w > maxWidth:
+                        maxWidth = w
+            taxTextWidth = maxWidth
+            
+            #find the width of the widest date in the First Date column
+            maxWidth = 0
+            for R in range(self.tblList.rowCount()):
+                item = self.tblList.item(R, 2)
+                if item is not None:
+                    text = item.text()
+                    w = metrics.boundingRect(text).width()
+                    if w > maxWidth:
+                        maxWidth = w
+            firstDateTextWidth = maxWidth
+            
+            #find the width of the widest date in the Last Date column
+            maxWidth = 0
+            for R in range(self.tblList.rowCount()):
+                item = self.tblList.item(R, 3)
+                if item is not None:
+                    text = item.text()
+                    w = metrics.boundingRect(text).width()
+                    if w > maxWidth:
+                        maxWidth = w
+            lastDateTextWidth = maxWidth
+            
+            # --- compute fixed widths ---
+            w0 = floor(1.75 * taxTextWidth)
+            w2 = floor(1.75 * firstDateTextWidth)
+            w3 = floor(1.75 * lastDateTextWidth)
+            w4 = floor(1.3 * dateTextWidth)
+            w5 = floor(1.7 * dateTextWidth)
+
+            # apply fixed widths to all columns except species name
+            header.resizeSection(0, w0)
+            header.resizeSection(2, w2)
+            header.resizeSection(3, w3)
+            header.resizeSection(4, w4)
+            header.resizeSection(5, w5)
+            
+            # give species name column the remaining width
+            header.setSectionResizeMode(1, QHeaderView.Stretch) 
+                      
+            for R in range(self.tblList.rowCount()):
+                self.tblList.setRowHeight(R, int(dateTextHeight * 1.1))
         
         if self.listType == "Single Checklist":
-            taxTextWidth = metrics.boundingRect("Tax").width()
+            taxTextWidth = int(metrics.boundingRect("Tax").width())
             header.resizeSection(0,  floor(1.75 * taxTextWidth))
-            countWidth = metrics.boundingRect("Count").width()
+            countWidth = int(metrics.boundingRect("Count").width())
             header.resizeSection(2,  floor(1.6 * countWidth))
-            commentWidth = metrics.boundingRect("Suitble comments column").width()
+            commentWidth = int(metrics.boundingRect("Suitble comments column").width())
             header.resizeSection(3,  floor(1.15 * commentWidth))
             # only limit row height if there aren't comments. If there are comments, we want word wrap
             # to have unlimited height
-            thisRowHeight= metrics.boundingRect("222").height()
+            thisRowHeight= int(metrics.boundingRect("222").height())
             for R in range(self.tblList.rowCount()):
                 if self.tblList.item(R,3).data(Qt.DisplayRole) == "":
-                    self.tblList.setRowHeight(R, thisRowHeight * 1.1) 
+                    self.tblList.setRowHeight(R, int(thisRowHeight * 1.1)) 
             self.tblList.resizeRowsToContents()
         
         if self.listType == "Locations":
-            dateTextWidth = metrics.boundingRect("2222-22-22 22:22").width()
-            dateTextHeight = metrics.boundingRect("2222-22-22 22:22").height()            
-            header.resizeSection(1,  floor(1.25 * dateTextWidth))
-            header.resizeSection(2,  floor(1.25 * dateTextWidth))                
+            dateTextWidth = int(metrics.boundingRect("2222-22-22 22:22").width())
+            dateTextHeight = int(metrics.boundingRect("2222-22-22 22:22").height())
+            header.resizeSection(1,  floor(1.75 * dateTextWidth))
+            header.resizeSection(2,  floor(1.75 * dateTextWidth))                
             for R in range(self.tblList.rowCount()):
-                self.tblList.setRowHeight(R, dateTextHeight * 1.1)        
+                self.tblList.setRowHeight(R, int(dateTextHeight * 1.1))
 
         if self.listType == "Checklists":
 
-            thisColumnWidth = metrics.boundingRect("Some Country").width()
-            header.resizeSection(0,  floor(1.15 * thisColumnWidth))                
-
-            thisColumnWidth = metrics.boundingRect("Some State").width()
-            header.resizeSection(1,  floor(1.15 * thisColumnWidth))                
-            header.resizeSection(2,  floor(1.15 * thisColumnWidth))                
+            thisColumnWidth = int(metrics.boundingRect("Sample Names").width())
+            header.resizeSection(0,  floor(1.5 * thisColumnWidth))                
+            header.resizeSection(1,  floor(1.75 * thisColumnWidth))                
+            header.resizeSection(2,  floor(1.75 * thisColumnWidth))                
             
             # Don't set Location width. It stretches to fill remaining vacant width
 
-            dateTextWidth = metrics.boundingRect("2222-22-22 22:22").width()
-            header.resizeSection(4,  floor(1.1 * dateTextWidth))
+            dateTextWidth = int(metrics.boundingRect("2222-22-22").width())
+            header.resizeSection(4,  floor(1.75 * dateTextWidth))
 
-            timeTextWidth = metrics.boundingRect("22:22").width()
-            header.resizeSection(5,  floor(1.45 * timeTextWidth))
+            timeTextWidth = int(metrics.boundingRect("22:22").width())
+            header.resizeSection(5,  floor(1.75 * timeTextWidth))
             
-            speciesColumnWidth = metrics.boundingRect("Species").width()
+            speciesColumnWidth = int(metrics.boundingRect("Species").width())
             header.resizeSection(6,  floor(1.45 * speciesColumnWidth))                
             
-            textHeight= metrics.boundingRect("2222").height()
+            textHeight= int(metrics.boundingRect("2222").height())
             for R in range(self.tblList.rowCount()):
-                self.tblList.setRowHeight(R, textHeight * 1.1)  
+                self.tblList.setRowHeight(R, int(textHeight * 1.1))  
         
         if self.listType == "Find Results":
 
-            # I chose to measure the size of "United States" becuase it's long, not for nationalistic reasons. 
-            thisColumnWidth = metrics.boundingRect("Checklist Comments").width()
-            header.resizeSection(0,  floor(1.15 * thisColumnWidth))                
+            thisColumnWidth = int(metrics.boundingRect("Checklist Comments").width())
+            header.resizeSection(0,  floor(1.5 * thisColumnWidth))                
 
-            thisColumnWidth = metrics.boundingRect("Some Location's Long Name").width()
-            header.resizeSection(1,  floor(1.15 * thisColumnWidth))               
+            thisColumnWidth = int(metrics.boundingRect("Some Location's Long Name").width())
+            header.resizeSection(1,  floor(1.75 * thisColumnWidth))               
 
-            dateTextWidth = metrics.boundingRect("2222-22-22").width()
-            header.resizeSection(2,  floor(1.25 * dateTextWidth))
+            dateTextWidth = int(metrics.boundingRect("2222-22-22").width())
+            header.resizeSection(2,  floor(1.75 * dateTextWidth))
 
             # Don't set Comments width. It stretches to fill remaining vacant width
-
-            textHeight= metrics.boundingRect("2222").height()
+            textHeight= int(metrics.boundingRect("2222").height())
             for R in range(self.tblList.rowCount()):
-                self.tblList.setRowHeight(R, textHeight * 1.1)        
+                self.tblList.setRowHeight(R, int(textHeight * 1.1))
         
         self.lblLocation.setFont(QFont("Helvetica", floor(fontSize * 1.4 )))
         self.lblLocation.setStyleSheet("QLabel { font: bold }");
@@ -270,9 +313,17 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         self.btnShowLocation.setFont(QFont("Helvetica", fontSize))
         self.btnShowLocation.setStyleSheet("QLabel { font: bold }");
          
-        windowWidth =  800  * scaleFactor
-        windowHeight = 580 * scaleFactor  
+        windowWidth =  int(800  * scaleFactor)
+        windowHeight = int(580 * scaleFactor)
         self.resize(windowWidth, windowHeight)
+           
+           
+    def afterSort(self, column, order):
+        metrics = self.tblList.fontMetrics()
+        textHeight = int(metrics.boundingRect("2222").height())
+
+        for R in range(self.tblList.rowCount()):
+            self.tblList.setRowHeight(R, int(textHeight * 1.1))       
            
         
     def ChangedFindText(self):
@@ -517,13 +568,6 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         if filter.getChecklistID() == "":
                         
             thisWindowList = self.mdiParent.db.GetSpeciesWithData(filter,  [], "Subspecies")
-#             thisCleanedWindowList = []
-#             
-#             # clean out spuh and slash entries
-#             for s in range(len(thisWindowList)):
-#                 if not("sp." in thisWindowList[s][0] or "/" in thisWindowList[s][0]):
-#                     thisCleanedWindowList.append(thisWindowList[s])
-#             thisWindowList = thisCleanedWindowList
                     
             if len(thisWindowList) == 0:
                 return(False)                    
@@ -531,7 +575,8 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
             self.tblList.setRowCount(len(thisWindowList))
             self.tblList.setColumnCount(6)
             self.tblList.setHorizontalHeaderLabels(['Tax', 'Species', 'First',  'Last', 'Checklists', '% of Checklists'])
-            header.setSectionResizeMode(1, QHeaderView.Stretch)   
+            #header.setSectionResizeMode(1, QHeaderView.Stretch) 
+            # header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
             self.tblList.setItemDelegateForColumn(5, code_FloatDelegate.FloatDelegate(2))
 
             # add species and dates to table row by row        
@@ -586,7 +631,7 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
             self.tblList.setRowCount(len(thisWindowList))            
             self.tblList.setColumnCount(4)
             self.tblList.setHorizontalHeaderLabels(['Tax', 'Species', 'Count',  "Comment"])    
-            header.setSectionResizeMode(1, QHeaderView.Stretch)        
+            header.setSectionResizeMode(1, QHeaderView.Stretch)
             self.tblList.setWordWrap(True)
             
             # add species and dates to table row by row        
@@ -696,29 +741,7 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         if checklistDetails != "":
             self.lblDetails.setText(checklistDetails)        
 
-        location = filter.getLocationName()
-        if location != "":
-            if filter.getLocationType() == "Region":
-                location = self.mdiParent.db.GetRegionName(location)
-            if filter.getLocationType() == "Country":
-                location = self.mdiParent.db.GetCountryName(location)
-            if filter.getLocationType() == "State":
-                location = self.mdiParent.db.GetStateName(location)                
-            location = location + ": "
-            
-        dateRange= self.lblDateRange.text()
-        
-        family = filter.getFamily()
-        if family != "":
-            family = family.split(" (")[0]
-            family = " (" + family + ")"        
-
-        order = filter.getOrder()
-        if order != "":
-            order = order + ":"
-            
-        windowTitle = location + dateRange + order + family
-        self.setWindowTitle(windowTitle)
+        self.setWindowTitle(filter.buildWindowTitle("Species", self.mdiParent.db, count=self.tblList.rowCount(), countUnit="Species"))
         
         icon = QIcon()
         icon.addPixmap(QPixmap(":/icon_bird.png"), QIcon.Normal, QIcon.Off)
@@ -793,8 +816,8 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
 
         self.mdiParent.SetChildDetailsLabels(self, filter)
 
-        self.setWindowTitle(self.lblLocation.text() + ": " + self.lblDateRange.text())
-        
+        self.setWindowTitle(filter.buildWindowTitle("Checklists", self.mdiParent.db, count=self.tblList.rowCount(), countUnit="Checklists"))
+
         self.txtChecklistComments.setVisible(False)
 
         icon = QIcon()
@@ -922,7 +945,7 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         
         self.mdiParent.SetChildDetailsLabels(self, filter)
 
-        self.setWindowTitle(self.lblLocation.text() + ": " + self.lblDateRange.text())
+        self.setWindowTitle(filter.buildWindowTitle("Locations", self.mdiParent.db, count=locationCount, countUnit="Locations"))
 
         icon = QIcon()
         icon.addPixmap(QPixmap(":/icon_location.png"), QIcon.Normal, QIcon.Off)
@@ -956,9 +979,9 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
                 speciesName = self.tblList.item(currentRow,  1).text()
                 
                 # abort if a spuh or slash species was clicked (we can't show an individual for this)
-                if "sp." in speciesName or "/" in speciesName:
-                    QApplication.restoreOverrideCursor()     
-                    return                    
+                # if "sp." in speciesName or "/" in speciesName:
+                    # QApplication.restoreOverrideCursor()
+                    # return
                 
                 sub = code_Individual.Individual()
                 sub.mdiParent = self.mdiParent
@@ -1087,4 +1110,6 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         self.mdiParent.PositionChildWindow(sub, self)        
         sub.show() 
         sub.resizeMe()
-        QApplication.restoreOverrideCursor()     
+        QApplication.restoreOverrideCursor()  
+        
+

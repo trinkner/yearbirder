@@ -72,14 +72,24 @@ class LocationTotals(QMdiSubWindow, form_LocationTotals.Ui_frmLocationTotals):
         tempFilter = deepcopy(self.filter)
 
         if locationType == "Region":
-            locationName = self.mdiParent.db.GetRegionCode(self.tblRegionTotals.item(self.tblRegionTotals.currentRow(),  1).text())        
+            if self.tblRegionTotals.currentRow() == -1:
+                return
+            locationName = self.mdiParent.db.GetRegionCode(self.tblRegionTotals.item(self.tblRegionTotals.currentRow(),  1).text())
         if locationType == "Country":
+            if self.tblCountryTotals.currentRow() == -1:
+                return
             locationName = self.mdiParent.db.GetCountryCode(self.tblCountryTotals.item(self.tblCountryTotals.currentRow(),  1).text())
         if locationType == "State":
+            if self.tblStateTotals.currentRow() == -1:
+                return
             locationName = self.mdiParent.db.GetStateCode(self.tblStateTotals.item(self.tblStateTotals.currentRow(),  1).text())
         if locationType == "County":
+            if self.tblCountyTotals.currentRow() == -1:
+                return
             locationName = self.tblCountyTotals.item(self.tblCountyTotals.currentRow(),  1).text()
         if locationType == "Location":
+            if self.tblLocationTotals.currentRow() == -1:
+                return
             locationName = self.tblLocationTotals.item(self.tblLocationTotals.currentRow(),  1).text()
         
         sub = code_Lists.Lists()        
@@ -620,7 +630,7 @@ class LocationTotals(QMdiSubWindow, form_LocationTotals.Ui_frmLocationTotals):
         self.mdiParent.SetChildDetailsLabels(self, self.filter)
 
         # set window title
-        self.setWindowTitle("Location Totals: " + self.lblLocation.text() + ": " + self.lblDateRange.text())
+        self.setWindowTitle(self.filter.buildWindowTitle("Location Totals", self.mdiParent.db))
 
         if self.lblDetails.text() != "":
             self.lblDetails.setVisible(True)
@@ -649,8 +659,8 @@ class LocationTotals(QMdiSubWindow, form_LocationTotals.Ui_frmLocationTotals):
     def scaleMe(self):
                
         scaleFactor = self.mdiParent.scaleFactor
-        windowWidth =  600  * scaleFactor
-        windowHeight = 580 * scaleFactor            
+        windowWidth =  int(600  * scaleFactor)
+        windowHeight = int(580 * scaleFactor)      
         self.resize(windowWidth, windowHeight)
         
         fontSize = self.mdiParent.fontSize
@@ -670,8 +680,8 @@ class LocationTotals(QMdiSubWindow, form_LocationTotals.Ui_frmLocationTotals):
         self.lblDetails.setStyleSheet("QLabel { font: bold }");
 
         metrics = self.tblCountryTotals.fontMetrics()
-        textHeight = metrics.boundingRect("A").height()        
-        rankTextWidth = metrics.boundingRect("Rank").width()
+        textHeight = int(metrics.boundingRect("A").height())        
+        rankTextWidth = int(metrics.boundingRect("Rank").width())
         
         for t in [self.tblRegionTotals, self.tblCountryTotals, self.tblStateTotals, self.tblCountyTotals, self.tblLocationTotals]:
             header = t.horizontalHeader()
@@ -679,7 +689,7 @@ class LocationTotals(QMdiSubWindow, form_LocationTotals.Ui_frmLocationTotals):
             header.resizeSection(2,  floor(2 * rankTextWidth))
             header.resizeSection(3,  floor(2.5 * rankTextWidth))
             for r in range(t.rowCount()):
-                t.setRowHeight(r, textHeight * 1.1) 
+                t.setRowHeight(r, int(textHeight * 1.1))
 
 
     def setCountryFilter(self):

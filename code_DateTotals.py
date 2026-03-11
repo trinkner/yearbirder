@@ -11,7 +11,8 @@ from math import floor
 
 from PyQt5.QtGui import (
     QCursor,
-    QFont
+    QFont,
+    QFontMetrics
     )
     
 from PyQt5.QtCore import (
@@ -413,11 +414,10 @@ class DateTotals(QMdiSubWindow, form_DateTotals.Ui_frmDateTotals):
         for month in dbMonths:
             monthSpecies = set()
             monthChecklists = set()
-            monthChecklists.add(s["checklistID"])
             for s in monthDict[month]:
                 monthSpecies.add(s["commonName"])
                 monthChecklists.add(s["checklistID"])
-            monthArray.append([len(monthSpecies),  month, len(monthChecklists) - 1 ])
+            monthArray.append([len(monthSpecies),  month, len(monthChecklists)])
         monthArray.sort(reverse=True)
         R = 0
         for month in monthArray:
@@ -521,7 +521,7 @@ class DateTotals(QMdiSubWindow, form_DateTotals.Ui_frmDateTotals):
 
         self.mdiParent.SetChildDetailsLabels(self, self.filter)
 
-        self.setWindowTitle("Date Totals: " + str(self.tblDateTotals.rowCount()) + " dates" )   
+        self.setWindowTitle(self.filter.buildWindowTitle("Date Totals", self.mdiParent.db, count=self.tblDateTotals.rowCount(), countUnit="Dates"))
 
         if self.lblDetails.text() != "":
             self.lblDetails.setVisible(True)
@@ -542,7 +542,7 @@ class DateTotals(QMdiSubWindow, form_DateTotals.Ui_frmDateTotals):
         
         
     def resizeMe(self):
-
+        
         windowWidth =  self.frameGeometry().width()
         windowHeight = self.frameGeometry().height()
         self.scrollArea.setGeometry(5, 27, windowWidth -10 , windowHeight-35)
@@ -571,8 +571,8 @@ class DateTotals(QMdiSubWindow, form_DateTotals.Ui_frmDateTotals):
     def scaleMe(self):
                
         scaleFactor = self.mdiParent.scaleFactor
-        windowWidth =  600  * scaleFactor
-        windowHeight = 580 * scaleFactor    
+        windowWidth =  int(600  * scaleFactor)
+        windowHeight = int(580 * scaleFactor)
         self.resize(windowWidth, windowHeight)
         
         fontSize = self.mdiParent.fontSize
@@ -591,15 +591,19 @@ class DateTotals(QMdiSubWindow, form_DateTotals.Ui_frmDateTotals):
         self.lblDetails.setFont(QFont("Helvetica", floor(fontSize * 1.2 )))
         self.lblDetails.setStyleSheet("QLabel { font: bold }");
 
-        metrics = self.tblYearTotals.fontMetrics()
-        textHeight = metrics.boundingRect("A").height()        
-        rankTextWidth = metrics.boundingRect("Rank").width()
+        for t in [self.tblYearTotals, self.tblMonthTotals, self.tblDateTotals]:
+            t.setFont(QFont("Helvetica", fontSize))
         
+        metrics = self.tblYearTotals.fontMetrics()    
+        #metrics = QFontMetrics(QFont("Helvetica", fontSize))
+        textHeight = int(metrics.height())
+        rankTextWidth = int(metrics.boundingRect("Rank").width())
+
         for t in [self.tblYearTotals, self.tblMonthTotals, self.tblDateTotals]:
             header = t.horizontalHeader()
             header.resizeSection(0,  floor(2 * rankTextWidth))
             header.resizeSection(2,  floor(2.5 * rankTextWidth))
             header.resizeSection(3,  floor(2.5 * rankTextWidth))
             for r in range(t.rowCount()):
-                t.setRowHeight(r, textHeight * 1.1) 
+                t.setRowHeight(r, int(textHeight * 1.8))
  

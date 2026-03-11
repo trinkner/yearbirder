@@ -287,8 +287,8 @@ class Compare(QMdiSubWindow, form_Compare.Ui_frmCompare):
     def scaleMe(self):
                
         scaleFactor = self.mdiParent.scaleFactor
-        windowWidth =  900  * scaleFactor
-        windowHeight = 500 * scaleFactor            
+        windowWidth =  int(900  * scaleFactor)
+        windowHeight = int(500 * scaleFactor)
         self.resize(windowWidth, windowHeight)
         
         fontSize = self.mdiParent.fontSize

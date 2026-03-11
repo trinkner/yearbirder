@@ -122,10 +122,10 @@ class BigReport(QMdiSubWindow, form_BigReport.Ui_frmBigReport):
         if callingWidget.objectName() == "lstLocations":
             locationName = callingWidget.currentItem().text()
         if callingWidget.objectName() == "tblNewLocationSpecies":
-            locationName = callingWidget.item(callingWidget.currentRow(),  0).text()
             if callingWidget.currentColumn() != 0:
-                QApplication.restoreOverrideCursor()     
+                QApplication.restoreOverrideCursor()
                 return
+            locationName = callingWidget.item(callingWidget.currentRow(),  0).text()
         sub = code_Location.Location()
         sub.mdiParent = self.mdiParent
         sub.FillLocation(locationName)
@@ -150,10 +150,10 @@ class BigReport(QMdiSubWindow, form_BigReport.Ui_frmBigReport):
                                                                             "tblNewCountySpecies", 
                                                                             "tblNewLocationSpecies"
                                                                             ]):
-            species = callingWidget.item(callingWidget.currentRow(),  1).text()
             if callingWidget.currentColumn() != 1:
-                QApplication.restoreOverrideCursor()     
+                QApplication.restoreOverrideCursor()
                 return
+            species = callingWidget.item(callingWidget.currentRow(),  1).text()
         sub = code_Individual.Individual()
         sub.mdiParent = self.mdiParent
         sub.FillIndividual(species)
@@ -572,7 +572,7 @@ class BigReport(QMdiSubWindow, form_BigReport.Ui_frmBigReport):
         # set main location label, using "All Locations" if none others are selected
         self.mdiParent.SetChildDetailsLabels(self, filter)
 
-        self.setWindowTitle(self.lblLocation.text() + ": " + self.lblDateRange.text())
+        self.setWindowTitle(self.filter.buildWindowTitle("Big Report", self.mdiParent.db, count=count, countUnit="Species"))
 
         if self.lblDetails.text() != "":
             self.lblDetails.setVisible(True)
@@ -633,8 +633,8 @@ class BigReport(QMdiSubWindow, form_BigReport.Ui_frmBigReport):
     def FillMap(self):
         
         coordinatesDict = defaultdict()
-        mapWidth = self.width() - 20
-        mapHeight = self.height() - self.lblLocation.height() - (self.lblDateRange.height() * 7.5)
+        mapWidth = int(self.width() - 20)
+        mapHeight = int(self.height() - self.lblLocation.height() - (self.lblDateRange.height() * 7.5))
         self.webMap.setGeometry(5, 5, mapWidth, mapHeight)
 
         for l in range(self.lstLocations.count()):
@@ -1459,8 +1459,8 @@ class BigReport(QMdiSubWindow, form_BigReport.Ui_frmBigReport):
     def scaleMe(self):
                
         scaleFactor = self.mdiParent.scaleFactor
-        windowWidth =  1100  * scaleFactor
-        windowHeight = 625 * scaleFactor            
+        windowWidth =  int(1100  * scaleFactor)
+        windowHeight = int(625 * scaleFactor)            
         self.resize(windowWidth, windowHeight)
         
         fontSize = self.mdiParent.fontSize
@@ -1480,8 +1480,8 @@ class BigReport(QMdiSubWindow, form_BigReport.Ui_frmBigReport):
         self.lblDetails.setStyleSheet("QLabel { font: bold }");
 
         metrics = self.tblSpecies.fontMetrics()
-        textHeight = metrics.boundingRect("A").height()        
-        textWidth = metrics.boundingRect("Dummy Country").width()
+        textHeight = int(metrics.boundingRect("A").height())
+        textWidth = int(metrics.boundingRect("Dummy Country").width())
         
         for t in ([
             self.tblNewYearSpecies,
@@ -1496,19 +1496,19 @@ class BigReport(QMdiSubWindow, form_BigReport.Ui_frmBigReport):
             else:
                 header.resizeSection(0,  floor(textWidth))
             for r in range(t.rowCount()):
-                t.setRowHeight(r, textHeight * 1.1) 
+                t.setRowHeight(r, int(textHeight * 1.1)) 
             
         # format tblSpecies, which is laid out differently from the other tables
-        dateWidth = metrics.boundingRect("2222-22-22").width()
+        dateWidth = int(metrics.boundingRect("2222-22-22").width())
         header = self.tblSpecies.horizontalHeader()
         header.resizeSection(2,  floor(1.5* dateWidth))
         header.resizeSection(3,  floor(1.5 * dateWidth))
         for r in range(self.tblSpecies.rowCount()):
-            self.tblSpecies.setRowHeight(r, textHeight * 1.1)         
+            self.tblSpecies.setRowHeight(r, int(textHeight * 1.1))         
         
         # format tblNewLocationSpecies, which needs wider location column
         header = self.tblNewLocationSpecies.horizontalHeader()
         header.resizeSection(0,  floor(4 * textWidth))
         for r in range(self.tblNewLocationSpecies.rowCount()):
-            t.setRowHeight(r, textHeight * 1.1)         
+            t.setRowHeight(r, int(textHeight * 1.1))
 

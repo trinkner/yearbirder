@@ -98,7 +98,7 @@ class Find(QMdiSubWindow, form_Find.Ui_frmFind):
     def scaleMe(self):
        
         metrics = self.txtFind.fontMetrics()
-        textHeight = metrics.boundingRect("ABCD").height()          
+        textHeight = int(metrics.boundingRect("ABCD").height())
         
         self.txtFind.resize(self.txtFind.x(), textHeight)
         self.lblFind.resize(self.txtFind.x(), textHeight)
@@ -128,7 +128,7 @@ class Find(QMdiSubWindow, form_Find.Ui_frmFind):
         self.txtFind.setFont(baseFont)
 
         metrics = self.txtFind.fontMetrics()
-        textHeight = metrics.boundingRect("2222-22-22").height()          
+        textHeight = int(metrics.boundingRect("2222-22-22").height())          
         
         self.txtFind.resize(self.txtFind.x(), textHeight)
         self.lblFind.resize(self.txtFind.x(), textHeight)

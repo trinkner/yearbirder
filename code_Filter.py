@@ -277,6 +277,73 @@ class Filter():
         return(self.endIso)       
 
         
+    def buildWindowTitle(self, prefix, db, count=None, countUnit=""):
+        """Return a descriptive MDI child window title for this filter.
+
+        Taxonomy: shows only the most specific level set — species, then family,
+        then order.  Location: shows only the single active level (the filter
+        only ever carries one at a time).  An optional count and unit label are
+        appended in parentheses, e.g. "(42 Species)".
+        """
+        locationName       = self.getLocationName()
+        locationType       = self.getLocationType()
+        startDate          = self.getStartDate()
+        endDate            = self.getEndDate()
+        startSeasonalMonth = self.getStartSeasonalMonth()
+        startSeasonalDay   = self.getStartSeasonalDay()
+        endSeasonalMonth   = self.getEndSeasonalMonth()
+        endSeasonalDay     = self.getEndSeasonalDay()
+        speciesName        = self.getSpeciesName()
+        family             = self.getFamily()
+        order              = self.getOrder()
+        commonNameSearch   = self.getCommonNameSearch()
+
+        # Taxonomy: use only the most specific level that has been set
+        if speciesName != "":
+            taxonomyLabel = speciesName
+        elif family != "":
+            taxonomyLabel = family[0:family.index("(") - 1] if "(" in family else family
+        elif order != "":
+            taxonomyLabel = order[0:order.index("(") - 1] if "(" in order else order
+        else:
+            taxonomyLabel = ""
+
+        windowTitle = taxonomyLabel
+
+        if commonNameSearch != "":
+            windowTitle = windowTitle + "; Search: " + commonNameSearch
+
+        # Location: the filter carries at most one active level
+        if locationName != "":
+            if locationType == "Country":
+                locationName = db.GetCountryName(locationName)
+            if locationType == "State":
+                locationName = db.GetStateName(locationName)
+            windowTitle = windowTitle + "; " + locationName
+
+        if startDate != "":
+            dateTitle = startDate + " to " + endDate
+            if startDate == endDate:
+                dateTitle = startDate
+            windowTitle = windowTitle + "; " + dateTitle
+
+        if not ((startSeasonalMonth == "") or (endSeasonalMonth == "")):
+            monthRange = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                          "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+            rangeTitle = (monthRange[int(startSeasonalMonth)-1] + "-" + startSeasonalDay +
+                          " to " + monthRange[int(endSeasonalMonth)-1] + "-" + endSeasonalDay)
+            windowTitle = windowTitle + "; " + rangeTitle
+
+        if windowTitle == "":
+            windowTitle = "All species, locations, and dates"
+
+        if windowTitle[0:2] == "; ":
+            windowTitle = windowTitle[2:]
+
+        countSuffix = " (" + str(count) + (" " + countUnit if countUnit else "") + ")" if count is not None else ""
+        return prefix + ": " + windowTitle + countSuffix
+
+
     def debugAll(self):
         returnString = (
             "locationType: " + self.locationType + '   ' +

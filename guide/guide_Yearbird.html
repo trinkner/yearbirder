@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Yearbird User Guide</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 15px;
+      line-height: 1.6;
+      color: #222;
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 2rem 2rem 4rem;
+      background: #fff;
+    }
+    h1 {
+      font-size: 2rem;
+      border-bottom: 2px solid #3a7d44;
+      padding-bottom: 0.4rem;
+      color: #1a1a1a;
+    }
+    h2 {
+      font-size: 1.4rem;
+      margin-top: 2.5rem;
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 0.3rem;
+      color: #2c5f2e;
+    }
+    h3 {
+      font-size: 1.1rem;
+      margin-top: 1.5rem;
+      color: #1a1a1a;
+    }
+    p { margin: 0.6rem 0 1rem; }
+    a { color: #3a7d44; }
+    a:hover { text-decoration: none; }
+    hr {
+      border: none;
+      border-top: 1px solid #e0e0e0;
+      margin: 2rem 0;
+    }
+    em { color: #555; }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 1rem 0 1.5rem;
+      font-size: 14px;
+    }
+    th {
+      background: #f0f6f1;
+      text-align: left;
+      padding: 7px 12px;
+      border: 1px solid #c8deca;
+      font-weight: 600;
+    }
+    td {
+      padding: 7px 12px;
+      border: 1px solid #ddd;
+      vertical-align: top;
+    }
+    tr:nth-child(even) td { background: #fafafa; }
+    ul, ol {
+      margin: 0.4rem 0 1rem;
+      padding-left: 1.6rem;
+    }
+    li { margin-bottom: 0.3rem; }
+    code {
+      background: #f4f4f4;
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-size: 0.9em;
+    }
+    strong { color: #111; }
+    .toc {
+      background: #f8fbf8;
+      border: 1px solid #c8deca;
+      border-radius: 6px;
+      padding: 1rem 1.5rem;
+      margin: 1.5rem 0;
+    }
+    .toc ol {
+      margin: 0;
+      column-count: 2;
+      column-gap: 2rem;
+    }
+    .toc li { margin-bottom: 0.25rem; }
+    .footer {
+      margin-top: 3rem;
+      padding-top: 1rem;
+      border-top: 1px solid #ddd;
+      font-size: 13px;
+      color: #666;
+      font-style: italic;
+    }
+    @media (max-width: 600px) {
+      .toc ol { column-count: 1; }
+      body { padding: 1rem; }
+    }
+  </style>
+</head>
+<body>
+
+<h1>Yearbird User Guide</h1>
+<p><em>A desktop application for exploring and analysing your personal eBird data</em></p>
+
+<hr>
+
+<div class="toc">
+  <ol>
+    <li><a href="#quick-start">Quick Start</a></li>
+    <li><a href="#main-window">The Main Window</a></li>
+    <li><a href="#loading-data">Loading Your eBird Data</a></li>
+    <li><a href="#standard-filter">The Standard Filter</a></li>
+    <li><a href="#photo-filter">The Photo Filter</a></li>
+    <li><a href="#species-list">Species List</a></li>
+    <li><a href="#locations-list">Locations List</a></li>
+    <li><a href="#checklists-list">Checklists List</a></li>
+    <li><a href="#families-window">Families Window</a></li>
+    <li><a href="#date-totals">Date Totals</a></li>
+    <li><a href="#location-totals">Location Totals</a></li>
+    <li><a href="#big-report">Big Report</a></li>
+    <li><a href="#compare-lists">Compare Lists</a></li>
+    <li><a href="#maps">Maps</a></li>
+    <li><a href="#choropleth-maps">Choropleth Maps</a></li>
+    <li><a href="#photos">Photos</a></li>
+    <li><a href="#photo-settings-file">Photo Settings File</a></li>
+    <li><a href="#individual-species">Individual Species Window</a></li>
+    <li><a href="#printing">Printing and PDF Export</a></li>
+    <li><a href="#tips">Tips and Tricks</a></li>
+	<li><a href="#preferences">Saving Preferences</a></li>
+  </ol>
+</div>
+
+<hr>
+
+<h2 id="quick-start">1. Quick Start</h2>
+<p>This section gets you from a fresh install to your first results in five minutes.</p>
+
+<h3>Step 1 — Download your eBird data</h3>
+<p>With a browser such as Chrome, Safari, or Edge, go to <a href="https://ebird.org/downloadMyData">https://ebird.org/downloadMyData</a>, and choose <strong>Request My Observations</strong>. eBird will email you a link to a <code>.csv</code> file containing your complete sightings history. Open the email, click the link, and save the file somewhere easy to find. By default, most browsers will save the file in your Downloads folder.</p>
+
+<h3>Step 2 — Open your data in Yearbird</h3>
+<p>Launch Yearbird. Click the <strong>Open</strong> button on the toolbar (or choose <strong>File → Open</strong>). Navigate to the <code>.csv</code> file you downloaded and click <strong>Open</strong>. Yearbird loads your data and displays list of the species in the file.</p>
+
+<h3>Step 3 — Generate your first list</h3>
+<p>Browse through the options on the filter on the left side of the screen.  Set a few filter options, like county or family, and then click the <strong>Species</strong> button on the toolbar. A new window opens showing the species you have recorded, sorted taxonomically, along with the first date, most recent date, and checklist count for each. You can click on the column headers to sort the columns. You can also right-click on any information in the list to send that information to the filter.</p>
+
+<h3>Step 4 — Explore further</h3>
+<ul>
+  <li>Click <strong>Map</strong> to see all your sighting locations plotted on an interactive map.</li>
+  <li>Click <strong>Date Totals</strong> to see which years, months, and individual dates you recorded the most species.</li>
+  <li>Click <strong>Photos</strong> (after setting up a Photo Settings file — see <a href="#photos">Section 16</a>) to browse your bird photos alongside their sighting data.</li>
+</ul>
+<p>You are up and running. Everything else in this guide describes these features in detail.</p>
+
+<hr>
+
+<h2 id="main-window">2. The Main Window</h2>
+<p>Yearbird uses a <strong>Multiple Document Interface (MDI)</strong>. The main window contains:</p>
+<ul>
+  <li>A <strong>menu bar</strong> across the top with menus for File, Filter, Lists, Map, Reports, Photos, Choropleths, and Windows.</li>
+  <li>A <strong>toolbar</strong> just below the menu bar with quick-access buttons for the most common actions.</li>
+  <li>A <strong>Standard Filter</strong> panel docked on the left side.</li>
+  <li>A <strong>Photo Filter</strong> panel docked on the right side.</li>
+  <li>A large <strong>MDI area</strong> in the centre where all child windows (lists, reports, maps, photos) are displayed.</li>
+  <li>A <strong>status bar</strong> at the very bottom showing the current data file and record counts.</li>
+</ul>
+
+<h3>Toolbar buttons (left to right)</h3>
+<table>
+  <thead><tr><th>Button</th><th>Action</th></tr></thead>
+  <tbody>
+    <tr><td>Open</td><td>Open an eBird data file</td></tr>
+    <tr><td>Print</td><td>Print the active child window</td></tr>
+    <tr><td>Create PDF</td><td>Export the active child window to PDF</td></tr>
+    <tr><td>Clear all filters</td><td>Reset every filter to its default (all) state</td></tr>
+    <tr><td>Species</td><td>Open a Species List window</td></tr>
+    <tr><td>Locations</td><td>Open a Locations List window</td></tr>
+    <tr><td>Checklists</td><td>Open a Checklists List window</td></tr>
+    <tr><td>Map</td><td>Open an interactive location map</td></tr>
+    <tr><td>Families</td><td>Open the Families window</td></tr>
+    <tr><td>Date Totals</td><td>Open the Date Totals report</td></tr>
+    <tr><td>Location Totals</td><td>Open the Location Totals report</td></tr>
+    <tr><td>Compare Lists</td><td>Open the Compare Lists report</td></tr>
+    <tr><td>Big Report</td><td>Open the comprehensive Big Report</td></tr>
+    <tr><td>Photos</td><td>Open the Photos gallery</td></tr>
+    <tr><td>Find</td><td>Search for checklists by text</td></tr>
+  </tbody>
+</table>
+
+<h3>MDI child windows</h3>
+<p>Any number of child windows can be open at the same time. Use <strong>Windows → Tile Windows</strong> or <strong>Windows → Cascade Windows</strong> to arrange them. Close individual windows with their close button, or close all at once with <strong>Windows → Close All Windows</strong>.</p>
+<p>Each child window's title bar shows a descriptive label that reflects the active filter — for example, <em>"Species: Warbler; New York; 2024 (42 Species)"</em>.</p>
+
+<hr>
+
+<h2 id="loading-data">3. Loading Your eBird Data</h2>
+
+<h3>Opening a data file</h3>
+<p>Choose <strong>File → Open</strong> or click the <strong>Open</strong> toolbar button. Yearbird accepts the standard eBird download CSV (the file is typically named something like <code>MyEBirdData.csv</code>).</p>
+<p>Loading time depends on the size of your dataset. A typical dataset of 10,000–50,000 sightings loads in a few seconds. Once loaded, the status bar shows the total number of sightings and species.</p>
+
+<h3>Closing a data file</h3>
+<p>Choose <strong>File → Close</strong> to unload the current dataset. Any open child windows that depend on the data will close automatically.</p>
+
+<h3>What data is loaded</h3>
+<p>Yearbird reads the following fields from your eBird CSV:</p>
+<ul>
+  <li>Species common name and scientific name</li>
+  <li>Taxonomic order, family, and order</li>
+  <li>Observation date and time</li>
+  <li>Country, state/province, county, and location name</li>
+  <li>Location coordinates (latitude/longitude)</li>
+  <li>Checklist ID</li>
+  <li>Number of individuals counted</li>
+</ul>
+
+<hr>
+
+<h2 id="standard-filter">4. The Standard Filter</h2>
+<p>The <strong>Standard Filter</strong> panel is the primary way to focus every report and list on the data you care about. It is docked on the left side of the main window and always visible. All open child windows update immediately whenever you change any filter setting.</p>
+
+<h3>Location filters</h3>
+<p>The location filters are <strong>hierarchical</strong> — selecting a more specific level automatically constrains the broader levels. You can filter at any one of these levels:</p>
+<table>
+  <thead><tr><th>Filter</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td>Region</td><td>A broad geographic region (e.g., North America)</td></tr>
+    <tr><td>Country</td><td>A specific country (e.g., United States)</td></tr>
+    <tr><td>State</td><td>A state or province</td></tr>
+    <tr><td>County</td><td>A county or sub-region within a state</td></tr>
+    <tr><td>Location</td><td>A specific named eBird location</td></tr>
+  </tbody>
+</table>
+<p>Select <strong>**All**</strong> in any drop-down to clear that level's filter.</p>
+
+<h3>Taxonomic filters</h3>
+<table>
+  <thead><tr><th>Filter</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td>Order</td><td>Bird order (e.g., Passeriformes)</td></tr>
+    <tr><td>Family</td><td>Bird family (e.g., Parulidae – Wood-Warblers)</td></tr>
+    <tr><td>Species</td><td>A single species name</td></tr>
+    <tr><td>Name Search</td><td>Free-text search; matches any part of a species' common name</td></tr>
+  </tbody>
+</table>
+<p>The taxonomic filters also follow a hierarchy for the purposes of the window title: if a Species is selected, Family and Order are not shown in the title (they are implied). If only a Family is selected, Order is not shown. Only the most specific level selected is displayed.</p>
+
+<h3>Date filters</h3>
+<table>
+  <thead><tr><th>Filter</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td>Date Options</td><td>Quick presets: No date filter, This year, Last year, etc.</td></tr>
+    <tr><td>Start Date</td><td>Beginning of a custom date range (yyyy-mm-dd)</td></tr>
+    <tr><td>End Date</td><td>End of a custom date range (yyyy-mm-dd)</td></tr>
+  </tbody>
+</table>
+
+<h3>Seasonal range filters</h3>
+<p>Seasonal filters let you examine a recurring window within each year regardless of the year itself — useful for studying migration patterns.</p>
+<table>
+  <thead><tr><th>Filter</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td>Seasonal Range Options</td><td>Quick presets for common seasonal windows</td></tr>
+    <tr><td>Start Seasonal Range</td><td>Month and day marking the start of the seasonal window</td></tr>
+    <tr><td>End Seasonal Range</td><td>Month and day marking the end of the seasonal window</td></tr>
+  </tbody>
+</table>
+<p>For example, setting a seasonal range of May 1 – May 31 shows all May sightings across all years.</p>
+
+<h3>Clearing filters</h3>
+<ul>
+  <li>Click <strong>Clear all filters</strong> on the toolbar to reset every filter at once.</li>
+  <li>Individual filters can be cleared by selecting the <strong>**All**</strong> option in their drop-down.</li>
+</ul>
+
+<hr>
+
+<h2 id="photo-filter">5. The Photo Filter</h2>
+<p>The <strong>Photo Filter</strong> panel is docked on the right side of the main window. It becomes active once a Photo Settings file has been loaded (see <a href="#photo-settings-file">Section 17</a>). It filters photo-related results in addition to the Standard Filter.</p>
+<table>
+  <thead><tr><th>Filter</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td>Rating Range</td><td>Minimum and maximum photo rating (your personal quality score)</td></tr>
+    <tr><td>Species</td><td>Show only species that have photos / that have no photos</td></tr>
+    <tr><td>Camera</td><td>Filter by specific camera model</td></tr>
+    <tr><td>Lens</td><td>Filter by specific lens model</td></tr>
+    <tr><td>Shutter Speed Range</td><td>Minimum and maximum shutter speed</td></tr>
+    <tr><td>Aperture Range</td><td>Minimum and maximum aperture (f-stop)</td></tr>
+    <tr><td>Focal Length Range</td><td>Minimum and maximum focal length in mm</td></tr>
+    <tr><td>ISO Range</td><td>Minimum and maximum ISO sensitivity</td></tr>
+  </tbody>
+</table>
+<p>All Photo Filter fields work as range selectors. Select <strong>**All**</strong> to disable a particular filter.</p>
+
+<hr>
+
+<h2 id="species-list">6. Species List</h2>
+<p>Open with <strong>Lists → Species</strong> or the <strong>Species</strong> toolbar button.</p>
+<p>The Species List shows every bird species (and other taxa) you have recorded that matches the current filter. Each row shows:</p>
+<table>
+  <thead><tr><th>Column</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td>Tax</td><td>Taxonomic sort order number</td></tr>
+    <tr><td>Species</td><td>Common name (click to open the Individual Species window)</td></tr>
+    <tr><td>First</td><td>Date of your first sighting of this species</td></tr>
+    <tr><td>Last</td><td>Date of your most recent sighting</td></tr>
+    <tr><td>Checklists</td><td>Number of checklists on which this species appears</td></tr>
+    <tr><td>% of Checklists</td><td>The percentage of your total checklists that include this species</td></tr>
+  </tbody>
+</table>
+<p>Species that are not full species (slash species, spuhs, hybrids) are listed separately and marked distinctly.</p>
+<p>The window title shows the total count — for example, <em>"Species: New York (42 Species)"</em>.</p>
+
+<h3>Clicking a species</h3>
+<p>Click any species name to open an <strong>Individual Species</strong> window (see <a href="#individual-species">Section 18</a>) showing the full history of your sightings of that species.</p>
+
+<h3>Right-click menu</h3>
+<p>Right-clicking a row in the species table offers options to set the species as the active filter, open associated web pages, or open the individual species window.</p>
+
+<hr>
+
+<h2 id="locations-list">7. Locations List</h2>
+<p>Open with <strong>Lists → Locations</strong> or the <strong>Locations</strong> toolbar button.</p>
+<p>Shows all locations where you have recorded sightings under the current filter:</p>
+<table>
+  <thead><tr><th>Column</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td>Location</td><td>The eBird location name</td></tr>
+    <tr><td>First</td><td>Date of your first visit</td></tr>
+    <tr><td>Last</td><td>Date of your most recent visit</td></tr>
+  </tbody>
+</table>
+<p>The count of locations is shown in the window title, e.g., <em>"Locations: All species, locations, and dates (702 Locations)"</em>.</p>
+<p>Right-clicking a location lets you set it as the active location filter, or open it on a map.</p>
+
+<hr>
+
+<h2 id="checklists-list">8. Checklists List</h2>
+<p>Open with <strong>Lists → Checklists</strong> or the <strong>Checklists</strong> toolbar button.</p>
+<p>Shows every checklist that matches the current filter:</p>
+<table>
+  <thead><tr><th>Column</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td>Country</td><td>Country where the checklist was submitted</td></tr>
+    <tr><td>State</td><td>State/province</td></tr>
+    <tr><td>County</td><td>County (if recorded)</td></tr>
+    <tr><td>Location</td><td>Location name</td></tr>
+    <tr><td>Date</td><td>Checklist date</td></tr>
+    <tr><td>Time</td><td>Start time</td></tr>
+    <tr><td>Species</td><td>Number of species on that checklist</td></tr>
+  </tbody>
+</table>
+<p>Click any row to see the comments recorded for that checklist.</p>
+<p>Right-clicking a row lets you set the checklist's date, country, state, county, or location as the active filter.</p>
+
+<hr>
+
+<h2 id="families-window">9. Families Window</h2>
+<p>Open with <strong>Lists → Families</strong> or the <strong>Families</strong> toolbar button.</p>
+<p>The Families window has two panes:</p>
+<ul>
+  <li><strong>Left pane</strong>: A scrolling list of every bird family represented in your sightings under the current filter.</li>
+  <li><strong>Right pane</strong>: The species from the selected family, along with sighting statistics.</li>
+</ul>
+<p>Click a family name in the left pane to populate the right pane. This is an efficient way to browse your sightings by taxonomic family — for example, quickly seeing all your warbler or shorebird records.</p>
+<p>The window title shows the number of families, e.g., <em>"Families: New York (12 Families)"</em>.</p>
+
+<hr>
+
+<h2 id="date-totals">10. Date Totals</h2>
+<p>Open with <strong>Reports → Date Totals</strong> or the <strong>Date Totals</strong> toolbar button.</p>
+<p>The Date Totals window presents three side-by-side tables:</p>
+
+<h3>Year Totals</h3>
+<p>One row per year, showing how many species and checklists you recorded in that year.</p>
+
+<h3>Month Totals</h3>
+<p>One row per calendar month (January through December), showing totals across all years.</p>
+
+<h3>Date Totals</h3>
+<p>One row per individual date on which you submitted a checklist, showing species and checklist counts for that date.</p>
+<p>All three tables are sortable by any column. This report is useful for identifying your most productive years, your best months for birding, and your record single-day species counts.</p>
+<p>The window title shows the total number of unique dates, e.g., <em>"Date Totals: All species, locations, and dates (365 Dates)"</em>.</p>
+
+<hr>
+
+<h2 id="location-totals">11. Location Totals</h2>
+<p>Open with <strong>Reports → Location Totals</strong> or the <strong>Location Totals</strong> toolbar button.</p>
+<p>Location Totals presents five tables on separate tabs:</p>
+<table>
+  <thead><tr><th>Tab</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td>Region Totals</td><td>Species counts by broad geographic region</td></tr>
+    <tr><td>Country Totals</td><td>Species counts by country</td></tr>
+    <tr><td>State Totals</td><td>Species counts by state/province</td></tr>
+    <tr><td>County Totals</td><td>Species counts by county</td></tr>
+    <tr><td>Location Totals</td><td>Species counts by individual named location</td></tr>
+  </tbody>
+</table>
+<p>Each table shows rank, name, species count, and checklist count. Sorted by rank (most species first) by default.</p>
+
+<hr>
+
+<h2 id="big-report">12. Big Report</h2>
+<p>Open with <strong>Reports → Big Report</strong> or the <strong>Big Report</strong> toolbar button.</p>
+<p>The Big Report is the most comprehensive single report in Yearbird. It combines multiple dimensions of your data into one window with multiple tabs:</p>
+<ul>
+  <li><strong>Species</strong> — Full species list with counts, first and last dates.</li>
+  <li><strong>Dates</strong> — Date-by-date breakdown of species seen.</li>
+  <li><strong>Locations</strong> — Location-by-location breakdown.</li>
+  <li><strong>New Species</strong> — Species seen for the first time at each location.</li>
+  <li><strong>Checklists</strong> — All checklists in the filtered set.</li>
+</ul>
+<p>The window title includes a species count, e.g., <em>"Big Report: New York (87 Species)"</em>.</p>
+
+<hr>
+
+<h2 id="compare-lists">13. Compare Lists</h2>
+<p>Open with <strong>Reports → Compare Lists</strong> or by clicking the <strong>Compare Lists</strong> button in the toolbar. </p>
+<p>Compare Lists lets you select two separate lists and compare their species. This is useful for questions like:</p>
+<ul>
+  <li>"Which species did I see in 2023 that I did not see in 2024?"</li>
+  <li>"Which species have I seen at location A but not at location B?"</li>
+</ul>
+<p>To compare lists:</p>
+<ol>
+  <li>Use the main window's filter and the Species button on the toolbar to create at least two list windows. </li>
+  <li>Click the <strong>Compare Lists</strong> button on the toolbar to open the Compare Lists window.</li>
+  <li>Select one list in the left-hand dropdown box and select another list in the right-hand dropdown list.</li>
+  <li>click the <strong>Compare</strong> button in the middle to see side-by-side results.</li>
+</ol>
+
+<hr>
+
+<h2 id="maps">14. Maps</h2>
+<p>Open with <strong>Map → Map</strong> or the <strong>Map</strong> toolbar button.</p>
+<p>The Map window displays an interactive map of all locations where you have recorded sightings under the current filter. Each location is plotted as a marker; clicking a marker shows the location name and coordinates.</p>
+<p>The map is pan-and-zoom capable using your mouse or trackpad. The title bar shows the count of locations plotted, e.g., <em>"Map: All species, locations, and dates (208)"</em>.</p>
+<p>When you resize the map window, the map reloads to fill the new size.</p>
+
+<hr>
+
+<h2 id="choropleth-maps">15. Choropleth Maps</h2>
+<p>Open with the <strong>Choropleths</strong> menu. Three choropleth types are available:</p>
+
+<h3>US States Choropleth</h3>
+<p>A map of the contiguous United States with each state shaded according to the number of species you have recorded there. Darker shading = more species. Hover over a state to see its name and species count. The title shows the number of shaded states, e.g., <em>"US States Choropleth: All species, locations, and dates (32 States)"</em>.</p>
+
+<h3>US Counties Choropleth</h3>
+<p>The same concept at the county level for the lower 48 states. Useful for seeing fine-grained geographic patterns in your birding.</p>
+
+<h3>World Countries Choropleth</h3>
+<p>A world map shaded by species count per country.</p>
+<p>All choropleth maps respond to the Standard Filter — for example, set a Family filter to see which states you have recorded warblers in.</p>
+
+<hr>
+
+<h2 id="photos">16. Photos</h2>
+<p>Yearbird can associate your personal bird photos with your eBird sightings. This unlocks a photo gallery view, displaying photos that match the filter, and filtering by camera, lens, and exposure settings using the photo filter that will appear on the right of the screen.</p>
+
+<h3>Overview of the photo system</h3>
+<ul>
+  <li>Your photos remain in their original folders on your computer. Yearbird stores <strong>references</strong> to them, not copies.</li>
+  <li>Photo associations and metadata are stored in a <strong>Photo Settings file</strong> (a CSV file you create and save using Yearbird). See <a href="#photo-settings-file">Section 17</a>.</li>
+  <li>Yearbird reads <strong>EXIF data</strong> from each JPEG file automatically: camera model, lens, shutter speed, aperture, focal length, and ISO.</li>
+</ul>
+
+<h3>Opening the Photos window</h3>
+<p>Once a Photo Settings file is loaded, click <strong>Photos</strong> on the toolbar or choose <strong>Lists → Photos</strong>. The Photos gallery opens, showing thumbnails of all photos that match the current filter.</p>
+
+<h3>The Photos gallery</h3>
+<p>Photos are arranged in a grid. Each thumbnail shows:</p>
+<ul>
+  <li>The photo itself</li>
+  <li>The species name</li>
+  <li>The date the photo was taken</li>
+  <li>Your rating for the photo (if set)</li>
+</ul>
+<p>Click any thumbnail to open the <strong>Enlargement</strong> view for that photo.</p>
+
+<h3>Sorting photos</h3>
+<p>You can sort the gallery by:</p>
+<ul>
+  <li><strong>Taxonomy</strong> — groups photos by species in taxonomic order</li>
+  <li><strong>Date</strong> — most recent first or oldest first</li>
+  <li><strong>Rating</strong> — highest rated first</li>
+  <li><strong>Species name</strong> — alphabetical</li>
+</ul>
+
+<h3>Photo Filter</h3>
+<p>Use the <strong>Photo Filter</strong> panel (right side of the main window) to narrow the gallery by camera, lens, exposure settings, or rating. See <a href="#photo-filter">Section 5</a> for the full list of filter options.</p>
+
+<h3>Enlargement view</h3>
+<p>Click any thumbnail to open the Enlargement view, which shows the full-resolution photo with pan and zoom. From the Enlargement view you can:</p>
+<ul>
+  <li><strong>Navigate</strong> between photos (previous/next arrows).</li>
+  <li><strong>Set or change the rating</strong> for the photo.</li>
+  <li><strong>View EXIF data</strong> — camera, lens, shutter speed, aperture, focal length, ISO.</li>
+  <li><strong>Detach a photo</strong> from its sighting (removes the association without deleting the file).</li>
+  <li><strong>Delete a photo reference</strong> entirely from the Photo Settings.</li>
+</ul>
+
+<hr>
+
+<h2 id="photo-settings-file">17. Adding Photos to the Photo Settings File</h2>
+<p>Yearbird uses a Photo Settings file to associate photos on your hard drive with your ebird sightings. Associating photos with your ebird sightings lets you view photos that match the main window's filter.  For example, Yearbird can show you all the photos you've taken of a species, or the photos from a certain day or from a location. Yearbird stores the photo file names, dates, times, species names, and camera information in a separate data file. Think of this file as your photo library within Yearbird.</p>
+
+<h3>Adding Photos To Yearbird</h3>
+<ol>
+  <li>Choose <strong>Photos → Add Photos</strong>.</li>
+  <li>A file dialog opens. Navigate to the folder containing your bird photos and select one or more JPEG files.</li>
+  <li>For each photo, Yearbird asks you to identify the associated bird species and sighting date.  If the correct sighting location and date does not appear as an option, make sure that you have logged that sighting in ebird itself; you cannot add a photo to Yearbird unless that sighting is also in your eBird data.</li>
+  <li>Once you have associated photos, choose <strong>Photos → Save Photo Settings</strong> to save your Photo Settings file. Remember where youy save this file, as you will want to open it in the future to view your photos with Yearbird.</li>
+</ol>
+
+<h3>Opening an existing Photo Settings file</h3>
+<p>Choose <strong>Photos → Open Photo Settings File</strong> and navigate to your saved <code>.csv</code> file. Yearbird loads all photo associations and EXIF data. The Photo Filter panel becomes active.</p>
+
+<h3>Saving changes</h3>
+<p>After adding, editing, or removing photo associations, choose <strong>Photos → Save Photo Settings</strong> to write changes back to the file. Yearbird will warn you if you try to close the file with unsaved changes.</p>
+
+<h3>Closing the Photo Settings file</h3>
+<p>Choose <strong>Photos → Close Photo Settings File</strong>. This unloads all photo data from memory. The Photo Filter panel becomes inactive.</p>
+
+<h3>Adding more photos</h3>
+<p>With a Photo Settings file already loaded, choose <strong>Photos → Add Photos</strong> to import additional photos. The new associations are merged into the existing file; save afterwards.</p>
+
+<h3>Editing photos by filter</h3>
+<p>Choose <strong>Photos → Edit Photos by Filter</strong> to make batch changes — for example, to update the rating of all photos from a particular outing, or to reassign a group of photos to a different species.</p>
+
+<h3>Updating EXIF data</h3>
+<p>If you have moved or re-exported your photo files, choose <strong>Photos → Update EXIF Data for All Photos</strong>. Yearbird re-reads the EXIF metadata from every file referenced in the Photo Settings and updates its records. This is also useful if you use photo editing software that writes new EXIF tags.</p>
+
+<h3>Cleaning up missing references</h3>
+<p>If photos have been moved or deleted from your hard drive, Yearbird may show broken references. Use <strong>Photos → Remove Missing Photo References</strong> to scan for and remove any associations pointing to files that no longer exist.</p>
+
+<h3>What the Photo Settings file contains</h3>
+<p>The CSV file stores one row per photo reference, with columns for:</p>
+<ul>
+  <li>File path to the JPEG</li>
+  <li>Associated species common name</li>
+  <li>Associated sighting date</li>
+  <li>Your personal rating</li>
+  <li>Camera model (from EXIF)</li>
+  <li>Lens model (from EXIF)</li>
+  <li>Shutter speed (from EXIF)</li>
+  <li>Aperture (from EXIF)</li>
+  <li>Focal length (from EXIF)</li>
+  <li>ISO (from EXIF)</li>
+</ul>
+<p>You can open the CSV in a spreadsheet application to inspect or bulk-edit values, but be careful to preserve the column order and formatting.</p>
+
+<hr>
+
+<h2 id="individual-species">18. Individual Species Window</h2>
+<p>The Individual Species window opens when you click a species name in the Species List, or from the right-click menu in most list windows.</p>
+<p>It shows a comprehensive view of your sightings of one particular species:</p>
+<ul>
+  <li><strong>All sightings</strong> — every checklist on which you recorded this species, with date, location, and count.</li>
+  <li><strong>Locations summary</strong> — a breakdown of sightings by location.</li>
+  <li><strong>Yearly summary</strong> — how many times you recorded the species in each year.</li>
+  <li><strong>Monthly summary</strong> — which months you most often record this species (useful for understanding migration timing).</li>
+  <li><strong>Links</strong> — direct links to the species' page on Wikipedia and AllAboutBirds.org.</li>
+  <li><strong>Photos</strong> — if you have photos of this species in your Photo Settings, thumbnails are shown. Click a thumbnail to open the Enlargement view.</li>
+</ul>
+
+<hr>
+
+<h2 id="printing">19. Printing and PDF Export</h2>
+
+<h3>Printing</h3>
+<p>Click <strong>Print</strong> on the toolbar or choose <strong>File → Print</strong>. The current active child window is sent to the printer. Most list and report windows print sensibly; map and photo windows print a screenshot of the current view.</p>
+
+<h3>PDF Export</h3>
+<p>Click <strong>Create PDF</strong> on the toolbar or choose <strong>File → Create PDF</strong>. Yearbird exports the active child window to a PDF file. A file save dialog lets you choose the destination. This is the recommended way to save or share a specific view of your data.</p>
+
+<hr>
+
+<h2 id="tips">20. Tips and Tricks</h2>
+
+<h3>Keep multiple windows open for comparison</h3>
+<p>Because Yearbird is an MDI application, you can open several child windows simultaneously. For example, open a Species List filtered to one location, then open a second Species List filtered to a different location, and use <strong>Windows → Tile Windows</strong> to view them side by side.</p>
+
+<h3>Seasonal migration analysis</h3>
+<p>Set the seasonal range filter to a narrow window (for example, May 1–May 15) and open the Date Totals report. You will see how your spring migration counts vary from year to year across those same two weeks.</p>
+
+<h3>Finding your best single day</h3>
+<p>Open Date Totals with no filters set and sort the Date Totals table by Species (descending). Your highest single-day species count rises to the top.</p>
+
+<h3>Tracking a family across geography</h3>
+<p>Set the Family filter to a family you are interested in (e.g., Shorebirds), then open the US States Choropleth. The shading immediately shows which states you have recorded shorebirds in.</p>
+
+<h3>Combining Name Search with other filters</h3>
+<p>The Name Search field accepts a partial name and filters the Species List in real time. This is the fastest way to find a species when you are not sure of its exact name — type "thrush" and all thrushes appear regardless of which family they belong to.</p>
+
+<h3>Photo workflow tips</h3>
+<ul>
+  <li><strong>Rate your photos immediately</strong> after a field outing while the session is fresh. Use the Enlargement view to assign ratings of 1–5.</li>
+  <li><strong>Back up your Photo Settings CSV</strong> alongside your eBird data file. It is the only record of your photo associations.</li>
+  <li><strong>Use the Photo Filter to find your best shots</strong>: set Rating Range to 4–5 and open the Photos gallery to see only your highest-rated photos.</li>
+  <li><strong>Update EXIF data</strong> after any significant photo editing session or file reorganisation to keep the metadata in sync.</li>
+</ul>
+
+<hr>
+
+<h2 id="preferences">21. Saving Preferences</h2>
+
+<p> You can tell Yearbird which folder you use to download ebird files. Yearbird will load the most recent ebird file from that folder whenever Yearbird starts.</p>
+
+<p>You can also tell Yearbird which Photo Settings file to use automatically when it starts.</p>
+
+<p>Click <strong>Yearbird → Preferences</strong> on the menu bar to set your preferences.</p>
+
+<hr>
+
+<div class="footer">
+  <p>Yearbird is free, open-source software licensed under the GNU General Public License v3.<br>
+  Created by Richard Trinkner.</p>
+</div>
+
+</body>
+</html>

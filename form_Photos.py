@@ -79,7 +79,41 @@ class Ui_frmPhotos(object):
         font.setPointSize(10)
         self.lblSpecies.setFont(font)
         self.lblSpecies.setObjectName("lblSpecies")
+
+        self.lblSortBy = QtWidgets.QLabel(self.layLists)
+        self.lblSortBy.setObjectName("lblSortBy")
+
+        self.sortButtonGroup = QtWidgets.QButtonGroup(self.layLists)
+        self.sortButtonGroup.setObjectName("sortButtonGroup")
+
+        self.rdoSortSpecies = QtWidgets.QRadioButton(self.layLists)
+        self.rdoSortSpecies.setChecked(True)
+        self.rdoSortSpecies.setObjectName("rdoSortSpecies")
+        self.sortButtonGroup.addButton(self.rdoSortSpecies, 0)
+
+        self.rdoSortDate = QtWidgets.QRadioButton(self.layLists)
+        self.rdoSortDate.setObjectName("rdoSortDate")
+        self.sortButtonGroup.addButton(self.rdoSortDate, 1)
+
+        self.rdoSortRating = QtWidgets.QRadioButton(self.layLists)
+        self.rdoSortRating.setObjectName("rdoSortRating")
+        self.sortButtonGroup.addButton(self.rdoSortRating, 2)
+
+        self.rdoSortTaxonomy = QtWidgets.QRadioButton(self.layLists)
+        self.rdoSortTaxonomy.setObjectName("rdoSortTaxonomy")
+        self.sortButtonGroup.addButton(self.rdoSortTaxonomy, 3)
+
         self.verticalLayout_3.addWidget(self.lblSpecies)
+
+        self.sortRow = QtWidgets.QHBoxLayout()
+        self.sortRow.addWidget(self.lblSortBy)
+        self.sortRow.addWidget(self.rdoSortSpecies)
+        self.sortRow.addWidget(self.rdoSortDate)
+        self.sortRow.addWidget(self.rdoSortRating)
+        self.sortRow.addWidget(self.rdoSortTaxonomy)
+        self.sortRow.addStretch()
+        self.verticalLayout_3.addLayout(self.sortRow)
+
         self.gridPhotos = QtWidgets.QGridLayout()
         self.gridPhotos.setObjectName("gridPhotos")
         self.verticalLayout_3.addLayout(self.gridPhotos)
@@ -119,6 +153,11 @@ class Ui_frmPhotos(object):
         self.actionSetCountryFilter.setText(_translate("frmPhotos", "Set Filter to Country"))
         self.actionSetStateFilter.setText(_translate("frmPhotos", "Set Filter to State"))
         self.actionSetCountyFilter.setText(_translate("frmPhotos", "Set Filter to County"))
+        self.lblSortBy.setText(_translate("frmPhotos", "Sort by:"))
+        self.rdoSortSpecies.setText(_translate("frmPhotos", "Alphabetical"))
+        self.rdoSortDate.setText(_translate("frmPhotos", "Date"))
+        self.rdoSortRating.setText(_translate("frmPhotos", "Rating"))
+        self.rdoSortTaxonomy.setText(_translate("frmPhotos", "Taxonomy"))
 
 import icons_rc
 

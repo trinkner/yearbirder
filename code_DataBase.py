@@ -17,7 +17,14 @@ from PyQt5.QtWidgets import (
     QApplication,
     QMessageBox
     )
-    
+
+
+#routine to open helper files (json, csv, etc.) in fashion compatible with PyInstaller for when code is bundled into an app.
+def resource_path(filename):
+    if hasattr(sys, "_MEIPASS"):
+        return os.path.join(sys._MEIPASS, filename)
+    return filename
+
     
 class DataBase():
 
@@ -125,30 +132,19 @@ class DataBase():
             "Australia and Territories":"AUS"
             }) 
 
-        # look for json files. They must be in the same directory as the script directory
-        if getattr(sys, 'frozen', False):
-            # frozen
-            scriptDirectory = os.path.dirname(sys.executable)
-        else:
-            # unfrozen
-            scriptDirectory = os.path.dirname(os.path.realpath(__file__))
-                           
-        # format file names so we can find them regardless of whether we're frozen
-        stateJsonFile = os.path.join(scriptDirectory, "us-states.json")
-        countyJsonFile = os.path.join(scriptDirectory, "us-counties-lower48.json")
-        countryJsonFile = os.path.join(scriptDirectory, "world-countries.json")
+        # Use resource_path helper routine (in module, below) to open files in way safe for PyInstaller app bundle
+        # Load JSON files using resource_path
+        stateJsonFile   = resource_path("us-states.json")
+        countyJsonFile  = resource_path("us-counties-lower48.json")
+        countryJsonFile = resource_path("world-countries.json")
         
         # load us-states json shape file for later use with choropleths
-        self.state_geo = json.loads(open(stateJsonFile).read())
-        
-#         # create list of US state abbreviations for later use with choropleths
-#         self.stateCodeList = set()
-#         for s in self.state_geo["features"]:
-#             self.stateCodeList.add(s["id"])
-#         self.stateCodeList = list(self.stateCodeList)
-        
+        with open(stateJsonFile) as f:
+            self.state_geo = json.loads(f.read())
+
         # load us-counties-lower48 json shape file for later use with choropleths
-        self.county_geo = json.loads(open(countyJsonFile).read())
+        with open(countyJsonFile) as f:
+            self.county_geo = json.loads(f.read())
         
         # save county code data for easy lookup when processing eBird data file
         self.countyCodeDict = defaultdict()
@@ -164,12 +160,10 @@ class DataBase():
             else:    
                 self.countyCodeDict[c["properties"]["name"]].append([c["id"],c["properties"]["state"]])
         
-#         self.countyCodeList = list(self.countyCodeList)
-
         # load world-countries json shape file for later use with choropleths
-        self.country_geo = json.loads(open(countryJsonFile).read())
-
-
+        with open(countryJsonFile) as f:
+            self.country_geo = json.loads(f.read())
+        
 
     def matchPhoto(self, file):
         
@@ -604,26 +598,26 @@ class DataBase():
         # clear the countryList and stateList because we'll use longer names
         self.countryList = []
         self.stateList = []
-        
+
         # search through each location in the master location file
         # append the long country and state names when found in the country state code data
-        for l in self.masterLocationList:
-            
+        for c in countryCodeData:
+
 #             # append two place holders in the masterLocationList for long country and state names
 #             l.append("")
 #             l.append("")
 #             
-            for c in countryCodeData:
-                
+            for l in self.masterLocationList:
+
                 # find the long country name by looking for a perfect match of "cc-" for the state code
                 # this match is actually for the country because states have characters
                 # after the - character
                 if l["countryCode"] + "-" == c[1]:
-                    
+
                     # when found, save the long country name to the masterLocationList
                     l["countryName"] = c[2]
                     self.countryList.append(c[2])
-                
+
                 # look for a perfect match for the state code
                 if l["stateCode"] == c[1]:
                     
@@ -634,29 +628,36 @@ class DataBase():
                     # no need to keep searching. We've found our long names.
                     break
                     
-            # get rid of duplicates in master country and state lists using the set command
-            self.countryList = list(set(self.countryList))
-            self.stateList = list(set(self.stateList))
-            
-            # sort the master country and state lists
-            self.countryList.sort()
-            self.stateList.sort()                
-            
-            self.countryCodeData = countryCodeData
-            self.countryStateCodeFileFound = True            
+        # get rid of duplicates in master country and state lists using the set command
+        self.countryList = list(set(self.countryList))
+        self.stateList = list(set(self.stateList))
+
+        # sort the master country and state lists
+        self.countryList.sort()
+        self.stateList.sort()
+
+        # self.countryCodeData = countryCodeData
+        self.countryStateCodeFileFound = True
 
 
     def ReadDataFile(self, DataFile):
+
+        self.ClearDatabase() 
         
-        self.ClearDatabase()
-                
         # extract data from zip file if user has chosen a zip file
-        if os.path.splitext(DataFile[0])[1] == ".zip":   
+        #if os.path.splitext(DataFile[0])[1] == ".zip":
+        # 
+        import zipfile
+
+        if zipfile.is_zipfile(DataFile):  
             
-            filehandle = open(DataFile[0], 'rb')
+            filehandle = open(DataFile, 'rb')
+            
             zfile = zipfile.ZipFile(filehandle)
+            
             try:
                 csvfile = io.StringIO(zfile.read("MyEBirdData.csv").decode('utf-8'))
+
             except (KeyError):
                 QApplication.restoreOverrideCursor()
                 self.eBirdFileOpenFlag = False
@@ -666,11 +667,12 @@ class DataBase():
                 msg.setWindowTitle("File failed to load")
                 msg.setStandardButtons(QMessageBox.Ok)
                 msg.exec_()   
-                return
+                return 
         
         # use csv reader to process csv file if user has selected a csv file
-        if os.path.splitext(DataFile[0])[1] == ".csv":        
-            csvfile = open(DataFile[0], 'r')
+         
+        if os.path.splitext(DataFile)[1] == ".csv":        
+            csvfile = open(DataFile, 'r') 
         
         # process CSV values from csvfile.        
         csvdata = csv.DictReader(csvfile)  
@@ -1050,90 +1052,91 @@ class DataBase():
 
             # add sighting to other dicts only if it's a full species, not a / or sp.
             commonName = thisSightingDict["commonName"]
-            if ("/" not in commonName) and ("sp." not in commonName):
+
+            #if ("/" not in commonName) and ("sp." not in commonName):
                 
-                self.allSpeciesList.append(commonName)
+            self.allSpeciesList.append(commonName)
 
-                # use species common name as key
-                if commonName not in self.speciesDict.keys():
-                    self.speciesDict[commonName] = [thisSightingDict]
-                else:
-                    self.speciesDict[commonName].append(thisSightingDict)                                
-            
-                # also add subspecies as key to speciesDict 
-                # to facilitate lookup
-                subspeciesName = thisSightingDict["subspeciesName"]
-                if subspeciesName not in self.speciesDict.keys():
-                    self.speciesDict[subspeciesName] = [thisSightingDict]
-                else:
-                    self.speciesDict[subspeciesName].append(thisSightingDict) 
-                
-                # add sighting to yearDict
-                # use 4-digit year as the key
-                year = thisSightingDict["date"][0:4]
-                if year not in self.yearDict.keys():
-                    self.yearDict[year] = [thisSightingDict]
-                else:
-                    self.yearDict[year].append(thisSightingDict)
-                    
-                # add sighting to monthDict
-                # use 2-digit month as the key
-                month = thisSightingDict["date"][5:7]
-                if month not in self.monthDict.keys():
-                    self.monthDict[month] = [thisSightingDict]
-                else:
-                    self.monthDict[month].append(thisSightingDict)      
-                    
-                # add sighting to dateDict
-                # use full date (yyyy-mm-dd) as the key
-                date = thisSightingDict["date"]
-                if date not in self.dateDict.keys():
-                    self.dateDict[date] = [thisSightingDict]
-                else:
-                    self.dateDict[date].append(thisSightingDict)                                        
+            # use species common name as key
+            if commonName not in self.speciesDict.keys():
+                self.speciesDict[commonName] = [thisSightingDict]
+            else:
+                self.speciesDict[commonName].append(thisSightingDict)
 
-                # add sighting to regionDict
-                # use 3-character code as key
-                regionCodes = thisSightingDict["regionCodes"]
-                for r in regionCodes:
-                    if r not in self.regionDict.keys():
-                        self.regionDict[r] = [thisSightingDict]
-                    else:
-                        self.regionDict[r].append(thisSightingDict) 
+            # also add subspecies as key to speciesDict
+            # to facilitate lookup
+            subspeciesName = thisSightingDict["subspeciesName"]
+            if subspeciesName not in self.speciesDict.keys():
+                self.speciesDict[subspeciesName] = [thisSightingDict]
+            else:
+                self.speciesDict[subspeciesName].append(thisSightingDict)
 
-                # add sighting to countryDict
-                # use 2-character code as key
-                countryCode = thisSightingDict["country"]
-                if countryCode not in self.countryDict.keys():
-                    self.countryDict[countryCode] = [thisSightingDict]
-                else:
-                    self.countryDict[countryCode].append(thisSightingDict)                                
-                    
-                # add sighting to stateDict
-                # use cc-ss code as the key
-                stateCode = thisSightingDict["state"]
-                if stateCode not in self.stateDict.keys():
-                    self.stateDict[stateCode] = [thisSightingDict]
-                else:
-                    self.stateDict[stateCode].append(thisSightingDict)                                
+            # add sighting to yearDict
+            # use 4-digit year as the key
+            year = thisSightingDict["date"][0:4]
+            if year not in self.yearDict.keys():
+                self.yearDict[year] = [thisSightingDict]
+            else:
+                self.yearDict[year].append(thisSightingDict)
 
-                # add sighting to countyDict
-                # use county name as key
-                # don't add sightings whose county name is absent
-                county = thisSightingDict["county"]
-                if county != "":
-                    if county not in self.countyDict.keys():
-                        self.countyDict[county] = [thisSightingDict]
-                    else:
-                        self.countyDict[county].append(thisSightingDict)                                
-                    
-                # add sighting to locationDict
-                # use location name as key
-                location = thisSightingDict["location"]
-                if location not in self.locationDict.keys():
-                    self.locationDict[location] = [thisSightingDict]
+            # add sighting to monthDict
+            # use 2-digit month as the key
+            month = thisSightingDict["date"][5:7]
+            if month not in self.monthDict.keys():
+                self.monthDict[month] = [thisSightingDict]
+            else:
+                self.monthDict[month].append(thisSightingDict)
+
+            # add sighting to dateDict
+            # use full date (yyyy-mm-dd) as the key
+            date = thisSightingDict["date"]
+            if date not in self.dateDict.keys():
+                self.dateDict[date] = [thisSightingDict]
+            else:
+                self.dateDict[date].append(thisSightingDict)
+
+            # add sighting to regionDict
+            # use 3-character code as key
+            regionCodes = thisSightingDict["regionCodes"]
+            for r in regionCodes:
+                if r not in self.regionDict.keys():
+                    self.regionDict[r] = [thisSightingDict]
                 else:
-                    self.locationDict[location].append(thisSightingDict)          
+                    self.regionDict[r].append(thisSightingDict)
+
+            # add sighting to countryDict
+            # use 2-character code as key
+            countryCode = thisSightingDict["country"]
+            if countryCode not in self.countryDict.keys():
+                self.countryDict[countryCode] = [thisSightingDict]
+            else:
+                self.countryDict[countryCode].append(thisSightingDict)
+
+            # add sighting to stateDict
+            # use cc-ss code as the key
+            stateCode = thisSightingDict["state"]
+            if stateCode not in self.stateDict.keys():
+                self.stateDict[stateCode] = [thisSightingDict]
+            else:
+                self.stateDict[stateCode].append(thisSightingDict)
+
+            # add sighting to countyDict
+            # use county name as key
+            # don't add sightings whose county name is absent
+            county = thisSightingDict["county"]
+            if county != "":
+                if county not in self.countyDict.keys():
+                    self.countyDict[county] = [thisSightingDict]
+                else:
+                    self.countyDict[county].append(thisSightingDict)
+
+            # add sighting to locationDict
+            # use location name as key
+            location = thisSightingDict["location"]
+            if location not in self.locationDict.keys():
+                self.locationDict[location] = [thisSightingDict]
+            else:
+                self.locationDict[location].append(thisSightingDict)
             
             # get just the location data from this particular sighting
             # thisMasterLocationEntry = [country, state, county, location]
@@ -1214,7 +1217,7 @@ class DataBase():
 
         # initialize thisSciName variable
         thisSciName = ""
-                
+
         # loop through sighting list to get each species, compare it, and add order and family
         for s in self.sightingList:
 
@@ -1302,9 +1305,9 @@ class DataBase():
             # this is not a single checklist, so remove spuh and slash sightings
             if filter.getChecklistID() == "":
                 commonName = s["commonName"]
-                if "/" not in commonName and "sp." not in commonName:
-                    if self.TestSighting(s, filter) is True:
-                        returnList.append(s)
+                # if "/" not in commonName and "sp." not in commonName:
+                if self.TestSighting(s, filter) is True:
+                    returnList.append(s)
             else:
                 # this is a single checklist, so allow spuh and slash sightings
                 if self.TestSighting(s, filter) is True:
@@ -1349,12 +1352,12 @@ class DataBase():
 
         for s in filteredSightingList:
             commonName = s["commonName"]
-            if "/" not in commonName and "sp." not in commonName:
-                if self.TestSighting(s, filter) is True:
-                    if "photos" in s.keys():
-                        if s["photos"][0]["fileName"] not in photosFound:
-                            photosFound.append(s["photos"][0]["fileName"])
-                            returnList.append(s)      
+            # if "/" not in commonName and "sp." not in commonName:
+            if self.TestSighting(s, filter) is True:
+                if "photos" in s.keys():
+                    if s["photos"][0]["fileName"] not in photosFound:
+                        photosFound.append(s["photos"][0]["fileName"])
+                        returnList.append(s)
         
         returnList = sorted(returnList, key=lambda x: (float(x["taxonomicOrder"]), x["date"], x["time"]))
 
@@ -2848,8 +2851,9 @@ class DataBase():
         
         if self.countryStateCodeFileFound is True:
             for l in self.masterLocationList:
-                if l["countryName"] == longName:
-                    return(l["countryCode"])
+                if "countryName" in l.keys():
+                    if l["countryName"] == longName:
+                        return(l["countryCode"])
         else:
             return(longName) 
                            
@@ -2861,8 +2865,9 @@ class DataBase():
             
         if self.countryStateCodeFileFound is True:
             for l in self.masterLocationList:
-                if l["stateName"] == longName:
-                    return(l["stateCode"])
+                if "stateName" in l.keys():
+                    if l["stateName"] == longName:
+                        return(l["stateCode"])
         else:
             return(longName)
         
@@ -2894,7 +2899,7 @@ class DataBase():
         if self.countryStateCodeFileFound is True:            
             for l in self.masterLocationList:
                 if l["stateCode"] == shortCode:
-                    return(l["stateName"])                    
+                    return(l["stateName"])
         else:
             return(shortCode)
 
@@ -2958,39 +2963,35 @@ class DataBase():
                 self.isoList = natsorted(self.isoList, key=lambda y: y.lower())
 
 
+
     def readPreferences(self):
 
-        # try to open the preferences file
-        
-        if os.path.isfile("yearbirdPreferences.txt"):
-                    
-            with open("yearbirdPreferences.txt", "r") as settingsFile:
-                
-                for line in settingsFile:
-                    
-                    if "startupFolder=" in line:
-                        startupFolder = line[14:].rstrip(" \n\r")
-                        startupFolder = startupFolder.lstrip(" ")
-                        self.startupFolder= startupFolder
-                    
-                    if "photoDataFile=" in line:
-                        photoDataFile = line[14:].rstrip(" \n\r")
-                        photoDataFile = photoDataFile.lstrip(" ")
-                        self.photoDataFile = photoDataFile   
-            
-            settingsFile.close()
+        prefs_dir = os.path.expanduser("~/Library/Application Support/Yearbird")
+        prefs_path = os.path.join(prefs_dir, "yearbirdPreferences.txt")
+
+        if not os.path.isfile(prefs_path):
+            return  # No preferences saved yet
+
+        with open(prefs_path, "r") as settingsFile:
+            for line in settingsFile:
+
+                if line.startswith("startupFolder="):
+                    value = line[len("startupFolder="):].strip()
+                    self.startupFolder = value
+
+                elif line.startswith("photoDataFile="):
+                    value = line[len("photoDataFile="):].strip()
+                    self.photoDataFile = value
                 
     
     def writePreferences(self):
-        
-        f = open("yearbirdPreferences.txt", "w")
-        
-        f.write("startupFolder=" + self.startupFolder)
-        f.write("\n")
-    
-        f.write("photoDataFile=" + self.photoDataFile)
-        f.write("\n")
-        
-        f.close()
+        prefs_dir = os.path.expanduser("~/Library/Application Support/Yearbird")
+        os.makedirs(prefs_dir, exist_ok=True)
+
+        prefs_path = os.path.join(prefs_dir, "yearbirdPreferences.txt")
+
+        with open(prefs_path, "w") as f:
+            f.write("startupFolder=" + self.startupFolder + "\n")
+            f.write("photoDataFile=" + self.photoDataFile + "\n")
         
             

@@ -1,3 +1,5 @@
+#! /usr/bin/env python
+
 # import the GUI forms that we create with Qt Creator
 import code_DataBase
 import code_BigReport
@@ -33,16 +35,20 @@ from math import (
 from PyQt5.QtGui import (
     QCursor,
     QFont,
-    QTextDocument, 
+    QFontMetrics,
+    QIcon,
+    QTextDocument,
     QColor
     )
     
 from PyQt5.QtCore import (
     Qt,
     QDate,
+    QSize,
     QThread,
     pyqtSignal,
-    QTimer
+    QTimer,
+    QEvent
     )
     
 from PyQt5.QtWidgets import (
@@ -59,57 +65,75 @@ from PyQt5.QtPrintSupport import (
     QPrinter
     )
 
-class threadProcessPreferences(QThread):
-
-    sig = pyqtSignal()
-
-    def __init__(self):
-        QThread.__init__(self)
-        self.parent = ""
-
-    
-    def __del__(self):
-        self.wait()
-        
-        
-    def processPreferences(self):
-        
-        self.parent.db.readPreferences()        
-        
-        if self.parent.db.startupFolder != "":
-            if os.path.isdir(self.parent.db.startupFolder):
-                self.parent.OpenDataFile(self.parent.db.startupFolder)
-        
-        if self.parent.db.photoDataFile!= "":
-            if os.path.isfile(self.parent.db.photoDataFile):
-                self.parent.db.readPhotoDataFromFile(self.parent.db.photoDataFile)
-        
-        
-    def run(self):
-#         self.sig.connect(self.parent.finishedProcessingPreferences)                
-        self.processPreferences()
-        self.sig.emit()
-
-
 class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
     # initialize main database that will be used throughout program
     db = code_DataBase.DataBase()
     fontSize = 11
     scaleFactor = 1
-    versionNumber = "0.3"
-    versionDate = "October 8, 2019"    
+    versionNumber = "1.0"
+    versionDate = "March 8, 2026"    
 
     def __init__(self):
         super(self.__class__, self).__init__()
         self.setupUi(self)
         self.setCentralWidget(self.mdiArea)
-        self.actionAboutLapwing.setText("About YearBird")
+        self.actionAboutYearbird.setText("About Yearbird")
+
+        # The form sets scrPhotoFilter with AlignTop + stretch=0, which prevents it
+        # from expanding to fill the dock and causes a spurious scroll bar.
+        self.verticalLayout_4.setAlignment(self.scrPhotoFilter, Qt.Alignment())
+        self.verticalLayout_4.setStretchFactor(self.scrPhotoFilter, 1)
+        # Pin the photo filter content to the top (mirrors how frmFilter is AlignTop
+        # in the standard filter), so items aren't stretched to fill the scroll area.
+        self.verticalLayout_5.setAlignment(self.frmPhotoFilter, Qt.AlignTop)
+
+        _iconDir = os.path.dirname(os.path.abspath(__file__))
+        _whiteIcons = {
+            self.actionOpen:           "icon_open_white.png",
+            self.actionPrint:          "icon_print_white.png",
+            self.actionCreatePDF:      "icon_pdf_white.png",
+            self.actionSpecies:        "icon_bird_white.png",
+            self.actionLocations:      "icon_location_white.png",
+            self.actionChecklists:     "icon_checklists_white.png",
+            self.actionMap:            "icon_map_white.png",
+            self.actionFamilies:       "icon_families_white.png",
+            self.actionDateTotals:     "icon_datetotals_white.png",
+            self.actionLocationTotals: "icon_locationtotals_white.png",
+            self.actionCompareLists:   "icon_compare_white.png",
+            self.actionBigReport:      "icon_tripreport_white.png",
+            self.actionPhotos:         "icon_camera_white.png",
+            self.actionFind:           "icon_find_white.png",
+            self.actionClearAllFilters:"icon_filter_white.png",
+        }
+        for action, filename in _whiteIcons.items():
+            action.setIcon(QIcon(os.path.join(_iconDir, filename)))
+
+        # Remove all separators from the toolbar for uniform spacing
+        for action in self.toolBar.actions():
+            if action.isSeparator():
+                self.toolBar.removeAction(action)
+
+        # Equalise toolbar button widths to the widest label
+        fm = self.toolBar.fontMetrics()
+        toolbarIconSize = self.toolBar.iconSize()
+        maxWidth = max(
+            (max(toolbarIconSize.width(), fm.boundingRect(action.text()).width())
+             for action in self.toolBar.actions()
+             if not action.isSeparator()),
+            default=24
+        )
+        buttonWidth = maxWidth + 24  # padding on each side
+        for action in self.toolBar.actions():
+            btn = self.toolBar.widgetForAction(action)
+            if btn is not None:
+                btn.setFixedWidth(buttonWidth)
         
         self.actionOpen.triggered.connect(self.openDataFileClicked)
         self.actionClose.triggered.connect(self.closeDataFile)
 
-        self.actionAboutLapwing.triggered.connect(self.CreateAboutYearbird)        
+        self.actionAboutYearbird.triggered.connect(self.CreateAboutYearbird)
+        self.actionUserGuide.triggered.connect(self.CreateUserGuide)        
         self.actionPreferences.triggered.connect(self.createPreferences)
         self.actionExit.triggered.connect(self.ExitApp)
         
@@ -206,8 +230,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.cboEndRatingRange.currentIndexChanged.connect(self.ComboEndRatingRangeChanged)
         self.cboSpeciesHasPhoto.addItems(["**All**", "Photographed", "Not photographed"])                    
         self.cboSpeciesHasPhoto.currentIndexChanged.connect(self.ComboSpeciesHasPhotosChanged)
-#         self.cboSpeciesHasPhoto.setVisible(False)
-#         self.lblSpeciesHasPhoto.setVisible(False)
         self.cboCamera.currentIndexChanged.connect(self.ComboCameraChanged)        
         self.cboLens.currentIndexChanged.connect(self.ComboLensChanged)
         self.cboStartShutterSpeedRange.currentIndexChanged.connect(self.ComboStartShutterSpeedChanged)
@@ -221,20 +243,22 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         
         self.lblSlider = QLabel(self.statusBar)
         self.lblSlider.setText("Display Size")
+        self.lblSlider.setVisible(False)
         self.sldFontSize = QSlider(self.statusBar)
         self.sldFontSize.setSingleStep(10)
         self.sldFontSize.setProperty("value", 50)
         self.sldFontSize.setOrientation(Qt.Horizontal)
         self.sldFontSize.setObjectName("sldFontSize")
         self.sldFontSize.valueChanged.connect(self.ScaleDisplay)
+        self.sldFontSize.setVisible(False)
         self.lblStatusBarMessage = QLabel(self.statusBar)
-        self.lblStatusBarMessage.setText("")    
+        self.lblStatusBarMessage.setText("")
         self.lblStatusBarMessage.setVisible(False)
-        self.statusBar.addWidget(self.lblSlider)
-        self.statusBar.addWidget(self.sldFontSize)
+        # self.statusBar.addWidget(self.lblSlider)
+        # self.statusBar.addWidget(self.sldFontSize)
         self.statusBar.addWidget(self.lblStatusBarMessage)
         
-        self.dckPhotoFilter.setMinimumWidth(215)
+        self.dckPhotoFilter.setMinimumWidth(235)
         self.dckFilter.setMinimumWidth(215)
         
         self.setWindowTitle("Yearbird v. " + self.versionNumber)
@@ -247,6 +271,12 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.showMaximized()
         self.ScaleDisplay()
         
+        self.processPreferences()
+
+        self.subWindowFocusOrder = []
+        self._windowBeingClosed = None
+        self.mdiArea.subWindowActivated.connect(self.onSubWindowActivated)
+
         QApplication.processEvents()
 
 
@@ -256,23 +286,59 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
         if reply is True:
             event.accept()
-        
-                              
+
+
+    def eventFilter(self, obj, event):
+        # Detect when a tracked subwindow is about to close so we can
+        # restore focus to the correct window afterward.
+        if event.type() == QEvent.Close and obj in self.subWindowFocusOrder:
+            self._windowBeingClosed = obj
+            QTimer.singleShot(0, self.restorePreviousFocus)
+        return False
+
+
+    def onSubWindowActivated(self, window):
+        if window is None:
+            return
+        # Install our event filter the first time each subwindow is activated.
+        if not getattr(window, '_focusFilterInstalled', False):
+            window.installEventFilter(self)
+            window._focusFilterInstalled = True
+        # Ignore Qt's automatic re-activation that fires while a close is in progress.
+        if self._windowBeingClosed is not None:
+            return
+        if window in self.subWindowFocusOrder:
+            self.subWindowFocusOrder.remove(window)
+        self.subWindowFocusOrder.append(window)
+
+
+    def restorePreviousFocus(self):
+        openWindows = set(self.mdiArea.subWindowList())
+        self.subWindowFocusOrder = [w for w in self.subWindowFocusOrder
+                                    if w in openWindows]
+        self._windowBeingClosed = None
+        if self.subWindowFocusOrder:
+            self.mdiArea.setActiveSubWindow(self.subWindowFocusOrder[-1])
+
+
     def processPreferences(self):
         
-        self.threadPreferences = threadProcessPreferences()
-        
-        self.threadPreferences.sig.connect(self.finishedProcessingPreferences)                        
-        self.threadPreferences.parent = self
-        
-        self.threadPreferences.start()
+        # Read preferences directly on the main thread 
+        self.db.readPreferences()
+
+        # If a startup folder is defined and valid, open it
+        if self.db.startupFolder and os.path.isdir(self.db.startupFolder):
+            self.OpenDataFile(self.db.startupFolder)             
+
+            # If a photo data file is defined and valid, load it
+            if self.db.photoDataFile and os.path.isfile(self.db.photoDataFile):
+                self.db.readPhotoDataFromFile(self.db.photoDataFile)
+
+        # Now that preferences are processed, continue with UI updates
+        self.finishedProcessingPreferences()
         
 
     def finishedProcessingPreferences(self):
-        
-        if self.db.photoDataFileOpenFlag == True:
-            self.fillPhotoComboBoxes()
-            self.showPhotoFilter()
         
         if self.db.eBirdFileOpenFlag == True:
             self.fillingLocationComboBoxesFlag = True
@@ -280,10 +346,18 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.fillingLocationComboBoxesFlag = False
             self.showStandardFilter()
             self.CreateSpeciesList()
+            
+            #show photo filter if an ebird file has been read and a photo file has been opened
+            if self.db.photoDataFileOpenFlag == True:
+                self.fillPhotoComboBoxes()
+                self.showPhotoFilter()
+            
             self.showFileDataMessage()
+            
             
           
     def ScaleDisplay(self):
+        
         
         self.scaleFactor = self.sldFontSize.value()/50
         if self.scaleFactor > 1:
@@ -316,17 +390,17 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         for w in filterFrameChildren:
                          
             if w.objectName()[0:3] == "cbo":
-                w.setFont(QFont("Helvetica", self.fontSize))    
-                metrics = w.fontMetrics()                
+                w.setFont(QFont("Helvetica", self.fontSize))
+                metrics = w.fontMetrics()
                 cboText = w.currentText()
                 if cboText == "":
                     cboText = "Dummy Text"
                 itemTextWidth = metrics.boundingRect(cboText).width()
-                itemTextHeight = metrics.boundingRect(cboText).height()
+                itemTextHeight = metrics.height()  # full line height; independent of current text content
                 w.setMinimumWidth(floor(1.1 * itemTextWidth))
-                w.setMinimumHeight(floor(1.1 * itemTextHeight))
-                w.setMaximumHeight(floor(1.1 * itemTextHeight))
-                w.resize(1.1 * itemTextHeight, 1.1 * itemTextWidth)
+                w.setMinimumHeight(floor(2 * itemTextHeight))
+                w.setMaximumHeight(floor(2 * itemTextHeight))
+                w.resize(int(2 * itemTextHeight), int(2 * itemTextWidth))
        
             if w.objectName()[0:3] == "lbl":
                 w.setFont(QFont("Helvetica", self.fontSize))    
@@ -351,30 +425,30 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                             + str(self.calStartDate.date().day()))
                 itemTextWidth = metrics.boundingRect(startDate).width()
                 itemTextHeight = metrics.boundingRect(startDate).height()
-                w.setMinimumWidth(floor(1.1 * itemTextWidth))
-                w.setMinimumHeight(floor(1.1 * itemTextHeight))
-                w.setMaximumHeight(floor(1.1 * itemTextHeight))
-                w.resize(1.1 * itemTextHeight, 1.1 * itemTextWidth)                     
+                w.setMinimumWidth(floor(2 * itemTextWidth))
+                w.setMinimumHeight(floor(2 * itemTextHeight))
+                w.setMaximumHeight(floor(2 * itemTextHeight))
+                w.resize(int(2 * itemTextHeight), int(2 * itemTextWidth))
 
         for w in (
             self.frmStartSeasonalRange,
             self.frmEndSeasonalRange,
+            self.frmRatingRange,
             self.frmShutterSpeedRange,
             self.frmApertureRange,
             self.frmIsoRange,
-            self.frmFocalLengthRange, 
-            self.frmRatingRange
+            self.frmFocalLengthRange,
             ):
-            
-            w.setMinimumWidth(floor(1.5 * itemTextWidth))
-            w.setMinimumHeight(floor(1.5* itemTextHeight))
-            w.setMaximumHeight(floor(1.5 * itemTextHeight))
-            w.resize(1.5 * itemTextHeight, 1.5 * itemTextWidth) 
+            w.setMinimumWidth(floor(2 * itemTextWidth))
+            w.setMinimumHeight(floor(2 * itemTextHeight))
+            w.setMaximumHeight(floor(2 * itemTextHeight))
+            w.resize(int(2 * itemTextHeight), int(2 * itemTextWidth))
             w.adjustSize()
+
             
-        self.scrPhotoFilter.setMinimumHeight(30 * itemTextHeight)
-        self.scrPhotoFilter.setMinimumWidth(2.5 * itemTextWidth)
-        self.scrFilter.setMinimumWidth(2.5 * itemTextWidth)
+        self.scrPhotoFilter.setMinimumHeight(0)
+        self.scrPhotoFilter.setMinimumWidth(int(2.5 * itemTextWidth))
+        self.scrFilter.setMinimumWidth(int(2.5 * itemTextWidth))
             
         # scale open children windows
         for w in self.mdiArea.subWindowList():        
@@ -476,78 +550,59 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         
         
     def addPhotos(self):
-                
-        # if no data file is currently open, abort        
-        if MainWindow.db.eBirdFileOpenFlag is not True:
-            self.CreateMessageNoFile()   
+        # Abort if no data file is open
+        if not MainWindow.db.eBirdFileOpenFlag:
+            self.CreateMessageNoFile()
             return
 
-        photos = QFileDialog.getOpenFileNames(self, 'Select photo files', "", "Jpeg Images (*.jpg *.jpeg)")
-                
-        # create list to hold file names of photos not already in db
-        unmatchedPhotos = []
-        
-        if len(photos) > 0: 
-                
-            filter = code_Filter.Filter()
-            
-            photosAlreadyInDb = self.db.GetPhotos(filter)
-            
-            countPhotosNotProcessed = 0
-                                
-            for p in photos[0]:
-                if p in photosAlreadyInDb:
-                    countPhotosNotProcessed += 1
-                else:
-                    unmatchedPhotos.append(p)
-    
-            if countPhotosNotProcessed > 0:
-                     
-                msg = QMessageBox()
-                msg.setIcon(QMessageBox.Information)
-                msg.setText(str(countPhotosNotProcessed) + " files were already attached to sightings and are not displayed here.\n\nTo edit their attachments, use Manage Photos By Filter.")
-                msg.setWindowTitle("Photos")
-                msg.setStandardButtons(QMessageBox.Ok)
-                msg.exec_()
-                        
-        if len(unmatchedPhotos) > 0:
-            
-            # create new Date Totals child window        
+        photo_paths, _ = QFileDialog.getOpenFileNames(self, 'Select photo files', "", "Jpeg Images (*.jpg *.jpeg)")
+
+        if not photo_paths:
+            return
+
+        filter_obj = code_Filter.Filter()
+        photos_already_in_db = set(self.db.GetPhotos(filter_obj))  # Use set for fast lookup
+
+        unmatched_photos = [p for p in photo_paths if p not in photos_already_in_db]
+        count_photos_not_processed = len(photo_paths) - len(unmatched_photos)
+
+        if count_photos_not_processed > 0:
+            QMessageBox.information(
+                self,
+                "Photos",
+                f"{count_photos_not_processed} files were already attached to sightings and are not displayed here.\n\n"
+                "To edit their attachments, use Manage Photos By Filter.",
+                QMessageBox.Ok
+            )
+
+        if unmatched_photos:
             sub = code_ManagePhotos.ManagePhotos()
-     
-            # save the MDI window as the parent for future use in the child        
-            sub.mdiParent = self 
-            
+            sub.mdiParent = self
+
             sub.scaleMe()
             sub.resizeMe()
 
-            # add and position the child to our MDI area
             self.mdiArea.addSubWindow(sub)
-            self.PositionChildWindow(sub,  self)
+            self.PositionChildWindow(sub, self)
             sub.show()
-            
+
             QApplication.processEvents()
- 
-            # call the child's routine to fill it with data
-            QTimer.singleShot(20, lambda: sub.FillPhotosByFiles(unmatchedPhotos))
-
- 
+            QTimer.singleShot(20, lambda: sub.FillPhotosByFiles(unmatched_photos))
         else:
-                 
-            msg = QMessageBox()
-            msg.setIcon(QMessageBox.Information)
-            msg.setText("No new photos files were found.")
-            msg.setWindowTitle("Photos")
-            msg.setStandardButtons(QMessageBox.Ok)
-            msg.exec_()
-
+            QMessageBox.information(
+                self,
+                "Photos",
+                "No new photo files were found.",
+                QMessageBox.Ok
+            )
+           
     
     def savePhotoSettings(self):
         
         photoFileInUse = self.db.photoDataFile
         
         # open save dialog box to get name of photo settings file
-        fname = QFileDialog.getSaveFileName(self,"QFileDialog.getOpenFileNames()", photoFileInUse,"Yearbird Photo Settings File (*.csv)")
+        fname = QFileDialog.getSaveFileName(self, "Save Photo Settings File", photoFileInUse, "Yearbird Photo Settings File (*.csv)")
         
         # check if user pressed cancel or if we have a file name for saving
         if fname[0] == "":
@@ -619,7 +674,36 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         
         self.cboStartRatingRange.setCurrentIndex(0)
         self.cboEndRatingRange.setCurrentIndex(0)
-            
+
+        # Adding items via addItem() triggers Qt layout updates that can override
+        # the size constraints set by ScaleDisplay().  Re-apply them now so these
+        # comboboxes stay the same height as the rest of the filter.
+        cboHeight = floor(2 * QFontMetrics(QFont("Helvetica", self.fontSize)).height())
+
+        for w in (
+            self.cboCamera,
+            self.cboLens,
+            self.cboStartShutterSpeedRange,
+            self.cboEndShutterSpeedRange,
+            self.cboStartApertureRange,
+            self.cboEndApertureRange,
+            self.cboStartIsoRange,
+            self.cboEndIsoRange,
+            self.cboStartFocalLengthRange,
+            self.cboEndFocalLengthRange,
+            ):
+            w.setMinimumHeight(cboHeight)
+            w.setMaximumHeight(cboHeight)
+
+        for w in (
+            self.frmShutterSpeedRange,
+            self.frmApertureRange,
+            self.frmIsoRange,
+            self.frmFocalLengthRange,
+            ):
+            w.setMinimumHeight(cboHeight)
+            w.setMaximumHeight(cboHeight)
+
 
     def removeUnfoundPhotos(self):
         
@@ -829,8 +913,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         if e.key() == Qt.Key_F and e.modifiers() & Qt.ControlModifier:
             self.CreateFind()
             
-        
-
                 
     def CalendarClicked(self):
         if MainWindow.db.eBirdFileOpenFlag is True:
@@ -851,10 +933,10 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         
         # add and position the child to our MDI area        
         self.mdiArea.addSubWindow(sub)
-        sub.setGeometry(self.dckFilter.width() * 2, self.dckFilter.height() * .25, sub.width(), sub.height())
+        #sub.setGeometry(self.dckFilter.width() * 2, self.dckFilter.height() * .25, sub.width(), sub.height())
         
-        sub.scaleMe()
-        sub.resizeMe()
+        #sub.scaleMe()
+        #sub.resizeMe()
         
         sub.show()
         
@@ -966,22 +1048,23 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 if file.endswith(".zip") and "ebird" in str(file):
                     
                     list_of_files.append(os.path.join(startupFolder, file))
-
-#             list_of_files = glob.glob(startupFolder + "/ebird*.zip")
             
-            fname = max(list_of_files, key=os.path.getctime)
-            
-            # add full path to latest_file
-            fname = [os.path.join(startupFolder, fname)]
-            
-            fname.append('eBird Data Files (*.csv *.zip)')
+            try:
+                #try to get the most recent file from the list of ebird zip files, if any were found
+                fname = max(list_of_files, key=os.path.getctime)
+            except:
+                #none were found, so return an empty string.  Tell ther user.
+                fname = ""
+                msg = QMessageBox()
+                msg.setText("No ebird file was found in the startup folder specified in your preferences.")
+                msg.exec_()
 
         else:
- 
-            fname = QFileDialog.getOpenFileName(self,"QFileDialog.getOpenFileNames()", "","eBird Data Files (*.csv *.zip)")
-             
+            
+            #No startup folder was specified, so ask user which ebird file to open.  Take only the first element of the tuple, which is the filename
+            fname = QFileDialog.getOpenFileName(self,"QFileDialog.getOpenFileNames()", "","eBird Data Files (*.csv *.zip)")[0]   
                 
-        if fname[0] != "":
+        if fname != "":
             
             QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
                         
@@ -989,42 +1072,22 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
             MainWindow.db.ReadDataFile(fname)            
             
-            # now try to open a taxonomy file, if one exists in the same directory as the python script
-            # get the directory path leading to the file in an OS-neutral way
-            
-            # look for a taxonomy file. It must be in the same directory as the script directory
-            # and be a csv file named "eBird_Taxonomy.csv"
-            if getattr(sys, 'frozen', False):
-                # frozen
-                scriptDirectory = os.path.dirname(sys.executable)
-            else:
-                # unfrozen
-                scriptDirectory = os.path.dirname(os.path.realpath(__file__))
-                               
-            # scriptDirectory = os.path.dirname(__file__)
-            taxonomyFile = os.path.join(scriptDirectory, "eBird_Taxonomy.csv")
-            
-            if os.path.isfile(taxonomyFile) is True:
+            # Load helper files using resource_path from Code_DataBase
+
+            # Taxonomy file
+            taxonomyFile = code_DataBase.resource_path("eBird_Taxonomy.csv")
+            if os.path.isfile(taxonomyFile):
                 MainWindow.db.ReadTaxonomyDataFile(taxonomyFile)
-                
-            # try to open the country-state code file , if one exists in the same directory as python script
-            # this file lists all the country and state codes, and their longer names for better legibility
-            # It must be named "ebird_api_ref_location_eBird_list_subnational1.csv".
-            countryStateCodeFile = os.path.join(scriptDirectory, "ebird_api_ref_location_eBird_list_subnational1.csv")
-            
-            if os.path.isfile(countryStateCodeFile) is True:
-                MainWindow.db.ReadCountryStateCodeFile(countryStateCodeFile) 
 
-            # try to open the BBL banding code file , if one exists in the same directory as python script
-            # It must be named "eBird_BBLCodes.csv".
-            bblCodeFile = os.path.join(scriptDirectory, "eBird_BBLCodes.csv")
-            
-            if os.path.isfile(bblCodeFile) is True:
-                MainWindow.db.ReadBBLCodeFile(bblCodeFile) 
+            # Country/state code file
+            countryStateCodeFile = code_DataBase.resource_path("ebird_api_ref_location_eBird_list_subnational1.csv")
+            if os.path.isfile(countryStateCodeFile):
+                MainWindow.db.ReadCountryStateCodeFile(countryStateCodeFile)
 
-#                                      
-#         if self.db.eBirdFileOpenFlag is True:
-#             self.showStandardFilter()
+            # BBL banding code file
+            bblCodeFile = code_DataBase.resource_path("eBird_BBLCodes.csv")
+            if os.path.isfile(bblCodeFile):
+                MainWindow.db.ReadBBLCodeFile(bblCodeFile)
                                              
         QApplication.restoreOverrideCursor()
 
@@ -1091,6 +1154,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             # add and position the child to our MDI area
             self.mdiArea.addSubWindow(sub)
             self.PositionChildWindow(sub,  self)
+            sub.resize(1000, sub.height())
             sub.show() 
 
         else:
@@ -1135,7 +1199,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             pageSize = printer.paperSize(QPrinter.Point)
             document.setPageSize(pageSize)
             
-            filename = QFileDialog.getSaveFileName(self,"QFileDialog.getSaveFileNames()", "","PDF Files (*.pdf)")
+            filename = QFileDialog.getSaveFileName(self, "Save PDF File", "", "PDF Files (*.pdf)")
             
             if filename[0] != "":
                 
@@ -1228,24 +1292,39 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         QApplication.restoreOverrideCursor() 
 
 
-    def CreateAboutYearbird(self):   
-        
+    def CreateAboutYearbird(self):
+
         QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
-        
+
         sub = code_Web.Web()
 
-        # save the MDI window as the parent for future use in the child        
-        sub.mdiParent = self        
+        # save the MDI window as the parent for future use in the child
+        sub.mdiParent = self
 
-        # call the child's routine to fill it with data        
+        # call the child's routine to fill it with data
         sub.loadAboutYearbird()
-            
+
         # add and position the child to our MDI area
         self.mdiArea.addSubWindow(sub)
         self.PositionChildWindow(sub,  self)
         sub.show()
-            
-        QApplication.restoreOverrideCursor() 
+
+        QApplication.restoreOverrideCursor()
+
+
+    def CreateUserGuide(self):
+
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+
+        sub = code_Web.Web()
+        sub.mdiParent = self
+        sub.loadUserGuide()
+
+        self.mdiArea.addSubWindow(sub)
+        self.PositionChildWindow(sub, self)
+        sub.show()
+
+        QApplication.restoreOverrideCursor()
 
 
     def CreateMap(self):   
@@ -2347,13 +2426,20 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 thisRegionLocations = set()
                 
                 # loop through masterLocationList to find locations filtered for the chosen region
+                print(MainWindow.db.masterLocationList)
                 for l in MainWindow.db.masterLocationList:
                     
                     if thisRegionCode in l["regionCodes"]:
+                                                
+                        if "countryName" in l.keys():
+                            if l["countryName"] != "": thisRegionCountries.add(l["countryName"])
                         
-                        thisRegionCountries.add(l["countryName"])
-                        if l["stateName"] != "": thisRegionStates.add(l["stateName"])
-                        if l["county"] != "": thisRegionCounties.add(l["county"])
+                        if "stateName" in l.keys():
+                            if l["stateName"] != "": thisRegionStates.add(l["stateName"])
+                        
+                        if "county" in l.keys():
+                            if l["county"] != "": thisRegionCounties.add(l["county"])
+                            
                         if l["location"] != "": thisRegionLocations.add(l["location"])
                 
                 # remove duplicates using the set command, then return to list format
@@ -2402,7 +2488,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
        
             # use the selected country to filter the masterLocationList
             # clear the subsidiary comboboxes and populat them anew with filtered locations
-            thisCountry = MainWindow.db.GetCountryCode(self.cboCountries.currentText())
+            thisCountry = self.cboCountries.currentText()
             self.cboStates.clear()
             self.cboCounties.clear()
             self.cboLocations.clear()
@@ -2430,15 +2516,18 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 thisCountryStates = set()
                 thisCountryCounties = set()
                 thisCountryLocations = set()
-                
+
                 # loop through masterLocationList to find locations filtered for the chose country
                 for l in MainWindow.db.masterLocationList:
+                    if "countryName" in l.keys():
                     
-                    if l["countryCode"] == thisCountry:
-                        
-                        if l["stateName"] != "": thisCountryStates.add(l["stateName"])
-                        if l["county"] != "": thisCountryCounties.add(l["county"])
-                        if l["location"] != "": thisCountryLocations.add(l["location"])
+                        if l["countryName"] == thisCountry:
+
+                            if "stateName" in l.keys():
+                                if l["stateName"] != "": thisCountryStates.add(l["stateName"])
+
+                            if l["county"] != "": thisCountryCounties.add(l["county"])
+                            if l["location"] != "": thisCountryLocations.add(l["location"])
                 
                 # remove duplicates using the set command, then return to list format
                 thisCountryStates = list(thisCountryStates)

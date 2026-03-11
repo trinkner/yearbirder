@@ -28,7 +28,8 @@ from PyQt5.QtWidgets import (
     QHeaderView,
     QMdiSubWindow,
     QTreeWidgetItem,
-    QPushButton
+    QPushButton,
+    QMessageBox
     )
 
 from math import floor
@@ -49,7 +50,8 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
         self.resized.connect(self.resizeMe)                    
         self.trLocations.currentItemChanged.connect(self.FillDates)
         self.trLocations.itemDoubleClicked.connect(self.CreateLocation)
-        self.trDates.currentItemChanged.connect(lambda: self.FillLocations(self.trDates))   
+        self.trDates.currentItemChanged.connect(lambda: self.FillLocations(self.trDates))
+        self.trDates.itemDoubleClicked.connect(lambda: self.FillLocations(self.trDates))   
         self.trMonthDates.currentItemChanged.connect(lambda: self.FillLocations(self.trMonthDates))           
         self.lstDates.itemDoubleClicked.connect(lambda: self.CreateSpeciesList(self.lstDates))   
         self.tblYearLocations.itemDoubleClicked.connect(lambda: self.CreateSpeciesList(self.tblYearLocations))
@@ -86,6 +88,15 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
         else:
             # add species Quick Entry Code code used by eBird
             self.lblSpeciesCode.setText("eBird Entry Code: " + self.mdiParent.db.GetQuickEntryCode(Species).upper())
+
+        # hide nonapplicable web buttons and info for spuh, hybrid and uncertain sightings
+        if "sp." in Species or "/" in Species or " x " in Species:
+            self.buttonWikipedia.hide()
+            self.buttonAllAboutBirds.hide()
+            self.buttonAudubon.hide()
+            self.lblScientificName.hide()
+            self.lblSpeciesCode.hide()
+
                 
         # find list of dates for species, to find oldest and newest
         filter = code_Filter.Filter()
@@ -120,7 +131,7 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
             )
                                                        
         self.lblMostRecentlySeen.setText(
-            "Most recently seen: " 
+            "Last seen: " 
             + dbDates[len(dbDates ) - 1] 
             + " at " 
             + lastLocation
@@ -354,8 +365,11 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
 
     def FillLocations(self,  callingWidget):
         
-        species = self.lblCommonName.text()
         currentItem = callingWidget.currentItem()
+        if currentItem is None:
+            return
+        
+        species = self.lblCommonName.text()
         
         filter = code_Filter.Filter()
         filter.setSpeciesName(species)
@@ -363,24 +377,28 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
         if callingWidget.objectName() == "trDates":
             locationWidget = self.tblYearLocations
             
+            parent = currentItem.parent()
+            
             # check if currentItem is a year
-            if currentItem.parent() is None:
+            if parent is None:
                 filter.setStartDate(currentItem.text(0) + "-01-01")
-                filter.setEndDate(currentItem.text(0) + "-12-31")                
-            
+                filter.setEndDate(currentItem.text(0) + "-12-31")
+
             # check if currentItem is a month
-            elif currentItem.parent().parent() is None:
-                month = currentItem.text(0)
-                monthNumberString =  self.mdiParent.db.monthNumberDict[month]
-                lastDayOfThisMonth = self.mdiParent.db.GetLastDayOfMonth(monthNumberString)
-                year = currentItem.parent().text(0)
-                filter.setStartDate(year + "-" + monthNumberString + "-01")
-                filter.setEndDate(year + "-" + monthNumberString + "-" + lastDayOfThisMonth)
-            
-            # item is a just a single date
             else:
-                filter.setStartDate(currentItem.text(0))
-                filter.setEndDate(currentItem.text(0))                
+                grandparent = parent.parent()
+                if grandparent is None:
+                    month = currentItem.text(0)
+                    monthNumberString = self.mdiParent.db.monthNumberDict[month]
+                    lastDayOfThisMonth = self.mdiParent.db.GetLastDayOfMonth(monthNumberString)
+                    year = parent.text(0)
+                    filter.setStartDate(year + "-" + monthNumberString + "-01")
+                    filter.setEndDate(year + "-" + monthNumberString + "-" + lastDayOfThisMonth)
+                
+                #currentItem is a date
+                else:
+                    filter.setStartDate(currentItem.text(0))
+                    filter.setEndDate(currentItem.text(0))             
 
         if callingWidget.objectName() == "trMonthDates":
 
@@ -408,7 +426,7 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
                 filter.setStartDate(currentItem.text(0))
                 filter.setEndDate(currentItem.text(0))    
         
-        locations = self.mdiParent.db.GetLocations(filter, "Checklist")          
+        locations = self.mdiParent.db.GetLocations(filter, "Checklist")     
         
         locationWidget.clear()        
         locationWidget.setColumnCount(2)       
@@ -418,23 +436,25 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
         header = locationWidget.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.Stretch)
         locationWidget.setShowGrid(False)
-
         metrics = locationWidget.fontMetrics()
-        textHeight = metrics.boundingRect("A").height()            
+        textHeight = metrics.boundingRect("A").height()   
+      
         
         R = 0
         for l in locations:
+            
             locationItem = QTableWidgetItem()
             locationItem.setText(l[0])
+            
             # store checklist ID in hidden data component of item
             locationItem.setData(Qt.UserRole,  QVariant(l[2]))
             speciesCountItem = QTableWidgetItem()
-            speciesCountItem.setData(Qt.DisplayRole, l[1])
-            locationWidget.setItem(R, 0, locationItem)  
-            locationWidget.setItem(R, 1, speciesCountItem)
-            locationWidget.setRowHeight(R, textHeight * 1.1)                 
+            speciesCountItem.setData(Qt.DisplayRole, l[1])            
+            locationWidget.setItem(R, 0, locationItem)              
+            locationWidget.setItem(R, 1, speciesCountItem)            
+            locationWidget.setRowHeight(R, int(textHeight * 1.1))                           
             R = R + 1
-            
+        
         self.lblLocationsForDate.setText("Checklists (" + str(locationWidget.rowCount()) + ")")
 
 
@@ -790,8 +810,8 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
     def scaleMe(self):
                
         scaleFactor = self.mdiParent.scaleFactor
-        windowWidth =  800  * scaleFactor
-        windowHeight = 580 * scaleFactor            
+        windowWidth =  int(800  * scaleFactor)
+        windowHeight = int(580 * scaleFactor)            
         self.resize(windowWidth, windowHeight)
         
         fontSize = self.mdiParent.fontSize
@@ -813,8 +833,9 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
         self.lblOrderName.setFont(baseFont)
 
         metrics = self.trDates.fontMetrics()
-        textHeight = metrics.boundingRect("2222-22-22").height()            
-        textWidth= metrics.boundingRect("2222-22-22").width()  
+        textHeight = int(metrics.boundingRect("2222-22-22").height())
+        textWidth= int(metrics.boundingRect("2222-22-22").width())
+        myQSize = QSize(int(textWidth * 1.1), int(textHeight * 1.75))
 
         self.buttonWikipedia.resize(self.buttonWikipedia.x(), textHeight)
         self.buttonAudubon.resize(self.buttonWikipedia.x(), textHeight)
@@ -824,32 +845,32 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
 
         root = self.trLocations.invisibleRootItem()
         for i in range(root.childCount()):
-            root.child(i).setSizeHint(0, QSize(textWidth * 1.1, textHeight * 1.1))
+            root.child(i).setSizeHint(0, myQSize)
             for ii in range(root.child(i).childCount()):
-                root.child(i).child(ii).setSizeHint(0, QSize(textWidth * 1.1, textHeight * 1.1))
+                root.child(i).child(ii).setSizeHint(0, myQSize)
                 for iii in range(root.child(i).child(ii).childCount()):
-                    root.child(i).child(ii).child(iii).setSizeHint(0, QSize(textWidth * 1.1, textHeight * 1.1)) 
+                    root.child(i).child(ii).child(iii).setSizeHint(0, myQSize) 
                     for iv in range(root.child(i).child(ii).child(iii).childCount()):
-                        root.child(i).child(ii).child(iii).child(iv).setSizeHint(0, QSize(textWidth * 1.1, textHeight * 1.1)) 
+                        root.child(i).child(ii).child(iii).child(iv).setSizeHint(0, myQSize) 
         
         root = self.trDates.invisibleRootItem()
         for i in range(root.childCount()):
-            root.child(i).setSizeHint(0, QSize(textWidth * 1.1, textHeight * 1.1))
+            root.child(i).setSizeHint(0, myQSize)
             for ii in range(root.child(i).childCount()):
-                root.child(i).child(ii).setSizeHint(0, QSize(textWidth * 1.1, textHeight * 1.1))
+                root.child(i).child(ii).setSizeHint(0, myQSize)
                 for iii in range(root.child(i).child(ii).childCount()):
-                    root.child(i).child(ii).child(iii).setSizeHint(0, QSize(textWidth * 1.1, textHeight * 1.1)) 
+                    root.child(i).child(ii).child(iii).setSizeHint(0, myQSize) 
  
         root = self.trMonthDates.invisibleRootItem()
         for i in range(root.childCount()):
-            root.child(i).setSizeHint(0, QSize(textWidth * 1.1, textHeight * 1.1))
+            root.child(i).setSizeHint(0, myQSize)
             for ii in range(root.child(i).childCount()):
-                root.child(i).child(ii).setSizeHint(0, QSize(textWidth * 1.1, textHeight * 1.1))
+                root.child(i).child(ii).setSizeHint(0, myQSize)
                 for iii in range(root.child(i).child(ii).childCount()):
-                    root.child(i).child(ii).child(iii).setSizeHint(0, QSize(textWidth * 1.1, textHeight * 1.1)) 
+                    root.child(i).child(ii).child(iii).setSizeHint(0, myQSize) 
 
         metrics = self.tblYearLocations.fontMetrics()
-        textHeight = metrics.boundingRect("A").height()            
+        textHeight = int(metrics.boundingRect("A").height())
         for r in range(self.tblYearLocations.rowCount()):
             self.tblYearLocations.setRowHeight(r, textHeight * 1.1)
         for r in range(self.tblMonthLocations.rowCount()):

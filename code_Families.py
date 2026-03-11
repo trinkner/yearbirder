@@ -287,7 +287,7 @@ class Families(QMdiSubWindow, form_Families.Ui_frmFamilies):
             
         self.mdiParent.SetChildDetailsLabels(self, self.filter)
 
-        self.setWindowTitle("Families: "+ self.lblLocation.text() + ": " + self.lblDateRange.text())
+        self.setWindowTitle(self.filter.buildWindowTitle("Families", self.mdiParent.db, count=len(self.familiesList), countUnit="Families"))
         
         QApplication.processEvents()
         
@@ -402,8 +402,8 @@ class Families(QMdiSubWindow, form_Families.Ui_frmFamilies):
     def scaleMe(self):
                
         scaleFactor = self.mdiParent.scaleFactor
-        windowWidth =  780  * scaleFactor
-        windowHeight = 500 * scaleFactor            
+        windowWidth =  int(780  * scaleFactor)
+        windowHeight = int(500 * scaleFactor)            
         self.resize(windowWidth, windowHeight)
         
         fontSize = self.mdiParent.fontSize
@@ -423,13 +423,13 @@ class Families(QMdiSubWindow, form_Families.Ui_frmFamilies):
         self.lblDetails.setStyleSheet("QLabel { font: bold }");
 
         metrics = self.tblPieChartLegend.fontMetrics()
-        textHeight = metrics.boundingRect("A").height()        
-        textWidth = metrics.boundingRect("Rank").width()
+        textHeight = int(metrics.boundingRect("A").height())
+        textWidth = int(metrics.boundingRect("Rank").width())
         
         for t in [self.tblPieChartLegend]:
             header = t.horizontalHeader()
             header.resizeSection(0,  floor(.75 * textWidth))
             header.resizeSection(2,  floor(.75 * textWidth))
             for r in range(t.rowCount()):
-                t.setRowHeight(r, textHeight * 1.1) 
+                t.setRowHeight(r, int(textHeight * 1.1)) 
     
