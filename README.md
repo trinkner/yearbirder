@@ -1,3 +1,5 @@
+<img src="Yearbird_Icon_1024.png" alt="Yearbird" width="120">
+
 # Yearbird
 
 A desktop application for exploring and analysing your personal [eBird](https://ebird.org) data.
