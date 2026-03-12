@@ -303,17 +303,20 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
         minimalSightingList = self.mdiParent.db.GetMinimalFilteredSightingsList(filter)
         
         for s in minimalSightingList:
-            
-            # Consider only full species, not slash or spuh or hybrid entries
-            commonName = s["commonName"]
-            if "/" not in commonName and "sp." not in commonName and " x " not in commonName:
-                
-                if self.mdiParent.db.TestSighting(s, filter):
-                
-                    if s["state"][3:5] not in stateDict.keys():
-                        stateDict[s["state"][3:5]] = [s]
-                    else:
-                        stateDict[s["state"][3:5]].append(s)                
+
+            # Only count US sightings since we're only showing the US choropleth
+            if s["country"] == "US":
+
+                # Consider only full species, not slash or spuh or hybrid entries
+                commonName = s["commonName"]
+                if "/" not in commonName and "sp." not in commonName and " x " not in commonName:
+
+                    if self.mdiParent.db.TestSighting(s, filter):
+
+                        if s["state"][3:5] not in stateDict.keys():
+                            stateDict[s["state"][3:5]] = [s]
+                        else:
+                            stateDict[s["state"][3:5]].append(s)
                                  
         # check if no sightings were found. Return false if none found. Abort and display message.
         if len(stateDict) == 0:
@@ -375,7 +378,7 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
         from copy import deepcopy
         import folium
 
-        self.title= "US Counties Choropleth"
+        self.title= "US Lower 48 Counties Choropleth"
         
         self.filter = deepcopy(filter)
         
@@ -453,10 +456,22 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
         folium.LayerControl().add_to(county_map)
                  
         # get the html string from the map
+        # Note: the county GeoJSON embeds ~1.2MB of data in a single JS line, which causes
+        # QWebEngineView.setHtml() to silently produce a blank page when many counties have
+        # non-zero species counts (as in the no-filter case). Writing to a temp file and
+        # loading via setUrl() bypasses this Qt internal content-handling limitation.
+        import tempfile
         html = county_map.get_root().render()
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as f:
+            f.write(html)
+            tmp_path = f.name
 
-        self.webView.setHtml(html)
-        self._buildFilterTitle(filter, "US Counties Choropleth", count=len(countyDict), countUnit="Counties")
+        # Allow the local file page to load Leaflet and other CDN resources
+        settings = QWebEngineSettings.globalSettings()
+        settings.setAttribute(QWebEngineSettings.LocalContentCanAccessRemoteUrls, True)
+
+        self.webView.setUrl(QUrl.fromLocalFile(tmp_path))
+        self._buildFilterTitle(filter, "US Lower 48 Counties Choropleth", count=len(countyDict), countUnit="Counties")
 
         return(True)
 

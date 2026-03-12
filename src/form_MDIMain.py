@@ -918,5 +918,5 @@ class Ui_MainWindow(object):
         self.actionUS_States.setText(_translate("MainWindow", "US States"))
         self.actionWorld_Countries.setText(_translate("MainWindow", "World Countries"))
         self.actionWorld_Subregion_1.setText(_translate("MainWindow", "World Subregion 1"))
-        self.actionUS_Counties.setText(_translate("MainWindow", "US Counties"))
+        self.actionUS_Counties.setText(_translate("MainWindow", "US Lower 48 Counties"))
 import icons_rc
