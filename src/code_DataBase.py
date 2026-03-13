@@ -138,6 +138,7 @@ class DataBase():
         countyJsonFile  = resource_path("us-counties-lower48.json")
         countryJsonFile = resource_path("world-countries.json")
         caProvJsonFile  = resource_path("ca-provinces.json")
+        inStatesJsonFile = resource_path("in-states.json")
         
         # load us-states json shape file for later use with choropleths
         with open(stateJsonFile) as f:
@@ -168,6 +169,10 @@ class DataBase():
         # load ca-provinces json shape file for later use with choropleths
         with open(caProvJsonFile) as f:
             self.ca_province_geo = json.loads(f.read())
+
+        # load in-states json shape file for later use with choropleths
+        with open(inStatesJsonFile) as f:
+            self.in_state_geo = json.loads(f.read())
         
 
     def matchPhoto(self, file):

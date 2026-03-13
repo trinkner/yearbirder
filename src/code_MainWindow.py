@@ -173,6 +173,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionUS_States.triggered.connect(self.createChoroplethUSStates)
         self.actionUS_Counties.triggered.connect(self.createChoroplethUSCounties)
         self.actionCanada_Provinces.triggered.connect(self.createChoroplethCanadaProvinces)
+        self.actionIndia_States.triggered.connect(self.createChoroplethIndiaStates)
         self.actionWorld_Countries.triggered.connect(self.createChoroplethWorldCountries)
         
         self.cboStartSeasonalRangeMonth.addItems(["Jan",  "Feb",  "Mar",  "Apr",  "May", "Jun",  "Jul",  "Aug",  "Sep",  "Oct",  "Nov",  "Dec"])
@@ -2949,6 +2950,29 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             
         QApplication.restoreOverrideCursor() 
         
+
+    def createChoroplethIndiaStates(self):
+
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+
+        filter = self.GetFilter()
+        sub = code_Web.Web()
+        sub.mdiParent = self
+
+        if sub.loadChoroplethIndiaStates(filter) is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+
+        QApplication.restoreOverrideCursor()
+
 
     def createChoroplethCanadaProvinces(self):
 

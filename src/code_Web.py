@@ -455,6 +455,83 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
 
         return(True)
 
+    def loadChoroplethIndiaStates(self, filter):
+
+        from copy import deepcopy
+        import folium
+
+        self.title = "India States Choropleth"
+
+        self.filter = deepcopy(filter)
+
+        # find states in filtered sightings
+        stateDict = defaultdict()
+
+        minimalSightingList = self.mdiParent.db.GetMinimalFilteredSightingsList(filter)
+
+        for s in minimalSightingList:
+
+            # Only count Indian sightings since we're only showing the India choropleth
+            if s["country"] == "IN":
+
+                # Consider only full species, not slash or spuh or hybrid entries
+                commonName = s["commonName"]
+                if "/" not in commonName and "sp." not in commonName and " x " not in commonName:
+
+                    if self.mdiParent.db.TestSighting(s, filter):
+
+                        stateCode = s["state"]  # already full code e.g. "IN-MH"
+                        if stateCode not in stateDict.keys():
+                            stateDict[stateCode] = [s]
+                        else:
+                            stateDict[stateCode].append(s)
+
+        if len(stateDict) == 0:
+            return(False)
+
+        stateTotals = defaultdict()
+        largestTotal = 0
+        for state in stateDict.keys():
+            stateSpecies = set()
+            for s in stateDict[state]:
+                stateSpecies.add(s["commonName"])
+            stateTotals[state] = len(stateSpecies)
+            if len(stateSpecies) > largestTotal:
+                largestTotal = len(stateSpecies)
+
+        geo_file = self.mdiParent.db.in_state_geo
+
+        for f in geo_file["features"]:
+            if f["id"] in stateTotals.keys():
+                f["properties"]["speciesTotal"] = stateTotals[f["id"]]
+            else:
+                f["properties"]["speciesTotal"] = 0
+                stateTotals[f["id"]] = 0
+
+        state_map = folium.Map(location=[22, 80], zoom_start=4)
+
+        folium.GeoJson(
+            geo_file,
+            style_function=lambda feature: {
+                'fillColor': self._lerp_orange(stateTotals[feature['id']], largestTotal),
+                'color': 'black',
+                'weight': .2,
+                'fillOpacity': .8,
+                },
+            tooltip=folium.features.GeoJsonTooltip(
+                fields=['name', 'speciesTotal'],
+                aliases=["State", "Species"]
+                )
+            ).add_to(state_map)
+
+        folium.LayerControl().add_to(state_map)
+
+        html = state_map.get_root().render()
+        self.webView.setHtml(html)
+        self._buildFilterTitle(filter, "India States Choropleth", count=len(stateDict), countUnit="States")
+
+        return(True)
+
     def loadChoroplethUSCounties(self, filter):
 
         from copy import deepcopy
