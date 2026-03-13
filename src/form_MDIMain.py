@@ -729,6 +729,8 @@ class Ui_MainWindow(object):
         self.actionWorld_Subregion_1.setObjectName("actionWorld_Subregion_1")
         self.actionUS_Counties = QtWidgets.QAction(MainWindow)
         self.actionUS_Counties.setObjectName("actionUS_Counties")
+        self.actionCanada_Provinces = QtWidgets.QAction(MainWindow)
+        self.actionCanada_Provinces.setObjectName("actionCanada_Provinces")
         self.menuFile.addAction(self.actionOpen)
         self.menuFile.addAction(self.actionClose)
         self.menuFile.addAction(self.actionPrint)
@@ -768,6 +770,7 @@ class Ui_MainWindow(object):
         self.menuPhotos.addAction(self.actionUpdateEXIFDataForAllPhotos)
         self.menuChoropleths.addAction(self.actionUS_States)
         self.menuChoropleths.addAction(self.actionUS_Counties)
+        self.menuChoropleths.addAction(self.actionCanada_Provinces)
         self.menuChoropleths.addAction(self.actionWorld_Countries)
         self.menuBar.addAction(self.menuFile.menuAction())
         self.menuBar.addAction(self.menuFilter.menuAction())
@@ -919,4 +922,5 @@ class Ui_MainWindow(object):
         self.actionWorld_Countries.setText(_translate("MainWindow", "World Countries"))
         self.actionWorld_Subregion_1.setText(_translate("MainWindow", "World Subregion 1"))
         self.actionUS_Counties.setText(_translate("MainWindow", "US Lower 48 Counties"))
+        self.actionCanada_Provinces.setText(_translate("MainWindow", "Canada Provinces"))
 import icons_rc

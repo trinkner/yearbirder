@@ -373,6 +373,88 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
         return(True)
 
 
+    def loadChoroplethCanadaProvinces(self, filter):
+
+        from copy import deepcopy
+        import folium
+
+        self.title = "Canada Provinces Choropleth"
+
+        self.filter = deepcopy(filter)
+
+        # find provinces in filtered sightings
+        provDict = defaultdict()
+
+        minimalSightingList = self.mdiParent.db.GetMinimalFilteredSightingsList(filter)
+
+        for s in minimalSightingList:
+
+            # Only count Canadian sightings since we're only showing the Canada choropleth
+            if s["country"] == "CA":
+
+                # Consider only full species, not slash or spuh or hybrid entries
+                commonName = s["commonName"]
+                if "/" not in commonName and "sp." not in commonName and " x " not in commonName:
+
+                    if self.mdiParent.db.TestSighting(s, filter):
+
+                        provCode = s["state"][3:5]  # e.g. "ON" from "CA-ON"
+                        if provCode not in provDict.keys():
+                            provDict[provCode] = [s]
+                        else:
+                            provDict[provCode].append(s)
+
+        # check if no sightings were found. Return false if none found. Abort and display message.
+        if len(provDict) == 0:
+            return(False)
+
+        provTotals = defaultdict()
+        largestTotal = 0
+        for prov in provDict.keys():
+            provSpecies = set()
+            for s in provDict[prov]:
+                provSpecies.add(s["commonName"])
+            provTotals[prov] = len(provSpecies)
+            if len(provSpecies) > largestTotal:
+                largestTotal = len(provSpecies)
+
+        # Load the Canada provinces GeoJSON
+        geo_file = self.mdiParent.db.ca_province_geo
+
+        # add species totals to geojson features for tooltips
+        for f in geo_file["features"]:
+            if f["id"] in provTotals.keys():
+                f["properties"]["speciesTotal"] = provTotals[f["id"]]
+            else:
+                f["properties"]["speciesTotal"] = 0
+                provTotals[f["id"]] = 0
+
+        # Initialize the folium map centered on Canada
+        prov_map = folium.Map(location=[62, -96], zoom_start=3)
+
+        # Configure the choropleth layer and add to map
+        folium.GeoJson(
+            geo_file,
+            style_function=lambda feature: {
+                'fillColor': self._lerp_orange(provTotals[feature['id']], largestTotal),
+                'color': 'black',
+                'weight': .2,
+                'fillOpacity': .8,
+                },
+            tooltip=folium.features.GeoJsonTooltip(
+                fields=['name', 'speciesTotal'],
+                aliases=["Province", "Species"]
+                )
+            ).add_to(prov_map)
+
+        folium.LayerControl().add_to(prov_map)
+
+        html = prov_map.get_root().render()
+        self.webView.setHtml(html)
+        self._buildFilterTitle(filter, "Canada Provinces Choropleth", count=len(provDict), countUnit="Provinces")
+
+        return(True)
+
     def loadChoroplethUSCounties(self, filter):
 
         from copy import deepcopy

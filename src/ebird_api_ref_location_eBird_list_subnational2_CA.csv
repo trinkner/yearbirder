@@ -1,0 +1,295 @@
+country_code,subnational1_code,subnational2_code,subnational2_name
+CA,CA-QC,CA-QC-AB,Abitibi
+CA,CA-QC,CA-QC-AO,Abitibi-Ouest
+CA,CA-QC,CA-QC-AC,Acton
+CA,CA-BC,CA-BC-AC,Alberni-Clayoquot
+CA,CA-NB,CA-NB-AL,Albert
+CA,CA-ON,CA-ON-AL,Algoma
+CA,CA-NS,CA-NS-AP,Annapolis
+CA,CA-NS,CA-NS-AG,Antigonish
+CA,CA-QC,CA-QC-AL,Antoine-Labelle
+CA,CA-QC,CA-QC-AG,Argenteuil
+CA,CA-QC,CA-QC-AT,Arthabaska
+CA,CA-SK,CA-SK-TR,Assiniboia
+CA,CA-AB,CA-AB-TN,Athabasca
+CA,CA-NL,CA-NL-ON,Avalon Peninsula-St. John's
+CA,CA-QC,CA-QC-AV,Avignon
+CA,CA-NU,CA-NU-QK,Baffin
+CA,CA-AB,CA-AB-FN,Banff
+CA,CA-SK,CA-SK-TV,Battleford
+CA,CA-QC,CA-QC-RC,Beauce-Centre
+CA,CA-QC,CA-QC-BS,Beauce-Sartigan
+CA,CA-QC,CA-QC-BH,Beauharnois-Salaberry
+CA,CA-MB,CA-MB-TV,Beausejour Area
+CA,CA-QC,CA-QC-BL,Bellechasse
+CA,CA-QC,CA-QC-BO,Bonaventure
+CA,CA-NL,CA-NL-SE,Bonavista/Trinity-Clarenville
+CA,CA-MB,CA-MB-SE,Brandon Area
+CA,CA-ON,CA-ON-BN,Brant
+CA,CA-QC,CA-QC-BM,Brome-Missisquoi
+CA,CA-ON,CA-ON-BC,Bruce
+CA,CA-BC,CA-BC-BN,Bulkley-Nechako
+CA,CA-NL,CA-NL-TW,Burin Peninsula-Marystown
+CA,CA-QC,CA-QC-BC,Bécancour
+CA,CA-AB,CA-AB-SI,Calgary
+CA,CA-AB,CA-AB-TE,Camrose-Lloydminister
+CA,CA-QC,CA-QC-CAN,Caniapiscau
+CA,CA-NS,CA-NS-CB,Cape Breton
+CA,CA-BC,CA-BC-CP,Capital
+CA,CA-BC,CA-BC-CR,Cariboo
+CA,CA-NB,CA-NB-CA,Carleton
+CA,CA-BC,CA-BC-CC,Central Coast
+CA,CA-BC,CA-BC-CK,Central Kootenay
+CA,CA-MB,CA-MB-EI,Central Manitoba - Central Plains
+CA,CA-NL,CA-NL-SI,Central Newfoundland-Grand Falls-Windsor
+CA,CA-BC,CA-BC-CO,Central Okanagan
+CA,CA-QC,CA-QC-CV,Charlevoix
+CA,CA-QC,CA-QC-CE,Charlevoix-Est
+CA,CA-NB,CA-NB-CH,Charlotte
+CA,CA-ON,CA-ON-KT,Chatham-Kent
+CA,CA-MB,CA-MB-EE,Churchill and Northern Manitoba
+CA,CA-QC,CA-QC-CT,Coaticook
+CA,CA-ON,CA-ON-CO,Cochrane
+CA,CA-NS,CA-NS-CO,Colchester
+CA,CA-BC,CA-BC-CS,Columbia-Shuswap
+CA,CA-BC,CA-BC-CX,Comox-Strathcona
+CA,CA-BC,CA-BC-CV,Cowichan Valley
+CA,CA-NS,CA-NS-CU,Cumberland
+CA,CA-QC,CA-QC-DA,D'Autray
+CA,CA-MB,CA-MB-SN,Dauphin
+CA,CA-QC,CA-QC-DM,Deux-Montagnes
+CA,CA-NS,CA-NS-DI,Digby
+CA,CA-AB,CA-AB-FI,Drumheller
+CA,CA-QC,CA-QC-DU,Drummond
+CA,CA-ON,CA-ON-DF,Dufferin
+CA,CA-ON,CA-ON-DR,Durham
+CA,CA-BC,CA-BC-EK,East Kootenay
+CA,CA-MB,CA-MB-ON,Eastern Manitoba - Eastman
+CA,CA-AB,CA-AB-EL,Edmonton
+CA,CA-AB,CA-AB-FT,Edson
+CA,CA-ON,CA-ON-EL,Elgin
+CA,CA-ON,CA-ON-ES,Essex
+CA,CA-SK,CA-SK-ON,Estevan
+CA,CA-MB,CA-MB-TO,Flin Flon and North West
+CA,CA-AB,CA-AB-TR,Fort MacLeod
+CA,CA-AB,CA-AB-ST,Fort McMurray
+CA,CA-NT,CA-NT-FS,Fort Smith
+CA,CA-BC,CA-BC-FV,Fraser Valley
+CA,CA-BC,CA-BC-FF,Fraser-Fort George
+CA,CA-ON,CA-ON-FR,Frontenac
+CA,CA-QC,CA-QC-OU,Gatineau
+CA,CA-NB,CA-NB-GL,Gloucester
+CA,CA-AB,CA-AB-ET,Grande Cache
+CA,CA-AB,CA-AB-NT,Grande Prairie
+CA,CA-ON,CA-ON-SU,Greater Sudbury
+CA,CA-ON,CA-ON-GR,Grey
+CA,CA-NS,CA-NS-GU,Guysborough
+CA,CA-ON,CA-ON-HD,Haldimand
+CA,CA-ON,CA-ON-HB,Haliburton
+CA,CA-NS,CA-NS-HL,Halifax
+CA,CA-ON,CA-ON-HT,Halton
+CA,CA-ON,CA-ON-HA,Hamilton
+CA,CA-AB,CA-AB-FO,Hanna
+CA,CA-NS,CA-NS-HN,Hants
+CA,CA-ON,CA-ON-HS,Hastings
+CA,CA-NL,CA-NL-FI,Humber District-Corner Brook
+CA,CA-ON,CA-ON-HU,Huron
+CA,CA-NT,CA-NT-IN,Inuvik
+CA,CA-NS,CA-NS-IN,Inverness
+CA,CA-QC,CA-QC-JAM,Jamésie
+CA,CA-QC,CA-QC-JO,Joliette
+CA,CA-QC,CA-QC-KA,Kamouraska
+CA,CA-QC,CA-QC-NQ,Kativik
+CA,CA-ON,CA-ON-VI,Kawartha Lakes
+CA,CA-NU,CA-NU-KV,Keewatin
+CA,CA-ON,CA-ON-KR,Kenora
+CA,CA-NB,CA-NB-KE,Kent
+CA,CA-SK,CA-SK-TN,Kindersley
+CA,CA-NB,CA-NB-KI,Kings
+CA,CA-NS,CA-NS-KI,Kings
+CA,CA-PE,CA-PE-KI,Kings
+CA,CA-NU,CA-NU-KT,Kitikmeot
+CA,CA-BC,CA-BC-KS,Kitimat-Stikine
+CA,CA-BC,CA-BC-KB,Kootenay Boundary
+CA,CA-QC,CA-QC-AN,L'Assomption
+CA,CA-QC,CA-QC-IS,L'Islet
+CA,CA-QC,CA-QC-ER,L'Érable
+CA,CA-QC,CA-QC-IO,L'Île-d'Orléans
+CA,CA-QC,CA-QC-CB,La Côte-de-Beaupré
+CA,CA-QC,CA-QC-CG,La Côte-de-Gaspé
+CA,CA-QC,CA-QC-HC,La Haute-Côte-Nord
+CA,CA-QC,CA-QC-DR,La Haute-Gaspésie
+CA,CA-QC,CA-QC-HY,La Haute-Yamaska
+CA,CA-QC,CA-QC-JC,La Jacques-Cartier
+CA,CA-QC,CA-QC-MT,La Matanie
+CA,CA-QC,CA-QC-MP,La Matapédia
+CA,CA-QC,CA-QC-MI,La Mitis
+CA,CA-QC,CA-QC-NB,La Nouvelle-Beauce
+CA,CA-QC,CA-QC-RD,La Rivière-du-Nord
+CA,CA-SK,CA-SK-ET,La Ronge
+CA,CA-QC,CA-QC-HM,La Tuque
+CA,CA-QC,CA-QC-VO,La Vallée-de-l'Or
+CA,CA-QC,CA-QC-VG,La Vallée-de-la-Gatineau
+CA,CA-QC,CA-QC-VR,La Vallée-du-Richelieu
+CA,CA-NL,CA-NL-TE,Labrador-Happy Valley-Goose Bay
+CA,CA-QC,CA-QC-LS,Lac-Saint-Jean-Est
+CA,CA-ON,CA-ON-LM,Lambton
+CA,CA-ON,CA-ON-LN,Lanark
+CA,CA-QC,CA-QC-LV,Laval
+CA,CA-QC,CA-QC-DD,Le Domaine-du-Roy
+CA,CA-QC,CA-QC-FS,Le Fjord-du-Saguenay
+CA,CA-QC,CA-QC-GSL,Le Golfe-du-Saint-Laurent
+CA,CA-QC,CA-QC-GR,Le Granit
+CA,CA-QC,CA-QC-HR,Le Haut-Richelieu
+CA,CA-QC,CA-QC-HF,Le Haut-Saint-François
+CA,CA-QC,CA-QC-HL,Le Haut-Saint-Laurent
+CA,CA-QC,CA-QC-PB,Le Rocher-Percé
+CA,CA-QC,CA-QC-VF,Le Val-Saint-François
+CA,CA-ON,CA-ON-LG,Leeds and Grenville
+CA,CA-ON,CA-ON-LA,Lennox and Addington
+CA,CA-QC,CA-QC-APP,Les Appalaches
+CA,CA-QC,CA-QC-BA,Les Basques
+CA,CA-QC,CA-QC-LCH,Les Chenaux
+CA,CA-QC,CA-QC-CO,Les Collines-de-l'Outaouais
+CA,CA-QC,CA-QC-ET,Les Etchemins
+CA,CA-QC,CA-QC-JN,Les Jardins-de-Napierville
+CA,CA-QC,CA-QC-LL,Les Laurentides
+CA,CA-QC,CA-QC-MK,Les Maskoutains
+CA,CA-QC,CA-QC-MU,Les Moulins
+CA,CA-QC,CA-QC-PH,Les Pays-d'en-Haut
+CA,CA-QC,CA-QC-AS,Les Sources
+CA,CA-QC,CA-QC-IM,Les Îles-de-la-Madeleine
+CA,CA-AB,CA-AB-TW,Lethbridge
+CA,CA-SK,CA-SK-SN,Lloydminster
+CA,CA-QC,CA-QC-CP,Longueuil
+CA,CA-QC,CA-QC-LO,Lotbinière
+CA,CA-NS,CA-NS-LU,Lunenburg
+CA,CA-QC,CA-QC-DE,Lévis
+CA,CA-NB,CA-NB-MA,Madawaska
+CA,CA-QC,CA-QC-MN,Manicouagan
+CA,CA-ON,CA-ON-MA,Manitoulin
+CA,CA-SK,CA-SK-FO,Maple Creek
+CA,CA-QC,CA-QC-LJ,Marguerite-D'Youville
+CA,CA-QC,CA-QC-MC,Maria-Chapdelaine
+CA,CA-QC,CA-QC-MS,Maskinongé
+CA,CA-QC,CA-QC-MW,Matawinie
+CA,CA-AB,CA-AB-ON,Medicine Hat
+CA,CA-SK,CA-SK-FT,Melfort
+CA,CA-SK,CA-SK-FI,Melville
+CA,CA-QC,CA-QC-MG,Memphrémagog
+CA,CA-BC,CA-BC-GV,Metro Vancouver
+CA,CA-ON,CA-ON-MI,Middlesex
+CA,CA-QC,CA-QC-MB,Minganie
+CA,CA-QC,CA-QC-ML,Mirabel
+CA,CA-QC,CA-QC-MO,Montcalm
+CA,CA-QC,CA-QC-MM,Montmagny
+CA,CA-QC,CA-QC-MR,Montréal
+CA,CA-SK,CA-SK-SE,Moose Jaw
+CA,CA-BC,CA-BC-MW,Mount Waddington
+CA,CA-ON,CA-ON-MU,Muskoka
+CA,CA-QC,CA-QC-ME,Mékinac
+CA,CA-BC,CA-BC-NA,Nanaimo
+CA,CA-ON,CA-ON-NG,Niagara
+CA,CA-QC,CA-QC-NY,Nicolet-Yamaska
+CA,CA-ON,CA-ON-NP,Nipissing
+CA,CA-ON,CA-ON-NF,Norfolk
+CA,CA-SK,CA-SK-ST,North Battleford
+CA,CA-MB,CA-MB-NT,North East Northern Region
+CA,CA-MB,CA-MB-ET,North Interlake Area
+CA,CA-BC,CA-BC-NO,North Okanagan
+CA,CA-NL,CA-NL-NI,Northern Peninsula-St. Anthony
+CA,CA-BC,CA-BC-NR,Northern Rockies
+CA,CA-NB,CA-NB-NO,Northumberland
+CA,CA-ON,CA-ON-NU,Northumberland
+CA,CA-NL,CA-NL-EI,Notre Dame Bay-Lewisporte
+CA,CA-NL,CA-NL-EL,Nunatsiavut-Nain
+CA,CA-BC,CA-BC-OS,Okanagan-Similkameen
+CA,CA-ON,CA-ON-OT,Ottawa
+CA,CA-ON,CA-ON-OX,Oxford
+CA,CA-QC,CA-QC-PP,Papineau
+CA,CA-ON,CA-ON-PS,Parry Sound
+CA,CA-BC,CA-BC-PC,Peace River
+CA,CA-ON,CA-ON-PL,Peel
+CA,CA-MB,CA-MB-TR,Pembina Valley
+CA,CA-ON,CA-ON-PT,Perth
+CA,CA-ON,CA-ON-PB,Peterborough
+CA,CA-NS,CA-NS-PI,Pictou
+CA,CA-QC,CA-QC-BR,Pierre-De Saurel
+CA,CA-MB,CA-MB-FO,Pilot Mound Area
+CA,CA-QC,CA-QC-PN,Pontiac
+CA,CA-MB,CA-MB-NI,Portage la Prairie Area
+CA,CA-QC,CA-QC-PR,Portneuf
+CA,CA-BC,CA-BC-PW,Powell River
+CA,CA-ON,CA-ON-PR,Prescott and Russell
+CA,CA-PE,CA-PE-PR,Prince
+CA,CA-SK,CA-SK-FN,Prince Albert
+CA,CA-ON,CA-ON-PE,Prince Edward
+CA,CA-NB,CA-NB-QU,Queens
+CA,CA-NS,CA-NS-QU,Queens
+CA,CA-PE,CA-PE-QU,Queens
+CA,CA-QC,CA-QC-QU,Québec
+CA,CA-ON,CA-ON-RR,Rainy River
+CA,CA-AB,CA-AB-EI,Red Deer
+CA,CA-SK,CA-SK-SI,Regina
+CA,CA-ON,CA-ON-RE,Renfrew
+CA,CA-NB,CA-NB-RE,Restigouche
+CA,CA-NS,CA-NS-RI,Richmond
+CA,CA-QC,CA-QC-RM,Rimouski-Neigette
+CA,CA-QC,CA-QC-RL,Rivière-du-Loup
+CA,CA-MB,CA-MB-ST,Roblin - Russell - Rossburn Area
+CA,CA-AB,CA-AB-NI,Rocky Mountain House
+CA,CA-QC,CA-QC-RS,Roussillon
+CA,CA-QC,CA-QC-RV,Rouville
+CA,CA-QC,CA-QC-RN,Rouyn-Noranda
+CA,CA-QC,CA-QC-SAG,Saguenay
+CA,CA-NB,CA-NB-SJ,Saint John
+CA,CA-SK,CA-SK-EL,Saskatoon
+CA,CA-MB,CA-MB-TN,Selkirk Area
+CA,CA-QC,CA-QC-SR,Sept-Rivières
+CA,CA-QC,CA-QC-CM,Shawinigan
+CA,CA-NS,CA-NS-SH,Shelburne
+CA,CA-QC,CA-QC-SH,Sherbrooke
+CA,CA-ON,CA-ON-SC,Simcoe
+CA,CA-BC,CA-BC-SQ,Skeena-Queen Charlotte
+CA,CA-AB,CA-AB-SN,Slave Lake
+CA,CA-NL,CA-NL-TR,South Coast-Channel-Port aux Basques
+CA,CA-MB,CA-MB-FT,South Interlake
+CA,CA-MB,CA-MB-FI,South West Westman
+CA,CA-BC,CA-BC-SL,Squamish-Lillooet
+CA,CA-NL,CA-NL-FO,St. George's-Stephenville
+CA,CA-AB,CA-AB-TV,St. Paul
+CA,CA-MB,CA-MB-TW,Steinbach Area
+CA,CA-AB,CA-AB-SE,Stettler
+CA,CA-BC,CA-BC-ST,Stikine
+CA,CA-ON,CA-ON-SD,"Stormont, Dundas and Glengarry"
+CA,CA-ON,CA-ON-SB,Sudbury
+CA,CA-NB,CA-NB-SU,Sunbury
+CA,CA-BC,CA-BC-SC,Sunshine Coast
+CA,CA-MB,CA-MB-TT,Swan River
+CA,CA-SK,CA-SK-EI,Swift Current
+CA,CA-MB,CA-MB-TY,Thompson and North Central
+CA,CA-BC,CA-BC-TN,Thompson-Nicola
+CA,CA-ON,CA-ON-TB,Thunder Bay
+CA,CA-QC,CA-QC-TB,Thérèse-De Blainville
+CA,CA-ON,CA-ON-TI,Timiskaming
+CA,CA-ON,CA-ON-TO,Toronto
+CA,CA-QC,CA-QC-FR,Trois-Rivières
+CA,CA-QC,CA-QC-TM,Témiscamingue
+CA,CA-QC,CA-QC-TT,Témiscouata
+CA,CA-QC,CA-QC-VS,Vaudreuil-Soulanges
+CA,CA-NS,CA-NS-VI,Victoria
+CA,CA-NB,CA-NB-VI,Victoria
+CA,CA-MB,CA-MB-SI,Virden Area
+CA,CA-ON,CA-ON-WT,Waterloo
+CA,CA-ON,CA-ON-WL,Wellington
+CA,CA-MB,CA-MB-FN,Western Manitoba Westman
+CA,CA-NB,CA-NB-WE,Westmorland
+CA,CA-SK,CA-SK-TW,Weyburn
+CA,CA-MB,CA-MB-TE,Whitehorse Plains
+CA,CA-MB,CA-MB-EL,Winnipeg
+CA,CA-SK,CA-SK-TE,Wynyard
+CA,CA-NS,CA-NS-YA,Yarmouth
+CA,CA-NB,CA-NB-YO,York
+CA,CA-ON,CA-ON-YO,York
+CA,CA-SK,CA-SK-NI,Yorkton
+CA,CA-YT,CA-YT-YT,Yukon
