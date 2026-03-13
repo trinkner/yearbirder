@@ -1,0 +1,110 @@
+country_code,subnational1_code,subnational2_code,subnational2_name
+GB,GB-SCT,GB-SCT-ABE,Aberdeen
+GB,GB-SCT,GB-SCT-ABD,Aberdeenshire
+GB,GB-WLS,GB-WLS-AGY,Anglesey
+GB,GB-SCT,GB-SCT-ANS,Angus
+GB,GB-NIR,GB-NIR-ANT,Antrim
+GB,GB-SCT,GB-SCT-AGB,Argyll and Bute
+GB,GB-NIR,GB-NIR-ARM,Armagh
+GB,GB-ENG,GB-ENG-BDF,Bedfordshire
+GB,GB-NIR,GB-NIR-BFS,Belfast
+GB,GB-ENG,GB-ENG-BRC,Berkshire
+GB,GB-WLS,GB-WLS-BGW,Blaenau Gwent
+GB,GB-WLS,GB-WLS-BGE,Bridgend
+GB,GB-ENG,GB-ENG-BST,Bristol
+GB,GB-ENG,GB-ENG-BKM,Buckinghamshire
+GB,GB-WLS,GB-WLS-CAY,Caerphilly
+GB,GB-ENG,GB-ENG-CAM,Cambridgeshire
+GB,GB-WLS,GB-WLS-CRF,Cardiff
+GB,GB-WLS,GB-WLS-CMN,Carmarthenshire
+GB,GB-WLS,GB-WLS-CGN,Ceredigion
+GB,GB-ENG,GB-ENG-CHS,Cheshire
+GB,GB-SCT,GB-SCT-CLK,Clackmannanshire
+GB,GB-WLS,GB-WLS-CWY,Conwy
+GB,GB-ENG,GB-ENG-CON,Cornwall
+GB,GB-ENG,GB-ENG-CMA,Cumbria
+GB,GB-WLS,GB-WLS-DEN,Denbighshire
+GB,GB-ENG,GB-ENG-DBY,Derbyshire
+GB,GB-NIR,GB-NIR-DRY,Derry
+GB,GB-ENG,GB-ENG-DEV,Devon
+GB,GB-ENG,GB-ENG-DOR,Dorset
+GB,GB-NIR,GB-NIR-DOW,Down
+GB,GB-SCT,GB-SCT-DGY,Dumfries and Galloway
+GB,GB-SCT,GB-SCT-DND,Dundee
+GB,GB-ENG,GB-ENG-DUR,Durham
+GB,GB-SCT,GB-SCT-EAY,East Ayrshire
+GB,GB-SCT,GB-SCT-EDU,East Dunbartonshire
+GB,GB-SCT,GB-SCT-ELN,East Lothian
+GB,GB-ENG,GB-ENG-ERY,East Riding of Yorkshire
+GB,GB-ENG,GB-ENG-ESX,East Sussex
+GB,GB-SCT,GB-SCT-EDH,Edinburgh
+GB,GB-SCT,GB-SCT-ELS,Eilean Siar
+GB,GB-ENG,GB-ENG-ESS,Essex
+GB,GB-SCT,GB-SCT-FAL,Falkirk
+GB,GB-NIR,GB-NIR-FER,Fermanagh
+GB,GB-SCT,GB-SCT-FIF,Fife
+GB,GB-WLS,GB-WLS-FLN,Flintshire
+GB,GB-SCT,GB-SCT-GLG,Glasgow
+GB,GB-ENG,GB-ENG-GLS,Gloucestershire
+GB,GB-WLS,GB-WLS-GWN,Gwynedd
+GB,GB-ENG,GB-ENG-HAL,Halton
+GB,GB-ENG,GB-ENG-HAM,Hampshire
+GB,GB-ENG,GB-ENG-HEF,Herefordshire
+GB,GB-ENG,GB-ENG-HRT,Hertfordshire
+GB,GB-SCT,GB-SCT-HLD,Highland
+GB,GB-ENG,GB-ENG-IOW,Isle of Wight
+GB,GB-ENG,GB-ENG-KEN,Kent
+GB,GB-ENG,GB-ENG-LAN,Lancashire
+GB,GB-ENG,GB-ENG-LEC,Leicestershire
+GB,GB-ENG,GB-ENG-LIN,Lincolnshire
+GB,GB-ENG,GB-ENG-LND,London
+GB,GB-ENG,GB-ENG-MAN,Manchester
+GB,GB-ENG,GB-ENG-KWL,Merseyside
+GB,GB-WLS,GB-WLS-MTY,Merthyr Tydfil
+GB,GB-SCT,GB-SCT-MLN,Midlothian
+GB,GB-WLS,GB-WLS-MON,Monmouthshire
+GB,GB-SCT,GB-SCT-MRY,Moray
+GB,GB-WLS,GB-WLS-NTL,Neath Port Talbot
+GB,GB-WLS,GB-WLS-NWP,Newport
+GB,GB-NIR,GB-NIR-NYM,Newry and Mourne
+GB,GB-ENG,GB-ENG-NFK,Norfolk
+GB,GB-SCT,GB-SCT-NAY,North Ayrshire
+GB,GB-SCT,GB-SCT-NLK,North Lanarkshire
+GB,GB-ENG,GB-ENG-NYK,North Yorkshire
+GB,GB-ENG,GB-ENG-NTH,Northamptonshire
+GB,GB-ENG,GB-ENG-NBL,Northumberland
+GB,GB-ENG,GB-ENG-NTT,Nottinghamshire
+GB,GB-NIR,GB-NIR-OMH,Omagh
+GB,GB-SCT,GB-SCT-ORK,Orkney Islands
+GB,GB-ENG,GB-ENG-OXF,Oxfordshire
+GB,GB-WLS,GB-WLS-PEM,Pembrokeshire
+GB,GB-SCT,GB-SCT-PKN,Perthshire and Kinross
+GB,GB-WLS,GB-WLS-POW,Powys
+GB,GB-SCT,GB-SCT-RFW,Renfrewshire
+GB,GB-WLS,GB-WLS-RCT,"Rhondda, Cynon, Taff"
+GB,GB-ENG,GB-ENG-RUT,Rutland
+GB,GB-SCT,GB-SCT-SCB,Scottish Borders
+GB,GB-SCT,GB-SCT-ZET,Shetland Islands
+GB,GB-ENG,GB-ENG-SHR,Shropshire
+GB,GB-ENG,GB-ENG-SOM,Somerset
+GB,GB-SCT,GB-SCT-SAY,South Ayrshire
+GB,GB-SCT,GB-SCT-SLK,South Lanarkshire
+GB,GB-ENG,GB-ENG-BNS,South Yorkshire
+GB,GB-ENG,GB-ENG-STS,Staffordshire
+GB,GB-SCT,GB-SCT-STG,Stirling
+GB,GB-ENG,GB-ENG-STT,Stockton-on-Tees
+GB,GB-ENG,GB-ENG-SFK,Suffolk
+GB,GB-ENG,GB-ENG-SRY,Surrey
+GB,GB-WLS,GB-WLS-SWA,Swansea
+GB,GB-WLS,GB-WLS-TOF,Torfaen
+GB,GB-ENG,GB-ENG-GAT,Tyne and Wear
+GB,GB-WLS,GB-WLS-VGL,Vale of Glamorgan
+GB,GB-ENG,GB-ENG-WAR,Warwickshire
+GB,GB-SCT,GB-SCT-WDU,West Dunbartonshire
+GB,GB-SCT,GB-SCT-WLN,West Lothian
+GB,GB-ENG,GB-ENG-SAW,West Midlands
+GB,GB-ENG,GB-ENG-WSX,West Sussex
+GB,GB-ENG,GB-ENG-WKF,West Yorkshire
+GB,GB-ENG,GB-ENG-WIL,Wiltshire
+GB,GB-ENG,GB-ENG-WOR,Worcestershire
+GB,GB-WLS,GB-WLS-WRX,Wrexham

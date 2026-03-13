@@ -532,6 +532,90 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
 
         return(True)
 
+    def loadChoroplethGBCounties(self, filter):
+
+        from copy import deepcopy
+        import folium
+
+        self.title = "Great Britain Counties Choropleth"
+
+        self.filter = deepcopy(filter)
+
+        countyDict = defaultdict()
+
+        minimalSightingList = self.mdiParent.db.GetMinimalFilteredSightingsList(filter)
+
+        for s in minimalSightingList:
+
+            # Only count GB sightings
+            if s["country"] == "GB":
+
+                commonName = s["commonName"]
+                if "/" not in commonName and "sp." not in commonName and " x " not in commonName:
+
+                    if self.mdiParent.db.TestSighting(s, filter):
+
+                        # eBird county field for GB is like "Yorkshire" — look up its code
+                        county = s.get("county", "")
+                        if county != "":
+                            # Strip the "(GB-ENG)" suffix that eBird appends to county names
+                            countyName = county.split(" (")[0].strip()
+                            if countyName not in countyDict.keys():
+                                countyDict[countyName] = [s]
+                            else:
+                                countyDict[countyName].append(s)
+
+        if len(countyDict) == 0:
+            return(False)
+
+        # Build species totals keyed by eBird county name
+        countyTotals = defaultdict()
+        largestTotal = 0
+        for county in countyDict.keys():
+            species = set()
+            for s in countyDict[county]:
+                species.add(s["commonName"])
+            countyTotals[county] = len(species)
+            if len(species) > largestTotal:
+                largestTotal = len(species)
+
+        geo_file = self.mdiParent.db.gb_county_geo
+
+        # Match GeoJSON features by ebird_name property (set during GeoJSON build)
+        for f in geo_file["features"]:
+            ename = f["properties"].get("ebird_name", f["properties"]["name"])
+            if ename in countyTotals.keys():
+                f["properties"]["speciesTotal"] = countyTotals[ename]
+            else:
+                f["properties"]["speciesTotal"] = 0
+                countyTotals[ename] = 0
+
+        county_map = folium.Map(location=[54, -2], zoom_start=5)
+
+        folium.GeoJson(
+            geo_file,
+            style_function=lambda feature: {
+                'fillColor': self._lerp_orange(
+                    countyTotals.get(feature['properties'].get('ebird_name', feature['properties']['name']), 0),
+                    largestTotal),
+                'color': 'black',
+                'weight': .2,
+                'fillOpacity': .8,
+                },
+            tooltip=folium.features.GeoJsonTooltip(
+                fields=['ebird_name', 'speciesTotal'],
+                aliases=["County", "Species"]
+                )
+            ).add_to(county_map)
+
+        folium.LayerControl().add_to(county_map)
+
+        html = county_map.get_root().render()
+        self.webView.setHtml(html)
+        self._buildFilterTitle(filter, "Great Britain Counties Choropleth", count=len(countyDict), countUnit="Counties")
+
+        return(True)
+
     def loadChoroplethUSCounties(self, filter):
 
         from copy import deepcopy
