@@ -30,9 +30,8 @@ Yearbird loads the CSV file you download from eBird and lets you filter, browse,
 
 ## Requirements
 
-- Python 3.8 or later
-- [PyQt5](https://pypi.org/project/PyQt5/)
-- [PyQtWebEngine](https://pypi.org/project/PyQtWebEngine/)
+- Python 3.10 or later
+- [PySide6](https://pypi.org/project/PySide6/) — Qt 6 bindings (LGPL)
 - [folium](https://pypi.org/project/folium/)
 - [natsort](https://pypi.org/project/natsort/)
 - [piexif](https://pypi.org/project/piexif/)
@@ -40,7 +39,7 @@ Yearbird loads the CSV file you download from eBird and lets you filter, browse,
 Install all dependencies with:
 
 ```
-pip install pyqt5 pyqtwebengine folium natsort piexif
+pip install pyside6 folium natsort piexif
 ```
 
 ---
