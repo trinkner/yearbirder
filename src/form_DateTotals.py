@@ -20,7 +20,7 @@ class Ui_frmDateTotals(object):
         frmDateTotals.setMinimumSize(QtCore.QSize(200, 300))
         frmDateTotals.setSizeIncrement(QtCore.QSize(0, 0))
         icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap(":/icon_datetotals.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon.addPixmap(QtGui.QPixmap(":/icon_datetotals_white.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         frmDateTotals.setWindowIcon(icon)
         self.scrollArea = QtWidgets.QScrollArea(frmDateTotals)
         self.scrollArea.setGeometry(QtCore.QRect(0, 23, 671, 451))

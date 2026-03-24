@@ -743,7 +743,7 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         self.setWindowTitle(filter.buildWindowTitle("Species", self.mdiParent.db, count=self.tblList.rowCount(), countUnit="Species"))
         
         icon = QIcon()
-        icon.addPixmap(QPixmap(":/icon_bird.png"), QIcon.Normal, QIcon.Off)
+        icon.addPixmap(QPixmap(":/icon_bird_white.png"), QIcon.Normal, QIcon.Off)
         self.setWindowIcon(icon)      
         
         self.scaleMe()
@@ -820,7 +820,7 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         self.txtChecklistComments.setVisible(False)
 
         icon = QIcon()
-        icon.addPixmap(QPixmap(":/icon_checklists.png"), QIcon.Normal, QIcon.Off)
+        icon.addPixmap(QPixmap(":/icon_checklists_white.png"), QIcon.Normal, QIcon.Off)
         self.setWindowIcon(icon)  
         
         self.tblList.addAction(self.actionSetDateFilter)
@@ -887,7 +887,7 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         self.txtChecklistComments.setVisible(False)
         
         icon = QIcon()
-        icon.addPixmap(QPixmap(":/icon_find.png"), QIcon.Normal, QIcon.Off)
+        icon.addPixmap(QPixmap(":/icon_find_white.png"), QIcon.Normal, QIcon.Off)
         self.setWindowIcon(icon)          
 
         self.scaleMe()
@@ -947,7 +947,7 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         self.setWindowTitle(filter.buildWindowTitle("Locations", self.mdiParent.db, count=locationCount, countUnit="Locations"))
 
         icon = QIcon()
-        icon.addPixmap(QPixmap(":/icon_location.png"), QIcon.Normal, QIcon.Off)
+        icon.addPixmap(QPixmap(":/icon_location_white.png"), QIcon.Normal, QIcon.Off)
         self.setWindowIcon(icon)  
 
         self.tblList.addAction(self.actionSetLocationFilter)

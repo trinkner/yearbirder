@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QGroupBox,
     QHBoxLayout,
+    QBoxLayout,
     QFrame,
     QVBoxLayout,
     QPushButton
@@ -179,7 +180,7 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
         
         self.pixmapEnlargement = QPixmap()
 
-        self.layout().setDirection(1)
+        self.layout().setDirection(QBoxLayout.Direction.RightToLeft)
         self.layout().setContentsMargins(0, 0, 0, 0)
         self.layout().setSpacing(0)   
         self.setStyleSheet("color:silver; background-color: #343333")

@@ -133,7 +133,7 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
             self.threads.append(t)
         
         icon = QIcon()
-        icon.addPixmap(QPixmap(":/icon_camera.png"), QIcon.Normal, QIcon.Off)
+        icon.addPixmap(QPixmap(":/icon_camera_white.png"), QIcon.Normal, QIcon.Off)
         self.setWindowIcon(icon) 
 
 
@@ -548,7 +548,7 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         QApplication.processEvents()
 
         icon = QIcon()
-        icon.addPixmap(QPixmap(":/icon_camera.png"), QIcon.Normal, QIcon.Off)
+        icon.addPixmap(QPixmap(":/icon_camera_white.png"), QIcon.Normal, QIcon.Off)
         self.setWindowIcon(icon) 
         self.setWindowTitle("Manage Photos")
         

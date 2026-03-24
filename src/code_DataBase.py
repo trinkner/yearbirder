@@ -1708,6 +1708,7 @@ class DataBase():
             # strip away the 1/ characters at start of shutter speeds
             filterStartShutterSpeed = int(filterStartShutterSpeed[2:])
             filterEndShutterSpeed = int(filterEndShutterSpeed[2:])
+            filterStartShutterSpeed, filterEndShutterSpeed = max(filterStartShutterSpeed, filterEndShutterSpeed), min(filterStartShutterSpeed, filterEndShutterSpeed)
             shutterSpeed = photoData["shutterSpeed"]
             if shutterSpeed != "":
                 shutterSpeed = int(shutterSpeed[2:])
@@ -1741,6 +1742,7 @@ class DataBase():
         if filterStartAperture != "" and filterEndAperture != "":
             filterStartAperture = float(filterStartAperture)
             filterEndAperture = float(filterEndAperture)
+            filterStartAperture, filterEndAperture = min(filterStartAperture, filterEndAperture), max(filterStartAperture, filterEndAperture)
             aperture = photoData["aperture"]
             if aperture != "":
                 aperture = float(aperture)
@@ -1772,6 +1774,7 @@ class DataBase():
         if filterStartIso != "" and filterEndIso != "":
             filterStartIso = int(filterStartIso)
             filterEndIso = int(filterEndIso)
+            filterStartIso, filterEndIso = min(filterStartIso, filterEndIso), max(filterStartIso, filterEndIso)
             iso = photoData["iso"]
             if iso != "":
                 iso = int(iso)
@@ -1805,6 +1808,7 @@ class DataBase():
             filterStartFocalLength = int(filterStartFocalLength)
             filterEndFocalLength = filterEndFocalLength.split(" mm")[0]
             filterEndFocalLength = int(filterEndFocalLength)
+            filterStartFocalLength, filterEndFocalLength = min(filterStartFocalLength, filterEndFocalLength), max(filterStartFocalLength, filterEndFocalLength)
             focalLength = photoData["focalLength"]
             if focalLength != "":
                 focalLength = focalLength.split(" mm")[0]
@@ -1841,6 +1845,7 @@ class DataBase():
         if filterStartRating != "" and filterEndRating != "":
             filterStartRating = int(filterStartRating)
             filterEndRating = int(filterEndRating)
+            filterStartRating, filterEndRating = min(filterStartRating, filterEndRating), max(filterStartRating, filterEndRating)
             rating = photoData["rating"]
             if rating != "" and rating is not None:
                 rating = int(rating)
@@ -2159,6 +2164,7 @@ class DataBase():
             filterStartShutterSpeed = float(filterStartShutterSpeed)
             filterEndShutterSpeed = endShutterSpeed[2:]
             filterEndShutterSpeed = float(filterEndShutterSpeed)
+            filterStartShutterSpeed, filterEndShutterSpeed = max(filterStartShutterSpeed, filterEndShutterSpeed), min(filterStartShutterSpeed, filterEndShutterSpeed)
             for p in sighting["photos"]:
                 # convert the string to an integer
                 shutterSpeed = p["shutterSpeed"]
@@ -2202,6 +2208,7 @@ class DataBase():
             apertureOK= False
             filterStartAperture = float(startAperture)
             filterEndAperture = float(endAperture)
+            filterStartAperture, filterEndAperture = min(filterStartAperture, filterEndAperture), max(filterStartAperture, filterEndAperture)
             for p in sighting["photos"]:
                 # convert the string to an integer
                 aperture = p["aperture"]
@@ -2244,6 +2251,7 @@ class DataBase():
             isoOK= False
             filterStartIso = int(startIso)
             filterEndIso = int(endIso)
+            filterStartIso, filterEndIso = min(filterStartIso, filterEndIso), max(filterStartIso, filterEndIso)
             for p in sighting["photos"]:
                 # convert the string to an integer
                 iso = p["iso"]
@@ -2288,10 +2296,11 @@ class DataBase():
                             
         if endFocalLength != "" and startFocalLength != "":
             focalLengthOK= False
-            filterStartFocalLength = startFocalLength.split(" mm")[0]            
+            filterStartFocalLength = startFocalLength.split(" mm")[0]
             filterStartFocalLength = int(filterStartFocalLength)
-            filterEndFocalLength = endFocalLength.split(" mm")[0]            
+            filterEndFocalLength = endFocalLength.split(" mm")[0]
             filterEndFocalLength = int(filterEndFocalLength)
+            filterStartFocalLength, filterEndFocalLength = min(filterStartFocalLength, filterEndFocalLength), max(filterStartFocalLength, filterEndFocalLength)
             for p in sighting["photos"]:
                 # convert the string to an integer
                 focalLength = p["focalLength"]
@@ -2335,6 +2344,7 @@ class DataBase():
             ratingOK= False
             filterStartRating = int(startRating)
             filterEndRating = int(endRating)
+            filterStartRating, filterEndRating = min(filterStartRating, filterEndRating), max(filterStartRating, filterEndRating)
             for p in sighting["photos"]:
                 # convert the string to an integer
                 rating = p["rating"]

@@ -1,9 +1,7 @@
 <RCC>
   <qresource prefix="/">
     <file>icon_star.png</file>
-    <file>icon_lapwing.png</file>
-    <file>icon_lapwing_small.png</file>
-    <file>icon_bird.png</file>
+<file>icon_bird.png</file>
     <file>icon_camera.png</file>
     <file>icon_checklists.png</file>
     <file>icon_compare.png</file>
@@ -19,5 +17,21 @@
     <file>icon_pdf.png</file>
     <file>icon_print.png</file>
     <file>icon_tripreport.png</file>
+    <file>icon_bird_white.png</file>
+    <file>icon_camera_white.png</file>
+    <file>icon_checklists_white.png</file>
+    <file>icon_compare_white.png</file>
+    <file>icon_datetotals_white.png</file>
+    <file>icon_families_white.png</file>
+    <file>icon_filter_white.png</file>
+    <file>icon_find_white.png</file>
+    <file>icon_individual_white.png</file>
+    <file>icon_location_white.png</file>
+    <file>icon_locationtotals_white.png</file>
+    <file>icon_map_white.png</file>
+    <file>icon_open_white.png</file>
+    <file>icon_pdf_white.png</file>
+    <file>icon_print_white.png</file>
+    <file>icon_tripreport_white.png</file>
   </qresource>
 </RCC>

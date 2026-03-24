@@ -19,7 +19,7 @@ class Ui_frmCompare(object):
         frmCompare.setSizePolicy(sizePolicy)
         frmCompare.setAcceptDrops(False)
         icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap(":/icon_compare.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon.addPixmap(QtGui.QPixmap(":/icon_compare_white.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         frmCompare.setWindowIcon(icon)
         self.scrollArea = QtWidgets.QScrollArea(frmCompare)
         self.scrollArea.setGeometry(QtCore.QRect(9, 9, 720, 292))

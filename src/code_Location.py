@@ -201,7 +201,7 @@ class Location(QMdiSubWindow, form_Location.Ui_frmLocation):
             self.lblDatesSeen.setText("Dates (" + str(self.tblDates.rowCount()) + ")")
         # display all dates for the selected location
         self.tblDates.setSortingEnabled(True)
-        self.tblDates.sortItems(0,0)
+        self.tblDates.sortItems(0, Qt.SortOrder.AscendingOrder)
         self.tblDates.setCurrentCell(0, 1)
             
         self.coordinates = self.mdiParent.db.GetLocationCoordinates(location)

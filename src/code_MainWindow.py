@@ -33,6 +33,7 @@ from math import (
 # do this so later we won't have to clutter our code with references to parent Qt classes 
 
 from PySide6.QtGui import (
+    QAction,
     QCursor,
     QFont,
     QFontMetrics,
@@ -57,7 +58,10 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QFileDialog,
     QSlider,
-    QLabel
+    QLabel,
+    QProxyStyle,
+    QStyle,
+    QStyleOptionToolButton
     )
 
 from PySide6.QtPrintSupport import (
@@ -65,14 +69,34 @@ from PySide6.QtPrintSupport import (
     QPrinter
     )
 
+class _WhiteIconToolbarStyle(QProxyStyle):
+    """Proxy style that draws white icons on toolbar buttons, leaving menu icons unchanged."""
+    def __init__(self, white_icon_map):
+        super().__init__()
+        self._map = white_icon_map  # {QAction: QIcon}
+
+    def drawControl(self, element, option, painter, widget=None):
+        if (element == QStyle.ControlElement.CE_ToolButtonLabel
+                and isinstance(option, QStyleOptionToolButton)
+                and widget is not None
+                and hasattr(widget, 'defaultAction')):
+            action = widget.defaultAction()
+            if action in self._map:
+                opt = QStyleOptionToolButton(option)
+                opt.icon = self._map[action]
+                super().drawControl(element, opt, painter, widget)
+                return
+        super().drawControl(element, option, painter, widget)
+
+
 class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
     # initialize main database that will be used throughout program
     db = code_DataBase.DataBase()
     fontSize = 11
     scaleFactor = 1
-    versionNumber = "1.0"
-    versionDate = "March 8, 2026"    
+    versionNumber = "1.1"
+    versionDate = "March 24, 2026"    
 
     def __init__(self):
         super(self.__class__, self).__init__()
@@ -89,30 +113,55 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.verticalLayout_5.setAlignment(self.frmPhotoFilter, Qt.AlignTop)
 
         _iconDir = os.path.dirname(os.path.abspath(__file__))
-        _whiteIcons = {
-            self.actionOpen:           "icon_open_white.png",
-            self.actionPrint:          "icon_print_white.png",
-            self.actionCreatePDF:      "icon_pdf_white.png",
-            self.actionSpecies:        "icon_bird_white.png",
-            self.actionLocations:      "icon_location_white.png",
-            self.actionChecklists:     "icon_checklists_white.png",
-            self.actionMap:            "icon_map_white.png",
-            self.actionFamilies:       "icon_families_white.png",
-            self.actionDateTotals:     "icon_datetotals_white.png",
-            self.actionLocationTotals: "icon_locationtotals_white.png",
-            self.actionCompareLists:   "icon_compare_white.png",
-            self.actionBigReport:      "icon_tripreport_white.png",
-            self.actionPhotos:         "icon_camera_white.png",
-            self.actionFind:           "icon_find_white.png",
-            self.actionClearAllFilters:"icon_filter_white.png",
+        # Black icons for drop-down menus
+        _menuIcons = {
+            self.actionOpen:           "icon_open.png",
+            self.actionPrint:          "icon_print.png",
+            self.actionCreatePDF:      "icon_pdf.png",
+            self.actionSpecies:        "icon_bird.png",
+            self.actionLocations:      "icon_location.png",
+            self.actionChecklists:     "icon_checklists.png",
+            self.actionMap:            "icon_map.png",
+            self.actionFamilies:       "icon_families.png",
+            self.actionDateTotals:     "icon_datetotals.png",
+            self.actionLocationTotals: "icon_locationtotals.png",
+            self.actionCompareLists:   "icon_compare.png",
+            self.actionBigReport:      "icon_tripreport.png",
+            self.actionPhotos:         "icon_camera.png",
+            self.actionFind:           "icon_find.png",
+            self.actionClearAllFilters:"icon_filter.png",
         }
-        for action, filename in _whiteIcons.items():
+        for action, filename in _menuIcons.items():
             action.setIcon(QIcon(os.path.join(_iconDir, filename)))
+        # White icons for toolbar buttons via proxy style (menus keep the black icons above)
+        _whiteIconMap = {
+            self.actionOpen:           QIcon(os.path.join(_iconDir, "icon_open_white.png")),
+            self.actionPrint:          QIcon(os.path.join(_iconDir, "icon_print_white.png")),
+            self.actionCreatePDF:      QIcon(os.path.join(_iconDir, "icon_pdf_white.png")),
+            self.actionSpecies:        QIcon(os.path.join(_iconDir, "icon_bird_white.png")),
+            self.actionLocations:      QIcon(os.path.join(_iconDir, "icon_location_white.png")),
+            self.actionChecklists:     QIcon(os.path.join(_iconDir, "icon_checklists_white.png")),
+            self.actionMap:            QIcon(os.path.join(_iconDir, "icon_map_white.png")),
+            self.actionFamilies:       QIcon(os.path.join(_iconDir, "icon_families_white.png")),
+            self.actionDateTotals:     QIcon(os.path.join(_iconDir, "icon_datetotals_white.png")),
+            self.actionLocationTotals: QIcon(os.path.join(_iconDir, "icon_locationtotals_white.png")),
+            self.actionCompareLists:   QIcon(os.path.join(_iconDir, "icon_compare_white.png")),
+            self.actionBigReport:      QIcon(os.path.join(_iconDir, "icon_tripreport_white.png")),
+            self.actionPhotos:         QIcon(os.path.join(_iconDir, "icon_camera_white.png")),
+            self.actionFind:           QIcon(os.path.join(_iconDir, "icon_find_white.png")),
+            self.actionClearAllFilters:QIcon(os.path.join(_iconDir, "icon_filter_white.png")),
+        }
+        self._toolbarStyle = _WhiteIconToolbarStyle(_whiteIconMap)
+        self.toolBar.setStyle(self._toolbarStyle)
 
         # Remove all separators from the toolbar for uniform spacing
         for action in self.toolBar.actions():
             if action.isSeparator():
                 self.toolBar.removeAction(action)
+
+        # Reduce toolbar icon size by 10%
+        _sz = self.toolBar.iconSize()
+        self.toolBar.setIconSize(QSize(int(_sz.width() * 0.9), int(_sz.height() * 0.9)))
 
         # Equalise toolbar button widths to the widest label
         fm = self.toolBar.fontMetrics()
@@ -133,7 +182,16 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionClose.triggered.connect(self.closeDataFile)
 
         self.actionAboutYearbird.triggered.connect(self.CreateAboutYearbird)
-        self.actionUserGuide.triggered.connect(self.CreateUserGuide)        
+        self.actionUserGuide.triggered.connect(self.CreateUserGuide)
+
+        # macOS intercepts any QAction named "About …" and moves it to the Application
+        # menu, so actionAboutYearbird never stays in the User Guide dropdown.
+        # Create a separate action with NoRole so macOS leaves it in place.
+        _aboutAction = QAction("About Yearbird", self)
+        _aboutAction.setMenuRole(QAction.MenuRole.NoRole)
+        _aboutAction.triggered.connect(self.CreateAboutYearbird)
+        self.menuHelp.addSeparator()
+        self.menuHelp.addAction(_aboutAction)        
         self.actionPreferences.triggered.connect(self.createPreferences)
         self.actionExit.triggered.connect(self.ExitApp)
         
@@ -3140,8 +3198,15 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
  
                 
+    def closeEvent(self, event):
+        # Remove the custom toolbar style before Qt teardown so PySide6's shutdown
+        # sequence cannot call back into a partially-destroyed Python proxy style object.
+        self.toolBar.setStyle(None)
+        event.accept()
+
     def ExitApp(self):
-        
+
         self.checkIfPhotoDataNeedSaving()
+        self.toolBar.setStyle(None)
         sys.exit()
         

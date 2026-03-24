@@ -20,7 +20,7 @@ class Ui_frmSpeciesList(object):
         frmSpeciesList.setMinimumSize(QtCore.QSize(200, 300))
         frmSpeciesList.setSizeIncrement(QtCore.QSize(0, 0))
         icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap(":/icon_bird.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon.addPixmap(QtGui.QPixmap(":/icon_bird_white.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         frmSpeciesList.setWindowIcon(icon)
         self.scrollArea = QtWidgets.QScrollArea(frmSpeciesList)
         self.scrollArea.setGeometry(QtCore.QRect(0, 23, 671, 480))

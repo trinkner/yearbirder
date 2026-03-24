@@ -19,7 +19,7 @@ class Ui_frmFind(object):
         sizePolicy.setHeightForWidth(frmFind.sizePolicy().hasHeightForWidth())
         frmFind.setSizePolicy(sizePolicy)
         icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap(":/icon_find.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon.addPixmap(QtGui.QPixmap(":/icon_find_white.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         frmFind.setWindowIcon(icon)
         frmFind.setLayoutDirection(QtCore.Qt.LeftToRight)
         self.scrollArea = QtWidgets.QScrollArea(frmFind)

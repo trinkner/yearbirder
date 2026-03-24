@@ -18,7 +18,7 @@ class Ui_frmLocation(object):
         sizePolicy.setHeightForWidth(frmLocation.sizePolicy().hasHeightForWidth())
         frmLocation.setSizePolicy(sizePolicy)
         icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap(":/icon_location.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon.addPixmap(QtGui.QPixmap(":/icon_location_white.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         frmLocation.setWindowIcon(icon)
         self.scrollArea = QtWidgets.QScrollArea(frmLocation)
         self.scrollArea.setGeometry(QtCore.QRect(10, 10, 861, 611))

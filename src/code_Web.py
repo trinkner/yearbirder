@@ -59,12 +59,17 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
         self.mdiParent = ""
         self.setWindowIcon(QIcon(QPixmap(1,1)))
         self.contentType = "Web Page"
-        self.resized.connect(self.resizeMe)   
+        self.resized.connect(self.resizeMe)
         self.webView = QWebEngineView(self)
         self.webView.setObjectName("webView")
         self.webView.loadFinished.connect(self.LoadFinished)
         self.webView.loadProgress.connect(self.showLoadProgress)
         self.title = ""
+        # Set once at creation so all choropleth temp-file pages can load
+        # remote tile CDNs without a referer error on first load
+        QWebEngineProfile.defaultProfile().settings().setAttribute(
+            QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True
+        )
 
 
     def resizeEvent(self, event):
@@ -141,61 +146,81 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
         
         self.contentType = "About"
                     
-        html = """
+        html = """<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>About Yearbird</title>
+<style>
+  body {
+    background-color: #1e1f26;
+    color: #e2e4ec;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 14px;
+    margin: 32px 40px;
+    line-height: 1.6;
+  }
+  h1 {
+    color: #4f8ef7;
+    font-size: 2em;
+    margin-bottom: 2px;
+  }
+  .subtitle {
+    color: #8b8fa8;
+    font-size: 0.95em;
+    margin-top: 0;
+    margin-bottom: 24px;
+  }
+  .description {
+    font-size: 1em;
+    margin-bottom: 28px;
+  }
+  h2 {
+    color: #4f8ef7;
+    font-size: 1.1em;
+    border-bottom: 1px solid #3a3d4e;
+    padding-bottom: 6px;
+    margin-top: 28px;
+  }
+  ul {
+    padding-left: 20px;
+    margin: 10px 0;
+  }
+  li {
+    margin-bottom: 8px;
+    color: #c8cad8;
+  }
+  li b {
+    color: #e2e4ec;
+  }
+</style>
+</head>
+<body>
+<h1>Yearbird</h1>
+"""
+        html += f'<p class="subtitle">Version {self.mdiParent.versionNumber} &nbsp;&bull;&nbsp; {self.mdiParent.versionDate}</p>'
+        html += """
+<p class="description">
+  Yearbird is a free, open-source application for analyzing personal eBird sightings.<br>
+  Created by Richard Trinkner.
+</p>
 
-            <!DOCTYPE html>
-            <html>
-            <head>
-            <title>About Yearbird</title>
-            <meta charset="utf-8">
-            <style>
-            * {
-                font-family: "Times New Roman", Times, serif;
-                }
-            </style>
-            </head>
-            <body>
-            <h1>
-            Yearbird
-            </h1>
-            """
-        
-        html = html + "<h3>Version: " + self.mdiParent.versionNumber + "</h3>"
-        html = html + "<h3>Date: " + self.mdiParent.versionDate+ "</h3>"
-        
-        html = html + """
-            <font size='4'>            
-            <b>
-            Yearbird is a free, open-source application to analyze personal eBird sightings. 
-            <br><br>
-            Created by Richard Trinkner.             
-            </b>
-            <h3>
-            Licenses
-            </h3>
-            <p>
-            <ul>
-            <li>
-            Yearbird is licensed under the GNU General Public License, version 3.
-            </li>
-            <li>
-            PyQt, by Riverbank Computing, is licensed under the GNU General Public License.
-            </li>
-            <li>
-            Map base layers are retrieved from Google.
-            </li>            
-            <li>
-            Map layers that include points and location labels are generated using OpenLayers. OpenLayers is free, Open Source JavaScript, released under the 2-clause BSD License (also known as the FreeBSD).
-            </li>
-            <li>
-            PyInstaller, by the PyInstaller Development Team, Giovanni Bajo and McMillan Enterprise, is licensed under the GPL General Public License.
-            </li>
-            </ul>
-            </font size>
-            </body>
-            </html>        
-            """
-        
+<h2>Licenses</h2>
+<ul>
+  <li><b>Yearbird</b> is licensed under the GNU General Public License, version 3.</li>
+  <li><b>PySide6</b>, by The Qt Company, is used under the GNU Lesser General Public
+      License (LGPL) version 3, which permits free non-commercial use.</li>
+  <li><b>Map base layers</b> are retrieved from OpenStreetMap contributors.</li>
+  <li><b>Choropleth maps</b> are generated using Folium, which is released under the
+      MIT License.</li>
+  <li><b>OpenLayers</b>, used for point and label map layers, is released under the
+      2-Clause BSD License.</li>
+  <li><b>PyInstaller</b>, by the PyInstaller Development Team, is licensed under the
+      GPL General Public License.</li>
+</ul>
+</body>
+</html>"""
+
         self.webView.setHtml(html)
                 
         self.setWindowTitle("About Yearbird")
@@ -263,7 +288,7 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
         self._buildFilterTitle(filter, "Map", count=len(coordinatesDict.keys()))
 
         icon = QIcon()
-        icon.addPixmap(QPixmap(":/icon_map.png"), QIcon.Normal, QIcon.Off)
+        icon.addPixmap(QPixmap(":/icon_map_white.png"), QIcon.Normal, QIcon.Off)
         self.setWindowIcon(icon) 
                 
         return(True)
@@ -347,7 +372,7 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
                 stateTotals[f["id"]] = 0
                     
         # Initialize the folium map
-        state_map = folium.Map(location=[39.5, -98.3], zoom_start=4)
+        state_map = folium.Map(location=[39.5, -98.3], zoom_start=4, tiles="CartoDB Positron")
 
         # Configure the chloropleth layer and add to map
         folium.GeoJson(
@@ -368,9 +393,14 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
         folium.LayerControl().add_to(state_map)
                  
         # get the html string from the map
+        import tempfile
         html = state_map.get_root().render()
-
-        self.webView.setHtml(html)
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as f:
+            f.write(html)
+            tmp_path = f.name
+        settings = QWebEngineProfile.defaultProfile().settings()
+        settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
+        self.webView.setUrl(QUrl.fromLocalFile(tmp_path))
         self._buildFilterTitle(filter, "US States Choropleth", count=len(stateDict), countUnit="States")
 
         return(True)
@@ -433,7 +463,7 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
                 provTotals[f["id"]] = 0
 
         # Initialize the folium map centered on Canada
-        prov_map = folium.Map(location=[62, -96], zoom_start=3)
+        prov_map = folium.Map(location=[62, -96], zoom_start=3, tiles="CartoDB Positron")
 
         # Configure the choropleth layer and add to map
         folium.GeoJson(
@@ -517,7 +547,7 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
                 f["properties"]["speciesTotal"] = 0
                 stateTotals[f["id"]] = 0
 
-        state_map = folium.Map(location=[22, 80], zoom_start=4)
+        state_map = folium.Map(location=[22, 80], zoom_start=4, tiles="CartoDB Positron")
 
         folium.GeoJson(
             geo_file,
@@ -605,7 +635,7 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
                 f["properties"]["speciesTotal"] = 0
                 countyTotals[ename] = 0
 
-        county_map = folium.Map(location=[54, -2], zoom_start=5)
+        county_map = folium.Map(location=[54, -2], zoom_start=5, tiles="CartoDB Positron")
 
         folium.GeoJson(
             geo_file,
@@ -698,7 +728,7 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
                 countyTotals[f["id"]] = 0
                     
         # Initialize the folium map
-        county_map = folium.Map(location=[39.5, -98.3], zoom_start=4)
+        county_map = folium.Map(location=[39.5, -98.3], zoom_start=4, tiles="CartoDB Positron")
 
         # Configure the chloropleth layer and add to map
         folium.GeoJson(
@@ -793,7 +823,7 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
                 countryTotals[f["id"]] = 0
                     
         # Initialize the folium map
-        choro_map = folium.Map(location=[1, 1], zoom_start=1)
+        choro_map = folium.Map(location=[1, 1], zoom_start=1, tiles="CartoDB Positron")
 
         # Configure the chloropleth layer and add to map
         folium.GeoJson(
@@ -815,9 +845,14 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
         folium.LayerControl().add_to(choro_map)
                  
         # get the html string from the map
+        import tempfile
         html = choro_map.get_root().render()
-
-        self.webView.setHtml(html)
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as f:
+            f.write(html)
+            tmp_path = f.name
+        settings = QWebEngineProfile.defaultProfile().settings()
+        settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
+        self.webView.setUrl(QUrl.fromLocalFile(tmp_path))
         self._buildFilterTitle(filter, "World Choropleth", count=len(countryDict), countUnit="Countries")
 
         return(True)

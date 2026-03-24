@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
     QTableWidgetItem,
     QHeaderView,
     QMdiSubWindow,
+    QWidget,
     )
 
 
@@ -45,7 +46,13 @@ class LocationTotals(QMdiSubWindow, form_LocationTotals.Ui_frmLocationTotals):
     
     def __init__(self):
         super(self.__class__, self).__init__()
-        self.setupUi(self)
+        # setupUi sets QVBoxLayout directly on its argument. QMdiSubWindow already
+        # has an internal Qt6 layout, so passing self causes a "already has a layout"
+        # warning. Use a container widget instead; all self.xxx UI attributes are still
+        # set on self by the Ui mixin regardless of which widget is passed.
+        _container = QWidget()
+        self.setupUi(_container)
+        self.setWidget(_container)
         self.setAttribute(Qt.WA_DeleteOnClose,True)
         self.mdiParent = ""        
         self.resized.connect(self.resizeMe)                            
@@ -616,7 +623,7 @@ class LocationTotals(QMdiSubWindow, form_LocationTotals.Ui_frmLocationTotals):
         # set headers and column stretching 
         for t in [self.tblRegionTotals, self.tblCountryTotals, self.tblStateTotals, self.tblCountyTotals, self.tblLocationTotals]:
             t.setSortingEnabled(True)
-            t.sortItems(0,0)
+            t.sortItems(0, Qt.SortOrder.AscendingOrder)
             t.horizontalHeader().setVisible(True)
             # remove first three characters from tbl widget name
             regionType = t.objectName()[3:]

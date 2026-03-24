@@ -20,7 +20,7 @@ class Ui_frmManagePhotos(object):
         frmManagePhotos.setMinimumSize(QtCore.QSize(200, 300))
         frmManagePhotos.setSizeIncrement(QtCore.QSize(0, 0))
         icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap(":/icon_bird.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon.addPixmap(QtGui.QPixmap(":/icon_bird_white.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         frmManagePhotos.setWindowIcon(icon)
         self.scrollArea = QtWidgets.QScrollArea(frmManagePhotos)
         self.scrollArea.setGeometry(QtCore.QRect(0, 10, 891, 601))

@@ -20,7 +20,7 @@ class Ui_frmEnlargement(object):
         frmEnlargement.setMinimumSize(QtCore.QSize(200, 300))
         frmEnlargement.setSizeIncrement(QtCore.QSize(0, 0))
         icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap(":/icon_camera.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon.addPixmap(QtGui.QPixmap(":/icon_camera_white.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         frmEnlargement.setWindowIcon(icon)
 
         self.retranslateUi(frmEnlargement)

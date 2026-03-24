@@ -20,7 +20,7 @@ class Ui_frmIndividual(object):
         sizePolicy.setHeightForWidth(frmIndividual.sizePolicy().hasHeightForWidth())
         frmIndividual.setSizePolicy(sizePolicy)
         icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap(":/icon_individual.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon.addPixmap(QtGui.QPixmap(":/icon_individual_white.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         frmIndividual.setWindowIcon(icon)
         self.scrollArea = QtWidgets.QScrollArea(frmIndividual)
         self.scrollArea.setGeometry(QtCore.QRect(0, 0, 780, 500))

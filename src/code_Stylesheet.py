@@ -91,27 +91,30 @@ class AppStyle(QProxyStyle):
                 if r.isValid() and r.left() < leftEdge:
                     leftEdge = r.left()
 
-            # Repaint the icon column at FULL title-bar height so that Fusion's
-            # bottom border line (which shows beneath the icon when iconRect is
-            # shorter than option.rect) is completely covered.
+            # Size the icon to fill the title bar height with a small margin,
+            # and offset it past the window's rounded corner radius (~8 px) so
+            # it isn't clipped.  Fusion's SC_TitleBarSysMenu rect starts at (0,0)
+            # which sits inside the clipped corner.
+            barH = option.rect.height()
+            iconSize = max(barH - 8, 10)   # 4 px top + 4 px bottom padding
+            iconX = option.rect.left() + 8  # clear the corner-radius clip zone
+            iconY = option.rect.top() + (barH - iconSize) // 2
+            columnRight = max(iconRect.right(), iconX + iconSize + 4)
+
+            # Repaint the icon column at full title-bar height
             iconColumnRect = QRect(option.rect.left(), option.rect.top(),
-                                   iconRect.right() - option.rect.left() + 1,
+                                   columnRight - option.rect.left() + 1,
                                    option.rect.height())
             painter.fillRect(iconColumnRect, bgColor)
             if not option.icon.isNull():
-                iconSize = self.pixelMetric(QStyle.PM_SmallIconSize, option, widget)
                 px = option.icon.pixmap(iconSize, iconSize)
-                painter.drawPixmap(
-                    iconRect.left() + (iconRect.width()  - px.width())  // 2,
-                    iconRect.top()  + (iconRect.height() - px.height()) // 2,
-                    px,
-                )
+                painter.drawPixmap(iconX, iconY, px)
 
             # Repaint the text area to erase Fusion's bold title text
             fillRect = QRect(
-                iconRect.right() + 1,
+                columnRight + 1,
                 option.rect.top(),
-                leftEdge - iconRect.right() - 2,
+                leftEdge - columnRight - 2,
                 option.rect.height(),
             )
             painter.fillRect(fillRect, bgColor)
@@ -237,6 +240,30 @@ stylesheetBase = """
         background: #2b2d38;
         padding: 6px;
         font-weight: bold;
+    }
+
+    QToolBar {
+        background: #1e1f26;
+        border: none;
+        spacing: 0px;
+    }
+    QToolBar::separator {
+        width: 0px;
+        height: 0px;
+    }
+    QToolButton {
+        background: transparent;
+        border: none;
+        color: #e2e4ec;
+    }
+    QToolButton:hover {
+        background: #363a4f;
+        border-radius: 4px;
+    }
+    QToolButton:pressed {
+        background: #4f8ef7;
+        border-radius: 4px;
+        color: white;
     }
 
     QMenuBar { background: #1e1f26; color: #e2e4ec; }

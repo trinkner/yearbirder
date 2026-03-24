@@ -18,7 +18,7 @@ class Ui_frmBigReport(object):
         sizePolicy.setHeightForWidth(frmBigReport.sizePolicy().hasHeightForWidth())
         frmBigReport.setSizePolicy(sizePolicy)
         icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap(":/icon_tripreport.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon.addPixmap(QtGui.QPixmap(":/icon_tripreport_white.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         frmBigReport.setWindowIcon(icon)
         self.scrollArea = QtWidgets.QScrollArea(frmBigReport)
         self.scrollArea.setGeometry(QtCore.QRect(9, 9, 720, 427))

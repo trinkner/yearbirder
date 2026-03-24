@@ -20,7 +20,7 @@ class Ui_frmPhotos(object):
         frmPhotos.setMinimumSize(QtCore.QSize(200, 300))
         frmPhotos.setSizeIncrement(QtCore.QSize(0, 0))
         icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap(":/icon_bird.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon.addPixmap(QtGui.QPixmap(":/icon_bird_white.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         frmPhotos.setWindowIcon(icon)
         self.scrollArea = QtWidgets.QScrollArea(frmPhotos)
         self.scrollArea.setGeometry(QtCore.QRect(0, 0, 671, 480))
@@ -87,7 +87,6 @@ class Ui_frmPhotos(object):
         self.sortButtonGroup.setObjectName("sortButtonGroup")
 
         self.rdoSortSpecies = QtWidgets.QRadioButton(self.layLists)
-        self.rdoSortSpecies.setChecked(True)
         self.rdoSortSpecies.setObjectName("rdoSortSpecies")
         self.sortButtonGroup.addButton(self.rdoSortSpecies, 0)
 
@@ -100,6 +99,7 @@ class Ui_frmPhotos(object):
         self.sortButtonGroup.addButton(self.rdoSortRating, 2)
 
         self.rdoSortTaxonomy = QtWidgets.QRadioButton(self.layLists)
+        self.rdoSortTaxonomy.setChecked(True)
         self.rdoSortTaxonomy.setObjectName("rdoSortTaxonomy")
         self.sortButtonGroup.addButton(self.rdoSortTaxonomy, 3)
 

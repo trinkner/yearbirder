@@ -20,7 +20,7 @@ class Ui_frmChecklists(object):
         frmChecklists.setMinimumSize(QtCore.QSize(800, 590))
         frmChecklists.setMaximumSize(QtCore.QSize(800, 590))
         icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap(":/icon_checklists.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon.addPixmap(QtGui.QPixmap(":/icon_checklists_white.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         frmChecklists.setWindowIcon(icon)
         self.txtFind = QtWidgets.QLineEdit(frmChecklists)
         self.txtFind.setGeometry(QtCore.QRect(570, 115, 221, 22))

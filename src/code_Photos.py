@@ -50,7 +50,10 @@ class threadLoadThumbnail(QThread):
         self.resultQueue = None   # Python queue shared with Photos
 
     def __del__(self):
-        self.wait()
+        try:
+            self.wait()
+        except RuntimeError:
+            pass
 
     def run(self):
 
@@ -249,7 +252,7 @@ class Photos(QMdiSubWindow, form_Photos.Ui_frmPhotos):
         self.SortAndDisplayPhotos()
 
         icon = QIcon()
-        icon.addPixmap(QPixmap(":/icon_camera.png"), QIcon.Normal, QIcon.Off)
+        icon.addPixmap(QPixmap(":/icon_camera_white.png"), QIcon.Normal, QIcon.Off)
         self.setWindowIcon(icon)
 
         # don't show if we don't have any photos to show

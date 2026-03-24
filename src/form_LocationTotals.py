@@ -20,7 +20,7 @@ class Ui_frmLocationTotals(object):
         sizePolicy.setHeightForWidth(frmLocationTotals.sizePolicy().hasHeightForWidth())
         frmLocationTotals.setSizePolicy(sizePolicy)
         icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap(":/icon_locationtotals.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon.addPixmap(QtGui.QPixmap(":/icon_locationtotals_white.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         frmLocationTotals.setWindowIcon(icon)
         self.verticalLayout_7 = QtWidgets.QVBoxLayout(frmLocationTotals)
         self.verticalLayout_7.setObjectName("verticalLayout_7")
