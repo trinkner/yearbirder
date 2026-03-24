@@ -20,7 +20,7 @@ Yearbird loads the CSV file you download from eBird and lets you filter, browse,
 - **Big Report** — comprehensive multi-tab report combining species, dates, locations, and checklists
 - **Compare Lists** — compare any two species lists side by side
 - **Interactive Map** — all your sighting locations plotted on a zoomable map
-- **Choropleth Maps** — US states, US counties, and world countries shaded by species count
+- **Choropleth Maps** — US states, US counties, Canada provinces, India states, Great Britain counties, and world countries shaded by species count
 - **Photos** — associate your JPEG bird photos with your sightings; browse, filter, and rate them by camera, lens, aperture, shutter speed, focal length, and ISO
 - **Individual Species window** — full sighting history, location and year breakdowns, monthly patterns, and photo thumbnails for any species
 - **Print and PDF export** — export any window to the printer or a PDF file
