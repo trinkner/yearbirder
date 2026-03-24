@@ -13,22 +13,22 @@ import code_Lists
 from copy import deepcopy
 from math import floor
 
-from PyQt5.QtGui import (
+from PySide6.QtGui import (
     QCursor,
     QFont
     )
-    
-from PyQt5.QtCore import (
+
+from PySide6.QtCore import (
     Qt,
-    pyqtSignal
+    Signal
     )
-    
+
 from collections import (
     defaultdict
-)    
-from PyQt5.QtWidgets import (
-    QApplication, 
-    QTableWidgetItem, 
+)
+from PySide6.QtWidgets import (
+    QApplication,
+    QTableWidgetItem,
     QHeaderView,
     QMdiSubWindow,
     )
@@ -40,7 +40,7 @@ class LocationTotals(QMdiSubWindow, form_LocationTotals.Ui_frmLocationTotals):
 
     # create "resized" as a signal that the window can emit
     # we respond to this signal with the form's resizeMe method below
-    resized = pyqtSignal()       
+    resized = Signal()       
     
     
     def __init__(self):
@@ -624,7 +624,7 @@ class LocationTotals(QMdiSubWindow, form_LocationTotals.Ui_frmLocationTotals):
             regionType = regionType[:-6]
             t.setHorizontalHeaderLabels(['Rank', regionType, 'Species', 'Checklists'])
             header = t.horizontalHeader()
-            header.setSectionResizeMode(1, QHeaderView.Stretch)
+            header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
 
         # set location and date range titles
         self.mdiParent.SetChildDetailsLabels(self, self.filter)

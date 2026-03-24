@@ -6,13 +6,13 @@
 #
 # WARNING! All changes made in this file will be lost!
 
-from PyQt5 import QtCore, QtGui, QtWidgets
+from PySide6 import QtCore, QtGui, QtWidgets
 
 class Ui_frmChecklists(object):
     def setupUi(self, frmChecklists):
         frmChecklists.setObjectName("frmChecklists")
         frmChecklists.resize(800, 590)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Fixed, QtWidgets.QSizePolicy.Policy.Fixed)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(frmChecklists.sizePolicy().hasHeightForWidth())
@@ -30,12 +30,12 @@ class Ui_frmChecklists(object):
         self.lblChecklists.setObjectName("lblChecklists")
         self.tblChecklists = QtWidgets.QTableWidget(frmChecklists)
         self.tblChecklists.setGeometry(QtCore.QRect(10, 140, 781, 441))
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Fixed, QtWidgets.QSizePolicy.Policy.Fixed)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.tblChecklists.sizePolicy().hasHeightForWidth())
         self.tblChecklists.setSizePolicy(sizePolicy)
-        self.tblChecklists.setFrameShape(QtWidgets.QFrame.StyledPanel)
+        self.tblChecklists.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
         self.tblChecklists.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.tblChecklists.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         self.tblChecklists.setObjectName("tblChecklists")
@@ -55,7 +55,7 @@ class Ui_frmChecklists(object):
         font = QtGui.QFont()
         font.setPointSize(12)
         font.setBold(False)
-        font.setWeight(50)
+        font.setWeight(QtGui.QFont.Weight.Normal)
         self.lblDateRange.setFont(font)
         self.lblDateRange.setObjectName("lblDateRange")
         self.lblLocation = QtWidgets.QLabel(frmChecklists)
@@ -63,7 +63,7 @@ class Ui_frmChecklists(object):
         font = QtGui.QFont()
         font.setPointSize(14)
         font.setBold(True)
-        font.setWeight(75)
+        font.setWeight(QtGui.QFont.Weight.Bold)
         self.lblLocation.setFont(font)
         self.lblLocation.setObjectName("lblLocation")
         self.lblDetails = QtWidgets.QLabel(frmChecklists)
@@ -71,7 +71,7 @@ class Ui_frmChecklists(object):
         font = QtGui.QFont()
         font.setPointSize(12)
         font.setBold(False)
-        font.setWeight(50)
+        font.setWeight(QtGui.QFont.Weight.Normal)
         self.lblDetails.setFont(font)
         self.lblDetails.setObjectName("lblDetails")
 

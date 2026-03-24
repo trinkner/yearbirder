@@ -1,11 +1,11 @@
 # class to format decimals properly in the column layouts.
 
 # import the Qt components we'll use    
-from PyQt5.QtCore import (
+from PySide6.QtCore import (
     Qt
     )
-    
-from PyQt5.QtWidgets import (
+
+from PySide6.QtWidgets import (
     QItemDelegate
     )
            

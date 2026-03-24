@@ -33,6 +33,9 @@ Yearbird_PyInstaller_Instructions.txt
 # Claude Code memory
 .claude/
 
+# PyQt5 backup
+backup/
+
 # Screenshots and temp files
 Screenshot.jpg
 Yearbird_Screenshot.jpg

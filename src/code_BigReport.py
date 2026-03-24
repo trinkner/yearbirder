@@ -13,29 +13,28 @@ from collections import defaultdict
 from math import floor
 import base64
 
-from PyQt5.QtGui import (
+from PySide6.QtGui import (
     QCursor,
     QFont,
     )
-    
-from PyQt5.QtCore import (
+
+from PySide6.QtCore import (
     Qt,
-    QVariant,
     QUrl,
-    pyqtSignal,
+    Signal,
     QIODevice,
     QByteArray,
     QBuffer
     )
-    
-from PyQt5.QtWidgets import (
-    QApplication, 
-    QTableWidgetItem, 
+
+from PySide6.QtWidgets import (
+    QApplication,
+    QTableWidgetItem,
     QHeaderView,
     QMdiSubWindow,
     )
-    
-from PyQt5.QtWebEngineWidgets import (
+
+from PySide6.QtWebEngineWidgets import (
     QWebEngineView,
 )
 
@@ -44,7 +43,7 @@ class BigReport(QMdiSubWindow, form_BigReport.Ui_frmBigReport):
 
     # create "resized" as a signal that the window can emit
     # we respond to this signal with the form's resizeMe method below
-    resized = pyqtSignal()  
+    resized = Signal()  
     
     def __init__(self):
         super(self.__class__, self).__init__()
@@ -208,7 +207,7 @@ class BigReport(QMdiSubWindow, form_BigReport.Ui_frmBigReport):
         self.tblSpecies.horizontalHeader().setVisible(True)
         self.tblSpecies.setHorizontalHeaderLabels(['Tax', 'Species', 'Count', 'First',  'Last'])
         header = self.tblSpecies.horizontalHeader()
-        header.setSectionResizeMode(1, QHeaderView.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.tblSpecies.setShowGrid(False)
 
         # add species and dates to table row by row        
@@ -218,7 +217,7 @@ class BigReport(QMdiSubWindow, form_BigReport.Ui_frmBigReport):
             taxItem.setData(Qt.DisplayRole, R+1)
             speciesItem = QTableWidgetItem()
             speciesItem.setText(species[0])
-            speciesItem.setData(Qt.UserRole,  QVariant(species[4])) 
+            speciesItem.setData(Qt.UserRole,  species[4]) 
             countItem = QTableWidgetItem()
             countItem.setData(Qt.DisplayRole, species[7])
             firstDateItem = QTableWidgetItem()
@@ -281,7 +280,7 @@ class BigReport(QMdiSubWindow, form_BigReport.Ui_frmBigReport):
         self.tblNewYearSpecies.setRowCount(len(yearSpecies)+1)
         self.tblNewYearSpecies.horizontalHeader().setVisible(False)
         header = self.tblNewYearSpecies.horizontalHeader()
-        header.setSectionResizeMode(1, QHeaderView.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.tblNewYearSpecies.setShowGrid(False)
 
         count = 0
@@ -322,7 +321,7 @@ class BigReport(QMdiSubWindow, form_BigReport.Ui_frmBigReport):
         self.tblNewMonthSpecies.setRowCount(len(monthSpecies)+1)
         self.tblNewMonthSpecies.horizontalHeader().setVisible(False)
         header = self.tblNewMonthSpecies.horizontalHeader()
-        header.setSectionResizeMode(1, QHeaderView.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.tblNewMonthSpecies.setShowGrid(False)
 
         count = 0
@@ -398,7 +397,7 @@ class BigReport(QMdiSubWindow, form_BigReport.Ui_frmBigReport):
         self.tblNewCountrySpecies.setRowCount(len(countrySpecies))
         self.tblNewCountrySpecies.horizontalHeader().setVisible(False)
         header = self.tblNewCountrySpecies.horizontalHeader()
-        header.setSectionResizeMode(1, QHeaderView.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.tblNewCountrySpecies.setShowGrid(False)
 
         count = 0
@@ -440,7 +439,7 @@ class BigReport(QMdiSubWindow, form_BigReport.Ui_frmBigReport):
         self.tblNewStateSpecies.setRowCount(len(stateSpecies))
         self.tblNewStateSpecies.horizontalHeader().setVisible(False)
         header = self.tblNewStateSpecies.horizontalHeader()
-        header.setSectionResizeMode(1, QHeaderView.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.tblNewStateSpecies.setShowGrid(False)
 
         count = 0
@@ -485,7 +484,7 @@ class BigReport(QMdiSubWindow, form_BigReport.Ui_frmBigReport):
         self.tblNewCountySpecies.setRowCount(len(countySpecies))
         self.tblNewCountySpecies.horizontalHeader().setVisible(False)
         header = self.tblNewCountySpecies.horizontalHeader()
-        header.setSectionResizeMode(1, QHeaderView.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.tblNewCountySpecies.setShowGrid(False)
 
         if len(countySpecies) > 0:
@@ -525,7 +524,7 @@ class BigReport(QMdiSubWindow, form_BigReport.Ui_frmBigReport):
         self.tblNewLocationSpecies.setRowCount(len(locationSpecies))
         self.tblNewLocationSpecies.horizontalHeader().setVisible(False)
         header = self.tblNewLocationSpecies.horizontalHeader()
-        header.setSectionResizeMode(1, QHeaderView.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.tblNewLocationSpecies.setShowGrid(False)
 
         if len(locationSpecies) > 0:
@@ -838,7 +837,7 @@ class BigReport(QMdiSubWindow, form_BigReport.Ui_frmBigReport):
 
         myByteArray = QByteArray()
         myBuffer = QBuffer(myByteArray)
-        myBuffer.open(QIODevice.WriteOnly)
+        myBuffer.open(QIODevice.OpenModeFlag.WriteOnly)
         myPixmap.save(myBuffer, "PNG")
 
         encodedImage = base64.b64encode(myByteArray)

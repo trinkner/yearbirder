@@ -12,22 +12,22 @@ from collections import defaultdict
 # import the Qt components we'll use
 # do this so later we won't have to clutter our code with references to parent Qt classes 
 
-from PyQt5.QtGui import (
+from PySide6.QtGui import (
     QCursor,
     QFont
     )
-    
-from PyQt5.QtCore import (
+
+from PySide6.QtCore import (
     Qt,
-    pyqtSignal,
+    Signal,
     QIODevice,
     QByteArray,
-    QBuffer,    
+    QBuffer,
     )
-    
-from PyQt5.QtWidgets import (
-    QApplication,  
-    QTableWidgetItem, 
+
+from PySide6.QtWidgets import (
+    QApplication,
+    QTableWidgetItem,
     QHeaderView,
     QMdiSubWindow
     )
@@ -36,7 +36,7 @@ from math import (
     floor
 )
 
-from PyQt5.QtWebEngineWidgets import (
+from PySide6.QtWebEngineWidgets import (
     QWebEngineView,
 )
 
@@ -47,8 +47,8 @@ import code_Stylesheet
 
 
 class Location(QMdiSubWindow, form_Location.Ui_frmLocation):
-    
-    resized = pyqtSignal()    
+
+    resized = Signal()    
     
     def __init__(self):
         super(self.__class__, self).__init__()
@@ -151,7 +151,7 @@ class Location(QMdiSubWindow, form_Location.Ui_frmLocation):
         self.tblDates.horizontalHeader().setVisible(True)
         self.tblDates.setHorizontalHeaderLabels(['Rank', 'Date', 'Species', 'Checklists'])
         header = self.tblDates.horizontalHeader()
-        header.setSectionResizeMode(2, QHeaderView.Stretch)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         
         self.lblLocation.setText(location)
         self.lblFirstVisited.setText("First visited: " + thisLocationDates[0])
@@ -247,7 +247,7 @@ class Location(QMdiSubWindow, form_Location.Ui_frmLocation):
         self.tblSpecies.horizontalHeader().setVisible(True)
         self.tblSpecies.setHorizontalHeaderLabels(['Tax', 'Species', 'First',  'Last', 'Checklists', '% of Chlists'])
         header = self.tblSpecies.horizontalHeader()
-        header.setSectionResizeMode(1, QHeaderView.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.tblSpecies.setShowGrid(False)
         
         font = QFont()
@@ -404,7 +404,7 @@ class Location(QMdiSubWindow, form_Location.Ui_frmLocation):
 
         myByteArray = QByteArray()
         myBuffer = QBuffer(myByteArray)
-        myBuffer.open(QIODevice.WriteOnly)
+        myBuffer.open(QIODevice.OpenModeFlag.WriteOnly)
         myPixmap.save(myBuffer, "PNG")
 
         encodedImage = b64encode(myByteArray)

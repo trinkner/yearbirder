@@ -14,7 +14,7 @@ import piexif
 from math import floor
 from natsort import natsorted
 
-from PyQt5.QtWidgets import (
+from PySide6.QtWidgets import (
     QApplication,
     QMessageBox
     )
@@ -598,11 +598,11 @@ class DataBase():
                                                  ])
                     except IOError as err:
                         msg = QMessageBox()
-                        msg.setIcon(QMessageBox.Warning)
+                        msg.setIcon(QMessageBox.Icon.Warning)
                         msg.setText("Error occurred while saving the photo data to disk.\n" + s["commonName"] + " " + s["checklistID"] + "\n"+  str(err))
                         msg.setWindowTitle("Save Error")
-                        msg.setStandardButtons(QMessageBox.Ok)
-                        msg.exec_()                        
+                        msg.setStandardButtons(QMessageBox.StandardButton.Ok)
+                        msg.exec()                        
 
 
     def readPhotoDataFromFile(self, fileName):
@@ -789,11 +789,11 @@ class DataBase():
                 QApplication.restoreOverrideCursor()
                 self.eBirdFileOpenFlag = False
                 msg = QMessageBox()
-                msg.setIcon(QMessageBox.Warning)
+                msg.setIcon(QMessageBox.Icon.Warning)
                 msg.setText("The file failed to load.\n\nPlease check that it is a valid eBird data file.\n")
                 msg.setWindowTitle("File failed to load")
-                msg.setStandardButtons(QMessageBox.Ok)
-                msg.exec_()   
+                msg.setStandardButtons(QMessageBox.StandardButton.Ok)
+                msg.exec()   
                 return 
         
         # use csv reader to process csv file if user has selected a csv file

@@ -2,11 +2,11 @@ import code_MainWindow
 import code_Stylesheet
 import sys
 
-from PyQt5.QtWidgets import (
+from PySide6.QtWidgets import (
     QApplication,
     )
 
-from PyQt5.QtGui import QFont, QPalette, QColor
+from PySide6.QtGui import QFont, QPalette, QColor
 
 
 def _force_macos_dark_appearance():
@@ -89,7 +89,7 @@ def main():
 
     # form.processPreferences()
             
-    app.exec_()
+    app.exec()
  
 
 if __name__ == '__main__':              

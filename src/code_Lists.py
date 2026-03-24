@@ -10,33 +10,32 @@ import code_Stylesheet
 from copy import deepcopy
 from math import floor
 
-from PyQt5.QtGui import (
+from PySide6.QtGui import (
     QCursor,
     QIcon,
     QPixmap,
     QFont
     )
-    
-from PyQt5.QtCore import (
+
+from PySide6.QtCore import (
     Qt,
-    QVariant,
-    pyqtSignal
+    Signal
     )
-    
-from PyQt5.QtWidgets import (
-    QApplication, 
-    QTableWidgetItem, 
+
+from PySide6.QtWidgets import (
+    QApplication,
+    QTableWidgetItem,
     QHeaderView,
     QMdiSubWindow,
     QItemDelegate
     )
-    
+
 
 class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
-    
+
     # create "resized" as a signal that the window can emit
     # we respond to this signal with the form's resizeMe method below
-    resized = pyqtSignal()
+    resized = Signal()
     
     
     def __init__(self):
@@ -236,7 +235,7 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
             header.resizeSection(5, w5)
             
             # give species name column the remaining width
-            header.setSectionResizeMode(1, QHeaderView.Stretch) 
+            header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch) 
                       
             for R in range(self.tblList.rowCount()):
                 self.tblList.setRowHeight(R, int(dateTextHeight * 1.1))
@@ -575,8 +574,8 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
             self.tblList.setRowCount(len(thisWindowList))
             self.tblList.setColumnCount(6)
             self.tblList.setHorizontalHeaderLabels(['Tax', 'Species', 'First',  'Last', 'Checklists', '% of Checklists'])
-            #header.setSectionResizeMode(1, QHeaderView.Stretch) 
-            # header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+            #header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch) 
+            # header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
             self.tblList.setItemDelegateForColumn(5, code_FloatDelegate.FloatDelegate(2))
 
             # add species and dates to table row by row        
@@ -586,7 +585,7 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
                 taxItem.setData(Qt.DisplayRole, R+1)
                 speciesItem = QTableWidgetItem()
                 speciesItem.setText(species[0])
-                speciesItem.setData(Qt.UserRole,  QVariant(species[4]))                
+                speciesItem.setData(Qt.UserRole,  species[4])                
                 firstItem = QTableWidgetItem()
                 firstItem.setData(Qt.DisplayRole, species[1])
                 lastItem = QTableWidgetItem()
@@ -631,7 +630,7 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
             self.tblList.setRowCount(len(thisWindowList))            
             self.tblList.setColumnCount(4)
             self.tblList.setHorizontalHeaderLabels(['Tax', 'Species', 'Count',  "Comment"])    
-            header.setSectionResizeMode(1, QHeaderView.Stretch)
+            header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
             self.tblList.setWordWrap(True)
             
             # add species and dates to table row by row        
@@ -643,7 +642,7 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
                 
                 speciesItem = QTableWidgetItem()
                 speciesItem.setText(s["commonName"])
-                speciesItem.setData(Qt.UserRole,  QVariant(s["commonName"]))
+                speciesItem.setData(Qt.UserRole,  s["commonName"])
                 
                 countItem = QTableWidgetItem()
                 count = s["count"]
@@ -772,14 +771,14 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         self.tblList.horizontalHeader().setVisible(True)
         self.tblList.setHorizontalHeaderLabels(['Country', 'State', 'County',  'Location', 'Date', 'Time',  'Species'])
         header = self.tblList.horizontalHeader()
-        header.setSectionResizeMode(3, QHeaderView.Stretch)        
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)        
         self.tblList.setShowGrid(False)
 
         # add species and dates to table row by row        
         R = 0
         for c in checklists:    
             countryItem = QTableWidgetItem()
-            countryItem.setData(Qt.UserRole, QVariant(c[0]))  #store checklistID for future retreaval                     
+            countryItem.setData(Qt.UserRole, c[0])  #store checklistID for future retreaval                     
             countryName = self.mdiParent.db.GetCountryName(c[1][0:2])
             countryItem.setText(countryName)            
             
@@ -848,7 +847,7 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         self.tblList.horizontalHeader().setVisible(True)
         self.tblList.setHorizontalHeaderLabels(['Type', 'Location', 'Date', 'Found'])
         header = self.tblList.horizontalHeader()
-        header.setSectionResizeMode(3, QHeaderView.Stretch)        
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)        
 
         self.tblList.setShowGrid(False)
         self.tblList.setWordWrap(True)
@@ -857,7 +856,7 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         R = 0
         for c in foundList:  
             typeItem = QTableWidgetItem()
-            typeItem.setData(Qt.UserRole, QVariant(c[1]))  #store checklistID for future retreaval                     
+            typeItem.setData(Qt.UserRole, c[1])  #store checklistID for future retreaval                     
             typeItem.setText(c[0])
             
             locationItem = QTableWidgetItem()
@@ -917,7 +916,7 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         self.tblList.setRowCount(len(thisWindowList))
         self.tblList.setColumnCount(3)
         self.tblList.setHorizontalHeaderLabels(['Location', 'First',  'Last'])
-        header.setSectionResizeMode(0, QHeaderView.Stretch)        
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)        
 
         # add locations and dates to table row by row        
         R = 0

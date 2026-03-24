@@ -12,41 +12,37 @@ from functools import partial
 
 from collections import defaultdict
 
-from PyQt5.QtGui import (
+from PySide6.QtGui import (
     QPixmap,
     QFont,
     QIcon,
     QImage,
     QTransform,
-    QCursor   
+    QCursor
     )
-    
-from PyQt5.QtCore import (
-    pyqtSignal,
+
+from PySide6.QtCore import (
+    Signal,
     QSize,
     Qt,
     QThread,
     )
-    
-from PyQt5.QtWidgets import (
-    QMdiSubWindow,
-    QPushButton, 
-    QApplication,
-    qApp,
-    QWidget,
-    QLabel
-    )
 
-from PyQt5.Qt import (
-    QComboBox, 
+from PySide6.QtWidgets import (
+    QMdiSubWindow,
+    QPushButton,
+    QApplication,
+    QWidget,
+    QLabel,
+    QComboBox,
     QVBoxLayout
     )
     
 
 class threadGetPhotoData(QThread):
 
-    sigProcessedPhoto = pyqtSignal([dict])
-    sigThreadFinished = pyqtSignal()
+    sigProcessedPhoto = Signal(dict)
+    sigThreadFinished = Signal()
 
     def __init__(self):
 
@@ -105,7 +101,7 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
     
     # create "resized" as a signal that the window can emit
     # we respond to this signal with the form's resizeMe method below
-    resized = pyqtSignal()
+    resized = Signal()
     
     
     def __init__(self):

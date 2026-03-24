@@ -10,21 +10,20 @@ import code_Stylesheet
 # import the Qt components we'll use
 # do this so later we won't have to clutter our code with references to parent Qt classes 
 
-from PyQt5.QtGui import (
+from PySide6.QtGui import (
     QCursor,
     QFont
     )
-    
-from PyQt5.QtCore import (
+
+from PySide6.QtCore import (
     Qt,
-    QVariant,
     QSize,
-    pyqtSignal,
+    Signal,
     )
-    
-from PyQt5.QtWidgets import (
-    QApplication,  
-    QTableWidgetItem, 
+
+from PySide6.QtWidgets import (
+    QApplication,
+    QTableWidgetItem,
     QHeaderView,
     QMdiSubWindow,
     QTreeWidgetItem,
@@ -39,7 +38,7 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
 
     # create "resized" as a signal that the window can emit
     # we respond to this signal with the form's resizeMe method below
-    resized = pyqtSignal()
+    resized = Signal()
    
    
     def __init__(self):
@@ -434,7 +433,7 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
         locationWidget.horizontalHeader().setVisible(False)
         locationWidget.verticalHeader().setVisible(False)
         header = locationWidget.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.Stretch)
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         locationWidget.setShowGrid(False)
         metrics = locationWidget.fontMetrics()
         textHeight = metrics.boundingRect("A").height()   
@@ -447,7 +446,7 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
             locationItem.setText(l[0])
             
             # store checklist ID in hidden data component of item
-            locationItem.setData(Qt.UserRole,  QVariant(l[2]))
+            locationItem.setData(Qt.UserRole,  l[2])
             speciesCountItem = QTableWidgetItem()
             speciesCountItem.setData(Qt.DisplayRole, l[1])            
             locationWidget.setItem(R, 0, locationItem)              

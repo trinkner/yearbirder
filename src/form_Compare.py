@@ -6,13 +6,13 @@
 #
 # WARNING! All changes made in this file will be lost!
 
-from PyQt5 import QtCore, QtGui, QtWidgets
+from PySide6 import QtCore, QtGui, QtWidgets
 
 class Ui_frmCompare(object):
     def setupUi(self, frmCompare):
         frmCompare.setObjectName("frmCompare")
         frmCompare.resize(800, 500)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Preferred)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Preferred, QtWidgets.QSizePolicy.Policy.Preferred)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(frmCompare.sizePolicy().hasHeightForWidth())
@@ -23,13 +23,13 @@ class Ui_frmCompare(object):
         frmCompare.setWindowIcon(icon)
         self.scrollArea = QtWidgets.QScrollArea(frmCompare)
         self.scrollArea.setGeometry(QtCore.QRect(9, 9, 720, 292))
-        self.scrollArea.setFrameShape(QtWidgets.QFrame.NoFrame)
-        self.scrollArea.setFrameShadow(QtWidgets.QFrame.Plain)
+        self.scrollArea.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+        self.scrollArea.setFrameShadow(QtWidgets.QFrame.Shadow.Plain)
         self.scrollArea.setWidgetResizable(True)
         self.scrollArea.setObjectName("scrollArea")
         self.scrollAreaWidgetContents = QtWidgets.QWidget()
         self.scrollAreaWidgetContents.setGeometry(QtCore.QRect(0, 0, 720, 292))
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.scrollAreaWidgetContents.sizePolicy().hasHeightForWidth())
@@ -40,8 +40,8 @@ class Ui_frmCompare(object):
         self.horizontalLayout.setSpacing(2)
         self.horizontalLayout.setObjectName("horizontalLayout")
         self.frame = QtWidgets.QFrame(self.scrollAreaWidgetContents)
-        self.frame.setFrameShape(QtWidgets.QFrame.NoFrame)
-        self.frame.setFrameShadow(QtWidgets.QFrame.Plain)
+        self.frame.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+        self.frame.setFrameShadow(QtWidgets.QFrame.Shadow.Plain)
         self.frame.setLineWidth(0)
         self.frame.setObjectName("frame")
         self.verticalLayout_2 = QtWidgets.QVBoxLayout(self.frame)
@@ -59,8 +59,8 @@ class Ui_frmCompare(object):
         self.verticalLayout_2.addWidget(self.lstLeftOnly)
         self.horizontalLayout.addWidget(self.frame)
         self.frame_2 = QtWidgets.QFrame(self.scrollAreaWidgetContents)
-        self.frame_2.setFrameShape(QtWidgets.QFrame.NoFrame)
-        self.frame_2.setFrameShadow(QtWidgets.QFrame.Plain)
+        self.frame_2.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+        self.frame_2.setFrameShadow(QtWidgets.QFrame.Shadow.Plain)
         self.frame_2.setLineWidth(0)
         self.frame_2.setObjectName("frame_2")
         self.verticalLayout_3 = QtWidgets.QVBoxLayout(self.frame_2)
@@ -78,8 +78,8 @@ class Ui_frmCompare(object):
         self.verticalLayout_3.addWidget(self.lstBoth)
         self.horizontalLayout.addWidget(self.frame_2)
         self.frame_3 = QtWidgets.QFrame(self.scrollAreaWidgetContents)
-        self.frame_3.setFrameShape(QtWidgets.QFrame.NoFrame)
-        self.frame_3.setFrameShadow(QtWidgets.QFrame.Plain)
+        self.frame_3.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+        self.frame_3.setFrameShadow(QtWidgets.QFrame.Shadow.Plain)
         self.frame_3.setLineWidth(0)
         self.frame_3.setObjectName("frame_3")
         self.verticalLayout_4 = QtWidgets.QVBoxLayout(self.frame_3)

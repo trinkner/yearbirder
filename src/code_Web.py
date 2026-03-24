@@ -1,4 +1,4 @@
-from PyQt5.QtCore import QLibraryInfo
+from PySide6.QtCore import QLibraryInfo
 import os
 import sys
 
@@ -9,23 +9,23 @@ import code_MapHtml
 # import the Qt components we'll use
 # do this so later we won't have to clutter our code with references to parent Qt classes 
 
-from PyQt5.QtGui import (
+from PySide6.QtGui import (
     QCursor,
     QIcon,
     QPixmap
     )
     
-from PyQt5.QtCore import (
+from PySide6.QtCore import (
     Qt,
     QUrl,
-    pyqtSignal,
+    Signal,
     QIODevice,
     QByteArray,
     QBuffer
     )    
     
-from PyQt5.QtWidgets import (
-#     QApplication,  
+from PySide6.QtWidgets import (
+#     QApplication,
     QMdiSubWindow
     )
 
@@ -33,9 +33,12 @@ from math import (
     floor
     )
 
-from PyQt5.QtWebEngineWidgets import (
+from PySide6.QtWebEngineWidgets import (
     QWebEngineView,
+    )
+from PySide6.QtWebEngineCore import (
     QWebEngineSettings,
+    QWebEngineProfile,
     )
 
 from collections import (
@@ -47,7 +50,7 @@ import base64
 
 class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
     
-    resized = pyqtSignal()
+    resized = Signal()
 
     def __init__(self):
         super(self.__class__, self).__init__()
@@ -98,7 +101,7 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
 
         myByteArray = QByteArray()
         myBuffer = QBuffer(myByteArray)
-        myBuffer.open(QIODevice.WriteOnly)
+        myBuffer.open(QIODevice.OpenModeFlag.WriteOnly)
         myPixmap.save(myBuffer, "PNG")
 
         encodedImage = base64.b64encode(myByteArray)
@@ -123,8 +126,8 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
     def scaleMe(self):
        
         fontSize = self.mdiParent.fontSize
-        settings = QWebEngineSettings.globalSettings()
-        settings.setFontSize(QWebEngineSettings.DefaultFontSize, floor(fontSize * 1.6))        
+        settings = QWebEngineProfile.defaultProfile().settings()
+        settings.setFontSize(QWebEngineSettings.FontSize.DefaultFontSize, floor(fontSize * 1.6))        
         
         scaleFactor = self.mdiParent.scaleFactor
         windowWidth =  int(800 * scaleFactor)
@@ -454,8 +457,8 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
         with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as f:
             f.write(html)
             tmp_path = f.name
-        settings = QWebEngineSettings.globalSettings()
-        settings.setAttribute(QWebEngineSettings.LocalContentCanAccessRemoteUrls, True)
+        settings = QWebEngineProfile.defaultProfile().settings()
+        settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
         self.webView.setUrl(QUrl.fromLocalFile(tmp_path))
         self._buildFilterTitle(filter, "Canada Provinces Choropleth", count=len(provDict), countUnit="Provinces")
 
@@ -537,8 +540,8 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
         with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as f:
             f.write(html)
             tmp_path = f.name
-        settings = QWebEngineSettings.globalSettings()
-        settings.setAttribute(QWebEngineSettings.LocalContentCanAccessRemoteUrls, True)
+        settings = QWebEngineProfile.defaultProfile().settings()
+        settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
         self.webView.setUrl(QUrl.fromLocalFile(tmp_path))
         self._buildFilterTitle(filter, "India States Choropleth", count=len(stateDict), countUnit="States")
 
@@ -627,8 +630,8 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
         with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as f:
             f.write(html)
             tmp_path = f.name
-        settings = QWebEngineSettings.globalSettings()
-        settings.setAttribute(QWebEngineSettings.LocalContentCanAccessRemoteUrls, True)
+        settings = QWebEngineProfile.defaultProfile().settings()
+        settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
         self.webView.setUrl(QUrl.fromLocalFile(tmp_path))
         self._buildFilterTitle(filter, "Great Britain Counties Choropleth", count=len(countyDict), countUnit="Counties")
 
@@ -728,8 +731,8 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
             tmp_path = f.name
 
         # Allow the local file page to load Leaflet and other CDN resources
-        settings = QWebEngineSettings.globalSettings()
-        settings.setAttribute(QWebEngineSettings.LocalContentCanAccessRemoteUrls, True)
+        settings = QWebEngineProfile.defaultProfile().settings()
+        settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
 
         self.webView.setUrl(QUrl.fromLocalFile(tmp_path))
         self._buildFilterTitle(filter, "US Lower 48 Counties Choropleth", count=len(countyDict), countUnit="Counties")

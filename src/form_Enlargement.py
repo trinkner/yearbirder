@@ -6,13 +6,13 @@
 #
 # WARNING! All changes made in this file will be lost!
 
-from PyQt5 import QtCore, QtGui, QtWidgets
+from PySide6 import QtCore, QtGui, QtWidgets
 
 class Ui_frmEnlargement(object):
     def setupUi(self, frmEnlargement):
         frmEnlargement.setObjectName("frmEnlargement")
         frmEnlargement.resize(671, 505)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Preferred)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Preferred, QtWidgets.QSizePolicy.Policy.Preferred)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(frmEnlargement.sizePolicy().hasHeightForWidth())
@@ -39,5 +39,5 @@ if __name__ == "__main__":
     ui = Ui_frmEnlargement()
     ui.setupUi(frmEnlargement)
     frmEnlargement.show()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
 

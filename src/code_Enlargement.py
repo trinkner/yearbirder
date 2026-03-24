@@ -8,22 +8,22 @@ from math import floor
 
 import piexif
 
-from PyQt5.QtGui import (
+from PySide6.QtGui import (
     QPixmap,
     QPainter,
     QCursor,
     QIcon
     )
-    
-from PyQt5.QtCore import (
+
+from PySide6.QtCore import (
     Qt,
-    pyqtSignal,
+    Signal,
     QTimer,
     QSize
     )
-    
-from PyQt5.QtWidgets import (
-    QApplication, 
+
+from PySide6.QtWidgets import (
+    QApplication,
     QMdiSubWindow,
     QGraphicsView,
     QGraphicsScene,
@@ -31,16 +31,18 @@ from PyQt5.QtWidgets import (
     QMenu,
     QLabel,
     QGroupBox,
-    QHBoxLayout
+    QHBoxLayout,
+    QFrame,
+    QVBoxLayout,
+    QPushButton
     )
-from PyQt5.Qt import QFrame, QVBoxLayout, QPushButton
    
 
 class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
     
     # create "resized" as a signal that the window can emit
     # we respond to this signal with the form's resizeMe method below
-    resized = pyqtSignal() 
+    resized = Signal() 
     
     class MyGraphicsView(QGraphicsView):
         
@@ -138,7 +140,7 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
             menu.addSeparator()
             actionDeleteFile = menu.addAction("Delete photo from file system")
             
-            action = menu.exec_(self.mapToGlobal(event.pos()))
+            action = menu.exec(self.mapToGlobal(event.pos()))
 
             if self.mdiParent.isMaximized() is True:
                 if action == actionToggleHideCursor:
@@ -464,10 +466,10 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
         msg = QMessageBox()
         msg.setText(msgText)
         msg.setWindowTitle("Detach photo?")
-        msg.setStandardButtons(QMessageBox.No | QMessageBox.Yes)
-        buttonClicked = msg.exec_()
+        msg.setStandardButtons(QMessageBox.StandardButton.No | QMessageBox.StandardButton.Yes)
+        buttonClicked = msg.exec()
         
-        if buttonClicked == QMessageBox.Yes:
+        if buttonClicked == QMessageBox.StandardButton.Yes:
                 
             # remove photo from database
             currentPhoto = self.photoList[self.currentIndex][0]["fileName"]
@@ -505,10 +507,10 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
         msg = QMessageBox()
         msg.setText(msgText)
         msg.setWindowTitle("Permanently delete photo?")
-        msg.setStandardButtons(QMessageBox.No | QMessageBox.Yes)
-        buttonClicked = msg.exec_()
+        msg.setStandardButtons(QMessageBox.StandardButton.No | QMessageBox.StandardButton.Yes)
+        buttonClicked = msg.exec()
         
-        if buttonClicked == QMessageBox.Yes:
+        if buttonClicked == QMessageBox.StandardButton.Yes:
                 
             # remove photo from database
             currentPhoto = self.photoList[self.currentIndex][0]["fileName"]
@@ -644,7 +646,7 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
         
         # get pixel dimensions
 
-        from PyQt5.QtGui import QImage
+        from PySide6.QtGui import QImage
         qimg = QImage(currentPhoto)
         if not qimg.isNull():
             photoDimensions = f"{qimg.width()} x {qimg.height()}"

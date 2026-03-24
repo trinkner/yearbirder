@@ -6,24 +6,24 @@ import code_Stylesheet
 # import the Qt components we'll use
 # do this so later we won't have to clutter our code with references to parent Qt classes 
 
-from PyQt5.QtGui import (
+from PySide6.QtGui import (
     QFont
     )
-    
-from PyQt5.QtCore import (
-    pyqtSignal,
+
+from PySide6.QtCore import (
+    Signal,
     Qt
 )
-    
-from PyQt5.QtWidgets import (
+
+from PySide6.QtWidgets import (
     QMdiSubWindow
     )
-    
-from PyQt5.QtWebEngineWidgets import (
+
+from PySide6.QtWebEngineWidgets import (
     QWebEngineView,
 )
 
-from PyQt5.QtPrintSupport import (
+from PySide6.QtPrintSupport import (
     QPrinter
     )
 
@@ -31,7 +31,7 @@ class Compare(QMdiSubWindow, form_Compare.Ui_frmCompare):
 
     # create "resized" as a signal that the window can emit
     # we respond to this signal with the form's resizeMe method below
-    resized = pyqtSignal()
+    resized = Signal()
 
     def __init__(self):
         super(self.__class__, self).__init__()

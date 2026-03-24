@@ -15,26 +15,26 @@ from math import floor
 # import the Qt components we'll use
 # do this so later we won't have to clutter our code with references to parent Qt classes 
 
-from PyQt5.QtGui import (
+from PySide6.QtGui import (
     QCursor,
     QColor,
     QFont,
     QPen
     )
-    
-from PyQt5.QtCore import (
+
+from PySide6.QtCore import (
     Qt,
-    pyqtSignal,
+    Signal,
     QTimer
     )
-    
-from PyQt5.QtWidgets import (
-    QApplication,  
-    QTableWidgetItem, 
+
+from PySide6.QtWidgets import (
+    QApplication,
+    QTableWidgetItem,
     QHeaderView,
     QMdiSubWindow,
     QGraphicsScene,
-    QGraphicsEllipseItem, 
+    QGraphicsEllipseItem,
     QMenu
     )
 
@@ -43,7 +43,7 @@ class Families(QMdiSubWindow, form_Families.Ui_frmFamilies):
 
     # create "resized" as a signal that the window can emit
     # we respond to this signal with the form's resizeMe method below
-    resized = pyqtSignal()   
+    resized = Signal()   
     
     class MyEllipse(QGraphicsEllipseItem):
         
@@ -306,7 +306,7 @@ class Families(QMdiSubWindow, form_Families.Ui_frmFamilies):
         
         self.tblPieChartLegend.horizontalHeader().setVisible(False)
         header = self.tblPieChartLegend.horizontalHeader()
-        header.setSectionResizeMode(1, QHeaderView.Stretch)     
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)     
         self.tblPieChartLegend.setShowGrid(False)
         
         colors = []

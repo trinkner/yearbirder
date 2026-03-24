@@ -11,22 +11,22 @@ from math import floor
 
 from functools import partial
 
-from PyQt5.QtGui import (
+from PySide6.QtGui import (
     QPixmap,
     QFont,
     QIcon,
     QImageReader,
     )
 
-from PyQt5.QtCore import (
-    pyqtSignal,
+from PySide6.QtCore import (
+    Signal,
     QSize,
     Qt,
     QThread,
     QTimer,
     )
 
-from PyQt5.QtWidgets import (
+from PySide6.QtWidgets import (
     QMdiSubWindow,
     QLabel,
     QApplication,
@@ -42,7 +42,7 @@ class threadLoadThumbnail(QThread):
     status bar from updating visually.
     """
 
-    sigThreadFinished = pyqtSignal()
+    sigThreadFinished = Signal()
 
     def __init__(self):
         QThread.__init__(self)
@@ -79,7 +79,7 @@ class Photos(QMdiSubWindow, form_Photos.Ui_frmPhotos):
 
     # create "resized" as a signal that the window can emit
     # we respond to this signal with the form's resizeMe method below
-    resized = pyqtSignal()
+    resized = Signal()
 
     def __init__(self):
         super(self.__class__, self).__init__()

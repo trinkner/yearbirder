@@ -2,25 +2,25 @@
 import form_Find
 import code_Lists
 
-from PyQt5.QtGui import (
+from PySide6.QtGui import (
     QCursor,
     QFont
     )
-    
-from PyQt5.QtCore import (
+
+from PySide6.QtCore import (
     Qt,
-    pyqtSignal
+    Signal
     )
-    
-from PyQt5.QtWidgets import (
-    QApplication, 
+
+from PySide6.QtWidgets import (
+    QApplication,
     QMdiSubWindow,
     )
 
 
 class Find(QMdiSubWindow, form_Find.Ui_frmFind):
-    
-    resized = pyqtSignal()
+
+    resized = Signal()
 
     def __init__(self):
         super(self.__class__, self).__init__()

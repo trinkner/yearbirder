@@ -9,34 +9,34 @@ import code_Lists
 from copy import deepcopy
 from math import floor
 
-from PyQt5.QtGui import (
+from PySide6.QtGui import (
     QCursor,
     QFont,
     QFontMetrics
     )
-    
-from PyQt5.QtCore import (
+
+from PySide6.QtCore import (
     Qt,
-    pyqtSignal
+    Signal
     )
-    
+
 from collections import (
     defaultdict
-)    
+)
 
-from PyQt5.QtWidgets import (
-    QApplication, 
-    QTableWidgetItem, 
+from PySide6.QtWidgets import (
+    QApplication,
+    QTableWidgetItem,
     QHeaderView,
     QMdiSubWindow,
     )
 
 
 class DateTotals(QMdiSubWindow, form_DateTotals.Ui_frmDateTotals):
-            
+
     # create "resized" as a signal that the window can emit
     # we respond to this signal with the form's resizeMe method below
-    resized = pyqtSignal()            
+    resized = Signal()            
     
     
     def __init__(self):
@@ -513,11 +513,11 @@ class DateTotals(QMdiSubWindow, form_DateTotals.Ui_frmDateTotals):
         self.tblMonthTotals.removeRow(self.tblMonthTotals.rowCount()-1)
         self.tblDateTotals.removeRow(self.tblDateTotals.rowCount()-1)
         header = self.tblYearTotals.horizontalHeader()
-        header.setSectionResizeMode(1, QHeaderView.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         header = self.tblMonthTotals.horizontalHeader()
-        header.setSectionResizeMode(1, QHeaderView.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         header = self.tblDateTotals.horizontalHeader()
-        header.setSectionResizeMode(1, QHeaderView.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
 
         self.mdiParent.SetChildDetailsLabels(self, self.filter)
 

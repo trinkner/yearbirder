@@ -1,7 +1,7 @@
 import sys
-from PyQt5.QtGui import QColor, QPainter
-from PyQt5.QtWidgets import QProxyStyle, QStyle, QMenu
-from PyQt5.QtCore import Qt, QRect, QEvent
+from PySide6.QtGui import QColor, QPainter
+from PySide6.QtWidgets import QProxyStyle, QStyle, QMenu
+from PySide6.QtCore import Qt, QRect, QEvent
 
 
 class AppStyle(QProxyStyle):
@@ -13,7 +13,7 @@ class AppStyle(QProxyStyle):
 
         QPalette overload must return the (possibly modified) palette object.
         """
-        from PyQt5.QtGui import QPalette
+        from PySide6.QtGui import QPalette
         if isinstance(obj, QPalette):
             return super().polish(obj)
         super().polish(obj)

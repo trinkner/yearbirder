@@ -32,7 +32,7 @@ from math import (
 # import the Qt components we'll use
 # do this so later we won't have to clutter our code with references to parent Qt classes 
 
-from PyQt5.QtGui import (
+from PySide6.QtGui import (
     QCursor,
     QFont,
     QFontMetrics,
@@ -41,27 +41,27 @@ from PyQt5.QtGui import (
     QColor
     )
     
-from PyQt5.QtCore import (
+from PySide6.QtCore import (
     Qt,
     QDate,
     QSize,
     QThread,
-    pyqtSignal,
+    Signal,
     QTimer,
     QEvent
     )
     
-from PyQt5.QtWidgets import (
-    QApplication, 
-    QMessageBox, 
+from PySide6.QtWidgets import (
+    QApplication,
+    QMessageBox,
     QMainWindow,
     QFileDialog,
     QSlider,
     QLabel
     )
 
-from PyQt5.QtPrintSupport import (
-    QPrintDialog, 
+from PySide6.QtPrintSupport import (
+    QPrintDialog,
     QPrinter
     )
 
@@ -483,11 +483,11 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         msgText = msgText + "Yearbird attached " + format(countPhotos, ",") + " photos to " + format(countPhotoSightings, ",") + " sightings."
         
         msg = QMessageBox()
-        msg.setIcon(QMessageBox.Information)
+        msg.setIcon(QMessageBox.Icon.Information)
         msg.setText(msgText)
         msg.setWindowTitle("eBird Data File")
-        msg.setStandardButtons(QMessageBox.Ok)
-        msg.exec_()        
+        msg.setStandardButtons(QMessageBox.StandardButton.Ok)
+        msg.exec()        
         
 
     def clearAllFilters(self):
@@ -575,7 +575,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 "Photos",
                 f"{count_photos_not_processed} files were already attached to sightings and are not displayed here.\n\n"
                 "To edit their attachments, use Manage Photos By Filter.",
-                QMessageBox.Ok
+                QMessageBox.StandardButton.Ok
             )
 
         if unmatched_photos:
@@ -596,7 +596,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 self,
                 "Photos",
                 "No new photo files were found.",
-                QMessageBox.Ok
+                QMessageBox.StandardButton.Ok
             )
            
     
@@ -713,11 +713,11 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         countRemovedPhotos = self.db.removeUnfoundPhotos()
         
         msg = QMessageBox()
-        msg.setIcon(QMessageBox.Information)
+        msg.setIcon(QMessageBox.Icon.Information)
         msg.setText("Yearbird removed " + str(countRemovedPhotos) + " references to unfound photos from its database.\n\nRemember to save your photo settings to a file.\n\n(No files were deleted from your computer.)")
         msg.setWindowTitle("Removed Photo References")
-        msg.setStandardButtons(QMessageBox.Ok)
-        msg.exec_()        
+        msg.setStandardButtons(QMessageBox.StandardButton.Ok)
+        msg.exec()        
         
 
     def createPreferences(self):
@@ -947,22 +947,22 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
     def CreateMessageNoFile(self):
         QApplication.restoreOverrideCursor() 
         msg = QMessageBox()
-        msg.setIcon(QMessageBox.Information)
+        msg.setIcon(QMessageBox.Icon.Information)
         msg.setText("No ebird data is currently loaded.\n\nPlease open an eBird data file.")
         msg.setWindowTitle("No Data")
-        msg.setStandardButtons(QMessageBox.Ok)
-        msg.exec_()
+        msg.setStandardButtons(QMessageBox.StandardButton.Ok)
+        msg.exec()
 
 
     def CreateMessageNoResults(self):
         
         QApplication.restoreOverrideCursor() 
         msg = QMessageBox()
-        msg.setIcon(QMessageBox.Information)
+        msg.setIcon(QMessageBox.Icon.Information)
         msg.setText("No sightings match the current filter settings.")
         msg.setWindowTitle("No Sightings")
-        msg.setStandardButtons(QMessageBox.Ok)
-        msg.exec_()
+        msg.setStandardButtons(QMessageBox.StandardButton.Ok)
+        msg.exec()
         
         
     def PositionChildWindow(self, child,  creatingWindow):
@@ -1008,13 +1008,13 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             # ask if user wants to save photo settings
             QApplication.restoreOverrideCursor() 
             msg = QMessageBox()
-            msg.setIcon(QMessageBox.Information)
+            msg.setIcon(QMessageBox.Icon.Information)
             msg.setText("Some photo attachment settings have not been saved\n\nDo you want to save them?")
             msg.setWindowTitle("Save Photo Settings?")
-            msg.setStandardButtons(QMessageBox.No | QMessageBox.Save)
-            buttonClicked = msg.exec_()
+            msg.setStandardButtons(QMessageBox.StandardButton.No | QMessageBox.StandardButton.Save)
+            buttonClicked = msg.exec()
             
-            if buttonClicked == QMessageBox.Save:
+            if buttonClicked == QMessageBox.StandardButton.Save:
                 
                 self.savePhotoSettings()
                 
@@ -1060,7 +1060,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 fname = ""
                 msg = QMessageBox()
                 msg.setText("No ebird file was found in the startup folder specified in your preferences.")
-                msg.exec_()
+                msg.exec()
 
         else:
             
@@ -1466,11 +1466,11 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             
             QApplication.restoreOverrideCursor() 
             msg = QMessageBox()
-            msg.setIcon(QMessageBox.Information)
+            msg.setIcon(QMessageBox.Icon.Information)
             msg.setText("Fewer than two lists are available to compare. \n\nCreate two or more species lists before trying to compare them.")
             msg.setWindowTitle("No Species Lists")
-            msg.setStandardButtons(QMessageBox.Ok)
-            msg.exec_()            
+            msg.setStandardButtons(QMessageBox.StandardButton.Ok)
+            msg.exec()            
             sub.close()
 
         QApplication.restoreOverrideCursor()   
@@ -2080,11 +2080,11 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
         msgText = "Yearbird updated EXIF data for all attached photos.\n\nRemember to save your photo data file to make these updates permanent."
         msg = QMessageBox()
-        msg.setIcon(QMessageBox.Information)
+        msg.setIcon(QMessageBox.Icon.Information)
         msg.setText(msgText)
         msg.setWindowTitle("Updated EXIF Data")
-        msg.setStandardButtons(QMessageBox.Ok)
-        msg.exec_()         
+        msg.setStandardButtons(QMessageBox.StandardButton.Ok)
+        msg.exec()         
         
         # set flag indicating that some photo data isn't yet saved to file
         self.db.photosNeedSaving = True
@@ -2362,7 +2362,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             dialog = QPrintDialog(printer, self) 
 
             # execute the print if the user clicked "Print"
-            if dialog.exec_():
+            if dialog.exec():
 
                 # send the html to the physical printer
                 document.print_(printer)            
