@@ -7,6 +7,7 @@ import os
 import piexif
 
 # import basic Python libraries
+import queue
 from functools import partial
 
 from collections import defaultdict
@@ -48,50 +49,54 @@ class threadGetPhotoData(QThread):
     sigThreadFinished = pyqtSignal()
 
     def __init__(self):
-        
+
         QThread.__init__(self)
-        
-        self.parent = ""      
-        self.fileNames = []
-        self.threadNumber = 0
-    
+
+        self.parent = ""
+        self.workQueue = None
+
     def __del__(self):
-        
+
         self.wait()
-                      
-                        
+
+
     def run(self):
 
-        for p in self.fileNames:
-            
-            row = p[0]
-            file = p[1]
-            
-            photoData = self.parent.mdiParent.db.getPhotoData(file)
-            photoMatchData = self.parent.mdiParent.db.matchPhoto(file)
-            pixMap = self.parent.GetPixmapForThumbnail(file)
-            
+        while True:
+
+            # pull the next job; exit cleanly when the queue is empty
+            try:
+                item = self.workQueue.get_nowait()
+            except queue.Empty:
+                break
+
+            row = item[0]
+            file = item[1]
+
+            # read EXIF once and share it across all three functions
+            try:
+                exif_dict = piexif.load(file)
+            except:
+                exif_dict = {}
+
+            photoData = self.parent.mdiParent.db.getPhotoData(file, exif_dict)
+            photoMatchData = self.parent.mdiParent.db.matchPhoto(file, exif_dict)
+            pixMap = self.parent.GetPixmapForThumbnail(file, exif_dict)
+
+            # pre-compute combo box data here in the worker thread so the
+            # main thread can populate widgets without querying the database
+            comboData = self.parent.mdiParent.db.getComboDataForPhoto(photoMatchData)
+
             thisPhotoDataEntry = defaultdict()
             thisPhotoDataEntry["row"] = row
             thisPhotoDataEntry["photoData"] = photoData
             thisPhotoDataEntry["photoMatchData"] = photoMatchData
             thisPhotoDataEntry["pixMap"] = pixMap
-            
-            # now that we've created the pixmap etc., send it back to the main routine 
-            # to insert into the form's grid
+            thisPhotoDataEntry["comboData"] = comboData
+
             self.sigProcessedPhoto.emit(thisPhotoDataEntry)
-        
-        #we're done, so wrap up and let the main thread know we're done
-        if self.threadNumber == 1:
-            self.parent.thread1Finished = True
-        if self.threadNumber == 2:
-            self.parent.thread2Finished = True
-        if self.threadNumber == 3:
-            self.parent.thread3Finished = True
-        if self.threadNumber == 4:
-            self.parent.thread4Finished = True
-        
-        # tell the main routine that our thread has processed all it's photos
+            self.workQueue.task_done()
+
         self.sigThreadFinished.emit()
         
 
@@ -117,26 +122,19 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         self.setAttribute(Qt.WA_DeleteOnClose)
         self.photosAlreadyInDb = True
                 
-        # set up four threads to be used to get photo data from files        
-        self.thread1 = threadGetPhotoData()
-        self.thread2 = threadGetPhotoData()
-        self.thread3 = threadGetPhotoData()
-        self.thread4 = threadGetPhotoData()
-        
-        self.thread1Finished = False
-        self.thread2Finished = False
-        self.thread3Finished = False
-        self.thread4Finished = False
-         
-        self.thread1.sigProcessedPhoto.connect(self.threadProcessedPhoto)
-        self.thread2.sigProcessedPhoto.connect(self.threadProcessedPhoto)
-        self.thread3.sigProcessedPhoto.connect(self.threadProcessedPhoto)
-        self.thread4.sigProcessedPhoto.connect(self.threadProcessedPhoto)
+        # dynamic thread pool — sized to CPU count, capped at 8 for disk-bound work
+        self.threadCount = min(os.cpu_count() or 4, 8)
+        self.workQueue = queue.Queue()
+        self.threadsRemaining = 0
+        self.threads = []
 
-        self.thread1.sigThreadFinished.connect(self.threadFinished)
-        self.thread2.sigThreadFinished.connect(self.threadFinished)
-        self.thread3.sigThreadFinished.connect(self.threadFinished)
-        self.thread4.sigThreadFinished.connect(self.threadFinished)
+        for _ in range(self.threadCount):
+            t = threadGetPhotoData()
+            t.parent = self
+            t.workQueue = self.workQueue
+            t.sigProcessedPhoto.connect(self.threadProcessedPhoto)
+            t.sigThreadFinished.connect(self.threadFinished)
+            self.threads.append(t)
         
         icon = QIcon()
         icon.addPixmap(QPixmap(":/icon_camera.png"), QIcon.Normal, QIcon.Off)
@@ -207,96 +205,39 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
             
             row += 1
         
-        # divide files into four groups, one for each thread
-        # we're using threads to divide up the work of creating pixmaps for each image
-        
-        if len(allowedPhotoFiles) > 3:
-            
-            filesPerThread = divmod(len(allowedPhotoFiles), 4)[0]
-        
-            thread1Files = allowedPhotoFiles[0 : filesPerThread]
-            thread2Files = allowedPhotoFiles[filesPerThread : 2 * filesPerThread]
-            thread3Files = allowedPhotoFiles[2 * filesPerThread : 3 * filesPerThread]
-            thread4Files = allowedPhotoFiles[3 * filesPerThread :]        
-            
-        else:
-            
-            # fewer than four files were selected, so let's not use more than one thread
-            thread1Files = allowedPhotoFiles
-            thread2Files = []
-            thread3Files = []
-            thread4Files = []
-            
-        # provide threads with starting data and run the threads
-        if len(thread1Files) > 0:
-            self.thread1.parent = self
-            self.thread1.threadNumber = 1
-            self.thread1.fileNames = thread1Files
-            self.thread1.start()
-        else:
-            self.thread1Finished = True
+        # fill the shared work queue; threads pull jobs from it dynamically
+        # so no thread sits idle while others still have work
+        for item in allowedPhotoFiles:
+            self.workQueue.put(item)
 
-        if len(thread2Files) > 0:
-            self.thread2.parent = self
-            self.thread2.threadNumber = 2
-            self.thread2.fileNames = thread2Files
-            self.thread2.start()
-        else:
-            self.thread2Finished = True
-        
-        if len(thread3Files) > 0:        
-            self.thread3.parent = self
-            self.thread3.threadNumber = 3
-            self.thread3.fileNames = thread3Files
-            self.thread3.start()
-        else:
-            self.thread3Finished = True
-
-        if len(thread4Files) > 0:         
-            self.thread4.parent = self
-            self.thread4.threadNumber = 4
-            self.thread4.fileNames = thread4Files
-            self.thread4.start()
-        else:
-            self.thread4Finished = True
+        # start only as many threads as there are photos to process
+        threadsToStart = min(self.threadCount, len(allowedPhotoFiles))
+        self.threadsRemaining = threadsToStart
+        for i in range(threadsToStart):
+            self.threads[i].start()
                 
     
-    def threadProcessedPhoto(self, thisPhotoDataEntry):                                
+    def threadProcessedPhoto(self, thisPhotoDataEntry):
 
-        QApplication.processEvents()
-        
-        # call the routine to put the photo into the grid
-            
         self.insertPhotoIntoTable(
-            thisPhotoDataEntry["row"], 
-            thisPhotoDataEntry["photoData"], 
-            thisPhotoDataEntry["photoMatchData"], 
-            thisPhotoDataEntry["pixMap"]
+            thisPhotoDataEntry["row"],
+            thisPhotoDataEntry["photoData"],
+            thisPhotoDataEntry["photoMatchData"],
+            thisPhotoDataEntry["pixMap"],
+            thisPhotoDataEntry["comboData"],
             )                         
    
    
     def threadFinished(self):
 
-        QApplication.processEvents()
-        
-        # if all threads are finished, set the scroll bar to the top and show the correct cursor
-        if self.thread1Finished == True:
-            if self.thread2Finished == True:
-                if self.thread3Finished == True:
-                    if self.thread4Finished == True:
-                        self.scrollArea.verticalScrollBar().setValue(0)
-        
-        QApplication.restoreOverrideCursor()   
-        
-        # reset flags for future use
-        self.thread1Finished = False
-        self.thread2Finished = False
-        self.thread3Finished = False
-        self.thread4Finished = False
+        self.threadsRemaining -= 1
+        if self.threadsRemaining == 0:
+            self.scrollArea.verticalScrollBar().setValue(0)
+            QApplication.restoreOverrideCursor()
               
                                 
                                  
-    def insertPhotoIntoTable(self, row, photoData, photoMatchData, pixMap):
+    def insertPhotoIntoTable(self, row, photoData, photoMatchData, pixMap, comboData):
 
         QApplication.processEvents()
                     
@@ -309,13 +250,13 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
                             
         # p is a filename. Use it to add the image to the label as a pixmap
         buttonPhoto = QPushButton()
-        buttonPhoto.setMinimumHeight(281)
+        buttonPhoto.setMinimumHeight(330)
         buttonPhoto.setMinimumWidth(500)
                 
         buttonPhoto.setIcon(QIcon(pixMap))
         
-        # size to 500x281
-        buttonPhoto.setIconSize(QSize(500,281))    
+        # size to 500x330
+        buttonPhoto.setIconSize(QSize(500,330))    
         buttonPhoto.setStyleSheet("QPushButton {background-color: #343333; border: 0px}")
 
         # display thumbnail to new row in grid
@@ -353,51 +294,33 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         for c in [cboLocation, cboDate, cboTime, cboCommonName, cboRating]:
             self.removeHighlight(c)   
 
-        # fill location combo box with all locations in db
-        locations = self.mdiParent.db.locationList
-        cboLocation.addItems(locations)
-        
-        # set location combo box to the photo's location
+        # date-first cascade: use data pre-computed by the worker thread
+        cboDate.addItems(comboData["allDates"])
+        if photoDate != "":
+            index = cboDate.findText(photoDate)
+            if index >= 0:
+                cboDate.setCurrentIndex(index)
+
+        cboLocation.addItems(comboData["locationsByDate"])
         if photoLocation != "":
             index = cboLocation.findText(photoLocation)
             if index >= 0:
                 cboLocation.setCurrentIndex(index)
-            
-                # fill date combo box with all dates associated with selected location
-                filterForThisPhoto = code_Filter.Filter()
-                filterForThisPhoto.setLocationName(photoLocation)
-                filterForThisPhoto.setLocationType("Location")
-                dates = self.mdiParent.db.GetDates(filterForThisPhoto)
-                cboDate.addItems(dates)
-                
-                # set date  combo box to the photo's associated date
-                index = cboDate.findText(photoDate)
-                if index >= 0:
-                    cboDate.setCurrentIndex(index)              
-                    
-                # fill time combo box with all times associated with selected location and date
-                filterForThisPhoto.setStartDate(photoDate)
-                filterForThisPhoto.setEndDate(photoDate)
-                startTimes = self.mdiParent.db.GetStartTimes(filterForThisPhoto)
-                cboTime.addItems(startTimes)
-                
-                # set time combo box to the photo's associated checklist time
-                index = cboTime.findText(photoTime)
-                if index >= 0:
-                    cboTime.setCurrentIndex(index)                              
-                                        
-                # get common names from checklist associated with photo
-                filterForThisPhoto.setTime(photoTime)
-                commonNames = self.mdiParent.db.GetSpecies(filterForThisPhoto)
-                
-                cboCommonName.addItem("**Detach Photo**")
-                cboCommonName.addItems(commonNames)  
-                
-                # set combo box to common name
-                index = cboCommonName.findText(photoCommonName)
-                if index >= 0:
-                    cboCommonName.setCurrentIndex(index)   
-            
+
+        cboTime.addItems(comboData["timesByDateAndLocation"])
+        if photoTime != "":
+            index = cboTime.findText(photoTime)
+            if index >= 0:
+                cboTime.setCurrentIndex(index)
+
+        cboCommonName.addItem("**None Selected**")
+        cboCommonName.addItem("**Detach Photo**")
+        cboCommonName.addItems(comboData["speciesByChecklist"])
+        if photoCommonName != "":
+            index = cboCommonName.findText(photoCommonName)
+            if index >= 0:
+                cboCommonName.setCurrentIndex(index)
+
         # assign names to combo boxes for future access
         cboLocation.setObjectName("cboLocation" + str(row))
         cboDate.setObjectName("cboDate" + str(row))
@@ -414,22 +337,22 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         lblFileTime = QLabel()
         lblFileTime.setText("Time: " + photoData["time"])
         
-        # add combo boxes to the layout in second column
+        # add combo boxes to the layout in second column (date-first order)
         detailsLayout.addWidget(lblFileName)
         detailsLayout.addWidget(lblFileDate)
         detailsLayout.addWidget(lblFileTime)
-        detailsLayout.addWidget(cboLocation)
         detailsLayout.addWidget(cboDate)
+        detailsLayout.addWidget(cboLocation)
         detailsLayout.addWidget(cboTime)
         detailsLayout.addWidget(cboCommonName)
         detailsLayout.addWidget(cboRating)
-        
+
         # create and add resent button
         btnReset = QPushButton()
         btnReset.setText("Reset")
         btnReset.clicked.connect(partial( self.btnResetClicked, row))
         detailsLayout.addWidget(btnReset)
-                
+
         # save meta data for future use when user clicks cbo boxes
         thisPhotoMetaData = {}
         thisPhotoMetaData["photoFileName"] = photoData["fileName"]
@@ -438,7 +361,8 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         thisPhotoMetaData["time"] = cboTime.currentText()
         thisPhotoMetaData["commonName"] = photoCommonName
         thisPhotoMetaData["photoData"] = photoData
-        thisPhotoMetaData["rating"] = thisPhotoMetaData["photoData"]["rating"] 
+        thisPhotoMetaData["rating"] = thisPhotoMetaData["photoData"]["rating"]
+        thisPhotoMetaData["cascadeMode"] = "date_first"
 
         self.metaDataByRow[row] = thisPhotoMetaData
         
@@ -487,7 +411,7 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
                 
                 # p is a filename. Use it to add the image to the label as a pixmap
                 buttonPhoto = QPushButton()
-                buttonPhoto.setMinimumHeight(281)
+                buttonPhoto.setMinimumHeight(330)
                 buttonPhoto.setMinimumWidth(500)
                 
                 # get thumbnail from file to display
@@ -495,8 +419,8 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
                 
                 buttonPhoto.setIcon(QIcon(pixMap))
                 
-                # size to 500x281
-                buttonPhoto.setIconSize(QSize(500,281))    
+                # size to 500x330
+                buttonPhoto.setIconSize(QSize(500,330))    
                 buttonPhoto.setStyleSheet("QPushButton {background-color: #343333; border: 0px}")
 
                 # display thumbnail to new row in grid
@@ -610,7 +534,8 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
                 thisPhotoMetaData["commonName"] = s["commonName"]
                 thisPhotoMetaData["photoData"] = p
                 thisPhotoMetaData["rating"] = p["rating"]
-               
+                thisPhotoMetaData["cascadeMode"] = "location_first"
+
                 self.metaDataByRow[row] = thisPhotoMetaData
 
                 # initialize the "new" data so that there are values there, even if they're not really new
@@ -639,17 +564,22 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         return(True)
 
 
-    def GetPixmapForThumbnail(self, photoFile):
-                
-        photoExif = piexif.load(photoFile)
-        
+    def GetPixmapForThumbnail(self, photoFile, exif_dict=None):
+
+        # use provided exif_dict (pre-loaded by caller) or load from file
+        if exif_dict is None:
+            try:
+                exif_dict = piexif.load(photoFile)
+            except:
+                exif_dict = {}
+
         try:
-            pmOrientation = int(photoExif["0th"][piexif.ImageIFD.Orientation] )
+            pmOrientation = int(exif_dict["0th"][piexif.ImageIFD.Orientation])
         except:
             pmOrientation = 1
-            
+
         try:
-            thumbimg = photoExif["thumbnail"]
+            thumbimg = exif_dict["thumbnail"]
         except:
             thumbimg = None
 
@@ -674,7 +604,7 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         pm.convertFromImage(qimage)
             
         if pm.height() > pm.width():
-            pm = pm.scaledToHeight(281)
+            pm = pm.scaledToHeight(330)
         else:
             pm = pm.scaledToWidth(500)
         return pm
@@ -697,11 +627,13 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
                 self.removeHighlight(cboLocation)
             else:
                 self.highlightWidget(cboLocation)
-#                         
-            self.setCboDate(row)
-            
+
+            cascadeMode = self.metaDataByRow[row].get("cascadeMode", "location_first")
+            if cascadeMode == "location_first":
+                self.setCboDate(row)
+
             self.setCboTime(row)
-                        
+
             self.setCboCommonName(row)
                         
             self.saveNewMetaData(row)
@@ -725,12 +657,15 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
             
             if cboDate.currentText() == originalDate:
                 self.removeHighlight(cboDate)
- 
             else:
                 self.highlightWidget(cboDate)
-                         
+
+            cascadeMode = self.metaDataByRow[row].get("cascadeMode", "location_first")
+            if cascadeMode == "date_first":
+                self.setCboLocationByDate(row)
+
             self.setCboTime(row)
-            
+
             self.setCboCommonName(row)
             
             self.saveNewMetaData(row)                         
@@ -840,7 +775,38 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         if cboDate.currentText() == originalDate:
             self.removeHighlight(cboDate)
         else:
-            self.highlightWidget(cboDate) 
+            self.highlightWidget(cboDate)
+
+
+    def setCboLocationByDate(self, row):
+
+        container = self.gridPhotos.itemAtPosition(row, 1).widget()
+        for w in container.children():
+            if "cboDate" in w.objectName():
+                cboDate = w
+            if "cboLocation" in w.objectName():
+                cboLocation = w
+
+        originalLocation = self.metaDataByRow[row]["location"]
+        currentlyDisplayedLocation = cboLocation.currentText()
+
+        # get locations visited on the selected date
+        filterForThisPhoto = code_Filter.Filter()
+        filterForThisPhoto.setStartDate(cboDate.currentText())
+        filterForThisPhoto.setEndDate(cboDate.currentText())
+        locations = self.mdiParent.db.GetLocations(filterForThisPhoto)
+        cboLocation.clear()
+        cboLocation.addItems(locations)
+
+        # try to keep the currently displayed location if it's valid for the new date
+        index = cboLocation.findText(currentlyDisplayedLocation)
+        if index >= 0:
+            cboLocation.setCurrentIndex(index)
+
+        if cboLocation.currentText() == originalLocation:
+            self.removeHighlight(cboLocation)
+        else:
+            self.highlightWidget(cboLocation)
 
 
     def setCboTime(self, row):

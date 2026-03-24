@@ -85,11 +85,11 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
     
             # F10 is pressed, so toggle display of camera details
             if e.key() == Qt.Key_F10:
-                self.mdiParent.toggleFullScreen()
-    
-            # Esc is pressed, so exit full screen mode, if we're in it 
+                QTimer.singleShot(0, self.mdiParent.toggleFullScreen)
+
+            # Esc is pressed, so exit full screen mode, if we're in it
             if e.key() == Qt.Key_Escape and self.mdiParent.mdiParent.mdiParent.statusBar.isVisible() is False:
-                self.mdiParent.toggleFullScreen()
+                QTimer.singleShot(0, self.mdiParent.toggleFullScreen)
     
             # 1-5 pressed, so rate the photo 
             if e.key() in [Qt.Key_0, Qt.Key_1, Qt.Key_2, Qt.Key_3, Qt.Key_4, Qt.Key_5]:
@@ -119,15 +119,15 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
             
             if self.mdiParent.isMaximized() is True:
                 if self.mdiParent.cursorIsVisible:
-                    actionToggleHideCursor = menu.addAction("Hide cursor (F7)")  
-                else:  
+                    actionToggleHideCursor = menu.addAction("Hide cursor (F7)")
+                else:
                     actionToggleHideCursor = menu.addAction("Show cursor (F7)")
-            
+
             if self.mdiParent.detailsPane.isVisible():
                 actionToggleCameraDetails = menu.addAction("Hide details (F9)")
             else:
                 actionToggleCameraDetails = menu.addAction("Show details (F9)")
-                
+
             if self.mdiParent.isMaximized() and self.mdiParent.mdiParent.mdiParent.isFullScreen():
                 actionToggleFullScreen = menu.addAction("Exit full screen (F10)")
             else:
@@ -140,7 +140,7 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
             
             action = menu.exec_(self.mapToGlobal(event.pos()))
 
-            if self.mdiParent.isMaximized() is True:                
+            if self.mdiParent.isMaximized() is True:
                 if action == actionToggleHideCursor:
                     self.parent().toggleHideCursor()
                     
@@ -157,7 +157,7 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
                 self.parent().toggleCameraDetails()
             
             if action == actionToggleFullScreen:
-                self.parent().toggleFullScreen()
+                QTimer.singleShot(0, self.parent().toggleFullScreen)
             
             if action == actionDeleteFile:
                 self.parent().deleteFile()
@@ -273,7 +273,7 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
         ratingLayout.addWidget(self.star5)
         
         self.horizontalGroupBox.setLayout(ratingLayout)
-        
+
         self.cursorIsVisible = True
 
 
@@ -317,10 +317,10 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
 
         # F10 is pressed, so toggle full screen
         if e.key() == Qt.Key_F10:
-            self.toggleFullScreen()
+            QTimer.singleShot(0, self.toggleFullScreen)
 
         if e.key() == Qt.Key_Escape and not self.mdiParent.mdiParent.statusBar.isVisible():
-            self.toggleFullScreen()
+            QTimer.singleShot(0, self.toggleFullScreen)
 
         # 1-5 pressed, so rate the photo 
         if e.key() in [Qt.Key_0, Qt.Key_1, Qt.Key_2, Qt.Key_3, Qt.Key_4, Qt.Key_5]:
@@ -439,14 +439,11 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
 
 
     def toggleHideCursor(self):
-        
+
         # toggle visibility of the cursor
-        
-        # abort if we're not full screen (don't want to confuse user by hiding cursor)
         if not self.isMaximized():
             return()
 
-        # abort if we're not full screen (don't want to confuse user by hiding cursor)
         if not self.mdiParent.mdiParent.isFullScreen():
             return()
         
@@ -549,33 +546,42 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
                           
             
     def toggleFullScreen(self):
-        
-        # toggle visibility of filter and menu bar
-        # if app is not full screen, then go to full screen and then hide the furniture
-        if not self.mdiParent.mdiParent.isFullScreen() is True:
-            
-            self.mdiParent.mdiParent.dckFilter.setVisible(False)
-            self.mdiParent.mdiParent.dckPhotoFilter.setVisible(False)
-            self.mdiParent.mdiParent.menuBar.setVisible(False)
-            self.mdiParent.mdiParent.toolBar.setVisible(False)
-            self.mdiParent.mdiParent.statusBar.setVisible(False)
-            self.setWindowFlags(Qt.FramelessWindowHint)
-            self.mdiParent.mdiParent.showFullScreen()
+        # Called via QTimer.singleShot(0, ...) from all key/menu handlers so that
+        # this runs after the triggering event handler has fully returned.
+        # Note: setUpdatesEnabled(False) cannot be used here — on macOS's Cocoa
+        # backend it conflicts with native window operations (showFullScreen,
+        # setWindowFlags) and causes a fatal crash via sendPostedEvents.
+        #
+        # Operation order is chosen to minimise visible intermediate states:
+        # entering — child maximises first (image already fills MDI area), then
+        # chrome hides and the main window expands to screen.
+        # exiting  — chrome restores first, then main window shrinks, then child
+        # returns to normal so the image never appears to "float" frameless.
+
+        mainWindow = self.mdiParent.mdiParent
+
+        if not mainWindow.isFullScreen():
             self.showMaximized()
-            
+            self.setWindowFlags(Qt.FramelessWindowHint)
+            mainWindow.dckFilter.setVisible(False)
+            mainWindow.dckPhotoFilter.setVisible(False)
+            mainWindow.menuBar.setVisible(False)
+            mainWindow.toolBar.setVisible(False)
+            mainWindow.statusBar.setVisible(False)
+            mainWindow.showFullScreen()
+
         else:
-            
-            # we are in full screen mode, so need to show furniture, restore photo window, and then maximize MDI window again
-            self.mdiParent.mdiParent.dckFilter.setVisible(True)
-            self.mdiParent.mdiParent.dckPhotoFilter.setVisible(True)
-            self.mdiParent.mdiParent.menuBar.setVisible(True)
-            self.mdiParent.mdiParent.toolBar.setVisible(True)
-            self.mdiParent.mdiParent.statusBar.setVisible(True)
-            self.mdiParent.mdiParent.showMaximized()
+            mainWindow.dckFilter.setVisible(True)
+            mainWindow.dckPhotoFilter.setVisible(True)
+            mainWindow.menuBar.setVisible(True)
+            mainWindow.toolBar.setVisible(True)
+            mainWindow.statusBar.setVisible(True)
             self.setWindowFlags(Qt.SubWindow)
+            mainWindow.showMaximized()
             self.showNormal()
-            self.fitEnlargement
-            QApplication.restoreOverrideCursor()           
+            QApplication.restoreOverrideCursor()
+
+        QTimer.singleShot(0, self.fitEnlargement)
                     
             
     def setCameraDetails(self):

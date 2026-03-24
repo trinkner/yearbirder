@@ -449,8 +449,14 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
 
         folium.LayerControl().add_to(prov_map)
 
+        import tempfile
         html = prov_map.get_root().render()
-        self.webView.setHtml(html)
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as f:
+            f.write(html)
+            tmp_path = f.name
+        settings = QWebEngineSettings.globalSettings()
+        settings.setAttribute(QWebEngineSettings.LocalContentCanAccessRemoteUrls, True)
+        self.webView.setUrl(QUrl.fromLocalFile(tmp_path))
         self._buildFilterTitle(filter, "Canada Provinces Choropleth", count=len(provDict), countUnit="Provinces")
 
         return(True)
@@ -526,8 +532,14 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
 
         folium.LayerControl().add_to(state_map)
 
+        import tempfile
         html = state_map.get_root().render()
-        self.webView.setHtml(html)
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as f:
+            f.write(html)
+            tmp_path = f.name
+        settings = QWebEngineSettings.globalSettings()
+        settings.setAttribute(QWebEngineSettings.LocalContentCanAccessRemoteUrls, True)
+        self.webView.setUrl(QUrl.fromLocalFile(tmp_path))
         self._buildFilterTitle(filter, "India States Choropleth", count=len(stateDict), countUnit="States")
 
         return(True)
@@ -610,8 +622,14 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
 
         folium.LayerControl().add_to(county_map)
 
+        import tempfile
         html = county_map.get_root().render()
-        self.webView.setHtml(html)
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as f:
+            f.write(html)
+            tmp_path = f.name
+        settings = QWebEngineSettings.globalSettings()
+        settings.setAttribute(QWebEngineSettings.LocalContentCanAccessRemoteUrls, True)
+        self.webView.setUrl(QUrl.fromLocalFile(tmp_path))
         self._buildFilterTitle(filter, "Great Britain Counties Choropleth", count=len(countyDict), countUnit="Counties")
 
         return(True)

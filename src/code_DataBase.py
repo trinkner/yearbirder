@@ -1,5 +1,6 @@
 # import basic Python libraries
 import os
+import re
 import csv
 import zipfile
 import io
@@ -180,18 +181,21 @@ class DataBase():
             self.gb_county_geo = json.loads(f.read())
         
 
-    def matchPhoto(self, file):
-        
+    def matchPhoto(self, file, exif_dict=None):
+
         # method to suggest a commonName, date, time, and location for a photo
-        
+
         # get just the filename portion from the full-path filename
         fileName = os.path.basename(file)
-        
-        # get the EXIF data from the file, if possible
-        try:
-            photoExif = piexif.load(file)
-        except:
-            photoExif = ""
+
+        # use provided exif_dict (pre-loaded by caller) or load from file
+        if exif_dict is None:
+            try:
+                photoExif = piexif.load(file)
+            except:
+                photoExif = {}
+        else:
+            photoExif = exif_dict
         
         # get photo date from EXIF
         try:
@@ -214,23 +218,44 @@ class DataBase():
         # if we find only one location, return it
         if len(locations) == 1:
             photoLocation = locations[0]
-        
+            # Resolve photoTime from the EXIF time to the actual checklist start time.
+            # The EXIF time may fall within a checklist's active window without matching its
+            # start time exactly, which would cause the time combo box to default to the
+            # first (wrong) checklist.  Find the start time closest to the photo's EXIF time
+            # among all checklists that were active at the photo time.
+            if photoTime != "":
+                filterWithLocation = code_Filter.Filter()
+                filterWithLocation.setStartDate(photoDate)
+                filterWithLocation.setEndDate(photoDate)
+                filterWithLocation.setLocationName(photoLocation)
+                filterWithLocation.setLocationType("Location")
+                filterWithLocation.setTime(photoTime)
+                startTimes = self.GetStartTimes(filterWithLocation)
+                if startTimes:
+                    photoMinutes = 60 * int(photoTime[0:2]) + int(photoTime[3:5])
+                    photoTime = min(startTimes, key=lambda t: abs(60 * int(t[0:2]) + int(t[3:5]) - photoMinutes))
+
         else:
             photoLocation = ""
-                    
-        # if no single location matched the photo, but we have a date, find which checklist is closest to the photo datetime    
+
+        # if no single location matched the photo, but we have a date, find which checklist is closest to the photo datetime
         if photoLocation == "" and photoDate != "":
             # try finding a checklist with the right date
             filter = code_Filter.Filter()
             filter.setStartDate(photoDate)
             filter.setEndDate(photoDate)
             locations = self.GetLocations(filter, "OnlyLocations")
-                        
+
             if len(locations) == 1:
                 photoLocation = locations[0]
                 possibleStartTimes = self.GetStartTimes(filter)
                 if len(possibleStartTimes) > 0:
-                    photoTime = possibleStartTimes[0]
+                    if photoTime != "":
+                        # pick the start time closest to the photo's EXIF time
+                        photoMinutes = 60 * int(photoTime[0:2]) + int(photoTime[3:5])
+                        photoTime = min(possibleStartTimes, key=lambda t: abs(60 * int(t[0:2]) + int(t[3:5]) - photoMinutes))
+                    else:
+                        photoTime = possibleStartTimes[0]
             
             # if more than one location was found, find which was visited closest to the photo time 
             elif len(locations) > 1 and photoTime != "":                
@@ -276,39 +301,78 @@ class DataBase():
             filter.setEndDate(photoDate)
             filter.setTime(photoTime)
             possibleCommonNames = self.GetSpecies(filter)
-             
-            # set up translation table to remove inconvenient characters from file name 
-            # and possiblecommonNames    
-            translation_table = dict.fromkeys(map(ord, "0123456789-' "), None)                    
-            
-            # make file name lower case and remove inconvenient characters
-            fileName = str(fileName)
-            fileName = fileName.lower()
-            fileName = fileName.translate(translation_table)
-            
-            # create list to store most likely commonName and number of matching characters
-            mostLikelyCommonName = [0, "", ""]
-            
-            # cycle through possibleCommonNames, testing them piece by piece
-            # to find which matches the most number of consecutive characters
-            
+
+            fileNameLower = os.path.splitext(str(fileName))[0].lower()
+
+            # Split filename into a set of alpha tokens (min 2 chars) for whole-word matching.
+            # e.g. "great_blue_heron_20230501.jpg" -> {"great", "blue", "heron"}
+            fileNameTokens = set(t for t in re.split(r'[^a-z]+', fileNameLower) if len(t) >= 2)
+
+            photoCommonName = ""
+
+            # --- Pass 1: BBL 4-letter alpha code ---
+            # e.g. "yrwa.jpg" -> token "yrwa" matches Yellow-rumped Warbler's BBL code.
+            # A code match is treated as definitive; the first match found wins.
             for pcn in possibleCommonNames:
-                lowerCasePcn = pcn.lower()
-                lowerCasePcn = lowerCasePcn.translate(translation_table)
-                possibleCommonNameLength = len(lowerCasePcn)
-                for i in range(possibleCommonNameLength):
-                    for ii in range(i + 1, possibleCommonNameLength + 1):
-                        if lowerCasePcn[i:ii] in fileName:
-                            if len(lowerCasePcn[i:ii]) > mostLikelyCommonName[0]:
-                                mostLikelyCommonName[0] = len(lowerCasePcn[i:ii])
-                                mostLikelyCommonName[1] = pcn
-                                mostLikelyCommonName[2] = lowerCasePcn[i:ii]
-                                if len(lowerCasePcn[i:ii]) == len(lowerCasePcn):
-                                    # matched the full possible name, so stop checking
+                bblCode = self.GetBBLCode(pcn).lower()
+                if bblCode and bblCode in fileNameTokens:
+                    photoCommonName = pcn
+                    break
+
+            # --- Pass 2: word-token intersection ---
+            if not photoCommonName:
+                bestRatio = 0.0
+                bestMatchCount = 0
+                for pcn in possibleCommonNames:
+                    speciesTokens = [t for t in re.split(r'[^a-z]+', pcn.lower()) if len(t) >= 2]
+                    if not speciesTokens:
+                        continue
+                    matchedCount = sum(1 for t in speciesTokens if t in fileNameTokens)
+                    ratio = matchedCount / len(speciesTokens)
+                    # prefer higher ratio; break ties by absolute number of matched tokens
+                    if ratio > bestRatio or (ratio == bestRatio and matchedCount > bestMatchCount):
+                        bestRatio = ratio
+                        bestMatchCount = matchedCount
+                        photoCommonName = pcn
+                if bestRatio == 0.0:
+                    photoCommonName = ""
+
+            # --- Pass 3: proportional substring match (used when passes 1 and 2 both fail) ---
+            # Score = longest_match_length / species_name_length; minimum match length = 4.
+            # If a substring starting at position i isn't found, no longer substring from
+            # that position can be either, so the inner loop breaks early.
+            if not photoCommonName:
+                translation_table = dict.fromkeys(map(ord, "0123456789-' "), None)
+                fileNameClean = fileNameLower.translate(translation_table)
+                bestSubstringRatio = 0.0
+                photoCommonName = ""
+
+                for pcn in possibleCommonNames:
+                    lowerCasePcn = pcn.lower().translate(translation_table)
+                    pcnLength = len(lowerCasePcn)
+                    if pcnLength == 0:
+                        continue
+                    bestMatchLen = 0
+                    fullMatchFound = False
+                    for i in range(pcnLength):
+                        if fullMatchFound:
+                            break
+                        for ii in range(i + 1, pcnLength + 1):
+                            substring = lowerCasePcn[i:ii]
+                            if substring in fileNameClean:
+                                if len(substring) > bestMatchLen:
+                                    bestMatchLen = len(substring)
+                                if bestMatchLen == pcnLength:
+                                    fullMatchFound = True
                                     break
-            
-            photoCommonName = mostLikelyCommonName[1]
-                        
+                            else:
+                                # a longer substring starting at i also won't be found
+                                break
+                    ratio = bestMatchLen / pcnLength if bestMatchLen >= 4 else 0.0
+                    if ratio > bestSubstringRatio:
+                        bestSubstringRatio = ratio
+                        photoCommonName = pcn
+
         else:
             photoCommonName = ""
         
@@ -369,16 +433,16 @@ class DataBase():
                 s.pop("photos", None)
                 
 
-    def getPhotoData(self, fileName):
-        
+    def getPhotoData(self, fileName, exif_dict=None):
+
         photoData = {}
-                 
-        # try to get EXIF data
- 
-        try:
-            exif_dict = piexif.load(fileName)
-        except:
-            exif_dict = ""
+
+        # use provided exif_dict (pre-loaded by caller) or load from file
+        if exif_dict is None:
+            try:
+                exif_dict = piexif.load(fileName)
+            except:
+                exif_dict = {}
              
         try:
             photoCamera = exif_dict["0th"][piexif.ImageIFD.Model].decode("utf-8")
@@ -433,6 +497,54 @@ class DataBase():
         photoData["rating"] = "0"
         
         return(photoData)
+
+
+    def getComboDataForPhoto(self, photoMatchData):
+        """Pre-compute all combo box data for a photo so worker threads can do
+        this work in parallel rather than blocking the main thread."""
+
+        photoDate = photoMatchData["photoDate"]
+        photoLocation = photoMatchData["photoLocation"]
+        photoTime = photoMatchData["photoTime"]
+
+        # all dates in db (for the date combo box)
+        allDates = self.GetDates(code_Filter.Filter())
+
+        # locations visited on the matched date
+        locationsByDate = []
+        if photoDate:
+            f = code_Filter.Filter()
+            f.setStartDate(photoDate)
+            f.setEndDate(photoDate)
+            locationsByDate = self.GetLocations(f)
+
+        # start times for the matched date + location
+        timesByDateAndLocation = []
+        if photoDate and photoLocation:
+            f = code_Filter.Filter()
+            f.setStartDate(photoDate)
+            f.setEndDate(photoDate)
+            f.setLocationName(photoLocation)
+            f.setLocationType("Location")
+            timesByDateAndLocation = self.GetStartTimes(f)
+
+        # species on the matched checklist
+        speciesByChecklist = []
+        if photoDate and photoLocation and photoTime:
+            f = code_Filter.Filter()
+            f.setLocationType("Location")
+            f.setLocationName(photoLocation)
+            f.setStartDate(photoDate)
+            f.setEndDate(photoDate)
+            f.setTime(photoTime)
+            speciesByChecklist = self.GetSpecies(f)
+
+        return {
+            "allDates": allDates,
+            "locationsByDate": locationsByDate,
+            "timesByDateAndLocation": timesByDateAndLocation,
+            "speciesByChecklist": speciesByChecklist,
+        }
 
 
     def addPhotoToDatabase(self, filter, photoData):

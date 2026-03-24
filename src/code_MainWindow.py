@@ -259,7 +259,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.lblStatusBarMessage.setVisible(False)
         # self.statusBar.addWidget(self.lblSlider)
         # self.statusBar.addWidget(self.sldFontSize)
-        self.statusBar.addWidget(self.lblStatusBarMessage)
+        self.statusBar.addWidget(self.lblStatusBarMessage, 1)
         
         self.dckPhotoFilter.setMinimumWidth(235)
         self.dckFilter.setMinimumWidth(215)

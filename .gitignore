@@ -35,3 +35,14 @@ Yearbird_PyInstaller_Instructions.txt
 
 # Screenshots and temp files
 Screenshot.jpg
+Yearbird_Screenshot.jpg
+
+# User data files
+photoData.csv
+
+# Old code backups
+src/code_Photos_OLD.py
+
+# Sample photos and legacy docs
+2026-03-17-181528_Golden-crownedSparrow_735BowhillRoad.jpg
+YearBird_WindowsInstallation_20200519.txt

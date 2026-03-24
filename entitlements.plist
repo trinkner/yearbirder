@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Required for Qt WebEngine (Chromium JIT) under Hardened Runtime -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <!-- Required because Homebrew Qt frameworks carry their own signatures -->
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+    <!-- Required for network access (eBird API, map tiles) -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+</dict>
+</plist>
