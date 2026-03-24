@@ -28,6 +28,14 @@ Yearbird loads the CSV file you download from eBird and lets you filter, browse,
 
 ---
 
+## Download
+
+A pre-built, signed, and notarized macOS app is available on the [Releases page](https://github.com/trinkner/yearbird/releases/latest).
+
+Download `Yearbird-1.1.dmg`, open it, and drag Yearbird to your Applications folder.
+
+---
+
 ## Requirements
 
 - Python 3.10 or later
