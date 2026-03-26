@@ -3,9 +3,9 @@
 import os, glob
 from PyInstaller.utils.hooks import collect_data_files
 
-# With Homebrew PyQt5, PyInstaller's binary analysis automatically collects
-# the real QtWebEngineCore.framework (binary + resources + QtWebEngineProcess.app)
-# into Contents/Frameworks/. No manual datas entries needed for WebEngine resources.
+# PySide6/WebEngine: PyInstaller's PySide6 hooks automatically collect
+# QtWebEngineCore.framework (binary + resources + QtWebEngineProcess.app)
+# into Contents/Frameworks/. No manual datas entries needed for WebEngine.
 
 datas = [
     ("src/guide", "guide"),
@@ -20,17 +20,13 @@ datas = [
     ("src/ebird_api_ref_location_eBird_list_subnational1.csv", "."),
 ]
 
-# White toolbar icons (loaded from filesystem at runtime)
-for _f in glob.glob("src/icon_*_white.png"):
-    datas.append((_f, "."))
-
-# PyQt5 data files (plugins, translations, etc.)
-datas += collect_data_files("PyQt5")
+# PySide6 data files (plugins, translations, etc.)
+datas += collect_data_files("PySide6")
 
 hiddenimports = [
-    "PyQt5.QtWebEngineWidgets",
-    "PyQt5.QtWebEngineCore",
-    "PyQt5.QtWebEngine",
+    "PySide6.QtWebEngineWidgets",
+    "PySide6.QtWebEngineCore",
+    "PySide6.QtWebChannel",
 ]
 
 a = Analysis(
@@ -75,7 +71,7 @@ app = BUNDLE(
     coll,
     name="Yearbird.app",
     icon="icons/Yearbird.icns",
-    bundle_identifier=None,
+    bundle_identifier="com.trinkner.yearbird",
     codesign_identity=None,
     entitlements_file=None,
 )

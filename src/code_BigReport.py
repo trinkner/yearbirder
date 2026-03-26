@@ -1563,3 +1563,5 @@ document.addEventListener("DOMContentLoaded", function() {{
         header.resizeSection(0,  floor(8 * textWidth))
         self.tblNewLocationSpecies.verticalHeader().setDefaultSectionSize(rowHeight)
 
+
+

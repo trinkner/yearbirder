@@ -77,6 +77,39 @@ class MapBridge(QObject):
         sub.scaleMe()
 
 
+class ChoroplethBridge(QObject):
+    """Qt/JavaScript bridge for choropleth maps.
+
+    Registered on the page's QWebChannel as 'bridge'.  When the user clicks a
+    shaded region, JavaScript calls regionClicked(clickKey) which opens a
+    species list filtered to that region.
+    """
+
+    def __init__(self, web_window, location_type):
+        super().__init__()
+        self._web = web_window
+        self._location_type = location_type  # "State", "County", or "Country"
+
+    @Slot(str)
+    def regionClicked(self, clickKey):
+        from copy import deepcopy
+        import code_Lists
+
+        newFilter = deepcopy(self._web.filter)
+        newFilter.setLocationType(self._location_type)
+        newFilter.setLocationName(clickKey)
+
+        sub = code_Lists.Lists()
+        sub.mdiParent = self._web.mdiParent
+
+        if sub.FillSpecies(newFilter):
+            self._web.mdiParent.mdiArea.addSubWindow(sub)
+            self._web.mdiParent.PositionChildWindow(sub, self._web)
+            sub.show()
+            QApplication.processEvents()
+            sub.scaleMe()
+
+
 class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
     
     resized = Signal()
@@ -412,6 +445,56 @@ document.addEventListener("DOMContentLoaded", function() {{
         return f'#{r:02x}{g:02x}{b:02x}'
 
 
+    def _setup_choropleth_channel(self, html, location_type):
+        """Register a ChoroplethBridge on the page and inject click-handler JS.
+
+        Each GeoJSON feature whose properties contain a non-empty 'clickKey'
+        will open a species-list window when clicked.  Returns the modified HTML.
+        """
+        import re
+
+        self._choroplethBridge = ChoroplethBridge(self, location_type)
+        channel = QWebChannel(self.webView.page())
+        channel.registerObject("bridge", self._choroplethBridge)
+        self.webView.page().setWebChannel(channel)
+
+        qwc_file = QFile(":/qtwebchannel/qwebchannel.js")
+        qwc_file.open(QIODevice.OpenModeFlag.ReadOnly)
+        qwc_js = bytes(qwc_file.readAll()).decode("utf-8")
+        qwc_file.close()
+
+        map_var_match = re.search(r'var\s+(map_[a-zA-Z0-9_]+)\s*=\s*L\.map', html)
+        map_var = map_var_match.group(1) if map_var_match else "map"
+
+        inject_js = f"""
+<script>
+{qwc_js}
+document.addEventListener("DOMContentLoaded", function() {{
+    new QWebChannel(qt.webChannelTransport, function(channel) {{
+        window.bridge = channel.objects.bridge;
+        {map_var}.eachLayer(function(layer) {{
+            if (layer.eachLayer) {{
+                layer.eachLayer(function(featureLayer) {{
+                    if (featureLayer.feature &&
+                            featureLayer.feature.properties &&
+                            featureLayer.feature.properties.clickKey) {{
+                        featureLayer.getElement && featureLayer.getElement() &&
+                            (featureLayer.getElement().style.cursor = 'pointer');
+                        featureLayer.on('click', function() {{
+                            window.bridge.regionClicked(
+                                featureLayer.feature.properties.clickKey);
+                        }});
+                    }}
+                }});
+            }}
+        }});
+    }});
+}});
+</script>
+"""
+        return html.replace("</body>", inject_js + "</body>")
+
+
     def loadChoroplethUSStates(self, filter):
 
         from copy import deepcopy
@@ -461,12 +544,16 @@ document.addEventListener("DOMContentLoaded", function() {{
                 
         #add the state values to the geojson so we can access them for tooltips
         for f in geo_file["features"]:
-            if f["id"] in stateTotals.keys(): 
+            if f["id"] in stateTotals.keys():
                 f["properties"]["speciesTotal"] = stateTotals[f["id"]]
             else:
                 f["properties"]["speciesTotal"] = 0
                 stateTotals[f["id"]] = 0
-                    
+            if f["properties"]["speciesTotal"] > 0:
+                f["properties"]["clickKey"] = "US-" + f["id"]
+            else:
+                f["properties"].pop("clickKey", None)
+
         # Initialize the folium map
         state_map = folium.Map(location=[39.5, -98.3], zoom_start=4, tiles="CartoDB Positron")
 
@@ -484,13 +571,14 @@ document.addEventListener("DOMContentLoaded", function() {{
                 aliases=["State", "Species"]
                 )
             ).add_to(state_map)
-        
+
         # make the layer control box visible
         folium.LayerControl().add_to(state_map)
-                 
+
         # get the html string from the map
         import tempfile
         html = state_map.get_root().render()
+        html = self._setup_choropleth_channel(html, "State")
         with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as f:
             f.write(html)
             tmp_path = f.name
@@ -557,6 +645,10 @@ document.addEventListener("DOMContentLoaded", function() {{
             else:
                 f["properties"]["speciesTotal"] = 0
                 provTotals[f["id"]] = 0
+            if f["properties"]["speciesTotal"] > 0:
+                f["properties"]["clickKey"] = "CA-" + f["id"]
+            else:
+                f["properties"].pop("clickKey", None)
 
         # Initialize the folium map centered on Canada
         prov_map = folium.Map(location=[62, -96], zoom_start=3, tiles="CartoDB Positron")
@@ -580,6 +672,7 @@ document.addEventListener("DOMContentLoaded", function() {{
 
         import tempfile
         html = prov_map.get_root().render()
+        html = self._setup_choropleth_channel(html, "State")
         with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as f:
             f.write(html)
             tmp_path = f.name
@@ -642,6 +735,10 @@ document.addEventListener("DOMContentLoaded", function() {{
             else:
                 f["properties"]["speciesTotal"] = 0
                 stateTotals[f["id"]] = 0
+            if f["properties"]["speciesTotal"] > 0:
+                f["properties"]["clickKey"] = f["id"]
+            else:
+                f["properties"].pop("clickKey", None)
 
         state_map = folium.Map(location=[22, 80], zoom_start=4, tiles="CartoDB Positron")
 
@@ -663,6 +760,7 @@ document.addEventListener("DOMContentLoaded", function() {{
 
         import tempfile
         html = state_map.get_root().render()
+        html = self._setup_choropleth_channel(html, "State")
         with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as f:
             f.write(html)
             tmp_path = f.name
@@ -730,6 +828,10 @@ document.addEventListener("DOMContentLoaded", function() {{
             else:
                 f["properties"]["speciesTotal"] = 0
                 countyTotals[ename] = 0
+            if f["properties"]["speciesTotal"] > 0:
+                f["properties"]["clickKey"] = ename
+            else:
+                f["properties"].pop("clickKey", None)
 
         county_map = folium.Map(location=[54, -2], zoom_start=5, tiles="CartoDB Positron")
 
@@ -753,6 +855,7 @@ document.addEventListener("DOMContentLoaded", function() {{
 
         import tempfile
         html = county_map.get_root().render()
+        html = self._setup_choropleth_channel(html, "County")
         with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as f:
             f.write(html)
             tmp_path = f.name
@@ -817,12 +920,17 @@ document.addEventListener("DOMContentLoaded", function() {{
                         
         #add the county values to the geojson so we can access them for tooltips
         for f in geo_file["features"]:
-            if f["id"] in countyTotals.keys(): 
+            if f["id"] in countyTotals.keys():
                 f["properties"]["speciesTotal"] = countyTotals[f["id"]]
             else:
                 f["properties"]["speciesTotal"] = 0
                 countyTotals[f["id"]] = 0
-                    
+            # clickKey is the county name as stored in db.countyDict (from the sighting data)
+            if f["properties"]["speciesTotal"] > 0:
+                f["properties"]["clickKey"] = countyDict[f["id"]][0]["county"]
+            else:
+                f["properties"].pop("clickKey", None)
+
         # Initialize the folium map
         county_map = folium.Map(location=[39.5, -98.3], zoom_start=4, tiles="CartoDB Positron")
 
@@ -841,10 +949,10 @@ document.addEventListener("DOMContentLoaded", function() {{
                 aliases=["County", "State", "Species"]
                 )
             ).add_to(county_map)
-        
+
         # make the layer control box visible
         folium.LayerControl().add_to(county_map)
-                 
+
         # get the html string from the map
         # Note: the county GeoJSON embeds ~1.2MB of data in a single JS line, which causes
         # QWebEngineView.setHtml() to silently produce a blank page when many counties have
@@ -852,6 +960,7 @@ document.addEventListener("DOMContentLoaded", function() {{
         # loading via setUrl() bypasses this Qt internal content-handling limitation.
         import tempfile
         html = county_map.get_root().render()
+        html = self._setup_choropleth_channel(html, "County")
         with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as f:
             f.write(html)
             tmp_path = f.name
@@ -912,12 +1021,16 @@ document.addEventListener("DOMContentLoaded", function() {{
                 
         #add the country values to the geojson so we can access them for tooltips
         for f in geo_file["features"]:
-            if f["id"] in countryTotals.keys(): 
+            if f["id"] in countryTotals.keys():
                 f["properties"]["speciesTotal"] = countryTotals[f["id"]]
             else:
                 f["properties"]["speciesTotal"] = 0
                 countryTotals[f["id"]] = 0
-                    
+            if f["properties"]["speciesTotal"] > 0:
+                f["properties"]["clickKey"] = f["id"]
+            else:
+                f["properties"].pop("clickKey", None)
+
         # Initialize the folium map
         choro_map = folium.Map(location=[1, 1], zoom_start=1, tiles="CartoDB Positron")
 
@@ -936,13 +1049,14 @@ document.addEventListener("DOMContentLoaded", function() {{
                 aliases=["Country", "Species"]
                 )
             ).add_to(choro_map)
-        
+
         # make the layer control box visible
         folium.LayerControl().add_to(choro_map)
-                 
+
         # get the html string from the map
         import tempfile
         html = choro_map.get_root().render()
+        html = self._setup_choropleth_channel(html, "Country")
         with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as f:
             f.write(html)
             tmp_path = f.name

@@ -184,9 +184,7 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         header = self.tblList.horizontalHeader()
         metrics = QFontMetrics(QFont("Helvetica", fontSize))
 
-        rowHeight = self.mdiParent.rowHeight
-        for R in range(self.tblList.rowCount()):
-            self.tblList.setRowHeight(R, rowHeight)
+        self.tblList.verticalHeader().setDefaultSectionSize(self.mdiParent.rowHeight)
 
         if self.listType == "Species":
             dateTextWidth = int(metrics.boundingRect("2222-22-22").width())
@@ -306,12 +304,15 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         windowWidth =  int(800  * scaleFactor)
         windowHeight = int(580 * scaleFactor)
         self.resize(windowWidth, windowHeight)
-           
-           
+
+        if self.listType == "Species":
+            import traceback
+            print("DEBUG scaleMe called:")
+            traceback.print_stack(limit=5)
+
+
     def afterSort(self, column, order):
-        rowHeight = self.mdiParent.rowHeight
-        for R in range(self.tblList.rowCount()):
-            self.tblList.setRowHeight(R, rowHeight)
+        self.tblList.verticalHeader().setDefaultSectionSize(self.mdiParent.rowHeight)
            
         
     def ChangedFindText(self):
