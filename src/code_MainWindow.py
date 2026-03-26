@@ -55,6 +55,7 @@ from PySide6.QtCore import (
     
 from PySide6.QtWidgets import (
     QApplication,
+    QMdiArea,
     QMessageBox,
     QMainWindow,
     QFileDialog,
@@ -2202,26 +2203,38 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         
         
     def TileWindows(self):
+        # Restore any minimized windows first
+        for w in self.mdiArea.subWindowList():
+            if w.isMinimized():
+                w.showNormal()
         self.mdiArea.tileSubWindows()
         
         
     def CascadeWindows(self):
-        # scale every window to its default size
-        # save those dimensions as minimum size 
-        # if we don't, cascading the windows will shrink them
-        # too too tiny
-        for w in self.mdiArea.subWindowList():        
+        # Restore any minimized windows first
+        for w in self.mdiArea.subWindowList():
+            if w.isMinimized():
+                w.showNormal()
+
+        # Get windows in stacking order (back-most first, front-most last)
+        visibleWindows = [w for w in self.mdiArea.subWindowList(QMdiArea.WindowOrder.StackingOrder) if w.isVisible()]
+        if not visibleWindows:
+            return
+
+        # Scale every window to its default size first
+        for w in visibleWindows:
             if w.windowTitle() != "Enlargement":
                 w.scaleMe()
-            w.setMinimumHeight(w.height())
-            w.setMinimumWidth(w.width())
-        
-        self.mdiArea.cascadeSubWindows()
-        
-        # set the minimum sizes back to 0, 0
-        for w in self.mdiArea.subWindowList():        
-            w.setMinimumHeight(0)
-            w.setMinimumWidth(0)        
+
+        # Cascade: position each window offset by title bar height from the previous,
+        # and raise_ each in order so z-order matches cascade position
+        titleBarHeight = 25
+        x, y = 0, 0
+        for w in visibleWindows:
+            w.move(x, y)
+            w.raise_()
+            x += titleBarHeight
+            y += titleBarHeight
         
     def CloseAllWindows(self):
         self.mdiArea.closeAllSubWindows()

@@ -261,6 +261,7 @@ class BigReport(QMdiSubWindow, form_BigReport.Ui_frmBigReport):
             speciesItem.setData(Qt.UserRole,  species[4]) 
             countItem = QTableWidgetItem()
             countItem.setData(Qt.DisplayRole, species[7])
+            countItem.setTextAlignment(Qt.AlignCenter | Qt.AlignVCenter)
             firstDateItem = QTableWidgetItem()
             firstDateItem.setData(Qt.DisplayRole, species[1])
             lastDateItem = QTableWidgetItem()
@@ -1534,6 +1535,7 @@ document.addEventListener("DOMContentLoaded", function() {{
 
         metrics = QFontMetrics(QFont("Helvetica", fontSize))
         textWidth = int(metrics.boundingRect("Dummy Country").width())
+        
 
         rowHeight = self.mdiParent.rowHeight
 
@@ -1552,8 +1554,14 @@ document.addEventListener("DOMContentLoaded", function() {{
             t.verticalHeader().setDefaultSectionSize(rowHeight)
 
         # format tblSpecies, which is laid out differently from the other tables
+        #find the width of the widest integer in the Tax column, but use a minimum if needed        
+        taxText = str(self.tblSpecies.rowCount())
+        taxTextWidth = int(metrics.boundingRect(taxText).width())
+        if taxTextWidth < int(metrics.boundingRect("Tax").width()) * 1.5:
+            taxTextWidth = int(metrics.boundingRect("Tax").width()) * 1.5
         dateWidth = int(metrics.boundingRect("2222-22-22").width())
         header = self.tblSpecies.horizontalHeader()
+        header.resizeSection(0,  floor(2.5* taxTextWidth))
         header.resizeSection(2,  floor(1.5* dateWidth))
         header.resizeSection(3,  floor(1.5 * dateWidth))
         self.tblSpecies.verticalHeader().setDefaultSectionSize(rowHeight)

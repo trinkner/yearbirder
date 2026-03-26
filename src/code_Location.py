@@ -560,9 +560,13 @@ class Location(QMdiSubWindow, form_Location.Ui_frmLocation):
         dateTextWidth = int(metrics.boundingRect("2222-22-22").width())
         rowHeight = self.mdiParent.rowHeight
 
+        #find the width of the widest integer in the Tax column, but use a minimum if needed        
         taxText = str(self.tblSpecies.rowCount())
         taxTextWidth = int(metrics.boundingRect(taxText).width())
-        header.resizeSection(0,  floor(2 * taxTextWidth))
+        if taxTextWidth < int(metrics.boundingRect("Tax").width()) * 1.5:
+            taxTextWidth = int(metrics.boundingRect("Tax").width()) * 1.5
+        
+        header.resizeSection(0,  floor(2.5 * taxTextWidth))
         header.resizeSection(2,  floor(1.5 * dateTextWidth))
         header.resizeSection(3,  floor(1.5 * dateTextWidth))
         self.tblSpecies.verticalHeader().setDefaultSectionSize(rowHeight)

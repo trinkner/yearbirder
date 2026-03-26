@@ -157,7 +157,6 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
             
    
     def scaleMe(self):
-       
         fontSize = self.mdiParent.fontSize
         scaleFactor = self.mdiParent.scaleFactor     
         #scale the font for all widgets in window
@@ -189,16 +188,10 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         if self.listType == "Species":
             dateTextWidth = int(metrics.boundingRect("2222-22-22").width())
 
-            #find the width of the widest integer in the Tax column
-            maxWidth = 0
-            for R in range(self.tblList.rowCount()):
-                item = self.tblList.item(R, 0)
-                if item is not None:
-                    text = item.text()
-                    w = metrics.boundingRect(text).width()
-                    if w > maxWidth:
-                        maxWidth = w
-            taxTextWidth = maxWidth
+            #find the width of the widest integer in the Tax column, but use a minimum if needed
+            taxTextWidth = int(metrics.boundingRect(str(self.tblList.rowCount())).width())
+            if taxTextWidth < int(metrics.boundingRect("Tax").width()) * 1.5:
+                taxTextWidth = int(metrics.boundingRect("Tax").width()) * 1.5 
             
             #find the width of the widest date in the First Date column
             maxWidth = 0
@@ -223,21 +216,21 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
             lastDateTextWidth = maxWidth
             
             # --- compute fixed widths ---
-            w0 = floor(1.75 * taxTextWidth)
+            w0 = floor(2.5 * taxTextWidth)
             w2 = floor(1.75 * firstDateTextWidth)
             w3 = floor(1.75 * lastDateTextWidth)
             w4 = floor(1.3 * dateTextWidth)
             w5 = floor(1.7 * dateTextWidth)
 
-            # apply fixed widths to all columns except species name
+            # give species name column the remaining width
+            header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+
+            # apply fixed widths to all columns except species name (must come after setSectionResizeMode)
             header.resizeSection(0, w0)
             header.resizeSection(2, w2)
             header.resizeSection(3, w3)
             header.resizeSection(4, w4)
             header.resizeSection(5, w5)
-
-            # give species name column the remaining width
-            header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
 
         if self.listType == "Single Checklist":
             taxTextWidth = int(metrics.boundingRect("Tax").width())
@@ -304,11 +297,6 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         windowWidth =  int(800  * scaleFactor)
         windowHeight = int(580 * scaleFactor)
         self.resize(windowWidth, windowHeight)
-
-        if self.listType == "Species":
-            import traceback
-            print("DEBUG scaleMe called:")
-            traceback.print_stack(limit=5)
 
 
     def afterSort(self, column, order):
@@ -738,9 +726,6 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         icon.addPixmap(QPixmap(":/icon_bird_white.png"), QIcon.Normal, QIcon.Off)
         self.setWindowIcon(icon)      
         
-        self.scaleMe()
-        self.resizeMe()
-        
         # tell MainWindow that we succeeded filling the list
         return(True)
 
@@ -821,9 +806,6 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         self.tblList.addAction(self.actionSetCountyFilter)
         self.tblList.addAction(self.actionSetLocationFilter)
 
-        self.scaleMe()
-        self.resizeMe()
-        
         # alert MainWindow that we finished fill data successfully
         return(True)
 
@@ -877,13 +859,10 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
             
         self.lblSpecies.setText("Checklists: " + str(self.tblList.rowCount()))
         self.txtChecklistComments.setVisible(False)
-        
+
         icon = QIcon()
         icon.addPixmap(QPixmap(":/icon_find_white.png"), QIcon.Normal, QIcon.Off)
-        self.setWindowIcon(icon)          
-
-        self.scaleMe()
-        self.resizeMe()
+        self.setWindowIcon(icon)
 
 
     def FillLocations(self, filter): 
@@ -945,10 +924,7 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         self.tblList.addAction(self.actionSetLocationFilter)
         self.tblList.addAction(self.actionSetFirstDateFilter)
         self.tblList.addAction(self.actionSetLastDateFilter)
-        
-        self.scaleMe()
-        self.resizeMe()
-        
+
         return(True)
 
 
