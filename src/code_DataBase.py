@@ -6,7 +6,7 @@ import zipfile
 import io
 import sys
 from copy import deepcopy
-from collections import defaultdict
+from collections import defaultdict, Counter
 import datetime
 import code_Filter
 import json
@@ -18,6 +18,14 @@ from PySide6.QtWidgets import (
     QApplication,
     QMessageBox
     )
+
+
+# Module-level constants shared across methods
+_MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+# Translation table used by matchPhoto (Pass 3 substring match) — built once at module load
+_PHOTO_TRANSLATION_TABLE = dict.fromkeys(map(ord, "0123456789-' "), None)
 
 
 #routine to open helper files (json, csv, etc.) in fashion compatible with PyInstaller for when code is bundled into an app.
@@ -68,6 +76,8 @@ class DataBase():
         self.bblCodeDict = defaultdict()
         self.photoDataFile = ""
         self.startupFolder = ""
+        self._countryLookup = {}   # shortCode -> longName, built by ReadCountryStateCodeFile
+        self._stateLookup = {}     # shortCode -> longName, built by ReadCountryStateCodeFile
         self.monthNameDict = ({
             "01":"Jan",
             "02":"Feb",
@@ -158,7 +168,7 @@ class DataBase():
             # save master list of all US county codes for use with choropleths
             self.countyCodeList.add(c["id"])
 
-            if c["properties"]["name"] not in self.countyCodeDict.keys():
+            if c["properties"]["name"] not in self.countyCodeDict:
                 self.countyCodeDict[c["properties"]["name"]] = [[c["id"],c["properties"]["state"]]]
                 
             else:    
@@ -342,13 +352,12 @@ class DataBase():
             # If a substring starting at position i isn't found, no longer substring from
             # that position can be either, so the inner loop breaks early.
             if not photoCommonName:
-                translation_table = dict.fromkeys(map(ord, "0123456789-' "), None)
-                fileNameClean = fileNameLower.translate(translation_table)
+                fileNameClean = fileNameLower.translate(_PHOTO_TRANSLATION_TABLE)
                 bestSubstringRatio = 0.0
                 photoCommonName = ""
 
                 for pcn in possibleCommonNames:
-                    lowerCasePcn = pcn.lower().translate(translation_table)
+                    lowerCasePcn = pcn.lower().translate(_PHOTO_TRANSLATION_TABLE)
                     pcnLength = len(lowerCasePcn)
                     if pcnLength == 0:
                         continue
@@ -423,7 +432,7 @@ class DataBase():
         sightings = self.GetSightingsWithPhotos(filter)
 
         for s in sightings:
-            if "photos" in s.keys():
+            if "photos" in s:
                 for p in s["photos"]:
                     if p["fileName"] == photoFileName:
                         s["photos"].remove(p)
@@ -559,7 +568,7 @@ class DataBase():
                 
                 s = sightings[0]    
                 
-                if "photos" not in s.keys():
+                if "photos" not in s:
                     s["photos"] = [photoData]
                 
                 else:    
@@ -627,7 +636,7 @@ class DataBase():
                     photoData["iso"] = row["ISO"]
                     photoData["focalLength"] = row["FocalLength"]
                     
-                    if "Rating" in row.keys():
+                    if "Rating" in row:
                         if row["Rating"] in ["0", "1", "2", "3", "4", "5"]:
                             photoData["rating"] = row["Rating"]
                         else:
@@ -635,11 +644,13 @@ class DataBase():
                     else:
                         photoData["rating"] = "0"
                                         
-                    self.addPhotoToDatabase(filter, photoData)    
-                    
+                    self.addPhotoToDatabase(filter, photoData)
+
             except:
                 pass
-            
+
+        # Sort all photo-attribute lists once now that loading is complete
+        self.refreshPhotoLists()
         self.photoDataFileOpenFlag = True
 
 
@@ -660,7 +671,7 @@ class DataBase():
         isoSet = set()
         
         for s in self.sightingList:
-            if "photos" in s.keys():
+            if "photos" in s:
                 for p in s["photos"]:
                     if p["camera"] != "":
                         cameraSet.add(p["camera"])
@@ -764,6 +775,16 @@ class DataBase():
         self.stateList.sort()
 
         # self.countryCodeData = countryCodeData
+
+        # Pre-build O(1) lookup dicts so GetCountryName/GetStateName don't iterate all records
+        self._countryLookup = {}
+        self._stateLookup = {}
+        for l in self.masterLocationList:
+            if "countryCode" in l and "countryName" in l:
+                self._countryLookup[l["countryCode"]] = l["countryName"]
+            if "stateCode" in l and "stateName" in l:
+                self._stateLookup[l["stateCode"]] = l["stateName"]
+
         self.countryStateCodeFileFound = True
 
 
@@ -882,9 +903,9 @@ class DataBase():
                 thisSightingDict["observers"] = ""            
             if thisSightingDict["breedingCode"] is None:
                 thisSightingDict["breedingCode"] = ""
-            if "Observation Details" in line.keys():
+            if "Observation Details" in line:
                 thisSightingDict["speciesComments"]=line["Observation Details"]
-            if "Species Comments" in line.keys():
+            if "Species Comments" in line:
                 thisSightingDict["speciesComments"]=line["Species Comments"]
             if thisSightingDict["speciesComments"] is None:
                 thisSightingDict["speciesComments"] = ""
@@ -1172,7 +1193,7 @@ class DataBase():
             # add sighting to checklistDict, even if it's a sp or / species
             # use checklistID as the key
             checklistID = thisSightingDict["checklistID"]
-            if checklistID not in self.checklistDict.keys():
+            if checklistID not in self.checklistDict:
                 self.checklistDict[checklistID] = [thisSightingDict]
             else:
                 self.checklistDict[checklistID].append(thisSightingDict)  
@@ -1185,7 +1206,7 @@ class DataBase():
             self.allSpeciesList.append(commonName)
 
             # use species common name as key
-            if commonName not in self.speciesDict.keys():
+            if commonName not in self.speciesDict:
                 self.speciesDict[commonName] = [thisSightingDict]
             else:
                 self.speciesDict[commonName].append(thisSightingDict)
@@ -1193,7 +1214,7 @@ class DataBase():
             # also add subspecies as key to speciesDict
             # to facilitate lookup
             subspeciesName = thisSightingDict["subspeciesName"]
-            if subspeciesName not in self.speciesDict.keys():
+            if subspeciesName not in self.speciesDict:
                 self.speciesDict[subspeciesName] = [thisSightingDict]
             else:
                 self.speciesDict[subspeciesName].append(thisSightingDict)
@@ -1201,7 +1222,7 @@ class DataBase():
             # add sighting to yearDict
             # use 4-digit year as the key
             year = thisSightingDict["date"][0:4]
-            if year not in self.yearDict.keys():
+            if year not in self.yearDict:
                 self.yearDict[year] = [thisSightingDict]
             else:
                 self.yearDict[year].append(thisSightingDict)
@@ -1209,7 +1230,7 @@ class DataBase():
             # add sighting to monthDict
             # use 2-digit month as the key
             month = thisSightingDict["date"][5:7]
-            if month not in self.monthDict.keys():
+            if month not in self.monthDict:
                 self.monthDict[month] = [thisSightingDict]
             else:
                 self.monthDict[month].append(thisSightingDict)
@@ -1217,7 +1238,7 @@ class DataBase():
             # add sighting to dateDict
             # use full date (yyyy-mm-dd) as the key
             date = thisSightingDict["date"]
-            if date not in self.dateDict.keys():
+            if date not in self.dateDict:
                 self.dateDict[date] = [thisSightingDict]
             else:
                 self.dateDict[date].append(thisSightingDict)
@@ -1226,7 +1247,7 @@ class DataBase():
             # use 3-character code as key
             regionCodes = thisSightingDict["regionCodes"]
             for r in regionCodes:
-                if r not in self.regionDict.keys():
+                if r not in self.regionDict:
                     self.regionDict[r] = [thisSightingDict]
                 else:
                     self.regionDict[r].append(thisSightingDict)
@@ -1234,7 +1255,7 @@ class DataBase():
             # add sighting to countryDict
             # use 2-character code as key
             countryCode = thisSightingDict["country"]
-            if countryCode not in self.countryDict.keys():
+            if countryCode not in self.countryDict:
                 self.countryDict[countryCode] = [thisSightingDict]
             else:
                 self.countryDict[countryCode].append(thisSightingDict)
@@ -1242,7 +1263,7 @@ class DataBase():
             # add sighting to stateDict
             # use cc-ss code as the key
             stateCode = thisSightingDict["state"]
-            if stateCode not in self.stateDict.keys():
+            if stateCode not in self.stateDict:
                 self.stateDict[stateCode] = [thisSightingDict]
             else:
                 self.stateDict[stateCode].append(thisSightingDict)
@@ -1252,7 +1273,7 @@ class DataBase():
             # don't add sightings whose county name is absent
             county = thisSightingDict["county"]
             if county != "":
-                if county not in self.countyDict.keys():
+                if county not in self.countyDict:
                     self.countyDict[county] = [thisSightingDict]
                 else:
                     self.countyDict[county].append(thisSightingDict)
@@ -1260,7 +1281,7 @@ class DataBase():
             # add sighting to locationDict
             # use location name as key
             location = thisSightingDict["location"]
-            if location not in self.locationDict.keys():
+            if location not in self.locationDict:
                 self.locationDict[location] = [thisSightingDict]
             else:
                 self.locationDict[location].append(thisSightingDict)
@@ -1305,15 +1326,13 @@ class DataBase():
         self.stateList.sort()
         # self.masterLocationList.sort()
         
-        # remove parenthetical state names from counties, unless needed to 
+        # remove parenthetical state names from counties, unless needed to
         # differentiate counties with same name in different states
-        countyNamesWithoutParens = []
+        countyNamesWithoutParens = Counter(cdk.split(" (")[0] for cdk in self.countyDict.keys())
         countyKeyChanges = []
+
         for cdk in self.countyDict.keys():
-            countyNamesWithoutParens.append(cdk.split(" (")[0])
-        
-        for cdk in self.countyDict.keys():
-            if countyNamesWithoutParens.count((cdk.split(" (")[0])) == 1:
+            if countyNamesWithoutParens[cdk.split(" (")[0]] == 1:
                 for s in self.countyDict[cdk]:
                     s["county"] = cdk.split(" (")[0]
                 countyKeyChanges.append([cdk, cdk.split(" (")[0]])
@@ -1373,13 +1392,13 @@ class DataBase():
                             self.masterFamilyOrderList.append([thisFamily, thisOrder])
 
                         # add species to orderSpeciesDict:
-                        if thisOrder not in self.orderSpeciesDict.keys():
+                        if thisOrder not in self.orderSpeciesDict:
                             self.orderSpeciesDict[thisOrder] = [s["commonName"]]
                         else:
                             self.orderSpeciesDict[thisOrder].append(s["commonName"]) 
                             
                         # add species to familySpeciesDict:
-                        if thisFamily not in self.familySpeciesDict.keys():
+                        if thisFamily not in self.familySpeciesDict:
                             self.familySpeciesDict[thisFamily] = [s["commonName"]]
                         else:
                             self.familySpeciesDict[thisFamily].append(s["commonName"]) 
@@ -1452,7 +1471,7 @@ class DataBase():
             commonName = s["commonName"]
             if "/" not in commonName and "sp." not in commonName:
                 if self.TestSighting(s, filter) is True:
-                    if "photos" in s.keys():
+                    if "photos" in s:
                         returnSet.add(s["commonName"])      
         
         return(returnSet)
@@ -1473,17 +1492,17 @@ class DataBase():
 
     def GetSightingsWithPhotos(self, filter):
         returnList = []
-        photosFound = []
-        
+        photosFound = set()
+
         filteredSightingList = self.GetMinimalFilteredSightingsList(filter)
 
         for s in filteredSightingList:
             commonName = s["commonName"]
             # if "/" not in commonName and "sp." not in commonName:
             if self.TestSighting(s, filter) is True:
-                if "photos" in s.keys():
+                if "photos" in s:
                     if s["photos"][0]["fileName"] not in photosFound:
-                        photosFound.append(s["photos"][0]["fileName"])
+                        photosFound.add(s["photos"][0]["fileName"])
                         returnList.append(s)
         
         returnList = sorted(returnList, key=lambda x: (float(x["taxonomicOrder"]), x["date"], x["time"]))
@@ -1497,7 +1516,7 @@ class DataBase():
         filteredSightingList = self.GetMinimalFilteredSightingsList(filter)
 
         for s in filteredSightingList:
-            if "photos" in s.keys():
+            if "photos" in s:
                 for p in s["photos"]:
                     if p["fileName"] not in returnList:
                         returnList.append(p["fileName"])
@@ -1543,14 +1562,14 @@ class DataBase():
         # use narrowest subset possible, according to filter            
         if checklistID != "":
             returnList = self.checklistDict[checklistID]
-        elif speciesName != "" and speciesName in self.speciesDict.keys():
+        elif speciesName != "" and speciesName in self.speciesDict:
             returnList = self.speciesDict[speciesName]
         elif speciesList != []:
             for sp in speciesList:
                 for s in self.speciesDict[sp]:
                     returnList. append(s)
         elif startDate != "" and startDate == endDate:
-            if startDate in self.dateDict.keys():
+            if startDate in self.dateDict:
                 returnList = self.dateDict[startDate]
             else:
                 returnList = []
@@ -1560,7 +1579,7 @@ class DataBase():
             returnList = self.stateDict[locationName]
         elif locationType == "County":
             returnList = self.countyDict[locationName]
-        elif locationType == "Location" and locationName in self.locationDict.keys():
+        elif locationType == "Location" and locationName in self.locationDict:
             returnList = self.locationDict[locationName]                
         else:
             returnList = self.sightingList  
@@ -1598,14 +1617,14 @@ class DataBase():
                 
                 # add the date and taxonomy number to a temp dictionary 
                 # we'll use this dictionary later to find the first and last dates
-                if key not in filteredDictWithDates.keys():
+                if key not in filteredDictWithDates:
                     filteredDictWithDates[key] = [thisDateTaxSpecies]
                 else:
                     filteredDictWithDates[key].append(thisDateTaxSpecies)
-                    
-                # add the checklist ID to a temp dictionary 
+
+                # add the checklist ID to a temp dictionary
                 # we'll use this dictionary later to sum the checklists per species
-                if key not in checklistIDs.keys():
+                if key not in checklistIDs:
                     checklistIDs[key] = [thisDateTaxSpecies[3]]
                 else:
                     checklistIDs[key].append(thisDateTaxSpecies[3])       
@@ -1678,7 +1697,7 @@ class DataBase():
 
 
     def TestIndividualPhoto(self, photoData, filter):
-        
+
         filterCamera = filter.getCamera()
         filterLens = filter.getLens()
         filterStartShutterSpeed = filter.getStartShutterSpeed()
@@ -1691,17 +1710,26 @@ class DataBase():
         filterEndIso = filter.getEndIso()
         filterStartRating = filter.getStartRating()
         filterEndRating = filter.getEndRating()
-        
+
+        # Cache photo attribute values once to avoid repeated dict lookups
+        photoCamera = photoData["camera"]
+        photoLens = photoData["lens"]
+        photoShutterSpeed = photoData["shutterSpeed"]
+        photoAperture = photoData["aperture"]
+        photoISO = photoData["iso"]
+        photoFocalLength = photoData["focalLength"]
+        photoRating = photoData["rating"]
+
         # check photo settings
         # note that a sighting can have several attached photos
         # we only reject a sighting here if all attached photos fail
-        
+
         if filterCamera != "":
-            if photoData["camera"] != filterCamera:
+            if photoCamera != filterCamera:
                 return(False)
-        
+
         if filterLens != "":
-            if photoData["lens"] != filterLens:
+            if photoLens != filterLens:
                 return(False)
 
         if filterStartShutterSpeed != "" and filterEndShutterSpeed != "":
@@ -1709,166 +1737,144 @@ class DataBase():
             filterStartShutterSpeed = int(filterStartShutterSpeed[2:])
             filterEndShutterSpeed = int(filterEndShutterSpeed[2:])
             filterStartShutterSpeed, filterEndShutterSpeed = max(filterStartShutterSpeed, filterEndShutterSpeed), min(filterStartShutterSpeed, filterEndShutterSpeed)
-            shutterSpeed = photoData["shutterSpeed"]
-            if shutterSpeed != "":
-                shutterSpeed = int(shutterSpeed[2:])
+            if photoShutterSpeed != "":
+                shutterSpeed = int(photoShutterSpeed[2:])
                 if not (shutterSpeed <= filterStartShutterSpeed and shutterSpeed >= filterEndShutterSpeed):
                     return(False)
             else:
-                return(False) 
-                            
+                return(False)
+
         if filterStartShutterSpeed != "" and filterEndShutterSpeed == "":
             # strip away the 1/ characters at start of shutter speeds
             filterStartShutterSpeed = int(filterStartShutterSpeed[2:])
-            shutterSpeed = photoData["shutterSpeed"]
-            if shutterSpeed != "":
-                shutterSpeed = int(shutterSpeed[2:])
+            if photoShutterSpeed != "":
+                shutterSpeed = int(photoShutterSpeed[2:])
                 if shutterSpeed > filterStartShutterSpeed:
                     return(False)
             else:
-                return(False) 
-            
+                return(False)
+
         if filterStartShutterSpeed == "" and filterEndShutterSpeed != "":
-            # strip away the 1/ characters at start of shutter speeds            
+            # strip away the 1/ characters at start of shutter speeds
             filterEndShutterSpeed = int(filterEndShutterSpeed[2:])
-            shutterSpeed = photoData["shutterSpeed"]
-            if shutterSpeed != "":
-                shutterSpeed = int(shutterSpeed[2:])
+            if photoShutterSpeed != "":
+                shutterSpeed = int(photoShutterSpeed[2:])
                 if shutterSpeed < filterEndShutterSpeed:
                     return(False)
             else:
-                return(False) 
-            
+                return(False)
+
         if filterStartAperture != "" and filterEndAperture != "":
             filterStartAperture = float(filterStartAperture)
             filterEndAperture = float(filterEndAperture)
             filterStartAperture, filterEndAperture = min(filterStartAperture, filterEndAperture), max(filterStartAperture, filterEndAperture)
-            aperture = photoData["aperture"]
-            if aperture != "":
-                aperture = float(aperture)
+            if photoAperture != "":
+                aperture = float(photoAperture)
                 if aperture < filterStartAperture or aperture > filterEndAperture:
                     return(False)
             else:
-                return(False) 
-                            
+                return(False)
+
         if filterStartAperture != "" and filterEndAperture == "":
             filterStartAperture = float(filterStartAperture)
-            aperture = photoData["aperture"]
-            if aperture != "":
-                aperture = float(aperture)
+            if photoAperture != "":
+                aperture = float(photoAperture)
                 if aperture < filterStartAperture:
                     return(False)
             else:
-                return(False) 
-            
+                return(False)
+
         if filterStartAperture == "" and filterEndAperture != "":
             filterEndAperture = float(filterEndAperture)
-            aperture = photoData["aperture"]
-            if aperture != "":
-                aperture = float(aperture)
+            if photoAperture != "":
+                aperture = float(photoAperture)
                 if aperture > filterEndAperture:
                     return(False)
             else:
-                return(False) 
-            
+                return(False)
+
         if filterStartIso != "" and filterEndIso != "":
             filterStartIso = int(filterStartIso)
             filterEndIso = int(filterEndIso)
             filterStartIso, filterEndIso = min(filterStartIso, filterEndIso), max(filterStartIso, filterEndIso)
-            iso = photoData["iso"]
-            if iso != "":
-                iso = int(iso)
+            if photoISO != "":
+                iso = int(photoISO)
                 if iso < filterStartIso or iso > filterEndIso:
                     return(False)
             else:
-                return(False) 
-                            
+                return(False)
+
         if filterStartIso != "" and filterEndIso == "":
             filterStartIso = int(filterStartIso)
-            iso = photoData["iso"]
-            if iso != "":
-                iso = int(iso)
+            if photoISO != "":
+                iso = int(photoISO)
                 if iso < filterStartIso:
                     return(False)
             else:
-                return(False) 
-            
+                return(False)
+
         if filterStartIso == "" and filterEndIso != "":
             filterEndIso = int(filterEndIso)
-            iso = photoData["iso"]
-            if iso != "":
-                iso = int(iso)
+            if photoISO != "":
+                iso = int(photoISO)
                 if iso > filterEndIso:
                     return(False)
             else:
-                return(False) 
-                        
+                return(False)
+
         if filterStartFocalLength != "" and filterEndFocalLength != "":
-            filterStartFocalLength = filterStartFocalLength.split(" mm")[0]
-            filterStartFocalLength = int(filterStartFocalLength)
-            filterEndFocalLength = filterEndFocalLength.split(" mm")[0]
-            filterEndFocalLength = int(filterEndFocalLength)
+            filterStartFocalLength = int(filterStartFocalLength.split(" mm")[0])
+            filterEndFocalLength = int(filterEndFocalLength.split(" mm")[0])
             filterStartFocalLength, filterEndFocalLength = min(filterStartFocalLength, filterEndFocalLength), max(filterStartFocalLength, filterEndFocalLength)
-            focalLength = photoData["focalLength"]
-            if focalLength != "":
-                focalLength = focalLength.split(" mm")[0]
-                focalLength = int(focalLength)
+            if photoFocalLength != "":
+                focalLength = int(photoFocalLength.split(" mm")[0])
                 if focalLength < filterStartFocalLength or focalLength > filterEndFocalLength:
                     return(False)
             else:
-                return(False) 
-                            
+                return(False)
+
         if filterStartFocalLength != "" and filterEndFocalLength == "":
-            filterStartFocalLength = filterStartFocalLength.split(" mm")[0]            
-            filterStartFocalLength = int(filterStartFocalLength)
-            focalLength = photoData["focalLength"]
-            if focalLength != "":
-                focalLength = focalLength.split(" mm")[0]                
-                focalLength = int(focalLength)
+            filterStartFocalLength = int(filterStartFocalLength.split(" mm")[0])
+            if photoFocalLength != "":
+                focalLength = int(photoFocalLength.split(" mm")[0])
                 if focalLength < filterStartFocalLength:
                     return(False)
             else:
-                return(False) 
-            
+                return(False)
+
         if filterStartFocalLength == "" and filterEndFocalLength != "":
-            filterEndFocalLength = filterEndFocalLength.split(" mm")[0]            
-            filterEndFocalLength = int(filterEndFocalLength)
-            focalLength = photoData["focalLength"]
-            if focalLength != "":
-                focalLength = focalLength.split(" mm")[0]                
-                focalLength = int(focalLength)
+            filterEndFocalLength = int(filterEndFocalLength.split(" mm")[0])
+            if photoFocalLength != "":
+                focalLength = int(photoFocalLength.split(" mm")[0])
                 if focalLength > filterEndFocalLength:
                     return(False)
             else:
-                return(False)                  
-            
+                return(False)
+
         if filterStartRating != "" and filterEndRating != "":
             filterStartRating = int(filterStartRating)
             filterEndRating = int(filterEndRating)
             filterStartRating, filterEndRating = min(filterStartRating, filterEndRating), max(filterStartRating, filterEndRating)
-            rating = photoData["rating"]
-            if rating != "" and rating is not None:
-                rating = int(rating)
+            if photoRating != "" and photoRating is not None:
+                rating = int(photoRating)
                 if rating < filterStartRating or rating > filterEndRating:
                     return(False)
             else:
-                return(False) 
-                            
+                return(False)
+
         if filterStartRating != "" and filterEndRating == "":
             filterStartRating = int(filterStartRating)
-            rating = photoData["rating"]
-            if rating != "":
-                rating = int(rating)
+            if photoRating != "":
+                rating = int(photoRating)
                 if rating < filterStartRating:
                     return(False)
             else:
-                return(False) 
-            
+                return(False)
+
         if filterStartRating == "" and filterEndRating != "":
             filterEndRating = int(filterEndRating)
-            rating = photoData["rating"]
-            if rating != "":
-                rating = int(rating)
+            if photoRating != "":
+                rating = int(photoRating)
                 if rating > filterEndRating:
                     return(False)
             else:
@@ -1935,12 +1941,12 @@ class DataBase():
             startRating != "" or
             endRating != ""       
             ):
-            if "photos" not in sighting.keys():
+            if "photos" not in sighting:
                 return(False)
         
         # reject if "no photo" was specified but sighting has photo
         if sightingHasPhoto == "No photo":
-            if "photos" in sighting.keys():
+            if "photos" in sighting:
                 return(False)
         
         # if user selected a value for whether a species has a photo, 
@@ -2440,7 +2446,7 @@ class DataBase():
         
         # remove photo data from sightings
         for s in self.sightingList:
-            if "photos" in s.keys():
+            if "photos" in s:
                 del s["photos"]
                 
         self.photoDataFileOpenFlag = False
@@ -2493,39 +2499,42 @@ class DataBase():
         return(returnList)
 
     def GetFindResults(self, searchString, checkedBoxes):
-        
+
         foundSet = set()
-        
+        searchLower = searchString.lower()
+
         for s in self.sightingList:
             for c in checkedBoxes:
                 if c == "chkCommonName":
-                    if searchString.lower() in s["commonName"].lower():
+                    if searchLower in s["commonName"].lower():
                         foundSet.add(("Common Name", s["checklistID"], s["location"], s["date"], s["commonName"]))
                 if c == "chkScientificName":
-                    if searchString.lower() in s["scientificName"].lower():
-                        foundSet.add(("Scientific Name", s["checklistID"], s["location"], s["date"], s["scientificName"]))                    
+                    if searchLower in s["scientificName"].lower():
+                        foundSet.add(("Scientific Name", s["checklistID"], s["location"], s["date"], s["scientificName"]))
                 if c == "chkCountryName":
-                    if searchString.lower() in self.GetCountryName(s["country"]).lower():
-                        foundSet.add(("Country", s["checklistID"], s["location"], s["date"], self.GetCountryName(s[5][0:2])))
+                    countryName = self.GetCountryName(s["country"])
+                    if searchLower in countryName.lower():
+                        foundSet.add(("Country", s["checklistID"], s["location"], s["date"], countryName))
                 if c == "chkStateName":
-                    if searchString.lower() in self.GetStateName(s["state"]).lower():
-                        foundSet.add(("State", s["checklistID"], s["location"], s["date"], self.GetStateName(s["state"])))
+                    stateName = self.GetStateName(s["state"])
+                    if searchLower in stateName.lower():
+                        foundSet.add(("State", s["checklistID"], s["location"], s["date"], stateName))
                 if c == "chkCountyName":
-                    if searchString.lower() in s["county"].lower():
+                    if searchLower in s["county"].lower():
                         foundSet.add(("County", s["checklistID"], s["location"], s["date"], s["county"]))
                 if c == "chkLocationName":
-                    if searchString.lower() in s["location"].lower():
+                    if searchLower in s["location"].lower():
                         foundSet.add(("Location", s["checklistID"], s["location"], s["date"], s["location"]))
                 if c == "chkSpeciesComments":
-                    if searchString.lower() in s["speciesComments"].lower():
+                    if searchLower in s["speciesComments"].lower():
                         foundSet.add(("Species Comments", s["checklistID"], s["location"], s["date"], s["speciesComments"]))
-                if c == "chkChecklistComments":                    
-                    if searchString.lower() in s["checklistComments"].lower():
+                if c == "chkChecklistComments":
+                    if searchLower in s["checklistComments"].lower():
                         foundSet.add(("Checklist Comments", s["checklistID"], s["location"], s["date"], s["checklistComments"]))
-                
-            foundList = list(foundSet)
-            foundList.sort()
-                
+
+        foundList = list(foundSet)
+        foundList.sort()
+
         return(foundList)
 
     def GetLastDayOfMonth(self, month):
@@ -2598,7 +2607,7 @@ class DataBase():
                     
                     keyName = s["location"]
                     
-                    if keyName not in tempDateDict.keys():
+                    if keyName not in tempDateDict:
                         tempDateDict[keyName] = [s["date"] + " " + s["time"]]
                     else:
                         tempDateDict[keyName].append(s["date"] + " " + s["time"])
@@ -2623,6 +2632,21 @@ class DataBase():
         # sort the list and return it
         returnList.sort()
         return(returnList)
+
+    def _buildSpeciesSightingDict(self, sightingList):
+        """Build a dict mapping commonName -> sorted list of sightings from sightingList.
+        Used as a shared helper by all GetNew*Species methods."""
+        tempSpeciesDict = {}
+        for s in sightingList:
+            commonName = s["commonName"]
+            if commonName not in tempSpeciesDict:
+                tempSpeciesDict[commonName] = [s]
+            else:
+                tempSpeciesDict[commonName].append(s)
+        # Sort each species' sightings by date once
+        for commonName in tempSpeciesDict:
+            tempSpeciesDict[commonName].sort(key=lambda x: x["date"])
+        return tempSpeciesDict
 
     def GetNewCountrySpecies(self, filter, filteredSightingList, sightingListForSpeciesSubset, speciesList):
         
@@ -2652,21 +2676,12 @@ class DataBase():
             
             # create temporary dictionary of sightings in selected country
             # keyed by species name
-            tempSpeciesDict = {}
-            for tcs in thisCountrySightings:
+            tempSpeciesDict = self._buildSpeciesSightingDict(thisCountrySightings)
 
-                commonName = tcs["commonName"]
-                
-                if commonName not in tempSpeciesDict.keys():
-                    tempSpeciesDict[commonName] = [tcs]
-                else:
-                    tempSpeciesDict[commonName].append(tcs)
-
-            # loop through species with dates to see if any sightings are the 
+            # loop through species with dates to see if any sightings are the
             # first for the country
             for species in speciesWithFirstLastDates:
                 tempSpeciesSightings = tempSpeciesDict[species[0]]
-                tempSpeciesSightings = sorted(tempSpeciesSightings, key=lambda x: (x["date"]))
                 if species[1] <= tempSpeciesSightings[0]["date"]:
                     countrySpecies.append([country, species[0]])
         
@@ -2699,20 +2714,13 @@ class DataBase():
             thisCountySightings = self.countyDict[county]
             
             # create temporary dictionary of sightings in selected county
-            # keyed by species name            
-            tempSpeciesDict = {}
-            for tms in thisCountySightings:
-                commonName = tms["commonName"]
-                if commonName not in tempSpeciesDict.keys():
-                    tempSpeciesDict[commonName] = [tms]
-                else:
-                    tempSpeciesDict[commonName].append(tms)
+            # keyed by species name
+            tempSpeciesDict = self._buildSpeciesSightingDict(thisCountySightings)
 
-            # loop through species with dates to see if any sightings are the 
+            # loop through species with dates to see if any sightings are the
             # first for the county
             for species in speciesWithFirstLastDates:
                 tempSpeciesSightings = tempSpeciesDict[species[0]]
-                tempSpeciesSightings = sorted(tempSpeciesSightings, key=lambda x: (x["date"]))
                 if species[1] <= tempSpeciesSightings[0]["date"]:
                     countySpecies.append([county, species[0]])                    
         
@@ -2728,11 +2736,10 @@ class DataBase():
         speciesWithFirstLastDates = self.GetSpeciesWithData(filter, filteredSightingList)
 
         for species in speciesWithFirstLastDates:
-            tempSpeciesSightings = self.speciesDict[species[0]]
-            tempSpeciesSightings = sorted(tempSpeciesSightings, key=lambda x: (x["date"]))
+            tempSpeciesSightings = sorted(self.speciesDict[species[0]], key=lambda x: x["date"])
             if species[1] <= tempSpeciesSightings[0]["date"]:
-                lifeSpecies.append(species[0])        
-                        
+                lifeSpecies.append(species[0])
+
         return(lifeSpecies)
 
     def GetNewLocationSpecies(self, filter, filteredSightingList, sightingListForSpeciesSubset, speciesList):
@@ -2758,17 +2765,10 @@ class DataBase():
             
             thisLocationSightings = self.locationDict[location]
                         
-            tempSpeciesDict = {}
-            for tms in thisLocationSightings:
-                commonName = tms["commonName"]
-                if commonName not in tempSpeciesDict.keys():
-                    tempSpeciesDict[commonName] = [tms]
-                else:
-                    tempSpeciesDict[commonName].append(tms)
+            tempSpeciesDict = self._buildSpeciesSightingDict(thisLocationSightings)
 
             for species in speciesWithFirstLastDates:
                 tempSpeciesSightings = tempSpeciesDict[species[0]]
-                tempSpeciesSightings = sorted(tempSpeciesSightings, key=lambda x: (x["date"]))
                 if species[1] <= tempSpeciesSightings[0]["date"]:
                     locationSpecies.append([location, species[0]])         
                         
@@ -2802,20 +2802,12 @@ class DataBase():
             
             thisMonthSightings = self.monthDict[month]
             
-            tempSpeciesDict = {}
-            for tms in thisMonthSightings:
-                commonName = tms["commonName"]
-                if commonName not in tempSpeciesDict.keys():
-                    tempSpeciesDict[commonName] = [tms]
-                else:
-                    tempSpeciesDict[commonName].append(tms)
+            tempSpeciesDict = self._buildSpeciesSightingDict(thisMonthSightings)
 
             for species in speciesWithFirstLastDates:
                 tempSpeciesSightings = tempSpeciesDict[species[0]]
-                tempSpeciesSightings = sorted(tempSpeciesSightings, key=lambda x: (x["date"]))
                 if species[1] <= tempSpeciesSightings[0]["date"]:
-                    monthRange = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-                    monthName = monthRange[int(month) - 1]
+                    monthName = _MONTH_NAMES[int(month) - 1]
                     monthSpecies.append([monthName, species[0]])                       
         
         return(monthSpecies)
@@ -2842,17 +2834,10 @@ class DataBase():
             speciesWithDates = self.GetSpeciesWithData(tempFilter, filteredSightingList)
             thisStateSightings = self.stateDict[state]
             
-            tempSpeciesDict = {}
-            for tms in thisStateSightings:
-                commonName = tms["commonName"]
-                if commonName not in tempSpeciesDict.keys():
-                    tempSpeciesDict[commonName] = [tms]
-                else:
-                    tempSpeciesDict[commonName].append(tms)
+            tempSpeciesDict = self._buildSpeciesSightingDict(thisStateSightings)
 
             for species in speciesWithDates:
                 tempSpeciesSightings = tempSpeciesDict[species[0]]
-                tempSpeciesSightings = sorted(tempSpeciesSightings, key=lambda x: (x["date"]))
                 if species[1] <= tempSpeciesSightings[0]["date"]:
                     stateSpecies.append([state, species[0]])            
                         
@@ -2881,17 +2866,10 @@ class DataBase():
             thisFilter.setEndDate(endDate)
             speciesWithDates = self.GetSpeciesWithData(thisFilter, filteredSightingList)
 
-            tempSpeciesDict = {}
-            for tms in thisYearSightings:
-                commonName = tms["commonName"]
-                if commonName not in tempSpeciesDict.keys():
-                    tempSpeciesDict[commonName] = [tms]
-                else:
-                    tempSpeciesDict[commonName].append(tms)
+            tempSpeciesDict = self._buildSpeciesSightingDict(thisYearSightings)
 
             for species in speciesWithDates:
                 tempSpeciesSightings = tempSpeciesDict[species[0]]
-                tempSpeciesSightings = sorted(tempSpeciesSightings, key=lambda x: (x["date"]))
                 if species[1] <= tempSpeciesSightings[0]["date"]:
                     yearSpecies.append([year, species[0]])   
                         
@@ -2932,7 +2910,7 @@ class DataBase():
         
         thisScientificName = self.GetScientificName(species)
 
-        if thisScientificName in self.bblCodeDict.keys():                
+        if thisScientificName in self.bblCodeDict:
             bblCode = self.bblCodeDict[thisScientificName]
         else:
             bblCode = ""
@@ -2988,7 +2966,7 @@ class DataBase():
         
         if self.countryStateCodeFileFound is True:
             for l in self.masterLocationList:
-                if "countryName" in l.keys():
+                if "countryName" in l:
                     if l["countryName"] == longName:
                         return(l["countryCode"])
         else:
@@ -3002,7 +2980,7 @@ class DataBase():
             
         if self.countryStateCodeFileFound is True:
             for l in self.masterLocationList:
-                if "stateName" in l.keys():
+                if "stateName" in l:
                     if l["stateName"] == longName:
                         return(l["stateCode"])
         else:
@@ -3010,14 +2988,12 @@ class DataBase():
         
 
     def GetCountryName(self, shortCode):
-        
+
         if shortCode == "**All Countries**":
             return("**All Countries**")
-            
+
         if self.countryStateCodeFileFound is True:
-            for l in self.masterLocationList:
-                if l["countryCode"] == shortCode:
-                    return(l["countryName"])
+            return self._countryLookup.get(shortCode, shortCode)
         else:
             return(shortCode)
 
@@ -3031,12 +3007,10 @@ class DataBase():
     def GetStateName(self, shortCode):
 
         if shortCode == "**All States**":
-            return("**All States**")            
-        
-        if self.countryStateCodeFileFound is True:            
-            for l in self.masterLocationList:
-                if l["stateCode"] == shortCode:
-                    return(l["stateName"])
+            return("**All States**")
+
+        if self.countryStateCodeFileFound is True:
+            return self._stateLookup.get(shortCode, shortCode)
         else:
             return(shortCode)
 
@@ -3068,36 +3042,33 @@ class DataBase():
 
 
     def addPhotoDataToDb(self, photoData):
-        
+        # Append new unique values to the photo-attribute lists.
+        # Sorting is intentionally deferred: call refreshPhotoLists() after a
+        # batch of addPhotoDataToDb() calls to get sorted lists for display.
+
         if photoData["camera"] not in self.cameraList:
             if photoData["camera"] != "":
                 self.cameraList.append(photoData["camera"])
-                self.cameraList.sort()
 
         if photoData["lens"] not in self.lensList:
             if photoData["lens"] != "":
                 self.lensList.append(photoData["lens"])
-                self.lensList.sort()
 
         if photoData["shutterSpeed"] not in self.shutterSpeedList:
             if photoData["shutterSpeed"] != "":
                 self.shutterSpeedList.append(photoData["shutterSpeed"])
-                self.shutterSpeedList = natsorted(self.shutterSpeedList, key=lambda y: y.lower(), reverse=True)
 
         if photoData["aperture"] not in self.apertureList:
             if photoData["aperture"] != "":
                 self.apertureList.append(photoData["aperture"])
-                self.apertureList= natsorted(self.apertureList, key=lambda y: y.lower())
 
         if photoData["focalLength"] not in self.focalLengthList:
             if photoData["focalLength"] != "":
                 self.focalLengthList.append(photoData["focalLength"])
-                self.focalLengthList = natsorted(self.focalLengthList, key=lambda y: y.lower())
-                
+
         if photoData["iso"] not in self.isoList:
             if photoData["iso"] != "":
                 self.isoList.append(photoData["iso"])
-                self.isoList = natsorted(self.isoList, key=lambda y: y.lower())
 
 
 

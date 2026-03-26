@@ -4,7 +4,6 @@ import sys
 
 # import the GUI forms that we create with Qt Creator
 import form_Web
-import code_MapHtml
 
 # import the Qt components we'll use
 # do this so later we won't have to clutter our code with references to parent Qt classes 
@@ -18,14 +17,19 @@ from PySide6.QtGui import (
 from PySide6.QtCore import (
     Qt,
     QUrl,
+    QFile,
     Signal,
+    Slot,
+    QObject,
     QIODevice,
     QByteArray,
     QBuffer
-    )    
+    )
+
+from PySide6.QtWebChannel import QWebChannel    
     
 from PySide6.QtWidgets import (
-#     QApplication,
+    QApplication,
     QMdiSubWindow
     )
 
@@ -46,6 +50,31 @@ from collections import (
     )
 
 import base64
+
+
+class MapBridge(QObject):
+    """Qt/JavaScript bridge for the location map.
+
+    Registered on the page's QWebChannel as 'bridge'.  When the user clicks a
+    location dot, JavaScript calls locationClicked(name) which opens the
+    Location child window for that location.
+    """
+
+    def __init__(self, web_window):
+        super().__init__()
+        self._web = web_window
+
+    @Slot(str)
+    def locationClicked(self, locationName):
+        import code_Location
+        sub = code_Location.Location()
+        sub.mdiParent = self._web.mdiParent
+        sub.FillLocation(locationName)
+        self._web.mdiParent.mdiArea.addSubWindow(sub)
+        self._web.mdiParent.PositionChildWindow(sub, self._web)
+        sub.show()
+        QApplication.processEvents()
+        sub.scaleMe()
 
 
 class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
@@ -256,42 +285,109 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
 
         
     def LoadLocationsMap(self, filter):
-        
-        self.title= "Location Map"
-        
-        coordinatesDict = defaultdict()
-        mapWidth =  self.frameGeometry().width() -10
-        mapHeight = self.frameGeometry().height() -35
-        self.scrollArea.setGeometry(5, 27, mapWidth + 2, mapHeight + 2)
-        self.webView.setGeometry(5, 27, mapWidth + 2, mapHeight + 2)        
+
+        import folium
+        import tempfile
+
+        self.title = "Location Map"
         self.contentType = "Map"
         self.filter = filter
-        
+
+        mapWidth  = self.frameGeometry().width()  - 10
+        mapHeight = self.frameGeometry().height() - 35
+        self.scrollArea.setGeometry(5, 27, mapWidth + 2, mapHeight + 2)
+        self.webView.setGeometry(5, 27, mapWidth + 2, mapHeight + 2)
+
         locations = self.mdiParent.db.GetLocations(filter)
-        
         if len(locations) == 0:
-            return(False)
-        
+            return False
+
+        coordinatesDict = defaultdict()
         for l in locations:
-            coordinates = self.mdiParent.db.GetLocationCoordinates(l)
-            coordinatesDict[l] = coordinates
+            coordinatesDict[l] = self.mdiParent.db.GetLocationCoordinates(l)
 
-        thisMap = code_MapHtml.MapHtml()
-        thisMap.mapHeight = mapHeight
-        thisMap.mapWidth = mapWidth
-        thisMap.coordinatesDict = coordinatesDict
-        
-        html = thisMap.html()
-        
-        self.webView.setHtml(html)
+        location_map = folium.Map(tiles="CartoDB Positron")
 
-        self._buildFilterTitle(filter, "Map", count=len(coordinatesDict.keys()))
+        points = []
+        for name, coords in coordinatesDict.items():
+            lat, lon = float(coords[0]), float(coords[1])
+            points.append([lat, lon])
+            marker = folium.CircleMarker(
+                location=[lat, lon],
+                radius=6,
+                color="#4f8ef7",
+                fill=True,
+                fill_color="#4f8ef7",
+                fill_opacity=0.85,
+                tooltip=name,
+            )
+            # Store the exact location name on the layer for click handling
+            marker.options["locationName"] = name
+            marker.add_to(location_map)
+
+        if len(points) == 1:
+            location_map.location = points[0]
+            location_map.zoom_start = 13
+        else:
+            lats = [p[0] for p in points]
+            lons  = [p[1] for p in points]
+            location_map.fit_bounds([[min(lats), min(lons)], [max(lats), max(lons)]])
+
+        # --- QWebChannel: wire up Python ↔ JS bridge ---
+        self._mapBridge = MapBridge(self)
+        channel = QWebChannel(self.webView.page())
+        channel.registerObject("bridge", self._mapBridge)
+        self.webView.page().setWebChannel(channel)
+
+        # Read qwebchannel.js from Qt resources
+        qwc_file = QFile(":/qtwebchannel/qwebchannel.js")
+        qwc_file.open(QIODevice.OpenModeFlag.ReadOnly)
+        qwc_js = bytes(qwc_file.readAll()).decode("utf-8")
+        qwc_file.close()
+
+        # Find the Leaflet map variable name Folium assigned (e.g. "map_a1b2c3")
+        import re
+        html = location_map.get_root().render()
+        map_var_match = re.search(r'var\s+(map_[a-zA-Z0-9_]+)\s*=\s*L\.map', html)
+        map_var = map_var_match.group(1) if map_var_match else "map"
+
+        # JS injected into the page: set up channel then add click handlers.
+        # layer.options.locationName holds the exact Python location name, set above.
+        inject_js = f"""
+<script>
+{qwc_js}
+document.addEventListener("DOMContentLoaded", function() {{
+    new QWebChannel(qt.webChannelTransport, function(channel) {{
+        window.bridge = channel.objects.bridge;
+        {map_var}.eachLayer(function(layer) {{
+            if (layer.options && layer.options.locationName) {{
+                var name = layer.options.locationName;
+                layer.on('click', function(e) {{
+                    window.bridge.locationClicked(name);
+                }});
+            }}
+        }});
+    }});
+}});
+</script>
+"""
+        html = html.replace("</body>", inject_js + "</body>")
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as f:
+            f.write(html)
+            tmp_path = f.name
+
+        settings = QWebEngineProfile.defaultProfile().settings()
+        settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
+        self.webView.setUrl(QUrl.fromLocalFile(tmp_path))
+
+        self._buildFilterTitle(filter, "Map", count=len(coordinatesDict))
 
         icon = QIcon()
         icon.addPixmap(QPixmap(":/icon_map_white.png"), QIcon.Normal, QIcon.Off)
-        self.setWindowIcon(icon) 
-                
-        return(True)
+        self.setWindowIcon(icon)
+
+        return True
 
 
     def _buildFilterTitle(self, filter, prefix, count=None, countUnit=""):

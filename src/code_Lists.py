@@ -14,7 +14,8 @@ from PySide6.QtGui import (
     QCursor,
     QIcon,
     QPixmap,
-    QFont
+    QFont,
+    QFontMetrics
     )
 
 from PySide6.QtCore import (
@@ -179,13 +180,13 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         self.txtFind.setMinimumHeight(buttonHeight)
         self.txtFind.setMaximumHeight(buttonHeight)        
         
-        # scale the main window table   
+        # scale the main window table
         header = self.tblList.horizontalHeader()
-        metrics = self.tblList.fontMetrics()
+        metrics = QFontMetrics(QFont("Helvetica", fontSize))
 
         if self.listType == "Species":
             dateTextWidth = int(metrics.boundingRect("2222-22-22").width())
-            dateTextHeight = int(metrics.boundingRect("2222-22-22").height())
+            dateTextHeight = self.mdiParent.rowHeight
             
             #find the width of the widest integer in the Tax column
             maxWidth = 0
@@ -235,11 +236,11 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
             header.resizeSection(5, w5)
             
             # give species name column the remaining width
-            header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch) 
-                      
+            header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+
             for R in range(self.tblList.rowCount()):
-                self.tblList.setRowHeight(R, int(dateTextHeight * 1.1))
-        
+                self.tblList.setRowHeight(R, dateTextHeight)
+
         if self.listType == "Single Checklist":
             taxTextWidth = int(metrics.boundingRect("Tax").width())
             header.resizeSection(0,  floor(1.75 * taxTextWidth))
@@ -318,11 +319,9 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
            
            
     def afterSort(self, column, order):
-        metrics = self.tblList.fontMetrics()
-        textHeight = int(metrics.boundingRect("2222").height())
-
+        rowHeight = self.mdiParent.rowHeight
         for R in range(self.tblList.rowCount()):
-            self.tblList.setRowHeight(R, int(textHeight * 1.1))       
+            self.tblList.setRowHeight(R, rowHeight)
            
         
     def ChangedFindText(self):
@@ -348,10 +347,12 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         location = self.lblLocation.text()
         sub = code_Location.Location()
         sub.mdiParent = self.mdiParent
-        sub.FillLocation(location)  
+        sub.FillLocation(location)
         self.parent().parent().addSubWindow(sub)
-        self.mdiParent.PositionChildWindow(sub, self)        
-        sub.show()        
+        self.mdiParent.PositionChildWindow(sub, self)
+        sub.show()
+        QApplication.processEvents()
+        sub.scaleMe()
 
 
     def html(self):
@@ -1106,9 +1107,11 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
             sub.FillSpecies(filter)
             
         self.parent().parent().addSubWindow(sub)
-        self.mdiParent.PositionChildWindow(sub, self)        
-        sub.show() 
+        self.mdiParent.PositionChildWindow(sub, self)
+        sub.show()
+        QApplication.processEvents()
+        sub.scaleMe()
         sub.resizeMe()
-        QApplication.restoreOverrideCursor()  
+        QApplication.restoreOverrideCursor()
         
 

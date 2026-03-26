@@ -38,6 +38,7 @@ from PySide6.QtGui import (
     QFont,
     QFontMetrics,
     QIcon,
+    QPixmap,
     QTextDocument,
     QColor
     )
@@ -95,6 +96,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
     db = code_DataBase.DataBase()
     fontSize = 11
     scaleFactor = 1
+    rowHeight = 16  # default; recomputed in ScaleDisplay() and __init__
     versionNumber = "1.1"
     versionDate = "March 24, 2026"    
 
@@ -112,44 +114,43 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         # in the standard filter), so items aren't stretched to fill the scroll area.
         self.verticalLayout_5.setAlignment(self.frmPhotoFilter, Qt.AlignTop)
 
-        _iconDir = os.path.dirname(os.path.abspath(__file__))
-        # Black icons for drop-down menus
+        # Black icons for drop-down menus (loaded from Qt resource system)
         _menuIcons = {
-            self.actionOpen:           "icon_open.png",
-            self.actionPrint:          "icon_print.png",
-            self.actionCreatePDF:      "icon_pdf.png",
-            self.actionSpecies:        "icon_bird.png",
-            self.actionLocations:      "icon_location.png",
-            self.actionChecklists:     "icon_checklists.png",
-            self.actionMap:            "icon_map.png",
-            self.actionFamilies:       "icon_families.png",
-            self.actionDateTotals:     "icon_datetotals.png",
-            self.actionLocationTotals: "icon_locationtotals.png",
-            self.actionCompareLists:   "icon_compare.png",
-            self.actionBigReport:      "icon_tripreport.png",
-            self.actionPhotos:         "icon_camera.png",
-            self.actionFind:           "icon_find.png",
-            self.actionClearAllFilters:"icon_filter.png",
+            self.actionOpen:           ":/icon_open.png",
+            self.actionPrint:          ":/icon_print.png",
+            self.actionCreatePDF:      ":/icon_pdf.png",
+            self.actionSpecies:        ":/icon_bird.png",
+            self.actionLocations:      ":/icon_location.png",
+            self.actionChecklists:     ":/icon_checklists.png",
+            self.actionMap:            ":/icon_map.png",
+            self.actionFamilies:       ":/icon_families.png",
+            self.actionDateTotals:     ":/icon_datetotals.png",
+            self.actionLocationTotals: ":/icon_locationtotals.png",
+            self.actionCompareLists:   ":/icon_compare.png",
+            self.actionBigReport:      ":/icon_tripreport.png",
+            self.actionPhotos:         ":/icon_camera.png",
+            self.actionFind:           ":/icon_find.png",
+            self.actionClearAllFilters:":/icon_filter.png",
         }
-        for action, filename in _menuIcons.items():
-            action.setIcon(QIcon(os.path.join(_iconDir, filename)))
+        for action, path in _menuIcons.items():
+            action.setIcon(QIcon(QPixmap(path)))
         # White icons for toolbar buttons via proxy style (menus keep the black icons above)
         _whiteIconMap = {
-            self.actionOpen:           QIcon(os.path.join(_iconDir, "icon_open_white.png")),
-            self.actionPrint:          QIcon(os.path.join(_iconDir, "icon_print_white.png")),
-            self.actionCreatePDF:      QIcon(os.path.join(_iconDir, "icon_pdf_white.png")),
-            self.actionSpecies:        QIcon(os.path.join(_iconDir, "icon_bird_white.png")),
-            self.actionLocations:      QIcon(os.path.join(_iconDir, "icon_location_white.png")),
-            self.actionChecklists:     QIcon(os.path.join(_iconDir, "icon_checklists_white.png")),
-            self.actionMap:            QIcon(os.path.join(_iconDir, "icon_map_white.png")),
-            self.actionFamilies:       QIcon(os.path.join(_iconDir, "icon_families_white.png")),
-            self.actionDateTotals:     QIcon(os.path.join(_iconDir, "icon_datetotals_white.png")),
-            self.actionLocationTotals: QIcon(os.path.join(_iconDir, "icon_locationtotals_white.png")),
-            self.actionCompareLists:   QIcon(os.path.join(_iconDir, "icon_compare_white.png")),
-            self.actionBigReport:      QIcon(os.path.join(_iconDir, "icon_tripreport_white.png")),
-            self.actionPhotos:         QIcon(os.path.join(_iconDir, "icon_camera_white.png")),
-            self.actionFind:           QIcon(os.path.join(_iconDir, "icon_find_white.png")),
-            self.actionClearAllFilters:QIcon(os.path.join(_iconDir, "icon_filter_white.png")),
+            self.actionOpen:           QIcon(QPixmap(":/icon_open_white.png")),
+            self.actionPrint:          QIcon(QPixmap(":/icon_print_white.png")),
+            self.actionCreatePDF:      QIcon(QPixmap(":/icon_pdf_white.png")),
+            self.actionSpecies:        QIcon(QPixmap(":/icon_bird_white.png")),
+            self.actionLocations:      QIcon(QPixmap(":/icon_location_white.png")),
+            self.actionChecklists:     QIcon(QPixmap(":/icon_checklists_white.png")),
+            self.actionMap:            QIcon(QPixmap(":/icon_map_white.png")),
+            self.actionFamilies:       QIcon(QPixmap(":/icon_families_white.png")),
+            self.actionDateTotals:     QIcon(QPixmap(":/icon_datetotals_white.png")),
+            self.actionLocationTotals: QIcon(QPixmap(":/icon_locationtotals_white.png")),
+            self.actionCompareLists:   QIcon(QPixmap(":/icon_compare_white.png")),
+            self.actionBigReport:      QIcon(QPixmap(":/icon_tripreport_white.png")),
+            self.actionPhotos:         QIcon(QPixmap(":/icon_camera_white.png")),
+            self.actionFind:           QIcon(QPixmap(":/icon_find_white.png")),
+            self.actionClearAllFilters:QIcon(QPixmap(":/icon_filter_white.png")),
         }
         self._toolbarStyle = _WhiteIconToolbarStyle(_whiteIconMap)
         self.toolBar.setStyle(self._toolbarStyle)
@@ -428,6 +429,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.fontSize = floor(11 * self.scaleFactor)
         MainWindow.fontSize = self.fontSize
         MainWindow.scaleFactor = self.scaleFactor
+        MainWindow.rowHeight = int(QFontMetrics(QFont("Helvetica", MainWindow.fontSize)).boundingRect("2222-22-22").height() * 1.1)
         
         self.menuBar.setFont(QFont("Helvetica", self.fontSize))     
                         
@@ -1184,11 +1186,12 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             # add child to MDI area and position it
             self.mdiArea.addSubWindow(sub)
             self.PositionChildWindow(sub,  self)
-            sub.show() 
-        
-        QApplication.restoreOverrideCursor() 
-        
-                       
+            sub.show()
+            QTimer.singleShot(0, sub.scaleMe)
+
+        QApplication.restoreOverrideCursor()
+
+
     def CreateChecklistsList(self): 
         # Create Filtered List button was clicked
         # create filtered species list child
@@ -1343,14 +1346,15 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.mdiArea.addSubWindow(sub)
             self.PositionChildWindow(sub,  self)
             sub.show()
-            
+            QTimer.singleShot(0, sub.scaleMe)
+
         else:
 
             # abort if filter found no sightings for child
             self.CreateMessageNoResults()
             sub.close()
-        
-        QApplication.restoreOverrideCursor() 
+
+        QApplication.restoreOverrideCursor()
 
 
     def CreateAboutYearbird(self):
@@ -1441,15 +1445,16 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             # add and position the child to our MDI area
             self.mdiArea.addSubWindow(sub)
             self.PositionChildWindow(sub,  self)
-            sub.show()            
-        
+            sub.show()
+            QTimer.singleShot(0, sub.scaleMe)
+
         else:
-                    
+
             # abort since filter found no sightings for child
             self.CreateMessageNoResults()
             sub.close()
 
-        QApplication.restoreOverrideCursor() 
+        QApplication.restoreOverrideCursor()
 
 
     def CreateFamiliesReport(self):      

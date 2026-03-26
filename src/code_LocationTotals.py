@@ -15,7 +15,8 @@ from math import floor
 
 from PySide6.QtGui import (
     QCursor,
-    QFont
+    QFont,
+    QFontMetrics
     )
 
 from PySide6.QtCore import (
@@ -686,17 +687,18 @@ class LocationTotals(QMdiSubWindow, form_LocationTotals.Ui_frmLocationTotals):
         self.lblDetails.setFont(QFont("Helvetica", floor(fontSize * 1.2 )))
         self.lblDetails.setStyleSheet("QLabel { font: bold }");
 
-        metrics = self.tblCountryTotals.fontMetrics()
-        textHeight = int(metrics.boundingRect("A").height())        
+        metrics = QFontMetrics(QFont("Helvetica", fontSize))
+        rowHeight = self.mdiParent.rowHeight
         rankTextWidth = int(metrics.boundingRect("Rank").width())
-        
+
         for t in [self.tblRegionTotals, self.tblCountryTotals, self.tblStateTotals, self.tblCountyTotals, self.tblLocationTotals]:
             header = t.horizontalHeader()
             header.resizeSection(0,  floor(1.7 * rankTextWidth))
             header.resizeSection(2,  floor(2 * rankTextWidth))
             header.resizeSection(3,  floor(2.5 * rankTextWidth))
+            t.verticalHeader().setDefaultSectionSize(rowHeight)
             for r in range(t.rowCount()):
-                t.setRowHeight(r, int(textHeight * 1.1))
+                t.setRowHeight(r, rowHeight)
 
 
     def setCountryFilter(self):

@@ -4,7 +4,6 @@ import code_Filter
 import code_Location
 import code_Individual
 import code_Lists
-import code_MapHtml
 import code_Stylesheet
 
 # import basic Python libraries
@@ -16,16 +15,22 @@ import base64
 from PySide6.QtGui import (
     QCursor,
     QFont,
+    QFontMetrics,
     )
 
 from PySide6.QtCore import (
     Qt,
     QUrl,
+    QFile,
     Signal,
+    Slot,
+    QObject,
     QIODevice,
     QByteArray,
     QBuffer
     )
+
+from PySide6.QtWebChannel import QWebChannel
 
 from PySide6.QtWidgets import (
     QApplication,
@@ -37,6 +42,34 @@ from PySide6.QtWidgets import (
 from PySide6.QtWebEngineWidgets import (
     QWebEngineView,
 )
+
+from PySide6.QtWebEngineCore import (
+    QWebEngineSettings,
+    QWebEngineProfile,
+)
+
+
+class BigReportMapBridge(QObject):
+    """Qt/JavaScript bridge for the Big Report map tab.
+
+    Registered on the page's QWebChannel as 'bridge'.  Clicking a location
+    dot calls locationClicked(name) which opens the Location child window.
+    """
+
+    def __init__(self, big_report):
+        super().__init__()
+        self._br = big_report
+
+    @Slot(str)
+    def locationClicked(self, locationName):
+        sub = code_Location.Location()
+        sub.mdiParent = self._br.mdiParent
+        sub.FillLocation(locationName)
+        self._br.mdiParent.mdiArea.addSubWindow(sub)
+        self._br.mdiParent.PositionChildWindow(sub, self._br)
+        sub.show()
+        QApplication.processEvents()
+        sub.scaleMe()
 
 
 class BigReport(QMdiSubWindow, form_BigReport.Ui_frmBigReport):
@@ -129,9 +162,11 @@ class BigReport(QMdiSubWindow, form_BigReport.Ui_frmBigReport):
         sub.mdiParent = self.mdiParent
         sub.FillLocation(locationName)
         self.parent().parent().addSubWindow(sub)
-        self.mdiParent.PositionChildWindow( sub, self)        
-        sub.show() 
-        QApplication.restoreOverrideCursor()     
+        self.mdiParent.PositionChildWindow( sub, self)
+        sub.show()
+        QApplication.processEvents()
+        sub.scaleMe()
+        QApplication.restoreOverrideCursor()
     
     
     def CreateIndividual(self,  callingWidget):
@@ -630,27 +665,103 @@ class BigReport(QMdiSubWindow, form_BigReport.Ui_frmBigReport):
     
 
     def FillMap(self):
-        
-        coordinatesDict = defaultdict()
+        import folium, tempfile, re
         mapWidth = int(self.width() - 20)
         mapHeight = int(self.height() - self.lblLocation.height() - (self.lblDateRange.height() * 7.5))
         self.webMap.setGeometry(5, 5, mapWidth, mapHeight)
 
+        coordinatesDict = defaultdict()
         for l in range(self.lstLocations.count()):
             locationName = self.lstLocations.item(l).text()
             coordinates = self.mdiParent.db.GetLocationCoordinates(locationName)
             coordinatesDict[locationName] = coordinates
 
-        thisMap = code_MapHtml.MapHtml()
-        thisMap.mapHeight = mapHeight -20
-        thisMap.mapWidth = mapWidth -20
-        thisMap.coordinatesDict = coordinatesDict
-                    
-        # save mapHtml in object's variable so we can reload it later
-        self.mapHtml = thisMap.html()
-                
-        # pass the mapHtml we created to the QWebView widget for display                    
-        self.webMap.setHtml(self.mapHtml)
+        points = []
+        for name, coords in coordinatesDict.items():
+            points.append([float(coords[0]), float(coords[1])])
+
+        # Compute center and zoom in Python — Leaflet can't fitBounds reliably
+        # inside a hidden tab (container size is 0 on first render).
+        lats = [p[0] for p in points]
+        lons  = [p[1] for p in points]
+        center = [(min(lats) + max(lats)) / 2, (min(lons) + max(lons)) / 2]
+        span = max(max(lats) - min(lats), max(lons) - min(lons), 0.01)
+
+        if   span >= 90:  zoom = 2
+        elif span >= 45:  zoom = 3
+        elif span >= 22:  zoom = 4
+        elif span >= 11:  zoom = 5
+        elif span >= 5:   zoom = 6
+        elif span >= 2.5: zoom = 7
+        elif span >= 1.2: zoom = 8
+        elif span >= 0.6: zoom = 9
+        elif span >= 0.3: zoom = 10
+        elif span >= 0.15:zoom = 11
+        elif span >= 0.07:zoom = 12
+        else:             zoom = 13
+
+        location_map = folium.Map(location=center, zoom_start=zoom,
+                                  tiles="CartoDB Positron")
+        for name, coords in coordinatesDict.items():
+            lat, lon = float(coords[0]), float(coords[1])
+            marker = folium.CircleMarker(
+                location=[lat, lon],
+                radius=6,
+                color="#4f8ef7",
+                fill=True,
+                fill_color="#4f8ef7",
+                fill_opacity=0.85,
+                tooltip=name,
+            )
+            marker.options["locationName"] = name
+            marker.add_to(location_map)
+
+        # Wire up QWebChannel bridge for click-to-spawn-Location
+        self._mapBridge = BigReportMapBridge(self)
+        channel = QWebChannel(self.webMap.page())
+        channel.registerObject("bridge", self._mapBridge)
+        self.webMap.page().setWebChannel(channel)
+
+        qwc_file = QFile(":/qtwebchannel/qwebchannel.js")
+        qwc_file.open(QIODevice.OpenModeFlag.ReadOnly)
+        qwc_js = bytes(qwc_file.readAll()).decode("utf-8")
+        qwc_file.close()
+
+        html = location_map.get_root().render()
+
+        map_var = re.search(r'var\s+(map_[a-zA-Z0-9_]+)\s*=\s*L\.map', html)
+        map_var = map_var.group(1) if map_var else "map"
+
+        inject_js = f"""
+<script>
+{qwc_js}
+document.addEventListener("DOMContentLoaded", function() {{
+    setTimeout(function() {{ {map_var}.invalidateSize(); }}, 100);
+    new QWebChannel(qt.webChannelTransport, function(channel) {{
+        window.bridge = channel.objects.bridge;
+        {map_var}.eachLayer(function(layer) {{
+            if (layer.options && layer.options.locationName) {{
+                var name = layer.options.locationName;
+                layer.on('click', function(e) {{
+                    window.bridge.locationClicked(name);
+                }});
+            }}
+        }});
+    }});
+}});
+</script>
+"""
+        html = html.replace("</body>", inject_js + "</body>")
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False,
+                                         encoding='utf-8') as f:
+            f.write(html)
+            tmp_path = f.name
+
+        settings = QWebEngineProfile.defaultProfile().settings()
+        settings.setAttribute(
+            QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
+        self.webMap.setUrl(QUrl.fromLocalFile(tmp_path))
         
 
     
@@ -1478,10 +1589,11 @@ class BigReport(QMdiSubWindow, form_BigReport.Ui_frmBigReport):
         self.lblDetails.setFont(QFont("Helvetica", floor(fontSize * 1.2 )))
         self.lblDetails.setStyleSheet("QLabel { font: bold }");
 
-        metrics = self.tblSpecies.fontMetrics()
-        textHeight = int(metrics.boundingRect("A").height())
+        metrics = QFontMetrics(QFont("Helvetica", fontSize))
         textWidth = int(metrics.boundingRect("Dummy Country").width())
-        
+
+        rowHeight = self.mdiParent.rowHeight
+
         for t in ([
             self.tblNewYearSpecies,
             self.tblNewMonthSpecies,
@@ -1494,20 +1606,23 @@ class BigReport(QMdiSubWindow, form_BigReport.Ui_frmBigReport):
                 header.resizeSection(0,  floor(.6 * textWidth))
             else:
                 header.resizeSection(0,  floor(textWidth))
+            t.verticalHeader().setDefaultSectionSize(rowHeight)
             for r in range(t.rowCount()):
-                t.setRowHeight(r, int(textHeight * 1.1)) 
-            
+                t.setRowHeight(r, rowHeight)
+
         # format tblSpecies, which is laid out differently from the other tables
         dateWidth = int(metrics.boundingRect("2222-22-22").width())
         header = self.tblSpecies.horizontalHeader()
         header.resizeSection(2,  floor(1.5* dateWidth))
         header.resizeSection(3,  floor(1.5 * dateWidth))
+        self.tblSpecies.verticalHeader().setDefaultSectionSize(rowHeight)
         for r in range(self.tblSpecies.rowCount()):
-            self.tblSpecies.setRowHeight(r, int(textHeight * 1.1))         
-        
+            self.tblSpecies.setRowHeight(r, rowHeight)
+
         # format tblNewLocationSpecies, which needs wider location column
         header = self.tblNewLocationSpecies.horizontalHeader()
         header.resizeSection(0,  floor(4 * textWidth))
+        self.tblNewLocationSpecies.verticalHeader().setDefaultSectionSize(rowHeight)
         for r in range(self.tblNewLocationSpecies.rowCount()):
-            t.setRowHeight(r, int(textHeight * 1.1))
+            self.tblNewLocationSpecies.setRowHeight(r, rowHeight)
 

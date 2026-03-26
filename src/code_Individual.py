@@ -12,7 +12,8 @@ import code_Stylesheet
 
 from PySide6.QtGui import (
     QCursor,
-    QFont
+    QFont,
+    QFontMetrics
     )
 
 from PySide6.QtCore import (
@@ -303,10 +304,7 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
 
                 dateCount = dateCount + len(theseDates)
 
-        if locationCount == 1:
-            self.lblLocations.setText("Location (1)")
-        else:
-            self.lblLocations.setText("Locations (" + str(locationCount) + ")")  
+        self.lblLocations.setText("Locations: " + str(locationCount))  
             
         # add a photo button if the db holds photos of this species
         filter = code_Filter.Filter()
@@ -359,7 +357,7 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
         self.lstDates.addItems(dates)
         self.lstDates.setCurrentRow(0)
         self.lstDates.setSpacing(2)
-        self.lblDatesForLocation.setText("Dates for selected location (" + str(self.lstDates.count()) + ")")
+        self.lblDatesForLocation.setText("Dates for selected location: " + str(self.lstDates.count()))
 
 
     def FillLocations(self,  callingWidget):
@@ -435,26 +433,24 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
         header = locationWidget.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         locationWidget.setShowGrid(False)
-        metrics = locationWidget.fontMetrics()
-        textHeight = metrics.boundingRect("A").height()   
-      
-        
+        rowHeight = self.mdiParent.rowHeight
+
         R = 0
         for l in locations:
-            
+
             locationItem = QTableWidgetItem()
             locationItem.setText(l[0])
-            
+
             # store checklist ID in hidden data component of item
             locationItem.setData(Qt.UserRole,  l[2])
             speciesCountItem = QTableWidgetItem()
-            speciesCountItem.setData(Qt.DisplayRole, l[1])            
-            locationWidget.setItem(R, 0, locationItem)              
-            locationWidget.setItem(R, 1, speciesCountItem)            
-            locationWidget.setRowHeight(R, int(textHeight * 1.1))                           
+            speciesCountItem.setData(Qt.DisplayRole, l[1])
+            locationWidget.setItem(R, 0, locationItem)
+            locationWidget.setItem(R, 1, speciesCountItem)
+            locationWidget.setRowHeight(R, rowHeight)
             R = R + 1
         
-        self.lblLocationsForDate.setText("Checklists (" + str(locationWidget.rowCount()) + ")")
+        self.lblLocationsForDate.setText("Checklists: " + str(locationWidget.rowCount()))
 
 
     def CreateChecklists(self):
@@ -477,10 +473,12 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
             location = self.trLocations.currentItem().text(0)
             sub = code_Location.Location()
             sub.mdiParent = self.mdiParent
-            sub.FillLocation(location)  
+            sub.FillLocation(location)
             self.parent().parent().addSubWindow(sub)
-            self.mdiParent.PositionChildWindow(sub, self)        
-            sub.show()        
+            self.mdiParent.PositionChildWindow(sub, self)
+            sub.show()
+            QApplication.processEvents()
+            sub.scaleMe()
 
 
     def CreateLocationAndSetDate(self):
@@ -488,11 +486,13 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
         date = self.lstDates.currentItem().text()
         sub = code_Location.Location()
         sub.mdiParent = self.mdiParent
-        sub.FillLocation(location) 
+        sub.FillLocation(location)
         sub.SetDate(date)
         self.parent().parent().addSubWindow(sub)
-        self.mdiParent.PositionChildWindow(sub, self)                
-        sub.show()     
+        self.mdiParent.PositionChildWindow(sub, self)
+        sub.show()
+        QApplication.processEvents()
+        sub.scaleMe()
         
         
     def CreateMap(self):
@@ -868,10 +868,9 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
                 for iii in range(root.child(i).child(ii).childCount()):
                     root.child(i).child(ii).child(iii).setSizeHint(0, myQSize) 
 
-        metrics = self.tblYearLocations.fontMetrics()
-        textHeight = int(metrics.boundingRect("A").height())
+        rowHeight = self.mdiParent.rowHeight
         for r in range(self.tblYearLocations.rowCount()):
-            self.tblYearLocations.setRowHeight(r, textHeight * 1.1)
+            self.tblYearLocations.setRowHeight(r, rowHeight)
         for r in range(self.tblMonthLocations.rowCount()):
-            self.tblMonthLocations.setRowHeight(r, textHeight * 1.1)            
+            self.tblMonthLocations.setRowHeight(r, rowHeight)
             

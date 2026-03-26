@@ -591,12 +591,8 @@ class DateTotals(QMdiSubWindow, form_DateTotals.Ui_frmDateTotals):
         self.lblDetails.setFont(QFont("Helvetica", floor(fontSize * 1.2 )))
         self.lblDetails.setStyleSheet("QLabel { font: bold }");
 
-        for t in [self.tblYearTotals, self.tblMonthTotals, self.tblDateTotals]:
-            t.setFont(QFont("Helvetica", fontSize))
-        
-        metrics = self.tblYearTotals.fontMetrics()    
-        #metrics = QFontMetrics(QFont("Helvetica", fontSize))
-        textHeight = int(metrics.height())
+        metrics = QFontMetrics(QFont("Helvetica", fontSize))
+        rowHeight = self.mdiParent.rowHeight
         rankTextWidth = int(metrics.boundingRect("Rank").width())
 
         for t in [self.tblYearTotals, self.tblMonthTotals, self.tblDateTotals]:
@@ -604,6 +600,7 @@ class DateTotals(QMdiSubWindow, form_DateTotals.Ui_frmDateTotals):
             header.resizeSection(0,  floor(2 * rankTextWidth))
             header.resizeSection(2,  floor(2.5 * rankTextWidth))
             header.resizeSection(3,  floor(2.5 * rankTextWidth))
+            t.verticalHeader().setDefaultSectionSize(rowHeight)
             for r in range(t.rowCount()):
-                t.setRowHeight(r, int(textHeight * 1.8))
+                t.setRowHeight(r, rowHeight)
  

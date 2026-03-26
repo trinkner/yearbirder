@@ -19,6 +19,7 @@ from PySide6.QtGui import (
     QCursor,
     QColor,
     QFont,
+    QFontMetrics,
     QPen
     )
 
@@ -422,14 +423,14 @@ class Families(QMdiSubWindow, form_Families.Ui_frmFamilies):
         self.lblDetails.setFont(QFont("Helvetica", floor(fontSize * 1.2 )))
         self.lblDetails.setStyleSheet("QLabel { font: bold }");
 
-        metrics = self.tblPieChartLegend.fontMetrics()
-        textHeight = int(metrics.boundingRect("A").height())
+        metrics = QFontMetrics(QFont("Helvetica", fontSize))
         textWidth = int(metrics.boundingRect("Rank").width())
-        
+        rowHeight = self.mdiParent.rowHeight
+
         for t in [self.tblPieChartLegend]:
             header = t.horizontalHeader()
             header.resizeSection(0,  floor(.75 * textWidth))
             header.resizeSection(2,  floor(.75 * textWidth))
             for r in range(t.rowCount()):
-                t.setRowHeight(r, int(textHeight * 1.1)) 
+                t.setRowHeight(r, rowHeight)
     

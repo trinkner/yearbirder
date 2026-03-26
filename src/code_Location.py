@@ -4,7 +4,6 @@ import form_Location
 # import classes from other project files
 import code_Filter
 import code_Lists
-import code_MapHtml
 import code_Individual
 import code_Stylesheet
 from collections import defaultdict
@@ -14,15 +13,22 @@ from collections import defaultdict
 
 from PySide6.QtGui import (
     QCursor,
-    QFont
+    QFont,
+    QFontMetrics
     )
 
 from PySide6.QtCore import (
     Qt,
+    QUrl,
     Signal,
     QIODevice,
     QByteArray,
     QBuffer,
+    )
+
+from PySide6.QtWebEngineCore import (
+    QWebEngineSettings,
+    QWebEngineProfile,
     )
 
 from PySide6.QtWidgets import (
@@ -195,10 +201,7 @@ class Location(QMdiSubWindow, form_Location.Ui_frmLocation):
         
         self.tblDates.selectRow(0)
         
-        if self.tblDates.rowCount() == 1:
-            self.lblDatesSeen.setText("Date (1)")
-        else:
-            self.lblDatesSeen.setText("Dates (" + str(self.tblDates.rowCount()) + ")")
+        self.lblDatesSeen.setText("Dates: " + str(self.tblDates.rowCount()))
         # display all dates for the selected location
         self.tblDates.setSortingEnabled(True)
         self.tblDates.sortItems(0, Qt.SortOrder.AscendingOrder)
@@ -216,20 +219,32 @@ class Location(QMdiSubWindow, form_Location.Ui_frmLocation):
 
 
     def FillMap(self):
+        import folium, tempfile
 
-        coordinatesDict = defaultdict()
-        coordinatesDict[self.location] = self.coordinates
+        lat, lon = float(self.coordinates[0]), float(self.coordinates[1])
 
-        mapWidth = self.width() - 40
-        mapHeight= self.height() - 170
+        location_map = folium.Map(location=[lat, lon], zoom_start=13,
+                                  tiles="CartoDB Positron")
+        folium.CircleMarker(
+            location=[lat, lon],
+            radius=8,
+            color="#4f8ef7",
+            fill=True,
+            fill_color="#4f8ef7",
+            fill_opacity=0.85,
+            tooltip=self.location,
+        ).add_to(location_map)
 
-        thisMap = code_MapHtml.MapHtml()
-        thisMap.mapHeight = mapHeight
-        thisMap.mapWidth = mapWidth
-        thisMap.coordinatesDict = coordinatesDict
-        
-        html = thisMap.html()        
-        self.webMap.setHtml(html)
+        html = location_map.get_root().render()
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False,
+                                         encoding='utf-8') as f:
+            f.write(html)
+            tmp_path = f.name
+
+        settings = QWebEngineProfile.defaultProfile().settings()
+        settings.setAttribute(
+            QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
+        self.webMap.setUrl(QUrl.fromLocalFile(tmp_path))
 
 
     def FillSpecies(self): 
@@ -539,24 +554,26 @@ class Location(QMdiSubWindow, form_Location.Ui_frmLocation):
         self.lblMostRecentlyVisited.setFont(baseFont)
 
         header = self.tblSpecies.horizontalHeader()
-        metrics = self.tblSpecies.fontMetrics()
+        metrics = QFontMetrics(QFont("Helvetica", fontSize))
 
         dateTextWidth = int(metrics.boundingRect("2222-22-22").width())
-        dateTextHeight = int(metrics.boundingRect("2222-22-22").height())
-        
+        rowHeight = self.mdiParent.rowHeight
+
         taxText = str(self.tblSpecies.rowCount())
         taxTextWidth = int(metrics.boundingRect(taxText).width())
         header.resizeSection(0,  floor(2 * taxTextWidth))
         header.resizeSection(2,  floor(1.5 * dateTextWidth))
-        header.resizeSection(3,  floor(1.5 * dateTextWidth))                
+        header.resizeSection(3,  floor(1.5 * dateTextWidth))
+        self.tblSpecies.verticalHeader().setDefaultSectionSize(rowHeight)
         for R in range(self.tblSpecies.rowCount()):
-            self.tblSpecies.setRowHeight(R, int(dateTextHeight * 1.75))
+            self.tblSpecies.setRowHeight(R, rowHeight)
 
-        header = self.tblDates.horizontalHeader()         
+        header = self.tblDates.horizontalHeader()
         textWidth = int(metrics.boundingRect("Rank").width())
         header.resizeSection(0,  floor(1.75 * textWidth))
         header.resizeSection(1,  floor(1.5 * dateTextWidth))
+        self.tblDates.verticalHeader().setDefaultSectionSize(rowHeight)
         for R in range(self.tblDates.rowCount()):
-            self.tblDates.setRowHeight(R, int(dateTextHeight * 1.75))
+            self.tblDates.setRowHeight(R, rowHeight)
         
         self.FillMap()
