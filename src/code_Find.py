@@ -68,8 +68,9 @@ class Find(QMdiSubWindow, form_Find.Ui_frmFind):
         sub.FillFindChecklists(found)
         
         self.parent().parent().addSubWindow(sub)
-        self.mdiParent.PositionChildWindow(sub, self)        
-        sub.show()  
+        self.mdiParent.PositionChildWindow(sub, self)
+        sub.show()
+        sub.scaleMe()
 
         QApplication.restoreOverrideCursor()   
         

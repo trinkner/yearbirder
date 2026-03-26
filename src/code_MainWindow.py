@@ -1161,13 +1161,54 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         
         # if no data file is currently open, abort
         if MainWindow.db.eBirdFileOpenFlag is False:
-            self.CreateMessageNoFile()   
+            self.CreateMessageNoFile()
             return
-            
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))            
-        
-        # get the current filter settings in a list to pass to new child
+
+        # get the current filter settings to validate before proceeding
         filter = self.GetFilter()
+
+        # check if filter is completely empty (no meaningful constraints set)
+        filterIsEmpty = (
+            filter.getLocationName() == "" and
+            filter.getStartDate() == "" and
+            filter.getEndDate() == "" and
+            filter.getSpeciesName() == "" and
+            filter.getSpeciesList() == [] and
+            filter.getFamily() == "" and
+            filter.getChecklistID() == "" and
+            filter.getCommonNameSearch() == "" and
+            filter.getStartSeasonalMonth() == ""
+        )
+        if filterIsEmpty:
+            QMessageBox.information(
+                self,
+                "No Filter Set",
+                "Please set a filter before generating a Big Report.\n\n"
+                "A Big Report with no filter will query your entire dataset and may take a very long time.",
+                QMessageBox.StandardButton.Ok
+            )
+            return
+
+        # if a date range is set, warn if it spans more than one year
+        startDate = filter.getStartDate()
+        endDate = filter.getEndDate()
+        if startDate != "" and endDate != "":
+            d0 = datetime.datetime.strptime(startDate, "%Y-%m-%d")
+            d1 = datetime.datetime.strptime(endDate, "%Y-%m-%d")
+            if (d1 - d0).days > 365:
+                reply = QMessageBox.question(
+                    self,
+                    "Large Date Range",
+                    f"The selected date range spans more than one year "
+                    f"({startDate} to {endDate}).\n\n"
+                    "Generating this report may take a long time. Proceed anyway?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No
+                )
+                if reply != QMessageBox.StandardButton.Yes:
+                    return
+
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
         
         # create new Analysis child window
         sub = code_BigReport.BigReport()
@@ -1219,14 +1260,15 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.mdiArea.addSubWindow(sub)
             self.PositionChildWindow(sub,  self)
             sub.resize(1000, sub.height())
-            sub.show() 
+            sub.show()
+            sub.scaleMe()
 
         else:
-            
+
             self.CreateMessageNoResults()
             sub.close()
-        
-        QApplication.restoreOverrideCursor()                        
+
+        QApplication.restoreOverrideCursor()
                     
                  
     def CreatePDF(self):
@@ -1312,16 +1354,17 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             # add and position the child to our MDI area
             self.mdiArea.addSubWindow(sub)
             self.PositionChildWindow(sub,  self)
-            sub.show() 
-        
+            sub.show()
+            sub.scaleMe()
+
         else:
-            
+
             self.CreateMessageNoResults()
             sub.close()
-        
-        QApplication.restoreOverrideCursor() 
-        
-        
+
+        QApplication.restoreOverrideCursor()
+
+
     def CreateLocationTotals(self):   
 
         # if no data file is currently open, abort        
@@ -1561,15 +1604,16 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         
             # add and position the child to our MDI area        
             self.mdiArea.addSubWindow(sub)
-            self.PositionChildWindow(sub,  self)        
+            self.PositionChildWindow(sub,  self)
             sub.show()
-        
+            sub.scaleMe()
+
         else:
-            
+
             self.CreateMessageNoResults()
-            sub.close
-            
-        QApplication.restoreOverrideCursor()   
+            sub.close()
+
+        QApplication.restoreOverrideCursor()
         
         
     def GetFilter(self):
@@ -2492,7 +2536,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 thisRegionLocations = set()
                 
                 # loop through masterLocationList to find locations filtered for the chosen region
-                print(MainWindow.db.masterLocationList)
                 for l in MainWindow.db.masterLocationList:
                     
                     if thisRegionCode in l["regionCodes"]:

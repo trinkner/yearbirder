@@ -433,7 +433,6 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
         header = locationWidget.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         locationWidget.setShowGrid(False)
-        rowHeight = self.mdiParent.rowHeight
 
         R = 0
         for l in locations:
@@ -447,7 +446,6 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
             speciesCountItem.setData(Qt.DisplayRole, l[1])
             locationWidget.setItem(R, 0, locationItem)
             locationWidget.setItem(R, 1, speciesCountItem)
-            locationWidget.setRowHeight(R, rowHeight)
             R = R + 1
         
         self.lblLocationsForDate.setText("Checklists: " + str(locationWidget.rowCount()))
@@ -464,9 +462,10 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
         sub.FillChecklists(filter)  
         sub.lblLocation.setText("Checklists: " + species)
         self.parent().parent().addSubWindow(sub)
-        self.mdiParent.PositionChildWindow(sub, self)        
-        sub.show()   
-        
+        self.mdiParent.PositionChildWindow(sub, self)
+        sub.show()
+        sub.scaleMe()
+
 
     def CreateLocation(self):
         if self.trLocations.currentItem().childCount() == 0:
@@ -564,9 +563,9 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
             sub.mdiParent = self.mdiParent
             sub.FillSpecies(cFilter)
             self.parent().parent().addSubWindow(sub)
-
-            self.mdiParent.PositionChildWindow(sub, self)        
-            sub.show() 
+            self.mdiParent.PositionChildWindow(sub, self)
+            sub.show()
+            sub.scaleMe()
 
         QApplication.restoreOverrideCursor()   
 
@@ -866,11 +865,11 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
             for ii in range(root.child(i).childCount()):
                 root.child(i).child(ii).setSizeHint(0, myQSize)
                 for iii in range(root.child(i).child(ii).childCount()):
-                    root.child(i).child(ii).child(iii).setSizeHint(0, myQSize) 
+                    root.child(i).child(ii).child(iii).setSizeHint(0, myQSize)
 
         rowHeight = self.mdiParent.rowHeight
-        for r in range(self.tblYearLocations.rowCount()):
-            self.tblYearLocations.setRowHeight(r, rowHeight)
-        for r in range(self.tblMonthLocations.rowCount()):
-            self.tblMonthLocations.setRowHeight(r, rowHeight)
-            
+        self.tblYearLocations.verticalHeader().setDefaultSectionSize(rowHeight)
+        self.tblMonthLocations.verticalHeader().setDefaultSectionSize(rowHeight)
+
+
+

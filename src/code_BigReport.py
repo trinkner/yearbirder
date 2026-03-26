@@ -144,9 +144,14 @@ class BigReport(QMdiSubWindow, form_BigReport.Ui_frmBigReport):
         self.webMap.setObjectName("webMap")
         
         self.tabAnalysis.setCurrentIndex(0)
-        self.speciesList = []        
+        self.speciesList = []
         self.filter = code_Filter.Filter()
         self.filteredSightingList = []
+        self.sightingListForSpeciesSubset = None
+        self.newDatesLoaded = False
+        self.newRegionsLoaded = False
+        self.newLocationsLoaded = False
+        self.tabAnalysis.currentChanged.connect(self.onTabChanged)
         
         
     def CreateLocation(self,  callingWidget):
@@ -211,11 +216,12 @@ class BigReport(QMdiSubWindow, form_BigReport.Ui_frmBigReport):
         sub.mdiParent = self.mdiParent
         sub.FillSpecies(filter)
         self.parent().parent().addSubWindow(sub)
-        self.mdiParent.PositionChildWindow( sub, self)        
-        sub.show() 
-        QApplication.restoreOverrideCursor()          
-        
-        
+        self.mdiParent.PositionChildWindow( sub, self)
+        sub.show()
+        sub.scaleMe()
+        QApplication.restoreOverrideCursor()
+
+
     def FillAnalysisReport(self, filter):
         # save filter for later use
         self.filter = filter
@@ -301,296 +307,6 @@ class BigReport(QMdiSubWindow, form_BigReport.Ui_frmBigReport):
             self.lblLocations.setText("Locations: " + str(len(listLocations)))
             self.lblLocationsVisited.setText("Locations: " + str(len(listLocations)))
 
-        # ****Setup New Species for Dates page****
-        speciesListFilter = code_Filter.Filter()
-        speciesListFilter.setSpeciesList(self.speciesList)
-        sightingListForSpeciesSubset = self.mdiParent.db.GetSightings(speciesListFilter)
-        
-        yearSpecies = self.mdiParent.db.GetNewYearSpecies(filter,  filteredSightingList,  sightingListForSpeciesSubset)
-        lifeSpecies=  self.mdiParent.db.GetNewLifeSpecies(filter,  filteredSightingList,  sightingListForSpeciesSubset)
-        monthSpecies = self.mdiParent.db.GetNewMonthSpecies(filter,  filteredSightingList,  sightingListForSpeciesSubset)
-        
-       # set up tblNewYearSpecies column headers and widths
-        self.tblNewYearSpecies.setColumnCount(2)
-        self.tblNewYearSpecies.setRowCount(len(yearSpecies)+1)
-        self.tblNewYearSpecies.horizontalHeader().setVisible(False)
-        header = self.tblNewYearSpecies.horizontalHeader()
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.tblNewYearSpecies.setShowGrid(False)
-
-        count = 0
-        nonSpeciesTaxaCount = 0
-
-        if len(yearSpecies) > 0:
-
-            R = 0
-            for ys in yearSpecies:
-                yearItem = QTableWidgetItem()
-                yearItem.setText(ys[0])
-                newYearSpeciesItem = QTableWidgetItem()
-                newYearSpeciesItem.setText(ys[1])
-                self.tblNewYearSpecies.setItem(R, 0, yearItem)    
-                self.tblNewYearSpecies.setItem(R, 1, newYearSpeciesItem)
-                self.tblNewYearSpecies.item(R, 1).setFont(font)
-                
-                # color code the entry. Stylesheet color  for full species, gray if not
-                # set the species to gray if it's not a true species
-                if " x " in ys[1] or "sp." in ys[1] or "/" in ys[1]:
-                    self.tblNewYearSpecies.item(R, 1).setForeground(Qt.gray)
-                    nonSpeciesTaxaCount += 1
-                else:
-                    self.tblNewYearSpecies.item(R, 1).setForeground(code_Stylesheet.speciesColor)
-                    count += 1            
-                
-                R = R + 1
-                            
-        labelText = "New year species: " + str(count)
-        
-        if nonSpeciesTaxaCount > 0:
-            labelText = labelText + " + " + str(nonSpeciesTaxaCount) + " other taxa"
-                            
-        self.lblNewYearSpecies.setText(labelText)
-            
-        # set up tblNewMonthSpecies column headers and widths
-        self.tblNewMonthSpecies.setColumnCount(2)
-        self.tblNewMonthSpecies.setRowCount(len(monthSpecies)+1)
-        self.tblNewMonthSpecies.horizontalHeader().setVisible(False)
-        header = self.tblNewMonthSpecies.horizontalHeader()
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.tblNewMonthSpecies.setShowGrid(False)
-
-        count = 0
-        nonSpeciesTaxaCount = 0
-        
-        if len(monthSpecies) > 0:
-            R = 0
-            for ms in monthSpecies:
-                monthItem = QTableWidgetItem()
-                monthItem.setText(ms[0])
-                newMonthSpeciesItem = QTableWidgetItem()
-                newMonthSpeciesItem.setText(ms[1])
-                self.tblNewMonthSpecies.setItem(R, 0, monthItem)    
-                self.tblNewMonthSpecies.setItem(R, 1, newMonthSpeciesItem)
-                self.tblNewMonthSpecies.item(R, 1).setFont(font)
-                
-                # color code the entry. Stylesheet color  for full species, gray if not
-                # set the species to gray if it's not a true species
-                if " x " in ms[1] or "sp." in ms[1] or "/" in ms[1]:
-                    self.tblNewMonthSpecies.item(R, 1).setForeground(Qt.gray)
-                    nonSpeciesTaxaCount += 1
-                else:
-                    self.tblNewMonthSpecies.item(R, 1).setForeground(code_Stylesheet.speciesColor)
-                    count += 1            
-                
-                R += 1
-                                
-        labelText = "New month species: " + str(count)
-        
-        if nonSpeciesTaxaCount > 0:
-            labelText = labelText + " + " + str(nonSpeciesTaxaCount) + " other taxa"
-                                        
-        self.lblNewMonthSpecies.setText(labelText)
-            
-        # set up lstNewLifeSpecies 
-        if len(lifeSpecies) > 0:
-            
-            R = 0
-            
-            for ls in lifeSpecies:
-                
-                self.lstNewLifeSpecies.addItem(ls)
-                
-                self.lstNewLifeSpecies.item(R).setFont(font)
-                
-                if "/" in ls or "sp." in ls or " x " in ls:
-                    self.lstNewLifeSpecies.item(R).setForeground(Qt.gray)
-                    
-                else:
-                    self.lstNewLifeSpecies.item(R).setForeground(code_Stylesheet.speciesColor)
-                
-                R += 1
-                
-            self.lstNewLifeSpecies.setSpacing(2)
-            
-        count = self.mdiParent.db.CountSpecies(lifeSpecies)
-        nonSpeciesTaxaCount = len(lifeSpecies) - count
-        
-        labelText = "New life species: " + str(count)
-        if nonSpeciesTaxaCount > 0:
-            labelText = labelText + " + " + str(nonSpeciesTaxaCount) + " other taxa"
-            
-        self.lblNewLifeSpecies.setText(labelText)
-
-        # ****Setup new Location Species page****
-        countrySpecies = self.mdiParent.db.GetNewCountrySpecies(filter,  filteredSightingList,  sightingListForSpeciesSubset,  self.speciesList)
-        stateSpecies = self.mdiParent.db.GetNewStateSpecies(filter,  filteredSightingList,  sightingListForSpeciesSubset,  self.speciesList)
-        countySpecies = self.mdiParent.db.GetNewCountySpecies(filter,  filteredSightingList,  sightingListForSpeciesSubset,  self.speciesList)
-        locationSpecies = self.mdiParent.db.GetNewLocationSpecies(filter,  filteredSightingList,  sightingListForSpeciesSubset,  self.speciesList)
-        
-        # set up tblNewCountrySpecies column headers and widths
-        self.tblNewCountrySpecies.setColumnCount(2)
-        self.tblNewCountrySpecies.setRowCount(len(countrySpecies))
-        self.tblNewCountrySpecies.horizontalHeader().setVisible(False)
-        header = self.tblNewCountrySpecies.horizontalHeader()
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.tblNewCountrySpecies.setShowGrid(False)
-
-        count = 0
-        nonSpeciesTaxaCount = 0
-
-        if len(countrySpecies) > 0:
-            R = 0
-            for cs in countrySpecies:
-                
-                countryItem = QTableWidgetItem()
-                countryItem.setText(self.mdiParent.db.GetCountryName(cs[0]))
-                newCountrySpeciesItem = QTableWidgetItem()
-                newCountrySpeciesItem.setText(cs[1])
-                self.tblNewCountrySpecies.setItem(R, 0, countryItem)    
-                self.tblNewCountrySpecies.setItem(R, 1, newCountrySpeciesItem)
-                # color code the entry. Stylesheet color  for full species, gray if not
-                # set the species to gray if it's not a true species
-                
-                self.tblNewCountrySpecies.item(R, 1).setFont(font)
-                
-                if " x " in cs[1] or "sp." in cs[1] or "/" in cs[1]:
-                    self.tblNewCountrySpecies.item(R, 1).setForeground(Qt.gray)
-                    nonSpeciesTaxaCount += 1
-                
-                else:
-                    self.tblNewCountrySpecies.item(R, 1).setForeground(code_Stylesheet.speciesColor)
-                    count += 1                   
-                
-                R = R + 1
-        labelText = "New country species: " + str(count)
-        
-        if nonSpeciesTaxaCount > 0:
-            labelText = labelText + " + " + str(nonSpeciesTaxaCount) + " taxa"
-                
-        self.lblNewCountrySpecies.setText(labelText)
-
-        # set up tblNewStateSpecies column headers and widths
-        self.tblNewStateSpecies.setColumnCount(2)
-        self.tblNewStateSpecies.setRowCount(len(stateSpecies))
-        self.tblNewStateSpecies.horizontalHeader().setVisible(False)
-        header = self.tblNewStateSpecies.horizontalHeader()
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.tblNewStateSpecies.setShowGrid(False)
-
-        count = 0
-        nonSpeciesTaxaCount = 0
-
-        if len(stateSpecies) > 0:
-            R = 0
-            for ss in stateSpecies:
-                stateItem = QTableWidgetItem()
-                stateItem.setText(self.mdiParent.db.GetStateName(ss[0]))
-                newStateSpeciesItem = QTableWidgetItem()
-                newStateSpeciesItem.setText(ss[1])
-                self.tblNewStateSpecies.setItem(R, 0, stateItem)    
-                self.tblNewStateSpecies.setItem(R, 1, newStateSpeciesItem)
-                
-                self.tblNewStateSpecies.item(R, 1).setFont(font)
-                
-                if " x " in ss[1] or "sp." in ss[1] or "/" in ss[1]:
-                    self.tblNewStateSpecies.item(R, 1).setForeground(Qt.gray)
-                    nonSpeciesTaxaCount += 1
-                
-                else:
-                    self.tblNewStateSpecies.item(R, 1).setForeground(code_Stylesheet.speciesColor)
-                    count += 1                   
-                
-                R = R + 1
-                
-        labelText = "New state species: " + str(count)
-        
-        if nonSpeciesTaxaCount > 0:
-            labelText = labelText + " + " + str(nonSpeciesTaxaCount) + " taxa"
-                
-        self.lblNewStateSpecies.setText(labelText)                
-                                        
-        self.tblNewStateSpecies.sortByColumn(0, Qt.AscendingOrder)
-                
-        count = 0
-        nonSpeciesTaxaCount = 0
-                    
-        # set up tblNewCountySpecies column headers and widths
-        self.tblNewCountySpecies.setColumnCount(2)
-        self.tblNewCountySpecies.setRowCount(len(countySpecies))
-        self.tblNewCountySpecies.horizontalHeader().setVisible(False)
-        header = self.tblNewCountySpecies.horizontalHeader()
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.tblNewCountySpecies.setShowGrid(False)
-
-        if len(countySpecies) > 0:
-            R = 0
-            for cs in countySpecies:
-                countyItem = QTableWidgetItem()
-                countyItem.setText(cs[0])
-                newCountySpeciesItem = QTableWidgetItem()
-                newCountySpeciesItem.setText(cs[1])
-                self.tblNewCountySpecies.setItem(R, 0, countyItem)    
-                self.tblNewCountySpecies.setItem(R, 1, newCountySpeciesItem)
-                
-                self.tblNewCountySpecies.item(R, 1).setFont(font)
-                
-                if " x " in cs[1] or "sp." in cs[1] or "/" in cs[1]:
-                    self.tblNewCountySpecies.item(R, 1).setForeground(Qt.gray)
-                    nonSpeciesTaxaCount += 1
-                
-                else:
-                    self.tblNewCountySpecies.item(R, 1).setForeground(code_Stylesheet.speciesColor)
-                    count += 1                   
-                
-                R = R + 1
-                
-        labelText = "New county species: " + str(count)
-        
-        if nonSpeciesTaxaCount > 0:
-            labelText = labelText + " + " + str(nonSpeciesTaxaCount) + " taxa"
-                
-        self.lblNewCountySpecies.setText(labelText)                  
-
-        count = 0
-        nonSpeciesTaxaCount = 0            
-        
-        # set up tblNewLocationSpecies column headers and widths
-        self.tblNewLocationSpecies.setColumnCount(2)
-        self.tblNewLocationSpecies.setRowCount(len(locationSpecies))
-        self.tblNewLocationSpecies.horizontalHeader().setVisible(False)
-        header = self.tblNewLocationSpecies.horizontalHeader()
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.tblNewLocationSpecies.setShowGrid(False)
-
-        if len(locationSpecies) > 0:
-            R = 0
-            for ls in locationSpecies:
-                locationItem = QTableWidgetItem()
-                locationItem.setText(ls[0])
-                newLocationSpeciesItem = QTableWidgetItem()
-                newLocationSpeciesItem.setText(ls[1])
-                self.tblNewLocationSpecies.setItem(R, 0, locationItem)    
-                self.tblNewLocationSpecies.setItem(R, 1, newLocationSpeciesItem)
-
-                self.tblNewLocationSpecies.item(R, 1).setFont(font)
-                
-                if " x " in ls[1] or "sp." in ls[1] or "/" in ls[1]:
-                    self.tblNewLocationSpecies.item(R, 1).setForeground(Qt.gray)
-                    nonSpeciesTaxaCount += 1
-                
-                else:
-                    self.tblNewLocationSpecies.item(R, 1).setForeground(code_Stylesheet.speciesColor)
-                    count += 1                   
-                
-                R = R + 1
-                
-        labelText = "New location species: " + str(count)
-        
-        if nonSpeciesTaxaCount > 0:
-            labelText = labelText + " + " + str(nonSpeciesTaxaCount) + " taxa"
-                
-        self.lblNewLocationSpecies.setText(labelText)                             
-
         # ****Setup window's main labels****
         # set main species seen label text
         count = self.mdiParent.db.CountSpecies(self.speciesList)
@@ -613,11 +329,237 @@ class BigReport(QMdiSubWindow, form_BigReport.Ui_frmBigReport):
         else:
             self.lblDetails.setVisible(False)
 
-        self.resizeMe()        
+        self.resizeMe()
         self.scaleMe()
- 
+
         return(True)
-        
+
+
+    def onTabChanged(self, index):
+        tabIndex = self.tabAnalysis.indexOf
+        if index == tabIndex(self.tabNewDates) and not self.newDatesLoaded:
+            QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+            self._fillNewDates()
+            self.newDatesLoaded = True
+            QApplication.restoreOverrideCursor()
+        elif index == tabIndex(self.tabNewRegions) and not self.newRegionsLoaded:
+            QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+            self._fillNewRegions()
+            self.newRegionsLoaded = True
+            QApplication.restoreOverrideCursor()
+        elif index == tabIndex(self.tabNewLocations) and not self.newLocationsLoaded:
+            QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+            self._fillNewLocations()
+            self.newLocationsLoaded = True
+            QApplication.restoreOverrideCursor()
+
+
+    def _ensureSpeciesSubsetSightings(self):
+        if self.sightingListForSpeciesSubset is None:
+            speciesListFilter = code_Filter.Filter()
+            speciesListFilter.setSpeciesList(self.speciesList)
+            self.sightingListForSpeciesSubset = self.mdiParent.db.GetSightings(speciesListFilter)
+
+
+    def _fillNewDates(self):
+        self._ensureSpeciesSubsetSightings()
+        font = QFont()
+        font.setBold(True)
+        filteredSightingList = self.filteredSightingList
+        sightingListForSpeciesSubset = self.sightingListForSpeciesSubset
+
+        yearSpecies = self.mdiParent.db.GetNewYearSpecies(self.filter, filteredSightingList, sightingListForSpeciesSubset)
+        lifeSpecies = self.mdiParent.db.GetNewLifeSpecies(self.filter, filteredSightingList, sightingListForSpeciesSubset)
+        monthSpecies = self.mdiParent.db.GetNewMonthSpecies(self.filter, filteredSightingList, sightingListForSpeciesSubset)
+
+        self.tblNewYearSpecies.setColumnCount(2)
+        self.tblNewYearSpecies.setRowCount(len(yearSpecies) + 1)
+        self.tblNewYearSpecies.horizontalHeader().setVisible(False)
+        self.tblNewYearSpecies.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self.tblNewYearSpecies.setShowGrid(False)
+        count = 0
+        nonSpeciesTaxaCount = 0
+        for R, ys in enumerate(yearSpecies):
+            yearItem = QTableWidgetItem(ys[0])
+            newYearSpeciesItem = QTableWidgetItem(ys[1])
+            self.tblNewYearSpecies.setItem(R, 0, yearItem)
+            self.tblNewYearSpecies.setItem(R, 1, newYearSpeciesItem)
+            self.tblNewYearSpecies.item(R, 1).setFont(font)
+            if " x " in ys[1] or "sp." in ys[1] or "/" in ys[1]:
+                self.tblNewYearSpecies.item(R, 1).setForeground(Qt.gray)
+                nonSpeciesTaxaCount += 1
+            else:
+                self.tblNewYearSpecies.item(R, 1).setForeground(code_Stylesheet.speciesColor)
+                count += 1
+        labelText = "New year species: " + str(count)
+        if nonSpeciesTaxaCount > 0:
+            labelText += " + " + str(nonSpeciesTaxaCount) + " other taxa"
+        self.lblNewYearSpecies.setText(labelText)
+
+        self.tblNewMonthSpecies.setColumnCount(2)
+        self.tblNewMonthSpecies.setRowCount(len(monthSpecies) + 1)
+        self.tblNewMonthSpecies.horizontalHeader().setVisible(False)
+        self.tblNewMonthSpecies.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self.tblNewMonthSpecies.setShowGrid(False)
+        count = 0
+        nonSpeciesTaxaCount = 0
+        for R, ms in enumerate(monthSpecies):
+            monthItem = QTableWidgetItem(ms[0])
+            newMonthSpeciesItem = QTableWidgetItem(ms[1])
+            self.tblNewMonthSpecies.setItem(R, 0, monthItem)
+            self.tblNewMonthSpecies.setItem(R, 1, newMonthSpeciesItem)
+            self.tblNewMonthSpecies.item(R, 1).setFont(font)
+            if " x " in ms[1] or "sp." in ms[1] or "/" in ms[1]:
+                self.tblNewMonthSpecies.item(R, 1).setForeground(Qt.gray)
+                nonSpeciesTaxaCount += 1
+            else:
+                self.tblNewMonthSpecies.item(R, 1).setForeground(code_Stylesheet.speciesColor)
+                count += 1
+        labelText = "New month species: " + str(count)
+        if nonSpeciesTaxaCount > 0:
+            labelText += " + " + str(nonSpeciesTaxaCount) + " other taxa"
+        self.lblNewMonthSpecies.setText(labelText)
+
+        for R, ls in enumerate(lifeSpecies):
+            self.lstNewLifeSpecies.addItem(ls)
+            self.lstNewLifeSpecies.item(R).setFont(font)
+            if "/" in ls or "sp." in ls or " x " in ls:
+                self.lstNewLifeSpecies.item(R).setForeground(Qt.gray)
+            else:
+                self.lstNewLifeSpecies.item(R).setForeground(code_Stylesheet.speciesColor)
+        if lifeSpecies:
+            self.lstNewLifeSpecies.setSpacing(2)
+        count = self.mdiParent.db.CountSpecies(lifeSpecies)
+        nonSpeciesTaxaCount = len(lifeSpecies) - count
+        labelText = "New life species: " + str(count)
+        if nonSpeciesTaxaCount > 0:
+            labelText += " + " + str(nonSpeciesTaxaCount) + " other taxa"
+        self.lblNewLifeSpecies.setText(labelText)
+
+
+    def _fillNewRegions(self):
+        self._ensureSpeciesSubsetSightings()
+        font = QFont()
+        font.setBold(True)
+        filteredSightingList = self.filteredSightingList
+        sightingListForSpeciesSubset = self.sightingListForSpeciesSubset
+
+        countrySpecies = self.mdiParent.db.GetNewCountrySpecies(self.filter, filteredSightingList, sightingListForSpeciesSubset, self.speciesList)
+        stateSpecies = self.mdiParent.db.GetNewStateSpecies(self.filter, filteredSightingList, sightingListForSpeciesSubset, self.speciesList)
+        countySpecies = self.mdiParent.db.GetNewCountySpecies(self.filter, filteredSightingList, sightingListForSpeciesSubset, self.speciesList)
+
+        self.tblNewCountrySpecies.setColumnCount(2)
+        self.tblNewCountrySpecies.setRowCount(len(countrySpecies))
+        self.tblNewCountrySpecies.horizontalHeader().setVisible(False)
+        self.tblNewCountrySpecies.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self.tblNewCountrySpecies.setShowGrid(False)
+        count = 0
+        nonSpeciesTaxaCount = 0
+        for R, cs in enumerate(countrySpecies):
+            countryItem = QTableWidgetItem(self.mdiParent.db.GetCountryName(cs[0]))
+            newCountrySpeciesItem = QTableWidgetItem(cs[1])
+            self.tblNewCountrySpecies.setItem(R, 0, countryItem)
+            self.tblNewCountrySpecies.setItem(R, 1, newCountrySpeciesItem)
+            self.tblNewCountrySpecies.item(R, 1).setFont(font)
+            if " x " in cs[1] or "sp." in cs[1] or "/" in cs[1]:
+                self.tblNewCountrySpecies.item(R, 1).setForeground(Qt.gray)
+                nonSpeciesTaxaCount += 1
+            else:
+                self.tblNewCountrySpecies.item(R, 1).setForeground(code_Stylesheet.speciesColor)
+                count += 1
+        labelText = "New country species: " + str(count)
+        if nonSpeciesTaxaCount > 0:
+            labelText += " + " + str(nonSpeciesTaxaCount) + " taxa"
+        self.lblNewCountrySpecies.setText(labelText)
+
+        self.tblNewStateSpecies.setColumnCount(2)
+        self.tblNewStateSpecies.setRowCount(len(stateSpecies))
+        self.tblNewStateSpecies.horizontalHeader().setVisible(False)
+        self.tblNewStateSpecies.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self.tblNewStateSpecies.setShowGrid(False)
+        count = 0
+        nonSpeciesTaxaCount = 0
+        for R, ss in enumerate(stateSpecies):
+            stateItem = QTableWidgetItem(self.mdiParent.db.GetStateName(ss[0]))
+            newStateSpeciesItem = QTableWidgetItem(ss[1])
+            self.tblNewStateSpecies.setItem(R, 0, stateItem)
+            self.tblNewStateSpecies.setItem(R, 1, newStateSpeciesItem)
+            self.tblNewStateSpecies.item(R, 1).setFont(font)
+            if " x " in ss[1] or "sp." in ss[1] or "/" in ss[1]:
+                self.tblNewStateSpecies.item(R, 1).setForeground(Qt.gray)
+                nonSpeciesTaxaCount += 1
+            else:
+                self.tblNewStateSpecies.item(R, 1).setForeground(code_Stylesheet.speciesColor)
+                count += 1
+        labelText = "New state species: " + str(count)
+        if nonSpeciesTaxaCount > 0:
+            labelText += " + " + str(nonSpeciesTaxaCount) + " taxa"
+        self.lblNewStateSpecies.setText(labelText)
+        self.tblNewStateSpecies.sortByColumn(0, Qt.AscendingOrder)
+
+        self.tblNewCountySpecies.setColumnCount(2)
+        self.tblNewCountySpecies.setRowCount(len(countySpecies))
+        self.tblNewCountySpecies.horizontalHeader().setVisible(False)
+        self.tblNewCountySpecies.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self.tblNewCountySpecies.setShowGrid(False)
+        count = 0
+        nonSpeciesTaxaCount = 0
+        for R, cs in enumerate(countySpecies):
+            countyItem = QTableWidgetItem(cs[0])
+            newCountySpeciesItem = QTableWidgetItem(cs[1])
+            self.tblNewCountySpecies.setItem(R, 0, countyItem)
+            self.tblNewCountySpecies.setItem(R, 1, newCountySpeciesItem)
+            self.tblNewCountySpecies.item(R, 1).setFont(font)
+            if " x " in cs[1] or "sp." in cs[1] or "/" in cs[1]:
+                self.tblNewCountySpecies.item(R, 1).setForeground(Qt.gray)
+                nonSpeciesTaxaCount += 1
+            else:
+                self.tblNewCountySpecies.item(R, 1).setForeground(code_Stylesheet.speciesColor)
+                count += 1
+        labelText = "New county species: " + str(count)
+        if nonSpeciesTaxaCount > 0:
+            labelText += " + " + str(nonSpeciesTaxaCount) + " taxa"
+        self.lblNewCountySpecies.setText(labelText)
+
+
+    def _fillNewLocations(self):
+        self._ensureSpeciesSubsetSightings()
+        font = QFont()
+        font.setBold(True)
+        filteredSightingList = self.filteredSightingList
+        sightingListForSpeciesSubset = self.sightingListForSpeciesSubset
+
+        locationSpecies = self.mdiParent.db.GetNewLocationSpecies(self.filter, filteredSightingList, sightingListForSpeciesSubset, self.speciesList)
+
+        self.tblNewLocationSpecies.setColumnCount(2)
+        self.tblNewLocationSpecies.setRowCount(len(locationSpecies))
+        self.tblNewLocationSpecies.horizontalHeader().setVisible(False)
+        self.tblNewLocationSpecies.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self.tblNewLocationSpecies.setShowGrid(False)
+        count = 0
+        nonSpeciesTaxaCount = 0
+        for R, ls in enumerate(locationSpecies):
+            locationItem = QTableWidgetItem(ls[0])
+            newLocationSpeciesItem = QTableWidgetItem(ls[1])
+            self.tblNewLocationSpecies.setItem(R, 0, locationItem)
+            self.tblNewLocationSpecies.setItem(R, 1, newLocationSpeciesItem)
+            self.tblNewLocationSpecies.item(R, 1).setFont(font)
+            if " x " in ls[1] or "sp." in ls[1] or "/" in ls[1]:
+                self.tblNewLocationSpecies.item(R, 1).setForeground(Qt.gray)
+                nonSpeciesTaxaCount += 1
+            else:
+                self.tblNewLocationSpecies.item(R, 1).setForeground(code_Stylesheet.speciesColor)
+                count += 1
+        labelText = "New location species: " + str(count)
+        if nonSpeciesTaxaCount > 0:
+            labelText += " + " + str(nonSpeciesTaxaCount) + " taxa"
+        self.lblNewLocationSpecies.setText(labelText)
+
+        # set location column width (must be done after fill since setColumnCount resets widths)
+        fontSize = self.mdiParent.fontSize
+        textWidth = int(QFontMetrics(QFont("Helvetica", fontSize)).boundingRect("Dummy Country").width())
+        self.tblNewLocationSpecies.horizontalHeader().resizeSection(0, floor(8 * textWidth))
+
 
     def FillSpeciesForDate(self):
         # create temporary filter for query with nothing but needed date
@@ -880,11 +822,12 @@ document.addEventListener("DOMContentLoaded", function() {{
             sub.mdiParent = self.mdiParent
             sub.FillSpecies(tempFilter)
             self.parent().parent().addSubWindow(sub)
-            self.mdiParent.PositionChildWindow(sub, self)        
-            sub.show() 
+            self.mdiParent.PositionChildWindow(sub, self)
+            sub.show()
+            sub.scaleMe()
             sub.resizeMe()
 
-        QApplication.restoreOverrideCursor() 
+        QApplication.restoreOverrideCursor()
         
 
     def html(self):
@@ -1607,8 +1550,6 @@ document.addEventListener("DOMContentLoaded", function() {{
             else:
                 header.resizeSection(0,  floor(textWidth))
             t.verticalHeader().setDefaultSectionSize(rowHeight)
-            for r in range(t.rowCount()):
-                t.setRowHeight(r, rowHeight)
 
         # format tblSpecies, which is laid out differently from the other tables
         dateWidth = int(metrics.boundingRect("2222-22-22").width())
@@ -1616,13 +1557,9 @@ document.addEventListener("DOMContentLoaded", function() {{
         header.resizeSection(2,  floor(1.5* dateWidth))
         header.resizeSection(3,  floor(1.5 * dateWidth))
         self.tblSpecies.verticalHeader().setDefaultSectionSize(rowHeight)
-        for r in range(self.tblSpecies.rowCount()):
-            self.tblSpecies.setRowHeight(r, rowHeight)
 
         # format tblNewLocationSpecies, which needs wider location column
         header = self.tblNewLocationSpecies.horizontalHeader()
-        header.resizeSection(0,  floor(4 * textWidth))
+        header.resizeSection(0,  floor(8 * textWidth))
         self.tblNewLocationSpecies.verticalHeader().setDefaultSectionSize(rowHeight)
-        for r in range(self.tblNewLocationSpecies.rowCount()):
-            self.tblNewLocationSpecies.setRowHeight(r, rowHeight)
 

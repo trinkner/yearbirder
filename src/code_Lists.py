@@ -184,10 +184,13 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         header = self.tblList.horizontalHeader()
         metrics = QFontMetrics(QFont("Helvetica", fontSize))
 
+        rowHeight = self.mdiParent.rowHeight
+        for R in range(self.tblList.rowCount()):
+            self.tblList.setRowHeight(R, rowHeight)
+
         if self.listType == "Species":
             dateTextWidth = int(metrics.boundingRect("2222-22-22").width())
-            dateTextHeight = self.mdiParent.rowHeight
-            
+
             #find the width of the widest integer in the Tax column
             maxWidth = 0
             for R in range(self.tblList.rowCount()):
@@ -234,12 +237,9 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
             header.resizeSection(3, w3)
             header.resizeSection(4, w4)
             header.resizeSection(5, w5)
-            
+
             # give species name column the remaining width
             header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-
-            for R in range(self.tblList.rowCount()):
-                self.tblList.setRowHeight(R, dateTextHeight)
 
         if self.listType == "Single Checklist":
             taxTextWidth = int(metrics.boundingRect("Tax").width())
@@ -258,11 +258,8 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         
         if self.listType == "Locations":
             dateTextWidth = int(metrics.boundingRect("2222-22-22 22:22").width())
-            dateTextHeight = int(metrics.boundingRect("2222-22-22 22:22").height())
             header.resizeSection(1,  floor(1.75 * dateTextWidth))
-            header.resizeSection(2,  floor(1.75 * dateTextWidth))                
-            for R in range(self.tblList.rowCount()):
-                self.tblList.setRowHeight(R, int(dateTextHeight * 1.1))
+            header.resizeSection(2,  floor(1.75 * dateTextWidth))
 
         if self.listType == "Checklists":
 
@@ -280,12 +277,8 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
             header.resizeSection(5,  floor(1.75 * timeTextWidth))
             
             speciesColumnWidth = int(metrics.boundingRect("Species").width())
-            header.resizeSection(6,  floor(1.45 * speciesColumnWidth))                
-            
-            textHeight= int(metrics.boundingRect("2222").height())
-            for R in range(self.tblList.rowCount()):
-                self.tblList.setRowHeight(R, int(textHeight * 1.1))  
-        
+            header.resizeSection(6,  floor(1.45 * speciesColumnWidth))
+
         if self.listType == "Find Results":
 
             thisColumnWidth = int(metrics.boundingRect("Checklist Comments").width())
@@ -298,10 +291,7 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
             header.resizeSection(2,  floor(1.75 * dateTextWidth))
 
             # Don't set Comments width. It stretches to fill remaining vacant width
-            textHeight= int(metrics.boundingRect("2222").height())
-            for R in range(self.tblList.rowCount()):
-                self.tblList.setRowHeight(R, int(textHeight * 1.1))
-        
+
         self.lblLocation.setFont(QFont("Helvetica", floor(fontSize * 1.4 )))
         self.lblLocation.setStyleSheet("QLabel { font: bold }");
         self.lblDateRange.setFont(QFont("Helvetica", floor(fontSize * 1.2 )))
@@ -568,10 +558,10 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         if filter.getChecklistID() == "":
                         
             thisWindowList = self.mdiParent.db.GetSpeciesWithData(filter,  [], "Subspecies")
-                    
+
             if len(thisWindowList) == 0:
-                return(False)                    
-                    
+                return(False)
+
             self.tblList.setRowCount(len(thisWindowList))
             self.tblList.setColumnCount(6)
             self.tblList.setHorizontalHeaderLabels(['Tax', 'Species', 'First',  'Last', 'Checklists', '% of Checklists'])
@@ -627,7 +617,7 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
             
             self.listType = "Single Checklist"
 
-            thisWindowList = self.mdiParent.db.GetSightings(filter)  
+            thisWindowList = self.mdiParent.db.GetSightings(filter)
             self.tblList.setRowCount(len(thisWindowList))            
             self.tblList.setColumnCount(4)
             self.tblList.setHorizontalHeaderLabels(['Tax', 'Species', 'Count',  "Comment"])    

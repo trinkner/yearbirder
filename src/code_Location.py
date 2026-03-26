@@ -135,10 +135,11 @@ class Location(QMdiSubWindow, form_Location.Ui_frmLocation):
         sub.mdiParent = self.mdiParent
         sub.FillSpecies(filter)
         self.parent().parent().addSubWindow(sub)
-        self.mdiParent.PositionChildWindow( sub, self)        
-        sub.show() 
-        
-        QApplication.restoreOverrideCursor()  
+        self.mdiParent.PositionChildWindow( sub, self)
+        sub.show()
+        sub.scaleMe()
+
+        QApplication.restoreOverrideCursor()
 
 
     def FillLocation(self, location):
@@ -274,7 +275,7 @@ class Location(QMdiSubWindow, form_Location.Ui_frmLocation):
         R = 0
         for species in thisWindowList:    
             taxItem = QTableWidgetItem()
-            taxItem.setData(Qt.DisplayRole, R)
+            taxItem.setData(Qt.DisplayRole, R + 1)
             speciesItem = QTableWidgetItem()
             speciesItem.setText(species[0])
             firstItem = QTableWidgetItem()
@@ -565,15 +566,11 @@ class Location(QMdiSubWindow, form_Location.Ui_frmLocation):
         header.resizeSection(2,  floor(1.5 * dateTextWidth))
         header.resizeSection(3,  floor(1.5 * dateTextWidth))
         self.tblSpecies.verticalHeader().setDefaultSectionSize(rowHeight)
-        for R in range(self.tblSpecies.rowCount()):
-            self.tblSpecies.setRowHeight(R, rowHeight)
 
         header = self.tblDates.horizontalHeader()
         textWidth = int(metrics.boundingRect("Rank").width())
         header.resizeSection(0,  floor(1.75 * textWidth))
         header.resizeSection(1,  floor(1.5 * dateTextWidth))
         self.tblDates.verticalHeader().setDefaultSectionSize(rowHeight)
-        for R in range(self.tblDates.rowCount()):
-            self.tblDates.setRowHeight(R, rowHeight)
         
         self.FillMap()

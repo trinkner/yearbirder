@@ -151,10 +151,11 @@ class Families(QMdiSubWindow, form_Families.Ui_frmFamilies):
         sub = code_Lists.Lists()
         sub.mdiParent = self.mdiParent        
         
-        sub.FillSpecies(tempFilter)        
+        sub.FillSpecies(tempFilter)
         self.parent().parent().addSubWindow(sub)
-        self.mdiParent.PositionChildWindow(sub, self)        
+        self.mdiParent.PositionChildWindow(sub, self)
         sub.show()
+        sub.scaleMe()
 
     
     def CreateIndividual(self,  species):
@@ -424,13 +425,11 @@ class Families(QMdiSubWindow, form_Families.Ui_frmFamilies):
         self.lblDetails.setStyleSheet("QLabel { font: bold }");
 
         metrics = QFontMetrics(QFont("Helvetica", fontSize))
-        textWidth = int(metrics.boundingRect("Rank").width())
         rowHeight = self.mdiParent.rowHeight
+        textWidth = int(metrics.boundingRect("Rank").width())
 
-        for t in [self.tblPieChartLegend]:
-            header = t.horizontalHeader()
-            header.resizeSection(0,  floor(.75 * textWidth))
-            header.resizeSection(2,  floor(.75 * textWidth))
-            for r in range(t.rowCount()):
-                t.setRowHeight(r, rowHeight)
+        header = self.tblPieChartLegend.horizontalHeader()
+        header.resizeSection(0,  floor(.75 * textWidth))
+        header.resizeSection(2,  floor(.75 * textWidth))
+        self.tblPieChartLegend.verticalHeader().setDefaultSectionSize(rowHeight)
     

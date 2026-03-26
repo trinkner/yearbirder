@@ -112,9 +112,10 @@ class LocationTotals(QMdiSubWindow, form_LocationTotals.Ui_frmLocationTotals):
             sub.FillChecklists(tempFilter)
 
         self.parent().parent().addSubWindow(sub)
-        self.mdiParent.PositionChildWindow( sub, self)        
-        sub.show() 
-        QApplication.restoreOverrideCursor()       
+        self.mdiParent.PositionChildWindow( sub, self)
+        sub.show()
+        sub.scaleMe()
+        QApplication.restoreOverrideCursor()
 
 
     def html(self):
@@ -697,8 +698,6 @@ class LocationTotals(QMdiSubWindow, form_LocationTotals.Ui_frmLocationTotals):
             header.resizeSection(2,  floor(2 * rankTextWidth))
             header.resizeSection(3,  floor(2.5 * rankTextWidth))
             t.verticalHeader().setDefaultSectionSize(rowHeight)
-            for r in range(t.rowCount()):
-                t.setRowHeight(r, rowHeight)
 
 
     def setCountryFilter(self):

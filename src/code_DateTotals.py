@@ -79,8 +79,9 @@ class DateTotals(QMdiSubWindow, form_DateTotals.Ui_frmDateTotals):
             sub.FillChecklists(tempFilter)
             
         self.parent().parent().addSubWindow(sub)
-        self.mdiParent.PositionChildWindow(sub, self)                
-        sub.show()   
+        self.mdiParent.PositionChildWindow(sub, self)
+        sub.show()
+        sub.scaleMe()
 
 
     def MonthTableClicked(self):
@@ -109,8 +110,9 @@ class DateTotals(QMdiSubWindow, form_DateTotals.Ui_frmDateTotals):
             sub.FillChecklists(tempFilter)
     
         self.parent().parent().addSubWindow(sub)
-        self.mdiParent.PositionChildWindow(sub, self)                
-        sub.show()   
+        self.mdiParent.PositionChildWindow(sub, self)
+        sub.show()
+        sub.scaleMe()
 
 
     def html(self):
@@ -323,10 +325,11 @@ class DateTotals(QMdiSubWindow, form_DateTotals.Ui_frmDateTotals):
             sub.FillChecklists(tempFilter)
             
         self.parent().parent().addSubWindow(sub)
-        self.mdiParent.PositionChildWindow(sub, self)                
-        sub.show()   
-    
-    
+        self.mdiParent.PositionChildWindow(sub, self)
+        sub.show()
+        sub.scaleMe()
+
+
     def FillDateTotals(self,  filter):
         
         self.filter = filter
@@ -601,6 +604,4 @@ class DateTotals(QMdiSubWindow, form_DateTotals.Ui_frmDateTotals):
             header.resizeSection(2,  floor(2.5 * rankTextWidth))
             header.resizeSection(3,  floor(2.5 * rankTextWidth))
             t.verticalHeader().setDefaultSectionSize(rowHeight)
-            for r in range(t.rowCount()):
-                t.setRowHeight(r, rowHeight)
  
