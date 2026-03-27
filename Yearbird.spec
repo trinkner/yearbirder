@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 import os, glob
-from PyInstaller.utils.hooks import collect_data_files
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 # PySide6/WebEngine: PyInstaller's PySide6 hooks automatically collect
 # QtWebEngineCore.framework (binary + resources + QtWebEngineProcess.app)
@@ -23,10 +23,15 @@ datas = [
 # PySide6 data files (plugins, translations, etc.)
 datas += collect_data_files("PySide6")
 
+# Matplotlib data files (font cache, style sheets, etc.)
+datas += collect_data_files("matplotlib")
+
 hiddenimports = [
     "PySide6.QtWebEngineWidgets",
     "PySide6.QtWebEngineCore",
     "PySide6.QtWebChannel",
+    "matplotlib.backends.backend_qtagg",
+    "matplotlib",
 ]
 
 a = Analysis(

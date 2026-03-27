@@ -11,6 +11,7 @@ import code_Families
 import code_Compare
 import code_LocationTotals
 import code_DateTotals
+import code_Graphs
 import code_Photos
 import code_ManagePhotos
 import code_Preferences
@@ -220,6 +221,13 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionFamilies.triggered.connect(self.CreateFamiliesReport)
         self.actionPhotos.triggered.connect(self.createPhotosReport)
         self.actionBigReport.triggered.connect(self.CreateBigReport)
+        self.actionBarGraph.triggered.connect(self.CreateBarGraph)
+        self.actionCumulativeCurve.triggered.connect(self.CreateCumulativeCurve)
+        self.actionHeatmap.triggered.connect(self.CreateHeatmap)
+        self.actionAccumulation.triggered.connect(self.CreateAccumulationChart)
+        self.actionTopLocations.triggered.connect(self.CreateTopLocations)
+        self.actionScatter.triggered.connect(self.CreateScatterChart)
+        self.actionPhenology.triggered.connect(self.CreatePhenologyChart)
         self.actionMap.triggered.connect(self.CreateMap)
         self.actionFind.triggered.connect(self.CreateFind)
 
@@ -1027,11 +1035,25 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         
         
     def PositionChildWindow(self, child,  creatingWindow):
-        
+
+        # Qt's QMdiArea only allows one maximized subwindow at a time.
+        # Capture whether the MDI area is in maximized mode *before* restoring,
+        # then restore the sibling so the new child can be freely positioned.
+        # After scaleMe has set the restore size, maximize the new child.
+        # QTimer(50ms) ensures both synchronous and QTimer(0) scaleMe calls
+        # complete before showMaximized fires.
+        spawned_from_maximized = any(
+            w.isMaximized() for w in self.mdiArea.subWindowList() if w is not child)
+        if spawned_from_maximized:
+            for w in self.mdiArea.subWindowList():
+                if w is not child and w.isMaximized():
+                    w.showNormal()
+                    break
+
         # if creatingWindow is the maind MDI window, center the new child window
         if creatingWindow.objectName() == "MainWindow":
             childWindowCoordinates = []
-            for window in self.mdiArea.subWindowList():        
+            for window in self.mdiArea.subWindowList():
                 if window.isVisible() == True:
                     childWindowCoordinates.append([window.x(),  window.y()])
             # try to place child window, but check if that would exactly overlap another window
@@ -1042,14 +1064,17 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 x = x + 25
                 y = y + 25
             child.setGeometry(x, y, child.width(), child.height())
-        
+
         # if creatingWindow is a child window, place new child window cascaded down from calling creatingWindow
         else:
             x = creatingWindow.x() + 25
             y = creatingWindow.y() + 25
         child.setGeometry(x, y, child.width(), child.height())
-        
+
         child.setFocus()
+
+        if spawned_from_maximized:
+            QTimer.singleShot(50, child.showMaximized)
 
 
     def closeDataFile(self):
@@ -1501,7 +1526,179 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         QApplication.restoreOverrideCursor()
 
 
-    def CreateFamiliesReport(self):      
+    def CreateBarGraph(self):
+
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+
+        sub = code_Graphs.Graphs()
+        sub.mdiParent = self
+
+        if sub.FillGraph(self.GetFilter(), "bar") is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+            QTimer.singleShot(0, sub.scaleMe)
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+
+        QApplication.restoreOverrideCursor()
+
+    def CreateCumulativeCurve(self):
+
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+
+        sub = code_Graphs.Graphs()
+        sub.mdiParent = self
+
+        if sub.FillGraph(self.GetFilter(), "cumulative") is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+            QTimer.singleShot(0, sub.scaleMe)
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+
+        QApplication.restoreOverrideCursor()
+
+    def CreateHeatmap(self):
+
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+
+        sub = code_Graphs.Graphs()
+        sub.mdiParent = self
+
+        if sub.FillGraph(self.GetFilter(), "heatmap") is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+            QTimer.singleShot(0, sub.scaleMe)
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+
+        QApplication.restoreOverrideCursor()
+
+    def CreateAccumulationChart(self):
+
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+
+        sub = code_Graphs.Graphs()
+        sub.mdiParent = self
+
+        if sub.FillGraph(self.GetFilter(), "accumulation") is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+            QTimer.singleShot(0, sub.scaleMe)
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+
+        QApplication.restoreOverrideCursor()
+
+
+    def CreateTopLocations(self):
+
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+
+        sub = code_Graphs.Graphs()
+        sub.mdiParent = self
+
+        if sub.FillGraph(self.GetFilter(), "locations") is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+            QTimer.singleShot(0, sub.scaleMe)
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+
+        QApplication.restoreOverrideCursor()
+
+    def CreateScatterChart(self):
+
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+
+        sub = code_Graphs.Graphs()
+        sub.mdiParent = self
+
+        if sub.FillGraph(self.GetFilter(), "scatter") is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+            QTimer.singleShot(0, sub.scaleMe)
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+
+        QApplication.restoreOverrideCursor()
+
+    def CreatePhenologyChart(self):
+
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+
+        f = self.GetFilter()
+        if (f.getSpeciesName() == "" and f.getCommonNameSearch() == ""
+                and f.getFamily() == "" and f.getOrder() == ""):
+            from PySide6.QtWidgets import QMessageBox
+            reply = QMessageBox.question(
+                self,
+                "No Species Filter",
+                "No species, family, or order filter is set.\n\n"
+                "The Phenology Chart is most useful for a species, family, or order. "
+                "Generating it for your entire dataset may be too cluttered "
+                "to read clearly.\n\n"
+                "Generate it anyway?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No)
+            if reply == QMessageBox.No:
+                return
+
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+
+        sub = code_Graphs.Graphs()
+        sub.mdiParent = self
+
+        if sub.FillGraph(f, "strip") is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+            QTimer.singleShot(0, sub.scaleMe)
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+
+        QApplication.restoreOverrideCursor()
+
+    def CreateFamiliesReport(self):
 
         # if no data file is currently open, abort        
         if MainWindow.db.eBirdFileOpenFlag is not True:
@@ -2399,9 +2596,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         if detailsText =="":
             sub.lblDetails.setVisible(False)
         else:
-            sub.lblDetails.setVisible(True)      
-            
-        sub.setWindowTitle(sub.lblLocation.text() + ": " + sub.lblDateRange.text())   
+            sub.lblDetails.setVisible(True)
        
     
     def FillMainComboBoxes(self):

@@ -315,6 +315,8 @@ class Filter():
 
         # Location: the filter carries at most one active level
         if locationName != "":
+            if locationType == "Region":
+                locationName = db.GetRegionName(locationName)
             if locationType == "Country":
                 locationName = db.GetCountryName(locationName)
             if locationType == "State":
