@@ -17,7 +17,7 @@
     }
     h1 {
       font-size: 2rem;
-      border-bottom: 2px solid #3a7d44;
+      border-bottom: 2px solid #4f8ef7;
       padding-bottom: 0.4rem;
       color: #1a1a1a;
     }
@@ -26,7 +26,7 @@
       margin-top: 2.5rem;
       border-bottom: 1px solid #ddd;
       padding-bottom: 0.3rem;
-      color: #2c5f2e;
+      color: #2a5cb8;
     }
     h3 {
       font-size: 1.1rem;
@@ -34,7 +34,7 @@
       color: #1a1a1a;
     }
     p { margin: 0.6rem 0 1rem; }
-    a { color: #3a7d44; }
+    a { color: #4f8ef7; }
     a:hover { text-decoration: none; }
     hr {
       border: none;
@@ -49,10 +49,10 @@
       font-size: 14px;
     }
     th {
-      background: #f0f6f1;
+      background: #eef3fe;
       text-align: left;
       padding: 7px 12px;
-      border: 1px solid #c8deca;
+      border: 1px solid #b8cef5;
       font-weight: 600;
     }
     td {
@@ -74,8 +74,8 @@
     }
     strong { color: #111; }
     .toc {
-      background: #f8fbf8;
-      border: 1px solid #c8deca;
+      background: #f4f8ff;
+      border: 1px solid #b8cef5;
       border-radius: 6px;
       padding: 1rem 1.5rem;
       margin: 1.5rem 0;
@@ -122,6 +122,7 @@
     <li><a href="#location-totals">Location Totals</a></li>
     <li><a href="#big-report">Big Report</a></li>
     <li><a href="#compare-lists">Compare Lists</a></li>
+    <li><a href="#graphs">Graphs</a></li>
     <li><a href="#maps">Maps</a></li>
     <li><a href="#choropleth-maps">Choropleth Maps</a></li>
     <li><a href="#photos">Photos</a></li>
@@ -139,10 +140,10 @@
 <p>This section gets you from a fresh install to your first results in five minutes.</p>
 
 <h3>Step 1 — Download your eBird data</h3>
-<p>With a browser such as Chrome, Safari, or Edge, go to <a href="https://ebird.org/downloadMyData">https://ebird.org/downloadMyData</a>, and choose <strong>Request My Observations</strong>. eBird will email you a link to a <code>.csv</code> file containing your complete sightings history. Open the email, click the link, and save the file somewhere easy to find. By default, most browsers will save the file in your Downloads folder.</p>
+<p>With a browser such as Chrome, Safari, or Edge, go to <a href="https://ebird.org/downloadMyData">https://ebird.org/downloadMyData</a>, and choose <strong>Request My Observations</strong>. eBird will email you a link to a <code>.zip</code> file containing your complete sightings history. Open the email, click the link, and save the file somewhere easy to find. Yearbird can open the <code>.zip</code> file directly — there is no need to unzip it first. By default, most browsers will save the file in your Downloads folder.</p>
 
 <h3>Step 2 — Open your data in Yearbird</h3>
-<p>Launch Yearbird. Click the <strong>Open</strong> button on the toolbar (or choose <strong>File → Open</strong>). Navigate to the <code>.csv</code> file you downloaded and click <strong>Open</strong>. Yearbird loads your data and displays list of the species in the file.</p>
+<p>Launch Yearbird. Click the <strong>Open</strong> button on the toolbar (or choose <strong>File → Open</strong>). Navigate to the <code>.zip</code> file you downloaded and click <strong>Open</strong>. Yearbird loads your data and displays list of the species in the file.</p>
 
 <h3>Step 3 — Generate your first list</h3>
 <p>Browse through the options on the filter on the left side of the screen.  Set a few filter options, like county or family, and then click the <strong>Species</strong> button on the toolbar. A new window opens showing the species you have recorded, sorted taxonomically, along with the first date, most recent date, and checklist count for each. You can click on the column headers to sort the columns. You can also right-click on any information in the list to send that information to the filter.</p>
@@ -151,7 +152,7 @@
 <ul>
   <li>Click <strong>Map</strong> to see all your sighting locations plotted on an interactive map.</li>
   <li>Click <strong>Date Totals</strong> to see which years, months, and individual dates you recorded the most species.</li>
-  <li>Click <strong>Photos</strong> (after setting up a Photo Settings file — see <a href="#photos">Section 16</a>) to browse your bird photos alongside their sighting data.</li>
+  <li>Click <strong>Photos</strong> (after setting up a Photo Settings file — see <a href="#photos">Section 17</a>) to browse your bird photos alongside their sighting data.</li>
 </ul>
 <p>You are up and running. Everything else in this guide describes these features in detail.</p>
 
@@ -160,7 +161,7 @@
 <h2 id="main-window">2. The Main Window</h2>
 <p>Yearbird uses a <strong>Multiple Document Interface (MDI)</strong>. The main window contains:</p>
 <ul>
-  <li>A <strong>menu bar</strong> across the top with menus for File, Filter, Lists, Map, Reports, Photos, Choropleths, and Windows.</li>
+  <li>A <strong>menu bar</strong> across the top with menus for File, Filter, Lists, Map, Reports, Graphs, Photos, Choropleths, and Windows.</li>
   <li>A <strong>toolbar</strong> just below the menu bar with quick-access buttons for the most common actions.</li>
   <li>A <strong>Standard Filter</strong> panel docked on the left side.</li>
   <li>A <strong>Photo Filter</strong> panel docked on the right side.</li>
@@ -279,7 +280,7 @@
 <hr>
 
 <h2 id="photo-filter">5. The Photo Filter</h2>
-<p>The <strong>Photo Filter</strong> panel is docked on the right side of the main window. It becomes active once a Photo Settings file has been loaded (see <a href="#photo-settings-file">Section 17</a>). It filters photo-related results in addition to the Standard Filter.</p>
+<p>The <strong>Photo Filter</strong> panel is hidden until you open a Photo Settings file (see <a href="#photo-settings-file">Section 18</a>), at which point it appears automatically on the right side of the main window. It filters photo-related results in addition to the Standard Filter — only photos that match <em>both</em> the Standard Filter and the Photo Filter are shown.</p>
 <table>
   <thead><tr><th>Filter</th><th>Description</th></tr></thead>
   <tbody>
@@ -315,7 +316,7 @@
 <p>The window title shows the total count — for example, <em>"Species: New York (42 Species)"</em>.</p>
 
 <h3>Clicking a species</h3>
-<p>Click any species name to open an <strong>Individual Species</strong> window (see <a href="#individual-species">Section 18</a>) showing the full history of your sightings of that species.</p>
+<p>Click any species name to open an <strong>Individual Species</strong> window (see <a href="#individual-species">Section 19</a>) showing the full history of your sightings of that species.</p>
 
 <h3>Right-click menu</h3>
 <p>Right-clicking a row in the species table offers options to set the species as the active filter, open associated web pages, or open the individual species window.</p>
@@ -435,7 +436,80 @@
 
 <hr>
 
-<h2 id="maps">14. Maps</h2>
+<h2 id="graphs">14. Graphs</h2>
+<p>Open graphs from the <strong>Graphs</strong> menu. Seven chart types are available, each responding to the current Standard Filter. All graphs display a hover tooltip when you move the cursor over a data point or bar — the tooltip shows relevant details such as date, species count, or location. Clicking on most data points opens a <strong>Species List</strong> window filtered to that point's context.</p>
+
+<h3>Bar Graph</h3>
+<p>Open with <strong>Graphs → Bar Graph</strong>.</p>
+<p>Shows species counts aggregated over time, with four granularity options selectable via radio buttons at the top of the window:</p>
+<ul>
+  <li><strong>By Year</strong> — one bar per year; the default when your data spans multiple years.</li>
+  <li><strong>By Month</strong> — one bar per calendar month, aggregated across all years. Shows which months are most productive regardless of year.</li>
+  <li><strong>By Month-Year</strong> — one bar per calendar month within each year (e.g., Jan-2022, Feb-2022, …). Useful for fine-grained temporal analysis. Disabled if there are more than 100 month-year combinations in the filtered data.</li>
+  <li><strong>By Day</strong> — one bar per individual date. Useful when the filter covers a narrow date range. Disabled if there are more than 100 days in the filtered data.</li>
+</ul>
+<p>Click any bar to open a Species List for that time period.</p>
+
+<h3>Cumulative Species Curve</h3>
+<p>Open with <strong>Graphs → Cumulative Species Curve</strong>.</p>
+<p>A line chart showing how your total species count has grown over time as each new species was first recorded. The x-axis is date and the y-axis is the running cumulative total. The final point shows the total number of species seen under the current filter.</p>
+<p>This chart is most interesting with no date filter set — it shows your life-list growth curve from your earliest eBird records to the present. With a location filter applied, it shows how quickly you added new species at that location.</p>
+<p>Hover over the line to see the cumulative count and date at any point. Click to open a Species List of all species seen up to and including that date.</p>
+
+<h3>Species Heatmap</h3>
+<p>Open with <strong>Graphs → Species Heatmap</strong>.</p>
+<p>A grid showing species counts for every month of every year in your data. Rows are years (most recent at the top) and columns are months (January through December). Cell colour ranges from light blue (low count) to dark blue (high count); cells with no data are shown in grey. When the grid is 15 years or fewer, each cell is also labelled with its species count.</p>
+<p>The heatmap immediately reveals seasonal patterns — which months of each year were most productive — and gaps in your birding record.</p>
+<p>Hover over any cell to see the month, year, and species count. Click a cell to open a Species List for that month and year.</p>
+
+<h3>Species Accumulation</h3>
+<p>Open with <strong>Graphs → Species Accumulation</strong>.</p>
+<p>A stacked bar chart showing, for each year, how many species you recorded that were <em>new to you under the current filter</em> (bright blue, labelled with a + count) versus how many were species you had already seen in a previous year (muted blue). Together the two segments show your total species count for that year.</p>
+<p>This graph answers questions such as: "How many new species did I add to my county list in 2023?" or "Has my backyard species accumulation slowed down in recent years?"</p>
+<p>Hover over a bar to see the year, total count, and new-species count. Click a bar to open a Species List for that year.</p>
+
+<h3>Top Locations</h3>
+<p>Open with <strong>Graphs → Top Locations</strong>.</p>
+<p>A horizontal bar chart showing your top locations by species count (up to 20 locations). Each bar is split into two segments:</p>
+<ul>
+  <li><strong>Muted blue</strong> — species you had already recorded elsewhere before visiting this location.</li>
+  <li><strong>Bright blue</strong> — species you recorded at this location for the <em>first time ever</em> in your database (life birds).</li>
+</ul>
+<p>The total species count is labelled at the right end of each bar. This chart shows not only which locations have been most productive, but which locations have contributed the most unique species to your life list.</p>
+<p>Hover over a bar to see the full location name, total species count, and life bird count. Click a bar to open a Species List filtered to that location.</p>
+
+<h3>Checklist Scatter</h3>
+<p>Open with <strong>Graphs → Checklist Scatter</strong>.</p>
+<p>A scatter plot showing every checklist matching the current filter as a dot, with <strong>duration in minutes</strong> on the x-axis and <strong>species count</strong> on the y-axis. Dots are coloured by season:</p>
+<table>
+  <thead><tr><th>Colour</th><th>Season</th><th>Months</th></tr></thead>
+  <tbody>
+    <tr><td>Steel blue</td><td>Winter</td><td>December – February</td></tr>
+    <tr><td>Green</td><td>Spring</td><td>March – May</td></tr>
+    <tr><td>Golden</td><td>Summer</td><td>June – August</td></tr>
+    <tr><td>Orange</td><td>Fall</td><td>September – November</td></tr>
+  </tbody>
+</table>
+<p>Incidental observations (checklists with no recorded duration) are excluded; a note at the bottom right of the chart shows how many were omitted.</p>
+<p><strong>Important:</strong> the species count on the y-axis reflects only species matching the active filter, not all species on the checklist. For example, if you filter by Tyrannidae, a checklist on which you recorded 3 flycatchers out of 40 total species will appear at y = 3.</p>
+<p>Hover over a dot to see the date, location, duration, and species count. Click a dot to open a Species List for that checklist.</p>
+
+<h3>Phenology Chart</h3>
+<p>Open with <strong>Graphs → Phenology Chart</strong>.</p>
+<p>A dot chart designed to reveal the seasonal timing of species occurrence. Each dot represents one date on which a species (or species matching the filter) was recorded, plotted by <strong>day of year</strong> on the x-axis and <strong>year</strong> on the y-axis. Dots are coloured by season using the same palette as the Checklist Scatter. If the same species was recorded at multiple locations on the same day, only one dot is plotted for that date (the tooltip lists all the locations).</p>
+<p>This chart is most powerful when a <strong>species, family, or order</strong> filter is set. For a single species it immediately shows:</p>
+<ul>
+  <li>Typical arrival and departure dates</li>
+  <li>Whether the species is a year-round resident or a seasonal visitor</li>
+  <li>Whether the timing has shifted over the years</li>
+  <li>Unusually early or late individual records</li>
+</ul>
+<p>If no species, family, or order filter is set, Yearbird will warn you before generating the chart, since plotting all species together produces a very cluttered result.</p>
+<p>Hover over a dot to see the exact date and the location or locations seen that day. Click a dot to open a Species List for that date.</p>
+
+<hr>
+
+<h2 id="maps">15. Maps</h2>
 <p>Open with <strong>Map → Map</strong> or the <strong>Map</strong> toolbar button.</p>
 <p>The Map window displays an interactive map of all locations where you have recorded sightings under the current filter. Each location is plotted as a marker; clicking a marker shows the location name and coordinates.</p>
 <p>The map is pan-and-zoom capable using your mouse or trackpad. The title bar shows the count of locations plotted, e.g., <em>"Map: All species, locations, and dates (208)"</em>.</p>
@@ -443,7 +517,7 @@
 
 <hr>
 
-<h2 id="choropleth-maps">15. Choropleth Maps</h2>
+<h2 id="choropleth-maps">16. Choropleth Maps</h2>
 <p>Open with the <strong>Choropleths</strong> menu. Three choropleth types are available:</p>
 
 <h3>US States Choropleth</h3>
@@ -458,13 +532,13 @@
 
 <hr>
 
-<h2 id="photos">16. Photos</h2>
+<h2 id="photos">17. Photos</h2>
 <p>Yearbird can associate your personal bird photos with your eBird sightings. This unlocks a photo gallery view, displaying photos that match the filter, and filtering by camera, lens, and exposure settings using the photo filter that will appear on the right of the screen.</p>
 
 <h3>Overview of the photo system</h3>
 <ul>
   <li>Your photos remain in their original folders on your computer. Yearbird stores <strong>references</strong> to them, not copies.</li>
-  <li>Photo associations and metadata are stored in a <strong>Photo Settings file</strong> (a CSV file you create and save using Yearbird). See <a href="#photo-settings-file">Section 17</a>.</li>
+  <li>Photo associations and metadata are stored in a <strong>Photo Settings file</strong> (a CSV file you create and save using Yearbird). See <a href="#photo-settings-file">Section 18</a>.</li>
   <li>Yearbird reads <strong>EXIF data</strong> from each JPEG file automatically: camera model, lens, shutter speed, aperture, focal length, and ISO.</li>
 </ul>
 
@@ -505,7 +579,7 @@
 
 <hr>
 
-<h2 id="photo-settings-file">17. Adding Photos to the Photo Settings File</h2>
+<h2 id="photo-settings-file">18. Adding Photos to the Photo Settings File</h2>
 <p>Yearbird uses a Photo Settings file to associate photos on your hard drive with your ebird sightings. Associating photos with your ebird sightings lets you view photos that match the main window's filter.  For example, Yearbird can show you all the photos you've taken of a species, or the photos from a certain day or from a location. Yearbird stores the photo file names, dates, times, species names, and camera information in a separate data file. Think of this file as your photo library within Yearbird.</p>
 
 <h3>Adding Photos To Yearbird</h3>
@@ -555,7 +629,7 @@
 
 <hr>
 
-<h2 id="individual-species">18. Individual Species Window</h2>
+<h2 id="individual-species">19. Individual Species Window</h2>
 <p>The Individual Species window opens when you click a species name in the Species List, or from the right-click menu in most list windows.</p>
 <p>It shows a comprehensive view of your sightings of one particular species:</p>
 <ul>
@@ -569,7 +643,7 @@
 
 <hr>
 
-<h2 id="printing">19. Printing and PDF Export</h2>
+<h2 id="printing">20. Printing and PDF Export</h2>
 
 <h3>Printing</h3>
 <p>Click <strong>Print</strong> on the toolbar or choose <strong>File → Print</strong>. The current active child window is sent to the printer. Most list and report windows print sensibly; map and photo windows print a screenshot of the current view.</p>
@@ -579,7 +653,7 @@
 
 <hr>
 
-<h2 id="tips">20. Tips and Tricks</h2>
+<h2 id="tips">21. Tips and Tricks</h2>
 
 <h3>Keep multiple windows open for comparison</h3>
 <p>Because Yearbird is an MDI application, you can open several child windows simultaneously. For example, open a Species List filtered to one location, then open a second Species List filtered to a different location, and use <strong>Windows → Tile Windows</strong> to view them side by side.</p>
@@ -596,6 +670,14 @@
 <h3>Combining Name Search with other filters</h3>
 <p>The Name Search field accepts a partial name and filters the Species List in real time. This is the fastest way to find a species when you are not sure of its exact name — type "thrush" and all thrushes appear regardless of which family they belong to.</p>
 
+<h3>Using graphs to understand your birding patterns</h3>
+<ul>
+  <li><strong>Phenology Chart + species filter</strong>: select a favourite migrant species in the Species filter, then open the Phenology Chart. You will immediately see whether your records show the species arriving earlier or later in recent years.</li>
+  <li><strong>Checklist Scatter + location filter</strong>: set a location filter and open the Checklist Scatter. Clusters of dots reveal your typical productivity at that site — and outlier dots (many species in a short time, or few species in a long session) are worth investigating.</li>
+  <li><strong>Species Accumulation + location filter</strong>: filter to a county or location you visit regularly and open the Species Accumulation chart. Bars with a large bright-blue new-species segment were standout years for that location.</li>
+  <li><strong>Cumulative Curve with no filter</strong>: open the Cumulative Species Curve with all filters cleared to see your all-time life-list growth curve. The slope flattens as you become a more experienced birder — steep jumps often correspond to trips to new regions.</li>
+</ul>
+
 <h3>Photo workflow tips</h3>
 <ul>
   <li><strong>Rate your photos immediately</strong> after a field outing while the session is fresh. Use the Enlargement view to assign ratings of 1–5.</li>
@@ -606,7 +688,7 @@
 
 <hr>
 
-<h2 id="preferences">21. Saving Preferences</h2>
+<h2 id="preferences">22. Saving Preferences</h2>
 
 <p> You can tell Yearbird which folder you use to download ebird files. Yearbird will load the most recent ebird file from that folder whenever Yearbird starts.</p>
 

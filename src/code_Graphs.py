@@ -70,11 +70,22 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         self._strip_years  = np.array([])
         self._strip_dates  = []
         self._strip_locs   = []
+        self._foy_doys      = np.array([])
+        self._foy_years     = np.array([])
+        self._foy_dates     = []
+        self._foy_species   = []
+        self._foy_highlight = None
+        self._loy_doys      = np.array([])
+        self._loy_years     = np.array([])
+        self._loy_dates     = []
+        self._loy_species   = []
+        self._loy_highlight = None
         self._chart_type = "bar"
         self._hover_annot = None
         self._hover_idx   = -1
         self._heatmap_years = []
-        self._heatmap_grid  = None
+        self._heatmap_grid         = None
+        self._heatmap_species_grid = None
         self._too_many_days = False
         self._day_count = 0
         self._too_many_month_years = False
@@ -265,17 +276,24 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         return dates, counts, "Cumulative Species"
 
     def _build_heatmap_data(self, sightings):
-        """Return (grid, years) where grid[year_idx][month_idx] = species count."""
+        """Return (grid, years, species_grid).
+
+        grid[i][j] = species count for year i, month j.
+        species_grid[i][j] = sorted list of species names for that cell.
+        """
         bucket = defaultdict(set)
         for s in sightings:
             key = (int(s["date"][0:4]), int(s["date"][5:7]))
             bucket[key].add(s["commonName"])
         years = sorted(set(k[0] for k in bucket), reverse=True)
-        grid  = np.zeros((len(years), 12), dtype=int)
+        grid         = np.zeros((len(years), 12), dtype=int)
+        species_grid = [[[] for _ in range(12)] for _ in range(len(years))]
         for i, year in enumerate(years):
             for j in range(12):
-                grid[i, j] = len(bucket.get((year, j + 1), set()))
-        return grid, years
+                sp = sorted(bucket.get((year, j + 1), set()))
+                grid[i, j]         = len(sp)
+                species_grid[i][j] = sp
+        return grid, years, species_grid
 
     def _build_accumulation_data(self, sightings):
         """Return (years, new_counts, repeat_counts) for stacked accumulation chart."""
@@ -485,6 +503,243 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
 
         canvas.mpl_connect('motion_notify_event', self._on_mouse_move)
         canvas.mpl_connect('button_press_event', self._on_strip_click)
+
+    def _build_foy_data(self, sightings):
+        """One dot per unique first-of-year date, aggregating all species
+        whose first sighting in that year falls on that date.
+
+        Returns (doys, years, dates, species_lists, colors) where
+        species_lists[i] is a sorted list of species names sharing that dot.
+        """
+        # (species, year) → earliest date string
+        foy = {}
+        for s in sightings:
+            key = (s["commonName"], s["date"][0:4])
+            if key not in foy or s["date"] < foy[key]:
+                foy[key] = s["date"]
+
+        # Aggregate: date → list of species (date string already encodes year)
+        date_species = defaultdict(list)
+        for (species, _year_str), date in foy.items():
+            date_species[date].append(species)
+
+        doys, years, dates_out, species_lists, colors = [], [], [], [], []
+        for date, sp_list in date_species.items():
+            year  = int(date[0:4])
+            month = int(date[5:7])
+            day   = int(date[8:10])
+            doy   = (datetime.date(year, month, day) -
+                     datetime.date(year, 1, 1)).days + 1
+
+            if month in (12, 1, 2):
+                season = "Winter"
+            elif month in (3, 4, 5):
+                season = "Spring"
+            elif month in (6, 7, 8):
+                season = "Summer"
+            else:
+                season = "Fall"
+
+            doys.append(doy)
+            years.append(year)
+            dates_out.append(date)
+            species_lists.append(sorted(sp_list))
+            colors.append(_SEASON_COLORS[season])
+
+        return doys, years, dates_out, species_lists, colors
+
+    def _draw_foy_chart(self, doys, years, dates, species, colors):
+        if self._canvas is not None:
+            self._canvas.setParent(None)
+            self._canvas = None
+            self._fig = None
+
+        self._foy_doys    = np.array(doys,  dtype=float)
+        self._foy_years   = np.array(years, dtype=float)
+        self._foy_dates   = dates
+        self._foy_species = species
+
+        fig = Figure(facecolor=_BG_COLOR)
+        ax  = fig.add_subplot(111, facecolor=_AXES_COLOR)
+
+        # Invert y-axis so most recent year is at the top
+        ax.scatter(doys, years, c=colors, s=15, alpha=1.0, zorder=2, linewidths=0)
+
+        # X-axis: month name labels at each month's start day
+        _MONTH_STARTS = [1, 32, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335]
+        ax.set_xticks(_MONTH_STARTS)
+        ax.set_xticklabels(_MONTH_NAMES, color=_TEXT_COLOR, fontsize=8)
+        ax.set_xlim(1, 366)
+
+        # Y-axis: one tick per year that has data
+        unique_years = sorted(set(years))
+        ax.set_yticks(unique_years)
+        ax.set_yticklabels([str(y) for y in unique_years],
+                           color=_TEXT_COLOR, fontsize=8)
+        ax.tick_params(colors=_TEXT_COLOR, which="both")
+
+        for spine in ax.spines.values():
+            spine.set_edgecolor(_GRID_COLOR)
+
+        ax.xaxis.grid(True, color=_GRID_COLOR, linewidth=0.5, zorder=1)
+        ax.yaxis.grid(True, color=_GRID_COLOR, linewidth=0.5, zorder=1)
+        ax.set_axisbelow(True)
+
+        # Season legend
+        legend_handles = [
+            Patch(facecolor=_SEASON_COLORS[s], label=f"{s} ({lbl})", alpha=0.8)
+            for s, lbl in (("Winter", "Dec–Feb"), ("Spring", "Mar–May"),
+                           ("Summer", "Jun–Aug"), ("Fall",   "Sep–Nov"))
+        ]
+        legend = ax.legend(handles=legend_handles, loc="upper right",
+                           facecolor=_AXES_COLOR, edgecolor=_GRID_COLOR, fontsize=8)
+        for text in legend.get_texts():
+            text.set_color(_TEXT_COLOR)
+
+        fig.tight_layout()
+
+        canvas = FigureCanvasQTAgg(fig)
+        layout = self.chartWidget.layout()
+        if layout is None:
+            layout = QVBoxLayout(self.chartWidget)
+            layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(canvas)
+
+        self._fig    = fig
+        self._canvas = canvas
+        self._ax     = ax
+        self._hover_idx = -1
+
+        self._hover_annot = ax.annotate(
+            "", xy=(0, 0),
+            xytext=(12, 12), textcoords="offset points",
+            bbox=dict(boxstyle="round,pad=0.5", fc=_AXES_COLOR,
+                      ec=_BAR_COLOR, lw=1),
+            color=_TEXT_COLOR, fontsize=8,
+            visible=False, zorder=5)
+
+        self._foy_highlight = ax.scatter(
+            [], [], s=55, zorder=4,
+            facecolors='none', edgecolors=_TEXT_COLOR, linewidths=1.5)
+
+        canvas.mpl_connect('motion_notify_event', self._on_mouse_move)
+        canvas.mpl_connect('button_press_event', self._on_foy_click)
+
+    def _build_loy_data(self, sightings):
+        """One dot per unique last-of-year date, aggregating all species
+        whose last sighting in that year falls on that date.
+
+        Returns (doys, years, dates, species_lists, colors).
+        """
+        # (species, year) → latest date string
+        loy = {}
+        for s in sightings:
+            key = (s["commonName"], s["date"][0:4])
+            if key not in loy or s["date"] > loy[key]:
+                loy[key] = s["date"]
+
+        # Aggregate: date → list of species
+        date_species = defaultdict(list)
+        for (species, _year_str), date in loy.items():
+            date_species[date].append(species)
+
+        doys, years, dates_out, species_lists, colors = [], [], [], [], []
+        for date, sp_list in date_species.items():
+            year  = int(date[0:4])
+            month = int(date[5:7])
+            day   = int(date[8:10])
+            doy   = (datetime.date(year, month, day) -
+                     datetime.date(year, 1, 1)).days + 1
+
+            if month in (12, 1, 2):
+                season = "Winter"
+            elif month in (3, 4, 5):
+                season = "Spring"
+            elif month in (6, 7, 8):
+                season = "Summer"
+            else:
+                season = "Fall"
+
+            doys.append(doy)
+            years.append(year)
+            dates_out.append(date)
+            species_lists.append(sorted(sp_list))
+            colors.append(_SEASON_COLORS[season])
+
+        return doys, years, dates_out, species_lists, colors
+
+    def _draw_loy_chart(self, doys, years, dates, species, colors):
+        if self._canvas is not None:
+            self._canvas.setParent(None)
+            self._canvas = None
+            self._fig = None
+
+        self._loy_doys    = np.array(doys,  dtype=float)
+        self._loy_years   = np.array(years, dtype=float)
+        self._loy_dates   = dates
+        self._loy_species = species
+
+        fig = Figure(facecolor=_BG_COLOR)
+        ax  = fig.add_subplot(111, facecolor=_AXES_COLOR)
+
+        ax.scatter(doys, years, c=colors, s=15, alpha=1.0, zorder=2, linewidths=0)
+
+        _MONTH_STARTS = [1, 32, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335]
+        ax.set_xticks(_MONTH_STARTS)
+        ax.set_xticklabels(_MONTH_NAMES, color=_TEXT_COLOR, fontsize=8)
+        ax.set_xlim(1, 366)
+
+        unique_years = sorted(set(years))
+        ax.set_yticks(unique_years)
+        ax.set_yticklabels([str(y) for y in unique_years],
+                           color=_TEXT_COLOR, fontsize=8)
+        ax.tick_params(colors=_TEXT_COLOR, which="both")
+
+        for spine in ax.spines.values():
+            spine.set_edgecolor(_GRID_COLOR)
+
+        ax.xaxis.grid(True, color=_GRID_COLOR, linewidth=0.5, zorder=1)
+        ax.yaxis.grid(True, color=_GRID_COLOR, linewidth=0.5, zorder=1)
+        ax.set_axisbelow(True)
+
+        legend_handles = [
+            Patch(facecolor=_SEASON_COLORS[s], label=f"{s} ({lbl})", alpha=0.8)
+            for s, lbl in (("Winter", "Dec–Feb"), ("Spring", "Mar–May"),
+                           ("Summer", "Jun–Aug"), ("Fall",   "Sep–Nov"))
+        ]
+        legend = ax.legend(handles=legend_handles, loc="upper right",
+                           facecolor=_AXES_COLOR, edgecolor=_GRID_COLOR, fontsize=8)
+        for text in legend.get_texts():
+            text.set_color(_TEXT_COLOR)
+
+        fig.tight_layout()
+
+        canvas = FigureCanvasQTAgg(fig)
+        layout = self.chartWidget.layout()
+        if layout is None:
+            layout = QVBoxLayout(self.chartWidget)
+            layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(canvas)
+
+        self._fig    = fig
+        self._canvas = canvas
+        self._ax     = ax
+        self._hover_idx = -1
+
+        self._hover_annot = ax.annotate(
+            "", xy=(0, 0),
+            xytext=(12, 12), textcoords="offset points",
+            bbox=dict(boxstyle="round,pad=0.5", fc=_AXES_COLOR,
+                      ec=_BAR_COLOR, lw=1),
+            color=_TEXT_COLOR, fontsize=8,
+            visible=False, zorder=5)
+
+        self._loy_highlight = ax.scatter(
+            [], [], s=55, zorder=4,
+            facecolors='none', edgecolors=_TEXT_COLOR, linewidths=1.5)
+
+        canvas.mpl_connect('motion_notify_event', self._on_mouse_move)
+        canvas.mpl_connect('button_press_event', self._on_loy_click)
 
     def _draw_scatter_chart(self, x, y, colors, ids, locs, dates, durs,
                             incidental_count):
@@ -696,14 +951,15 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         canvas.mpl_connect('motion_notify_event', self._on_mouse_move)
         canvas.mpl_connect('button_press_event', self._on_line_click)
 
-    def _draw_heatmap(self, grid, years):
+    def _draw_heatmap(self, grid, years, species_grid):
         if self._canvas is not None:
             self._canvas.setParent(None)
             self._canvas = None
             self._fig = None
 
-        self._heatmap_years = years
-        self._heatmap_grid  = grid
+        self._heatmap_years        = years
+        self._heatmap_grid         = grid
+        self._heatmap_species_grid = species_grid
 
         fig = Figure(facecolor=_BG_COLOR)
         ax  = fig.add_subplot(111, facecolor=_AXES_COLOR)
@@ -727,14 +983,15 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         for spine in ax.spines.values():
             spine.set_edgecolor(_GRID_COLOR)
 
-        # Annotate cells with species count when the grid is small enough to read
-        if len(years) <= 15:
-            for i in range(len(years)):
-                for j in range(12):
-                    val = int(grid[i, j])
-                    if val > 0:
-                        ax.text(j, i, str(val), ha='center', va='center',
-                                color=_TEXT_COLOR, fontsize=7)
+        # Annotate every non-empty cell with its species count;
+        # scale font size down gracefully as the number of years grows
+        cell_fontsize = max(4, 9 - len(years) // 5)
+        for i in range(len(years)):
+            for j in range(12):
+                val = int(grid[i, j])
+                if val > 0:
+                    ax.text(j, i, str(val), ha='center', va='center',
+                            color=_TEXT_COLOR, fontsize=cell_fontsize)
 
         # Colorbar
         cbar = fig.colorbar(im, ax=ax, pad=0.02)
@@ -941,6 +1198,10 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             self._update_scatter_hover(event)
         elif self._chart_type == "strip":
             self._update_strip_hover(event)
+        elif self._chart_type == "foy":
+            self._update_foy_hover(event)
+        elif self._chart_type == "loy":
+            self._update_loy_hover(event)
         else:
             # Bar chart: pointer cursor over bars
             if (event.inaxes is self._ax and event.xdata is not None
@@ -1055,13 +1316,25 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         year    = self._heatmap_years[row]
         label   = f"{_MONTH_NAMES[col]} {year}"
 
-        x_off = -90 if col >= 9 else 12
-        y_off = -40 if row < len(self._heatmap_years) * 0.25 else 12
+        xlim   = self._ax.get_xlim()
+        ylim   = self._ax.get_ylim()
+        xrange = xlim[1] - xlim[0] if xlim[1] != xlim[0] else 1.0
+        yrange = ylim[1] - ylim[0] if ylim[1] != ylim[0] else 1.0
+        x_off = -140 if event.xdata > xlim[0] + xrange * 0.75 else 12
+        # imshow y-axis has 0 at the top, so "near top" = small ydata
+        y_off = -90  if event.ydata < ylim[0] + yrange * 0.25 else 12
         self._hover_annot.set_position((x_off, y_off))
 
         self._hover_annot.xy = (col, row)
         if species > 0:
-            self._hover_annot.set_text(f"{label}\n{species} species")
+            sp_list = (self._heatmap_species_grid[row][col]
+                       if self._heatmap_species_grid else [])
+            tip = f"{label}  ·  {species} species"
+            for name in sp_list[:25]:
+                tip += f"\n  {name}"
+            if species > 25:
+                tip += f"\n  (+{species - 25} more)"
+            self._hover_annot.set_text(tip)
             self._canvas.setCursor(Qt.PointingHandCursor)
         else:
             self._hover_annot.set_text(f"{label}\nNo data")
@@ -1193,6 +1466,181 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
 
         new_filter = copy.deepcopy(self.filter)
         d = self._strip_dates[idx]
+        new_filter.setStartDate(d)
+        new_filter.setEndDate(d)
+        self._spawn_species_list(new_filter)
+
+    def _update_foy_hover(self, event):
+        if self._hover_annot is None or len(self._foy_doys) == 0:
+            return
+        if event.inaxes is not self._ax or event.xdata is None or event.ydata is None:
+            if self._hover_annot.get_visible():
+                self._hover_annot.set_visible(False)
+                self._hover_idx = -1
+                if self._foy_highlight is not None:
+                    self._foy_highlight.set_offsets(np.empty((0, 2)))
+                self._canvas.draw_idle()
+            self._canvas.setCursor(Qt.ArrowCursor)
+            return
+
+        xlim   = self._ax.get_xlim()
+        ylim   = self._ax.get_ylim()
+        xrange = xlim[1] - xlim[0] if xlim[1] != xlim[0] else 1.0
+        yrange = ylim[1] - ylim[0] if ylim[1] != ylim[0] else 1.0
+
+        dx   = (self._foy_doys  - event.xdata) / xrange
+        dy   = (self._foy_years - event.ydata) / yrange
+        dist = np.sqrt(dx * dx + dy * dy)
+        idx  = int(np.argmin(dist))
+
+        if dist[idx] > 0.03:
+            if self._hover_annot.get_visible():
+                self._hover_annot.set_visible(False)
+                self._hover_idx = -1
+                if self._foy_highlight is not None:
+                    self._foy_highlight.set_offsets(np.empty((0, 2)))
+                self._canvas.draw_idle()
+            self._canvas.setCursor(Qt.ArrowCursor)
+            return
+
+        self._canvas.setCursor(Qt.PointingHandCursor)
+        if idx == self._hover_idx:
+            return
+
+        self._hover_idx = idx
+        px = float(self._foy_doys[idx])
+        py = float(self._foy_years[idx])
+
+        # y-axis is inverted, so "near top" means large ydata values are
+        # visually at the bottom — flip tooltip down when near the visual top
+        # (i.e. small ydata = recent years = top of inverted axis)
+        x_off = -140 if event.xdata > xlim[0] + xrange * 0.75 else 12
+        # Use -90 offset (not -40) to clear the taller multi-line tooltip.
+        y_off = -90  if event.ydata > ylim[0] + yrange * 0.75 else 12
+        self._hover_annot.set_position((x_off, y_off))
+
+        date     = self._foy_dates[idx]
+        sp_list  = self._foy_species[idx]
+        n        = len(sp_list)
+        tip      = f"{date}  ·  {n} FOY species"
+        show     = sp_list[:25]
+        for name in show:
+            tip += f"\n  {name}"
+        if n > 25:
+            tip += f"\n  (+{n - 25} more)"
+        self._hover_annot.xy = (px, py)
+        self._hover_annot.set_text(tip)
+        self._hover_annot.set_visible(True)
+        if self._foy_highlight is not None:
+            self._foy_highlight.set_offsets([[px, py]])
+        self._canvas.draw_idle()
+
+    def _on_foy_click(self, event):
+        if event.inaxes is not self._ax or event.xdata is None or event.ydata is None:
+            return
+        if len(self._foy_doys) == 0:
+            return
+
+        xlim   = self._ax.get_xlim()
+        ylim   = self._ax.get_ylim()
+        xrange = xlim[1] - xlim[0] if xlim[1] != xlim[0] else 1.0
+        yrange = ylim[1] - ylim[0] if ylim[1] != ylim[0] else 1.0
+
+        dx   = (self._foy_doys  - event.xdata) / xrange
+        dy   = (self._foy_years - event.ydata) / yrange
+        dist = np.sqrt(dx * dx + dy * dy)
+        idx  = int(np.argmin(dist))
+
+        if dist[idx] > 0.03:
+            return
+
+        new_filter = copy.deepcopy(self.filter)
+        d = self._foy_dates[idx]
+        new_filter.setStartDate(d)
+        new_filter.setEndDate(d)
+        self._spawn_species_list(new_filter)
+
+    def _update_loy_hover(self, event):
+        if self._hover_annot is None or len(self._loy_doys) == 0:
+            return
+        if event.inaxes is not self._ax or event.xdata is None or event.ydata is None:
+            if self._hover_annot.get_visible():
+                self._hover_annot.set_visible(False)
+                self._hover_idx = -1
+                if self._loy_highlight is not None:
+                    self._loy_highlight.set_offsets(np.empty((0, 2)))
+                self._canvas.draw_idle()
+            self._canvas.setCursor(Qt.ArrowCursor)
+            return
+
+        xlim   = self._ax.get_xlim()
+        ylim   = self._ax.get_ylim()
+        xrange = xlim[1] - xlim[0] if xlim[1] != xlim[0] else 1.0
+        yrange = ylim[1] - ylim[0] if ylim[1] != ylim[0] else 1.0
+
+        dx   = (self._loy_doys  - event.xdata) / xrange
+        dy   = (self._loy_years - event.ydata) / yrange
+        dist = np.sqrt(dx * dx + dy * dy)
+        idx  = int(np.argmin(dist))
+
+        if dist[idx] > 0.03:
+            if self._hover_annot.get_visible():
+                self._hover_annot.set_visible(False)
+                self._hover_idx = -1
+                if self._loy_highlight is not None:
+                    self._loy_highlight.set_offsets(np.empty((0, 2)))
+                self._canvas.draw_idle()
+            self._canvas.setCursor(Qt.ArrowCursor)
+            return
+
+        self._canvas.setCursor(Qt.PointingHandCursor)
+        if idx == self._hover_idx:
+            return
+
+        self._hover_idx = idx
+        px = float(self._loy_doys[idx])
+        py = float(self._loy_years[idx])
+
+        x_off = -140 if event.xdata > xlim[0] + xrange * 0.75 else 12
+        y_off = -90  if event.ydata > ylim[0] + yrange * 0.75 else 12
+        self._hover_annot.set_position((x_off, y_off))
+
+        date     = self._loy_dates[idx]
+        sp_list  = self._loy_species[idx]
+        n        = len(sp_list)
+        tip      = f"{date}  ·  {n} LOY species"
+        for name in sp_list[:25]:
+            tip += f"\n  {name}"
+        if n > 25:
+            tip += f"\n  (+{n - 25} more)"
+        self._hover_annot.xy = (px, py)
+        self._hover_annot.set_text(tip)
+        self._hover_annot.set_visible(True)
+        if self._loy_highlight is not None:
+            self._loy_highlight.set_offsets([[px, py]])
+        self._canvas.draw_idle()
+
+    def _on_loy_click(self, event):
+        if event.inaxes is not self._ax or event.xdata is None or event.ydata is None:
+            return
+        if len(self._loy_doys) == 0:
+            return
+
+        xlim   = self._ax.get_xlim()
+        ylim   = self._ax.get_ylim()
+        xrange = xlim[1] - xlim[0] if xlim[1] != xlim[0] else 1.0
+        yrange = ylim[1] - ylim[0] if ylim[1] != ylim[0] else 1.0
+
+        dx   = (self._loy_doys  - event.xdata) / xrange
+        dy   = (self._loy_years - event.ydata) / yrange
+        dist = np.sqrt(dx * dx + dy * dy)
+        idx  = int(np.argmin(dist))
+
+        if dist[idx] > 0.03:
+            return
+
+        new_filter = copy.deepcopy(self.filter)
+        d = self._loy_dates[idx]
         new_filter.setStartDate(d)
         new_filter.setEndDate(d)
         self._spawn_species_list(new_filter)
@@ -1429,13 +1877,43 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
 
         if chartType == "heatmap":
             self.frmGranularity.setVisible(False)
-            grid, years = self._build_heatmap_data(sightings)
+            grid, years, species_grid = self._build_heatmap_data(sightings)
             if not len(years):
                 return False
-            self._draw_heatmap(grid, years)
+            self._draw_heatmap(grid, years, species_grid)
             self.mdiParent.SetChildDetailsLabels(self, filter)
             self.setWindowTitle(
                 filter.buildWindowTitle("Species Heatmap", self.mdiParent.db))
+            icon = QIcon()
+            icon.addPixmap(QPixmap(":/icon_bird_white.png"),
+                           QIcon.Normal, QIcon.Off)
+            self.setWindowIcon(icon)
+            return True
+
+        if chartType == "loy":
+            self.frmGranularity.setVisible(False)
+            doys, years, dates, species, colors = self._build_loy_data(sightings)
+            if not doys:
+                return False
+            self._draw_loy_chart(doys, years, dates, species, colors)
+            self.mdiParent.SetChildDetailsLabels(self, filter)
+            self.setWindowTitle(
+                filter.buildWindowTitle("Last of Year Phenology", self.mdiParent.db))
+            icon = QIcon()
+            icon.addPixmap(QPixmap(":/icon_bird_white.png"),
+                           QIcon.Normal, QIcon.Off)
+            self.setWindowIcon(icon)
+            return True
+
+        if chartType == "foy":
+            self.frmGranularity.setVisible(False)
+            doys, years, dates, species, colors = self._build_foy_data(sightings)
+            if not doys:
+                return False
+            self._draw_foy_chart(doys, years, dates, species, colors)
+            self.mdiParent.SetChildDetailsLabels(self, filter)
+            self.setWindowTitle(
+                filter.buildWindowTitle("First of Year Phenology", self.mdiParent.db))
             icon = QIcon()
             icon.addPixmap(QPixmap(":/icon_bird_white.png"),
                            QIcon.Normal, QIcon.Off)

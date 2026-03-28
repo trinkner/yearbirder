@@ -228,6 +228,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionTopLocations.triggered.connect(self.CreateTopLocations)
         self.actionScatter.triggered.connect(self.CreateScatterChart)
         self.actionPhenology.triggered.connect(self.CreatePhenologyChart)
+        self.actionFOY.triggered.connect(self.CreateFOYChart)
+        self.actionLOY.triggered.connect(self.CreateLOYChart)
         self.actionMap.triggered.connect(self.CreateMap)
         self.actionFind.triggered.connect(self.CreateFind)
 
@@ -1688,6 +1690,50 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         sub.mdiParent = self
 
         if sub.FillGraph(f, "strip") is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+            QTimer.singleShot(0, sub.scaleMe)
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+
+        QApplication.restoreOverrideCursor()
+
+    def CreateFOYChart(self):
+
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+
+        sub = code_Graphs.Graphs()
+        sub.mdiParent = self
+
+        if sub.FillGraph(self.GetFilter(), "foy") is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+            QTimer.singleShot(0, sub.scaleMe)
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+
+        QApplication.restoreOverrideCursor()
+
+    def CreateLOYChart(self):
+
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+
+        sub = code_Graphs.Graphs()
+        sub.mdiParent = self
+
+        if sub.FillGraph(self.GetFilter(), "loy") is True:
             self.mdiArea.addSubWindow(sub)
             self.PositionChildWindow(sub, self)
             sub.show()
