@@ -1033,7 +1033,7 @@ class Ui_MainWindow(object):
         self.actionTotalChecklists.setToolTip(_translate("MainWindow", "Total checklists per period as a bar graph"))
         self.actionTotalLocations.setText(_translate("MainWindow", "Total Locations"))
         self.actionTotalLocations.setToolTip(_translate("MainWindow", "Total distinct locations per period as a bar graph"))
-        self.actionScatter.setText(_translate("MainWindow", "Checklists by Species & Duration"))
+        self.actionScatter.setText(_translate("MainWindow", "Checklists by Species && Duration"))
         self.actionScatter.setToolTip(_translate("MainWindow", "Duration vs. species count per checklist, coloured by season"))
         self.actionPhenology.setText(_translate("MainWindow", "Phenology Chart"))
         self.actionPhenology.setToolTip(_translate("MainWindow", "Sighting dates by day-of-year across years — best with a species filter"))
