@@ -1421,7 +1421,10 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             new_filter.setStartDate(label)
             new_filter.setEndDate(label)
 
-        self._spawn_species_list(new_filter)
+        if self._chart_type == "totallocations":
+            self._spawn_locations_list(new_filter)
+        else:
+            self._spawn_species_list(new_filter)
 
     def _update_bar_hover(self, event):
         if self._hover_annot is None:
@@ -2013,6 +2016,20 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         sub = code_Lists.Lists()
         sub.mdiParent = self.mdiParent
         if sub.FillSpecies(filter) is True:
+            self.mdiParent.mdiArea.addSubWindow(sub)
+            self.mdiParent.PositionChildWindow(sub, self.mdiParent)
+            sub.show()
+            sub.scaleMe()
+        else:
+            self.mdiParent.CreateMessageNoResults()
+            sub.close()
+        QApplication.restoreOverrideCursor()
+
+    def _spawn_locations_list(self, filter):
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        sub = code_Lists.Lists()
+        sub.mdiParent = self.mdiParent
+        if sub.FillLocations(filter) is True:
             self.mdiParent.mdiArea.addSubWindow(sub)
             self.mdiParent.PositionChildWindow(sub, self.mdiParent)
             sub.show()
