@@ -30,14 +30,15 @@ Yearbird lets you filter, browse, and visualise your personal eBird sightings in
   - *Last of Year Chart* — last sighting of each species per year, plotted by month
   - *Pie Chart by Species* — species count by taxonomic family or order
   - *Pie Chart by Individual Tallies* — individual bird count by taxonomic family or order
-- **Maps** — six interactive map types:
+- **Maps** — eight interactive map types:
   - *Locations Map* — all your sighting locations plotted on a zoomable map
   - *Animated Lifer Map* — watch your life list build up chronologically, dot by dot
   - *Effort Map by Time* — bubble map sized by cumulative birding time per location
   - *Effort Map by Checklists* — bubble map sized by checklist count per location
   - *Species Total Map* — bubble map sized by species total per location
   - *Individuals Total Map* — bubble map sized by individual bird count per location
-- **Choropleth Maps** — US states, US counties, Canada provinces, India states, Great Britain counties, and world countries shaded by species count or checklist count
+  - *Choropleth by Species* — US states, US counties, Canada, India, Great Britain, and world countries shaded by species count
+  - *Choropleth by Checklists* — same regions shaded by checklist count
 - **Photos** — associate your JPEG bird photos with your sightings; browse, filter, and rate them by camera, lens, aperture, shutter speed, focal length, and ISO
 - **Individual Species window** — full sighting history, location and year breakdowns, monthly patterns, and photo thumbnails for any species
 - **Print and PDF export** — export any window to the printer or a PDF file
