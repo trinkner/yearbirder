@@ -99,8 +99,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
     fontSize = 11
     scaleFactor = 1
     rowHeight = 16  # default; recomputed in ScaleDisplay() and __init__
-    versionNumber = "1.11"
-    versionDate = "March 26, 2026"    
+    versionNumber = "1.2"
+    versionDate = "March 30, 2026"
 
     def __init__(self):
         super(self.__class__, self).__init__()
@@ -218,7 +218,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionLocations.triggered.connect(self.CreateLocationsList)
         self.actionPrint.triggered.connect(self.printMe)
         self.actionCreatePDF.triggered.connect(self.CreatePDF)
-        self.actionFamilies.triggered.connect(self.CreateFamiliesReport)
+        self.actionFamilies.triggered.connect(self.CreateIndivPieChart)
         self.actionPhotos.triggered.connect(self.createPhotosReport)
         self.actionBigReport.triggered.connect(self.CreateBigReport)
         self.actionBarGraph.triggered.connect(self.CreateBarGraph)
@@ -230,6 +230,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionPhenology.triggered.connect(self.CreatePhenologyChart)
         self.actionFOY.triggered.connect(self.CreateFOYChart)
         self.actionLOY.triggered.connect(self.CreateLOYChart)
+        self.actionFamilyPie.triggered.connect(self.CreateFamilyPieChart)
+        self.actionIndivPie.triggered.connect(self.CreateIndivPieChart)
         self.actionMap.triggered.connect(self.CreateMap)
         self.actionFind.triggered.connect(self.CreateFind)
 
@@ -246,6 +248,19 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionIndia_States.triggered.connect(self.createChoroplethIndiaStates)
         self.actionGB_Counties.triggered.connect(self.createChoroplethGBCounties)
         self.actionWorld_Countries.triggered.connect(self.createChoroplethWorldCountries)
+        self.actionUS_States_Checklists.triggered.connect(self.createChoroplethUSStatesChecklists)
+        self.actionUS_Counties_Checklists.triggered.connect(self.createChoroplethUSCountiesChecklists)
+        self.actionCanada_Provinces_Checklists.triggered.connect(self.createChoroplethCanadaProvincesChecklists)
+        self.actionIndia_States_Checklists.triggered.connect(self.createChoroplethIndiaStatesChecklists)
+        self.actionGB_Counties_Checklists.triggered.connect(self.createChoroplethGBCountiesChecklists)
+        self.actionWorld_Countries_Checklists.triggered.connect(self.createChoroplethWorldCountriesChecklists)
+        self.actionGeolocatedPhotos.triggered.connect(self.createGeolocatedPhotosMap)
+        self.actionGeolocatedPhotos.setEnabled(False)
+        self.actionLifeListMap.triggered.connect(self.createLifeListMap)
+        self.actionEffortMap.triggered.connect(self.createEffortMap)
+        self.actionEffortMapByChecklists.triggered.connect(self.createEffortMapByChecklists)
+        self.actionSpeciesTotalMap.triggered.connect(self.createSpeciesTotalMap)
+        self.actionIndividualsTotalMap.triggered.connect(self.createIndividualsTotalMap)
         
         self.cboStartSeasonalRangeMonth.addItems(["Jan",  "Feb",  "Mar",  "Apr",  "May", "Jun",  "Jul",  "Aug",  "Sep",  "Oct",  "Nov",  "Dec"])
         self.cboEndSeasonalRangeMonth.addItems(["Jan",  "Feb",  "Mar",  "Apr",  "May", "Jun",  "Jul",  "Aug",  "Sep",  "Oct",  "Nov",  "Dec"])
@@ -424,6 +439,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             if self.db.photoDataFileOpenFlag == True:
                 self.fillPhotoComboBoxes()
                 self.showPhotoFilter()
+                self.actionGeolocatedPhotos.setEnabled(True)
             
             self.showFileDataMessage()
             
@@ -610,17 +626,20 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         photoDataFile = fname[0]
                             
         self.db.readPhotoDataFromFile(photoDataFile)
-                
+
         self.fillPhotoComboBoxes()
-        
+
         self.showPhotoFilter()
+
+        self.actionGeolocatedPhotos.setEnabled(True)
 
 
     def closePhotoSettings(self):
-        
+
         self.clearPhotoFilter()
         self.hidePhotoFilter()
         self.db.ClearPhotoSettings()
+        self.actionGeolocatedPhotos.setEnabled(False)
         
         
     def addPhotos(self):
@@ -1744,6 +1763,50 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
         QApplication.restoreOverrideCursor()
 
+    def CreateIndivPieChart(self):
+
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+
+        sub = code_Graphs.Graphs()
+        sub.mdiParent = self
+
+        if sub.FillGraph(self.GetFilter(), "indivpie") is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+            QTimer.singleShot(0, sub.scaleMe)
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+
+        QApplication.restoreOverrideCursor()
+
+    def CreateFamilyPieChart(self):
+
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+
+        sub = code_Graphs.Graphs()
+        sub.mdiParent = self
+
+        if sub.FillGraph(self.GetFilter(), "familypie") is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+            QTimer.singleShot(0, sub.scaleMe)
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+
+        QApplication.restoreOverrideCursor()
+
     def CreateFamiliesReport(self):
 
         # if no data file is currently open, abort        
@@ -2101,27 +2164,27 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
         if self.cboSeasonalRangeOptions.currentText() == "Spring":
             startSeasonalMonth = "03"
-            startSeasonalDay = "21"
+            startSeasonalDay = "20"
             endSeasonalMonth = "06"
-            endSeasonalDay = "21"
+            endSeasonalDay = "19"
 
         if self.cboSeasonalRangeOptions.currentText() == "Summer":
             startSeasonalMonth = "06"
-            startSeasonalDay = "21"
+            startSeasonalDay = "20"
             endSeasonalMonth = "09"
-            endSeasonalDay = "21"
+            endSeasonalDay = "19"
 
         if self.cboSeasonalRangeOptions.currentText() == "Fall":
             startSeasonalMonth = "09"
-            startSeasonalDay = "21"
+            startSeasonalDay = "20"
             endSeasonalMonth = "12"
-            endSeasonalDay = "21"
+            endSeasonalDay = "19"
 
         if self.cboSeasonalRangeOptions.currentText() == "Winter":
             startSeasonalMonth = "12"
-            startSeasonalDay = "21"
+            startSeasonalDay = "20"
             endSeasonalMonth = "03"
-            endSeasonalDay = "21"         
+            endSeasonalDay = "19"
          
         if self.cboSeasonalRangeOptions.currentText() == "This Month":
             now = datetime.datetime.now()
@@ -2454,9 +2517,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         
         
     def CascadeWindows(self):
-        # Restore any minimized windows first
+        # Restore any minimized or maximized windows first
         for w in self.mdiArea.subWindowList():
-            if w.isMinimized():
+            if w.isMinimized() or w.isMaximized():
                 w.showNormal()
 
         # Get windows in stacking order (back-most first, front-most last)
@@ -2778,10 +2841,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             
             else:
 
-                red = str(code_Stylesheet.mdiAreaColor.red())
-                blue = str(code_Stylesheet.mdiAreaColor.blue())
-                green = str(code_Stylesheet.mdiAreaColor.green())                        
-                self.cboRegions.setStyleSheet("QComboBox { background-color: rgb(" + red + "," + green + "," + blue + ");}")
+                self.cboRegions.setStyleSheet("QComboBox { color: #4f8ef7; }")
                 
                 # initialize lists to store the subsidiary locations
                 thisRegionCountries = set()
@@ -2870,10 +2930,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             
             else:
 
-                red = str(code_Stylesheet.mdiAreaColor.red())
-                blue = str(code_Stylesheet.mdiAreaColor.blue())
-                green = str(code_Stylesheet.mdiAreaColor.green())                        
-                self.cboCountries.setStyleSheet("QComboBox { background-color: rgb(" + red + "," + green + "," + blue + ");}")
+                self.cboCountries.setStyleSheet("QComboBox { color: #4f8ef7; }")
                 
                 # initialize lists to store the subsidiary locations
                 thisCountryStates = set()
@@ -3034,29 +3091,73 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         
     def ComboSeasonalRangeOptionsChanged(self):
         if self.fillingLocationComboBoxesFlag is False:
-            
+
             thisOption = self.cboSeasonalRangeOptions.currentText()
-            
+
             if thisOption == "No Seasonal Range":
                 self.unhighlightFilterElement(self.cboSeasonalRangeOptions)
                 self.unhighlightFilterElement(self.cboStartSeasonalRangeMonth)
                 self.unhighlightFilterElement(self.cboStartSeasonalRangeDate)
                 self.unhighlightFilterElement(self.cboEndSeasonalRangeMonth)
                 self.unhighlightFilterElement(self.cboEndSeasonalRangeDate)
-                
+
             elif thisOption == "Use Range Below":
                 self.highlightFilterElement(self.cboSeasonalRangeOptions)
                 self.highlightFilterElement(self.cboStartSeasonalRangeMonth)
                 self.highlightFilterElement(self.cboStartSeasonalRangeDate)
                 self.highlightFilterElement(self.cboEndSeasonalRangeMonth)
-                self.highlightFilterElement(self.cboEndSeasonalRangeDate)           
-                
+                self.highlightFilterElement(self.cboEndSeasonalRangeDate)
+
             else:
                 self.highlightFilterElement(self.cboSeasonalRangeOptions)
                 self.unhighlightFilterElement(self.cboStartSeasonalRangeMonth)
                 self.unhighlightFilterElement(self.cboStartSeasonalRangeDate)
                 self.unhighlightFilterElement(self.cboEndSeasonalRangeMonth)
-                self.unhighlightFilterElement(self.cboEndSeasonalRangeDate)  
+                self.unhighlightFilterElement(self.cboEndSeasonalRangeDate)
+
+                # Compute start/end month index (0=Jan) and day index (0=1st)
+                # for the preset so the dropdowns reflect the active range.
+                start_m = start_d = end_m = end_d = None
+
+                if thisOption == "Spring":
+                    start_m, start_d, end_m, end_d = 2, 19, 5, 18   # Mar 20 – Jun 19
+                elif thisOption == "Summer":
+                    start_m, start_d, end_m, end_d = 5, 19, 8, 18   # Jun 20 – Sep 19
+                elif thisOption == "Fall":
+                    start_m, start_d, end_m, end_d = 8, 19, 11, 18  # Sep 20 – Dec 19
+                elif thisOption == "Winter":
+                    start_m, start_d, end_m, end_d = 11, 19, 2, 18  # Dec 20 – Mar 19
+                elif thisOption == "This Month":
+                    now = datetime.datetime.now()
+                    m = now.month - 1
+                    last = int(MainWindow.db.GetLastDayOfMonth(str(now.month).zfill(2)))
+                    start_m, start_d, end_m, end_d = m, 0, m, last - 1
+                elif thisOption == "Year to Date":
+                    now = datetime.datetime.now()
+                    start_m, start_d = 0, 0
+                    end_m, end_d = now.month - 1, now.day - 1
+                elif thisOption == "Remainder of Year":
+                    now = datetime.datetime.now()
+                    start_m, start_d = now.month - 1, now.day - 1
+                    end_m, end_d = 11, 30  # Dec 31
+                else:
+                    monthList = ["January", "February", "March", "April", "May", "June",
+                                 "July", "August", "September", "October", "November", "December"]
+                    if thisOption in monthList:
+                        m = monthList.index(thisOption)
+                        last = int(MainWindow.db.GetLastDayOfMonth(str(m + 1).zfill(2)))
+                        start_m, start_d, end_m, end_d = m, 0, m, last - 1
+
+                if start_m is not None:
+                    for combo, idx in (
+                        (self.cboStartSeasonalRangeMonth, start_m),
+                        (self.cboStartSeasonalRangeDate,  start_d),
+                        (self.cboEndSeasonalRangeMonth,   end_m),
+                        (self.cboEndSeasonalRangeDate,    end_d),
+                    ):
+                        combo.blockSignals(True)
+                        combo.setCurrentIndex(idx)
+                        combo.blockSignals(False)
 
 
     def ComboSpeciesChanged(self):
@@ -3432,7 +3533,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
         # call the child's routine to fill it with data        
         if sub.loadChoroplethWorldCountries(filter) is True:
-            
+
             # add and position the child to our MDI area
             self.mdiArea.addSubWindow(sub)
             self.PositionChildWindow(sub,  self)
@@ -3442,9 +3543,222 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             # abort if filter found no sightings for map
             self.CreateMessageNoResults()
             sub.close()
-            
-        QApplication.restoreOverrideCursor()         
 
+        QApplication.restoreOverrideCursor()
+
+
+    def createChoroplethUSStatesChecklists(self):
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        filter = self.GetFilter()
+        sub = code_Web.Web()
+        sub.mdiParent = self
+        if sub.loadChoroplethUSStates(filter, mode='checklists') is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+        QApplication.restoreOverrideCursor()
+
+
+    def createChoroplethUSCountiesChecklists(self):
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        filter = self.GetFilter()
+        sub = code_Web.Web()
+        sub.mdiParent = self
+        if sub.loadChoroplethUSCounties(filter, mode='checklists') is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+        QApplication.restoreOverrideCursor()
+
+
+    def createChoroplethCanadaProvincesChecklists(self):
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        filter = self.GetFilter()
+        sub = code_Web.Web()
+        sub.mdiParent = self
+        if sub.loadChoroplethCanadaProvinces(filter, mode='checklists') is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+        QApplication.restoreOverrideCursor()
+
+
+    def createChoroplethIndiaStatesChecklists(self):
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        filter = self.GetFilter()
+        sub = code_Web.Web()
+        sub.mdiParent = self
+        if sub.loadChoroplethIndiaStates(filter, mode='checklists') is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+        QApplication.restoreOverrideCursor()
+
+
+    def createChoroplethGBCountiesChecklists(self):
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        filter = self.GetFilter()
+        sub = code_Web.Web()
+        sub.mdiParent = self
+        if sub.loadChoroplethGBCounties(filter, mode='checklists') is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+        QApplication.restoreOverrideCursor()
+
+
+    def createChoroplethWorldCountriesChecklists(self):
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        filter = self.GetFilter()
+        sub = code_Web.Web()
+        sub.mdiParent = self
+        if sub.loadChoroplethWorldCountries(filter, mode='checklists') is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+        QApplication.restoreOverrideCursor()
+
+
+    def createGeolocatedPhotosMap(self):
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        filter = self.GetFilter()
+        sub = code_Web.Web()
+        sub.mdiParent = self
+        if sub.loadGeolocatedPhotosMap(filter) is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+        QApplication.restoreOverrideCursor()
+
+
+    def createLifeListMap(self):
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        filter = self.GetFilter()
+        sub = code_Web.Web()
+        sub.mdiParent = self
+        if sub.loadLifeListMap(filter) is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+        QApplication.restoreOverrideCursor()
+
+
+    def createEffortMap(self):
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        filter = self.GetFilter()
+        sub = code_Web.Web()
+        sub.mdiParent = self
+        if sub.loadEffortMap(filter, mode='time') is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+        QApplication.restoreOverrideCursor()
+
+    def createEffortMapByChecklists(self):
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        filter = self.GetFilter()
+        sub = code_Web.Web()
+        sub.mdiParent = self
+        if sub.loadEffortMap(filter, mode='checklists') is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+        QApplication.restoreOverrideCursor()
+
+
+    def createSpeciesTotalMap(self):
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        filter = self.GetFilter()
+        sub = code_Web.Web()
+        sub.mdiParent = self
+        if sub.loadBubbleMap(filter, mode='species') is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+        QApplication.restoreOverrideCursor()
+
+    def createIndividualsTotalMap(self):
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        filter = self.GetFilter()
+        sub = code_Web.Web()
+        sub.mdiParent = self
+        if sub.loadBubbleMap(filter, mode='individuals') is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+        QApplication.restoreOverrideCursor()
 
     def createChoroplethWorldSubregion1(self):
         
@@ -3480,13 +3794,10 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
 
     def highlightFilterElement(self, widget):
-        
+
         if widget.objectName()[0:3] == "cbo":
-            red = str(code_Stylesheet.mdiAreaColor.red())
-            blue = str(code_Stylesheet.mdiAreaColor.blue())
-            green = str(code_Stylesheet.mdiAreaColor.green())
-            widget.setStyleSheet("QComboBox { background-color: rgb(" + red + "," + green + "," + blue + ")}")
-        
+            widget.setStyleSheet("QComboBox { color: #4f8ef7; }")
+
         if widget.objectName()[0:3] == "cal":
             red = str(code_Stylesheet.mdiAreaColor.red())
             blue = str(code_Stylesheet.mdiAreaColor.blue())

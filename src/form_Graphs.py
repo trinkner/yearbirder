@@ -103,6 +103,29 @@ class Ui_frmGraphs(object):
 
         self.verticalLayout.addWidget(self.frmGranularity)
 
+        # Pie-mode row: Families / Orders toggle (shown only for pie chart)
+        self.frmPieMode = QtWidgets.QFrame(self.layGraphs)
+        self.frmPieMode.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+        self.frmPieMode.setObjectName("frmPieMode")
+        self.hLayoutPieMode = QtWidgets.QHBoxLayout(self.frmPieMode)
+        self.hLayoutPieMode.setContentsMargins(0, 0, 0, 0)
+        self.hLayoutPieMode.setSpacing(16)
+        self.hLayoutPieMode.setObjectName("hLayoutPieMode")
+
+        self.rdoPieFamily = QtWidgets.QRadioButton(self.frmPieMode)
+        self.rdoPieFamily.setChecked(True)
+        self.rdoPieFamily.setObjectName("rdoPieFamily")
+        self.hLayoutPieMode.addWidget(self.rdoPieFamily)
+
+        self.rdoPieOrder = QtWidgets.QRadioButton(self.frmPieMode)
+        self.rdoPieOrder.setObjectName("rdoPieOrder")
+        self.hLayoutPieMode.addWidget(self.rdoPieOrder)
+
+        self.hLayoutPieMode.addStretch(1)
+
+        self.frmPieMode.setVisible(False)
+        self.verticalLayout.addWidget(self.frmPieMode)
+
         # Chart widget — expands to fill all remaining vertical space
         self.chartWidget = QtWidgets.QWidget(self.layGraphs)
         sizePolicy3 = QtWidgets.QSizePolicy(
@@ -129,6 +152,8 @@ class Ui_frmGraphs(object):
         self.rdoDay.setText(_translate("frmGraphs", "By Day"))
         self.lblWarning.setText(_translate("frmGraphs",
             "⚠  Too many days to display clearly — narrow the date filter."))
+        self.rdoPieFamily.setText(_translate("frmGraphs", "Families"))
+        self.rdoPieOrder.setText(_translate("frmGraphs", "Orders"))
 
 
 import icons_rc

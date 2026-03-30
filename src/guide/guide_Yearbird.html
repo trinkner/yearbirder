@@ -124,7 +124,7 @@
     <li><a href="#compare-lists">Compare Lists</a></li>
     <li><a href="#graphs">Graphs</a></li>
     <li><a href="#maps">Maps</a></li>
-    <li><a href="#choropleth-maps">Choropleth Maps</a></li>
+    <li><a href="#choropleth-maps">Maps – Choropleth Maps</a></li>
     <li><a href="#photos">Photos</a></li>
     <li><a href="#photo-settings-file">Photo Settings File</a></li>
     <li><a href="#individual-species">Individual Species Window</a></li>
@@ -161,7 +161,7 @@
 <h2 id="main-window">2. The Main Window</h2>
 <p>Yearbird uses a <strong>Multiple Document Interface (MDI)</strong>. The main window contains:</p>
 <ul>
-  <li>A <strong>menu bar</strong> across the top with menus for File, Filter, Lists, Map, Reports, Graphs, Photos, Choropleths, and Windows.</li>
+  <li>A <strong>menu bar</strong> across the top with menus for File, Filter, Lists, Map, Reports, Graphs, Photos, Maps, and Windows.</li>
   <li>A <strong>toolbar</strong> just below the menu bar with quick-access buttons for the most common actions.</li>
   <li>A <strong>Standard Filter</strong> panel docked on the left side.</li>
   <li>A <strong>Photo Filter</strong> panel docked on the right side.</li>
@@ -437,7 +437,7 @@
 <hr>
 
 <h2 id="graphs">14. Graphs</h2>
-<p>Open graphs from the <strong>Graphs</strong> menu. Seven chart types are available, each responding to the current Standard Filter. All graphs display a hover tooltip when you move the cursor over a data point or bar — the tooltip shows relevant details such as date, species count, or location. Clicking on most data points opens a <strong>Species List</strong> window filtered to that point's context.</p>
+<p>Open graphs from the <strong>Graphs</strong> menu. Eleven chart types are available, each responding to the current Standard Filter. All graphs display a hover tooltip when you move the cursor over a data point or bar — the tooltip shows relevant details such as date, species count, or location. Clicking on most data points opens a <strong>Species List</strong> window filtered to that point's context.</p>
 
 <h3>Bar Graph</h3>
 <p>Open with <strong>Graphs → Bar Graph</strong>.</p>
@@ -484,10 +484,10 @@
 <table>
   <thead><tr><th>Colour</th><th>Season</th><th>Months</th></tr></thead>
   <tbody>
-    <tr><td>Steel blue</td><td>Winter</td><td>December – February</td></tr>
-    <tr><td>Green</td><td>Spring</td><td>March – May</td></tr>
-    <tr><td>Golden</td><td>Summer</td><td>June – August</td></tr>
-    <tr><td>Orange</td><td>Fall</td><td>September – November</td></tr>
+    <tr><td>Steel blue</td><td>Winter</td><td>December 20 – March 19</td></tr>
+    <tr><td>Green</td><td>Spring</td><td>March 20 – June 19</td></tr>
+    <tr><td>Golden</td><td>Summer</td><td>June 20 – September 19</td></tr>
+    <tr><td>Orange</td><td>Fall</td><td>September 20 – December 19</td></tr>
   </tbody>
 </table>
 <p>Incidental observations (checklists with no recorded duration) are excluded; a note at the bottom right of the chart shows how many were omitted.</p>
@@ -507,28 +507,96 @@
 <p>If no species, family, or order filter is set, Yearbird will warn you before generating the chart, since plotting all species together produces a very cluttered result.</p>
 <p>Hover over a dot to see the exact date and the location or locations seen that day. Click a dot to open a Species List for that date.</p>
 
+<h3>First of Year Chart</h3>
+<p>Open with <strong>Graphs → First of Year Chart</strong>.</p>
+<p>A dot chart plotting the <em>first sighting of each species in each year</em>. The x-axis shows day of year (January through December) and the y-axis shows year. Each dot represents one or more species whose first record of the year fell on the same date; hovering reveals the species list for that dot. Dots are coloured by season using the same palette as the Checklist Scatter.</p>
+<p>This chart is ideal for tracking arrival timing — when do your warblers return each spring? Has arrival crept earlier over the years? Apply a Family or species filter before opening the chart for the most focused view.</p>
+<p>Hover over a dot to see the date and the species recorded for the first time that year. Click a dot to open a Species List for that date.</p>
+
+<h3>Last of Year Chart</h3>
+<p>Open with <strong>Graphs → Last of Year Chart</strong>.</p>
+<p>The mirror image of the First of Year Chart: plots the <em>last sighting of each species in each year</em>, using the same axes and colour scheme. Useful for tracking departure timing and lingering late records.</p>
+<p>Hover over a dot to see the date and the species recorded for the last time that year. Click a dot to open a Species List for that date.</p>
+
+<h3>Pie Charts</h3>
+<p>Open with <strong>Graphs → Pie Charts</strong>. Two pie chart variants are available, selectable via radio buttons at the top of the window:</p>
+<ul>
+  <li><strong>Pie Chart by Species</strong> — each wedge represents a bird family (or order), sized by the number of species you have recorded in it under the current filter.</li>
+  <li><strong>Pie Chart by Individual Tallies</strong> — each wedge represents a family (or order), sized by the total number of individual birds tallied. Unknown counts ("X" in eBird) are counted as 1.</li>
+</ul>
+<p>Toggle between <strong>Families</strong> and <strong>Orders</strong> using the radio buttons below the chart title. Wedges smaller than 0.5% of the total are unlabelled to avoid clutter; percentage labels appear only on wedges of 2% or larger.</p>
+<p>Hover over a wedge to see the family or order name, its count, and the species it contains. Click a wedge to open a Species List filtered to that family or order.</p>
+
 <hr>
 
 <h2 id="maps">15. Maps</h2>
-<p>Open with <strong>Map → Map</strong> or the <strong>Map</strong> toolbar button.</p>
-<p>The Map window displays an interactive map of all locations where you have recorded sightings under the current filter. Each location is plotted as a marker; clicking a marker shows the location name and coordinates.</p>
-<p>The map is pan-and-zoom capable using your mouse or trackpad. The title bar shows the count of locations plotted, e.g., <em>"Map: All species, locations, and dates (208)"</em>.</p>
-<p>When you resize the map window, the map reloads to fill the new size.</p>
+<p>Yearbird's <strong>Maps</strong> menu offers a range of interactive map types. All maps are pan-and-zoom capable using your mouse or trackpad, respond to the Standard Filter, and open in MDI child windows like any other report. Hovering over a marker or bubble shows a tooltip; clicking most markers opens the <strong>Location</strong> window for that site.</p>
+
+<h3>Location Map</h3>
+<p>Open with the <strong>Map</strong> toolbar button or <strong>Map → Map</strong>.</p>
+<p>Plots every location where you have recorded sightings under the current filter as a circle marker, sized by species count. Hover over a marker to see the location name and species list. Click a marker to open the Location window for that site.</p>
+
+<h3>Animated Lifer Map</h3>
+<p>Open with <strong>Maps → Animated Lifer Map</strong>.</p>
+<p>Animates your life list building geographically over time. Each dot represents a lifer — the first time you recorded a species anywhere in your database — placed at the sighting's GPS coordinates and revealed in chronological order. Dots are coloured on a cream-to-orange gradient from earliest to most recent lifer; the newest dot flashes blue before settling to its gradient colour when the next dot appears.</p>
+<p>A control bar at the bottom of the map provides:</p>
+<ul>
+  <li><strong>⏮ Restart</strong> — jump back to the beginning.</li>
+  <li><strong>▶ / ⏸ Play/Pause</strong> — start or pause the animation.</li>
+  <li><strong>Scrubber</strong> — drag to jump to any point in the sequence.</li>
+  <li><strong>Speed slider</strong> (🐢 – 🐇) — adjust animation speed from leisurely to rapid.</li>
+  <li><strong>Lifer info line</strong> — shows the species name, location, and date of the most recently revealed dot.</li>
+</ul>
+<p>Hover over any dot to see its species name, lifer number, date, and location. Click a dot to open a popup with the same information.</p>
+
+<h3>Effort Map by Time</h3>
+<p>Open with <strong>Maps → Effort Map by Time</strong>.</p>
+<p>A bubble map where each bubble represents a checklist location. Bubble <strong>area is proportional to the total cumulative time</strong> you have spent birding at that location (in minutes, summed across all matching checklists). Locations where you have invested the most time appear as the largest bubbles.</p>
+<p>Hover over a bubble to see the location name, total time, and checklist count. If some checklists at a location have no recorded duration, the tooltip notes how many are untimed. Click a bubble to open the Location window for that site.</p>
+
+<h3>Effort Map by Checklists</h3>
+<p>Open with <strong>Maps → Effort Map by Checklists</strong>.</p>
+<p>The same bubble map concept, but bubble area is proportional to the <strong>number of checklists</strong> submitted at each location rather than total time. Useful for seeing where you bird most frequently regardless of duration.</p>
+<p>Hover over a bubble to see the location name, checklist count, and total time. Click a bubble to open the Location window for that site.</p>
+
+<h3>Species Total Map</h3>
+<p>Open with <strong>Maps → Species Total Map</strong>.</p>
+<p>A bubble map where bubble area is proportional to the <strong>number of species</strong> recorded at each location under the current filter. Slashes, spuhs, and hybrids are excluded from the species count using the same rules as the Species List. Apply a taxonomic filter to compare how many warblers — or any other group — you have found at each of your locations.</p>
+<p>Hover over a bubble to see the location name and species count. Click a bubble to open the Location window for that site.</p>
+
+<h3>Individuals Total Map</h3>
+<p>Open with <strong>Maps → Individuals Total Map</strong>.</p>
+<p>A bubble map where bubble area is proportional to the <strong>total number of individual birds tallied</strong> at each location. Sightings recorded with an unknown count ("X" in eBird) contribute 1 to the total. The tooltip notes how many checklists contain at least one uncounted species.</p>
+<p>Hover over a bubble to see the location name, individual count, and any caveat about uncounted entries. Click a bubble to open the Location window for that site.</p>
+
+<h3>Geolocated Photos</h3>
+<p>Open with <strong>Maps → Geolocated Photos</strong>. Available only when a Photo Settings file is loaded.</p>
+<p>Plots your photos on a clustered marker map. Each marker represents one photo; clicking it opens a popup showing a thumbnail of the photo, the species name, date, and location. Markers cluster together at lower zoom levels and spread apart as you zoom in. Multiple photos taken at exactly the same GPS coordinates are automatically spread into a Fibonacci spiral so they remain individually clickable.</p>
 
 <hr>
 
 <h2 id="choropleth-maps">16. Choropleth Maps</h2>
-<p>Open with the <strong>Choropleths</strong> menu. Three choropleth types are available:</p>
+<p>Choropleth maps are accessed via <strong>Maps → Choropleths</strong>. Six geographic regions are available, each with two modes selectable from the <strong>By Species</strong> and <strong>By Checklists</strong> submenus.</p>
+<p>All choropleth maps respond to the Standard Filter — for example, set a Family filter to see which states you have recorded warblers in. Clicking a shaded region opens a Species List (By Species mode) or a Checklists List (By Checklists mode) filtered to that region.</p>
 
-<h3>US States Choropleth</h3>
-<p>A map of the contiguous United States with each state shaded according to the number of species you have recorded there. Darker shading = more species. Hover over a state to see its name and species count. The title shows the number of shaded states, e.g., <em>"US States Choropleth: All species, locations, and dates (32 States)"</em>.</p>
+<h3>By Species mode</h3>
+<p>Each region is shaded according to the number of distinct species you have recorded there under the current filter. Darker shading = more species. Hover over a region to see its name, species count, and a list of the most recently recorded species.</p>
 
-<h3>US Lower 48 Counties Choropleth</h3>
-<p>The same concept at the county level for the lower 48 states. Useful for seeing fine-grained geographic patterns in your birding.</p>
+<h3>By Checklists mode</h3>
+<p>Each region is shaded according to the number of checklists you have submitted there. Hover over a region to see its name, checklist count, and the dates of your most recent visits (newest first).</p>
 
-<h3>World Countries Choropleth</h3>
-<p>A world map shaded by species count per country.</p>
-<p>All choropleth maps respond to the Standard Filter — for example, set a Family filter to see which states you have recorded warblers in.</p>
+<h3>Available regions</h3>
+<table>
+  <thead><tr><th>Menu entry</th><th>Coverage</th></tr></thead>
+  <tbody>
+    <tr><td>US States</td><td>Contiguous United States, shaded by state</td></tr>
+    <tr><td>Canada Provinces</td><td>Canadian provinces and territories</td></tr>
+    <tr><td>India States</td><td>States and union territories of India</td></tr>
+    <tr><td>Great Britain Counties</td><td>Counties of England, Scotland, and Wales</td></tr>
+    <tr><td>US Lower 48 Counties</td><td>County-level detail for the contiguous US</td></tr>
+    <tr><td>World Countries</td><td>All countries worldwide</td></tr>
+  </tbody>
+</table>
 
 <hr>
 

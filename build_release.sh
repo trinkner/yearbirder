@@ -114,7 +114,7 @@ broken=$(find "$WORK_APP" -type l | while read link; do
     dir=$(dirname "$link")
     [[ "$target" == /* ]] && resolved="$target" || resolved="$dir/$target"
     [ ! -e "$resolved" ] && echo "$link -> $target"
-done)
+done) || true
 if [ -n "$broken" ]; then
     echo "ERROR: Broken symlinks found:"; echo "$broken"; exit 1
 fi
