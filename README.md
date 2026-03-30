@@ -20,7 +20,7 @@ Yearbird lets you filter, browse, and visualise your personal eBird sightings in
 - **Big Report** — comprehensive multi-tab report combining species, dates, locations, and checklists
 - **Compare Lists** — compare any two species lists side by side
 - **Graphs** — eleven chart types:
-  - *Bar Graph* — species count per year
+  - *Total Species Bar Graph* — species count per year
   - *Cumulative Species Curve* — cumulative species seen over time
   - *Species Heatmap* — species count by month and year
   - *Species Accumulation* — new species added each year vs. repeats
