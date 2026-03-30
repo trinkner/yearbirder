@@ -999,7 +999,7 @@ class Ui_MainWindow(object):
         self.actionChecklists.setText(_translate("MainWindow", "Checklists"))
         self.actionBigReport.setText(_translate("MainWindow", "Big Report"))
         self.actionBigReport.setToolTip(_translate("MainWindow", "Big Report"))
-        self.actionBarGraph.setText(_translate("MainWindow", "Total Species Bar Graph"))
+        self.actionBarGraph.setText(_translate("MainWindow", "Total Species"))
         self.actionBarGraph.setToolTip(_translate("MainWindow", "Total species per year as a bar graph"))
         self.actionCumulativeCurve.setText(_translate("MainWindow", "Cumulative Species Curve"))
         self.actionCumulativeCurve.setToolTip(_translate("MainWindow", "Cumulative species seen over time"))
