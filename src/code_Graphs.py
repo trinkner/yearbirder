@@ -93,6 +93,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         self._labels = []
         self._counts = []
         self._cumulative_new_species = []
+        self._cumulative_new_items   = []
         self._cumulative_highlight   = None
         self._new_counts    = []
         self._repeat_counts = []
@@ -374,6 +375,51 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             counts.append(len(seen))
             new_species.append(new_sp)
         return dates, counts, new_species, "Cumulative Species"
+
+    def _build_cumulative_locations_data(self, sightings):
+        """Return (dates, counts, new_locations, y_label).
+
+        new_locations[i] is a sorted list of location names first seen on dates[i].
+        """
+        daily = defaultdict(set)
+        for s in sightings:
+            daily[s["date"]].add(s["location"])
+        dates = sorted(daily.keys())
+        seen = set()
+        counts = []
+        new_locations = []
+        for d in dates:
+            new_locs = sorted(daily[d] - seen)
+            seen |= daily[d]
+            counts.append(len(seen))
+            new_locations.append(new_locs)
+        return dates, counts, new_locations, "Cumulative Locations"
+
+    def _build_cumulative_families_data(self, sightings):
+        """Return (dates, counts, new_families, y_label).
+
+        new_families[i] is a list of (family_name, species_list) tuples for each
+        family first encountered on dates[i].  species_list holds the taxo-sorted
+        species from that family seen on that introduction day.
+        """
+        by_date = defaultdict(lambda: defaultdict(set))
+        for s in sightings:
+            fam = s.get("family", "") or "Unknown"
+            by_date[s["date"]][fam].add(s["commonName"])
+        dates = sorted(by_date.keys())
+        seen_fams = set()
+        counts = []
+        new_families = []
+        for d in dates:
+            day_fams = by_date[d]
+            new_fam_entries = []
+            for fam in sorted(day_fams.keys() - seen_fams):
+                sp = self._taxo_sort(day_fams[fam], sightings)
+                new_fam_entries.append((fam, sp))
+            seen_fams |= set(day_fams.keys())
+            counts.append(len(seen_fams))
+            new_families.append(new_fam_entries)
+        return dates, counts, new_families, "Cumulative Families"
 
     def _build_heatmap_data(self, sightings):
         """Return (grid, years, species_grid).
@@ -987,7 +1033,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         canvas.mpl_connect('button_press_event', self._on_bar_click)
         canvas.mpl_connect('motion_notify_event', self._on_mouse_move)
 
-    def _draw_line_chart(self, labels, counts, new_species, y_label):
+    def _draw_line_chart(self, labels, counts, new_species, y_label, new_items=None):
         if self._canvas is not None:
             self._canvas.setParent(None)
             self._canvas = None
@@ -1048,6 +1094,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         self._labels = labels
         self._counts = counts
         self._cumulative_new_species = new_species
+        self._cumulative_new_items   = new_items if new_items is not None else []
         self._hover_idx = -1
 
         self._hover_annot = ax.annotate(
@@ -1317,6 +1364,10 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
     def _on_mouse_move(self, event):
         if self._chart_type == "cumulative":
             self._update_hover_annotation(event)
+        elif self._chart_type == "cumulativelocations":
+            self._update_cumulative_locations_hover(event)
+        elif self._chart_type == "cumulativefamilies":
+            self._update_cumulative_families_hover(event)
         elif self._chart_type == "heatmap":
             self._update_heatmap_hover(event)
         elif self._chart_type == "accumulation":
@@ -1378,6 +1429,110 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         if n_new > limit:
             tip += f"\n  (+{n_new - limit} more)"
         n_lines = 2 + min(n_new, limit) + (1 if n_new > limit else 0)
+
+        self._hover_annot.xy = (x, y)
+        self._hover_annot.set_text(tip)
+        self._position_tooltip(event, n_lines, (x, y))
+        self._hover_annot.set_visible(True)
+        if self._cumulative_highlight is not None:
+            self._cumulative_highlight.set_offsets([[x, y]])
+        self._canvas.draw_idle()
+
+    def _update_cumulative_locations_hover(self, event):
+        if self._hover_annot is None:
+            return
+        if event.inaxes is not self._ax or event.xdata is None:
+            if self._hover_annot.get_visible():
+                self._hover_annot.set_visible(False)
+                if self._cumulative_highlight is not None:
+                    self._cumulative_highlight.set_offsets(np.empty((0, 2)))
+                self._hover_idx = -1
+                self._canvas.draw_idle()
+            self._canvas.setCursor(Qt.ArrowCursor)
+            return
+
+        idx = int(round(event.xdata))
+        if not (0 <= idx < len(self._labels)):
+            if self._hover_annot.get_visible():
+                self._hover_annot.set_visible(False)
+                if self._cumulative_highlight is not None:
+                    self._cumulative_highlight.set_offsets(np.empty((0, 2)))
+                self._hover_idx = -1
+                self._canvas.draw_idle()
+            self._canvas.setCursor(Qt.ArrowCursor)
+            return
+
+        self._canvas.setCursor(Qt.PointingHandCursor)
+        if idx == self._hover_idx:
+            return
+
+        self._hover_idx = idx
+        x, y   = idx, self._counts[idx]
+        new_locs = self._cumulative_new_items[idx] if idx < len(self._cumulative_new_items) else []
+        n_new    = len(new_locs)
+        limit    = self._tooltip_species_limit()
+
+        tip = f"{self._labels[idx]}\n{y} locations total  +{n_new} new"
+        for loc in new_locs[:limit]:
+            tip += f"\n  {loc}"
+        if n_new > limit:
+            tip += f"\n  (+{n_new - limit} more)"
+        n_lines = 2 + min(n_new, limit) + (1 if n_new > limit else 0)
+
+        self._hover_annot.xy = (x, y)
+        self._hover_annot.set_text(tip)
+        self._position_tooltip(event, n_lines, (x, y))
+        self._hover_annot.set_visible(True)
+        if self._cumulative_highlight is not None:
+            self._cumulative_highlight.set_offsets([[x, y]])
+        self._canvas.draw_idle()
+
+    def _update_cumulative_families_hover(self, event):
+        if self._hover_annot is None:
+            return
+        if event.inaxes is not self._ax or event.xdata is None:
+            if self._hover_annot.get_visible():
+                self._hover_annot.set_visible(False)
+                if self._cumulative_highlight is not None:
+                    self._cumulative_highlight.set_offsets(np.empty((0, 2)))
+                self._hover_idx = -1
+                self._canvas.draw_idle()
+            self._canvas.setCursor(Qt.ArrowCursor)
+            return
+
+        idx = int(round(event.xdata))
+        if not (0 <= idx < len(self._labels)):
+            if self._hover_annot.get_visible():
+                self._hover_annot.set_visible(False)
+                if self._cumulative_highlight is not None:
+                    self._cumulative_highlight.set_offsets(np.empty((0, 2)))
+                self._hover_idx = -1
+                self._canvas.draw_idle()
+            self._canvas.setCursor(Qt.ArrowCursor)
+            return
+
+        self._canvas.setCursor(Qt.PointingHandCursor)
+        if idx == self._hover_idx:
+            return
+
+        self._hover_idx  = idx
+        x, y     = idx, self._counts[idx]
+        new_fams = self._cumulative_new_items[idx] if idx < len(self._cumulative_new_items) else []
+        n_new    = len(new_fams)
+        limit    = self._tooltip_species_limit()
+
+        tip = f"{self._labels[idx]}\n{y} families total  +{n_new} new"
+        shown = 0
+        for fam, sp_list in new_fams:
+            if shown >= limit:
+                remaining = n_new - shown
+                tip += f"\n  (+{remaining} more)"
+                break
+            tip += f"\n  {fam}"
+            for sp in sp_list:
+                tip += f"\n    {sp}"
+            shown += 1
+        n_lines = 2 + sum(1 + len(sp) for fam, sp in new_fams[:min(n_new, limit)]) + (1 if n_new > limit else 0)
 
         self._hover_annot.xy = (x, y)
         self._hover_annot.set_text(tip)
@@ -2009,7 +2164,10 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         new_filter = copy.deepcopy(self.filter)
         new_filter.setStartDate(self._labels[0])
         new_filter.setEndDate(self._labels[idx])
-        self._spawn_species_list(new_filter)
+        if self._chart_type == "cumulativelocations":
+            self._spawn_locations_list(new_filter)
+        else:
+            self._spawn_species_list(new_filter)
 
     def _spawn_species_list(self, filter):
         QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
@@ -2461,6 +2619,38 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             self.mdiParent.SetChildDetailsLabels(self, filter)
             self.setWindowTitle(
                 filter.buildWindowTitle("Cumulative Species Curve", self.mdiParent.db))
+            icon = QIcon()
+            icon.addPixmap(QPixmap(":/icon_bird_white.png"),
+                           QIcon.Normal, QIcon.Off)
+            self.setWindowIcon(icon)
+            return True
+
+        if chartType == "cumulativelocations":
+            self.frmGranularity.setVisible(False)
+            labels, counts, new_locations, y_label = self._build_cumulative_locations_data(sightings)
+            if not labels:
+                return False
+            self._draw_line_chart(labels, counts, new_locations, y_label,
+                                  new_items=new_locations)
+            self.mdiParent.SetChildDetailsLabels(self, filter)
+            self.setWindowTitle(
+                filter.buildWindowTitle("Cumulative Locations Curve", self.mdiParent.db))
+            icon = QIcon()
+            icon.addPixmap(QPixmap(":/icon_bird_white.png"),
+                           QIcon.Normal, QIcon.Off)
+            self.setWindowIcon(icon)
+            return True
+
+        if chartType == "cumulativefamilies":
+            self.frmGranularity.setVisible(False)
+            labels, counts, new_families, y_label = self._build_cumulative_families_data(sightings)
+            if not labels:
+                return False
+            self._draw_line_chart(labels, counts, new_families, y_label,
+                                  new_items=new_families)
+            self.mdiParent.SetChildDetailsLabels(self, filter)
+            self.setWindowTitle(
+                filter.buildWindowTitle("Cumulative Families Curve", self.mdiParent.db))
             icon = QIcon()
             icon.addPixmap(QPixmap(":/icon_bird_white.png"),
                            QIcon.Normal, QIcon.Off)
