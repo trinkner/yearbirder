@@ -2166,7 +2166,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         new_filter.setEndDate(self._labels[idx])
         if self._chart_type == "cumulativelocations":
             self._spawn_locations_list(new_filter)
-        else:
+        else:  # cumulative, cumulativefamilies
             self._spawn_species_list(new_filter)
 
     def _spawn_species_list(self, filter):
