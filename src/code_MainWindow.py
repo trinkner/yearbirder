@@ -222,6 +222,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionPhotos.triggered.connect(self.createPhotosReport)
         self.actionBigReport.triggered.connect(self.CreateBigReport)
         self.actionBarGraph.triggered.connect(self.CreateBarGraph)
+        self.actionTotalChecklists.triggered.connect(self.CreateTotalChecklistsGraph)
+        self.actionTotalLocations.triggered.connect(self.CreateTotalLocationsGraph)
         self.actionCumulativeCurve.triggered.connect(self.CreateCumulativeCurve)
         self.actionHeatmap.triggered.connect(self.CreateHeatmap)
         self.actionAccumulation.triggered.connect(self.CreateAccumulationChart)
@@ -1559,6 +1561,50 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         sub.mdiParent = self
 
         if sub.FillGraph(self.GetFilter(), "bar") is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+            QTimer.singleShot(0, sub.scaleMe)
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+
+        QApplication.restoreOverrideCursor()
+
+    def CreateTotalChecklistsGraph(self):
+
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+
+        sub = code_Graphs.Graphs()
+        sub.mdiParent = self
+
+        if sub.FillGraph(self.GetFilter(), "totalchecklists") is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+            QTimer.singleShot(0, sub.scaleMe)
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+
+        QApplication.restoreOverrideCursor()
+
+    def CreateTotalLocationsGraph(self):
+
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+
+        sub = code_Graphs.Graphs()
+        sub.mdiParent = self
+
+        if sub.FillGraph(self.GetFilter(), "totallocations") is True:
             self.mdiArea.addSubWindow(sub)
             self.PositionChildWindow(sub, self)
             sub.show()

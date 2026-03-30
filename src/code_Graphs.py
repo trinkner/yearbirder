@@ -43,6 +43,23 @@ _SEASON_COLORS = {
 }
 
 
+def _period_key(date, granularity):
+    """Return the bucket key for a date string at the given granularity."""
+    if granularity == "year":      return date[0:4]
+    if granularity == "month":     return date[5:7]
+    if granularity == "monthyear": return date[0:7]
+    return date  # day
+
+
+def _period_labels(keys, granularity):
+    """Convert sorted bucket keys to human-readable bar labels."""
+    if granularity == "month":
+        return [_MONTH_NAMES[int(k) - 1] for k in keys]
+    if granularity == "monthyear":
+        return [_MONTH_NAMES[int(k[5:7]) - 1] + "-" + k[0:4] for k in keys]
+    return list(keys)  # year or day: keys are already display-ready
+
+
 def _get_season(month, day):
     """Return the astronomical season name for a given month and day.
 
@@ -115,8 +132,9 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         self._chart_type = "bar"
         self._hover_annot = None
         self._hover_idx   = -1
-        self._bar_species   = []
-        self._bar_highlight = None
+        self._bar_species    = []
+        self._bar_highlight  = None
+        self._bar_item_label = "species"
         self._heatmap_years = []
         self._heatmap_grid         = None
         self._heatmap_species_grid = None
@@ -226,8 +244,8 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         else:
             self._current_granularity = "day"
 
-        labels, counts, species_lists, y_label = self._get_current_data()
-        self._draw_chart(labels, counts, species_lists, y_label)
+        labels, counts, item_lists, y_label = self._get_current_data()
+        self._draw_chart(labels, counts, item_lists, y_label, self._bar_item_label)
 
     # ------------------------------------------------------------------
     # Day-button visual state
@@ -301,6 +319,46 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         counts = [len(bucket[k]) for k in labels]
         species_lists = [self._taxo_sort(bucket[k], sightings) for k in labels]
         return labels, counts, species_lists, "Species per Day"
+
+    def _build_checklist_count_data(self, sightings, granularity):
+        """Return (labels, counts, checklist_lists, y_label) for any granularity.
+
+        checklist_lists[i] is a list of 'YYYY-MM-DD  Location' strings sorted by date.
+        """
+        bucket  = defaultdict(set)    # period_key → set of checklistIDs
+        cl_info = {}                  # checklistID → (date, location)
+        for s in sightings:
+            key = _period_key(s["date"], granularity)
+            bucket[key].add(s["checklistID"])
+            cl_info[s["checklistID"]] = (s["date"], s["location"])
+
+        keys   = sorted(bucket.keys())
+        labels = _period_labels(keys, granularity)
+        counts = [len(bucket[k]) for k in keys]
+        checklist_lists = [
+            sorted(f"{cl_info[cid][0]}  {cl_info[cid][1]}" for cid in bucket[k])
+            for k in keys
+        ]
+        suffix = {"year": "per Year", "month": "per Month",
+                  "monthyear": "per Month", "day": "per Day"}[granularity]
+        return labels, counts, checklist_lists, f"Checklists {suffix}"
+
+    def _build_location_count_data(self, sightings, granularity):
+        """Return (labels, counts, location_lists, y_label) for any granularity.
+
+        location_lists[i] is a sorted list of distinct location name strings.
+        """
+        bucket = defaultdict(set)    # period_key → set of locations
+        for s in sightings:
+            bucket[_period_key(s["date"], granularity)].add(s["location"])
+
+        keys   = sorted(bucket.keys())
+        labels = _period_labels(keys, granularity)
+        counts = [len(bucket[k]) for k in keys]
+        location_lists = [sorted(bucket[k]) for k in keys]
+        suffix = {"year": "per Year", "month": "per Month",
+                  "monthyear": "per Month", "day": "per Day"}[granularity]
+        return labels, counts, location_lists, f"Locations {suffix}"
 
     def _build_cumulative_data(self, sightings):
         daily = defaultdict(set)
@@ -844,6 +902,11 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
 
     def _get_current_data(self):
         sightings = self._filtered_sightings()
+        if self._chart_type == "totalchecklists":
+            return self._build_checklist_count_data(sightings, self._current_granularity)
+        if self._chart_type == "totallocations":
+            return self._build_location_count_data(sightings, self._current_granularity)
+        # Default: species bar chart
         if self._current_granularity == "month":
             return self._build_month_data(sightings)
         if self._current_granularity == "monthyear":
@@ -856,7 +919,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
     # Chart renderer
     # ------------------------------------------------------------------
 
-    def _draw_chart(self, labels, counts, species_lists, y_label):
+    def _draw_chart(self, labels, counts, species_lists, y_label, item_label="species"):
         if self._canvas is not None:
             self._canvas.setParent(None)
             self._canvas = None
@@ -902,9 +965,10 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         self._canvas = canvas
         self._ax     = ax
         self._labels = labels
-        self._counts = counts
-        self._bar_species = species_lists
-        self._hover_idx   = -1
+        self._counts         = counts
+        self._bar_species    = species_lists
+        self._bar_item_label = item_label
+        self._hover_idx      = -1
 
         self._hover_annot = ax.annotate(
             "", xy=(0, 0),
@@ -1392,7 +1456,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         sp_list = self._bar_species[idx] if idx < len(self._bar_species) else []
         limit   = self._tooltip_species_limit()
 
-        tip = f"{self._labels[idx]}: {count} species"
+        tip = f"{self._labels[idx]}: {count} {self._bar_item_label}"
         for name in sp_list[:limit]:
             tip += f"\n  {name}"
         if count > limit:
@@ -2587,22 +2651,33 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             btn.blockSignals(False)
 
         # Draw initial chart
-        if default == "month":
-            labels, counts, species_lists, y_label = self._build_month_data(sightings)
-        elif default == "day":
-            labels, counts, species_lists, y_label = self._build_day_data(sightings)
-        else:
-            labels, counts, species_lists, y_label = self._build_year_data(sightings)
+        if chartType == "totalchecklists":
+            labels, counts, item_lists, y_label = self._build_checklist_count_data(sightings, default)
+            item_label = "checklists"
+            title = "Total Checklists"
+        elif chartType == "totallocations":
+            labels, counts, item_lists, y_label = self._build_location_count_data(sightings, default)
+            item_label = "locations"
+            title = "Total Locations"
+        else:  # "bar"
+            if default == "month":
+                labels, counts, item_lists, y_label = self._build_month_data(sightings)
+            elif default == "day":
+                labels, counts, item_lists, y_label = self._build_day_data(sightings)
+            else:
+                labels, counts, item_lists, y_label = self._build_year_data(sightings)
+            item_label = "species"
+            title = "Total Species"
 
         if not labels:
             return False
 
-        self._draw_chart(labels, counts, species_lists, y_label)
+        self._draw_chart(labels, counts, item_lists, y_label, item_label)
 
         self.mdiParent.SetChildDetailsLabels(self, filter)
 
         self.setWindowTitle(
-            filter.buildWindowTitle("Bar Graph", self.mdiParent.db))
+            filter.buildWindowTitle(title, self.mdiParent.db))
 
         icon = QIcon()
         icon.addPixmap(QPixmap(":/icon_bird_white.png"),
