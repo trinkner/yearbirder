@@ -115,6 +115,8 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         self._chart_type = "bar"
         self._hover_annot = None
         self._hover_idx   = -1
+        self._bar_species   = []
+        self._bar_highlight = None
         self._heatmap_years = []
         self._heatmap_grid         = None
         self._heatmap_species_grid = None
@@ -224,8 +226,8 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         else:
             self._current_granularity = "day"
 
-        labels, counts, y_label = self._get_current_data()
-        self._draw_chart(labels, counts, y_label)
+        labels, counts, species_lists, y_label = self._get_current_data()
+        self._draw_chart(labels, counts, species_lists, y_label)
 
     # ------------------------------------------------------------------
     # Day-button visual state
@@ -267,7 +269,8 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             bucket[s["date"][0:4]].add(s["commonName"])
         labels = sorted(bucket.keys())
         counts = [len(bucket[k]) for k in labels]
-        return labels, counts, "Species per Year"
+        species_lists = [self._taxo_sort(bucket[k], sightings) for k in labels]
+        return labels, counts, species_lists, "Species per Year"
 
     def _build_month_data(self, sightings):
         bucket = defaultdict(set)
@@ -276,7 +279,8 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         month_nums = sorted(bucket.keys())
         labels = [_MONTH_NAMES[int(m) - 1] for m in month_nums]
         counts = [len(bucket[m]) for m in month_nums]
-        return labels, counts, "Species per Month"
+        species_lists = [self._taxo_sort(bucket[m], sightings) for m in month_nums]
+        return labels, counts, species_lists, "Species per Month"
 
     def _build_month_year_data(self, sightings):
         """One bar per YYYY-MM, sorted chronologically, labelled 'Jan-2020' etc."""
@@ -286,7 +290,8 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         keys   = sorted(bucket.keys())
         labels = [_MONTH_NAMES[int(k[5:7]) - 1] + "-" + k[0:4] for k in keys]
         counts = [len(bucket[k]) for k in keys]
-        return labels, counts, "Species per Month"
+        species_lists = [self._taxo_sort(bucket[k], sightings) for k in keys]
+        return labels, counts, species_lists, "Species per Month"
 
     def _build_day_data(self, sightings):
         bucket = defaultdict(set)
@@ -294,7 +299,8 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             bucket[s["date"]].add(s["commonName"])
         labels = sorted(bucket.keys())
         counts = [len(bucket[k]) for k in labels]
-        return labels, counts, "Species per Day"
+        species_lists = [self._taxo_sort(bucket[k], sightings) for k in labels]
+        return labels, counts, species_lists, "Species per Day"
 
     def _build_cumulative_data(self, sightings):
         daily = defaultdict(set)
@@ -850,7 +856,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
     # Chart renderer
     # ------------------------------------------------------------------
 
-    def _draw_chart(self, labels, counts, y_label):
+    def _draw_chart(self, labels, counts, species_lists, y_label):
         if self._canvas is not None:
             self._canvas.setParent(None)
             self._canvas = None
@@ -896,6 +902,23 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         self._canvas = canvas
         self._ax     = ax
         self._labels = labels
+        self._counts = counts
+        self._bar_species = species_lists
+        self._hover_idx   = -1
+
+        self._hover_annot = ax.annotate(
+            "", xy=(0, 0),
+            xytext=(12, 12), textcoords="offset points",
+            bbox=dict(boxstyle="round,pad=0.5", fc=_AXES_COLOR,
+                      ec=_BAR_COLOR, lw=1),
+            color=_TEXT_COLOR, fontsize=8,
+            visible=False, zorder=5)
+
+        bar_rect = Rectangle((0, 0), 0.6, 1,
+                              linewidth=1.5, edgecolor=_TEXT_COLOR,
+                              facecolor='none', visible=False, zorder=4)
+        ax.add_patch(bar_rect)
+        self._bar_highlight = bar_rect
 
         canvas.mpl_connect('button_press_event', self._on_bar_click)
         canvas.mpl_connect('motion_notify_event', self._on_mouse_move)
@@ -1247,12 +1270,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         elif self._chart_type in ("familypie", "indivpie"):
             self._update_family_pie_hover(event)
         else:
-            # Bar chart: pointer cursor over bars
-            if (event.inaxes is self._ax and event.xdata is not None
-                    and 0 <= int(round(event.xdata)) < len(self._labels)):
-                self._canvas.setCursor(Qt.PointingHandCursor)
-            else:
-                self._canvas.setCursor(Qt.ArrowCursor)
+            self._update_bar_hover(event)
 
     def _update_hover_annotation(self, event):
         if self._hover_annot is None:
@@ -1340,6 +1358,56 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             new_filter.setEndDate(label)
 
         self._spawn_species_list(new_filter)
+
+    def _update_bar_hover(self, event):
+        if self._hover_annot is None:
+            return
+        if event.inaxes is not self._ax or event.xdata is None:
+            if self._hover_annot.get_visible():
+                self._hover_annot.set_visible(False)
+                if self._bar_highlight is not None:
+                    self._bar_highlight.set_visible(False)
+                self._hover_idx = -1
+                self._canvas.draw_idle()
+            self._canvas.setCursor(Qt.ArrowCursor)
+            return
+
+        idx = int(round(event.xdata))
+        if not (0 <= idx < len(self._labels)):
+            if self._hover_annot.get_visible():
+                self._hover_annot.set_visible(False)
+                if self._bar_highlight is not None:
+                    self._bar_highlight.set_visible(False)
+                self._hover_idx = -1
+                self._canvas.draw_idle()
+            self._canvas.setCursor(Qt.ArrowCursor)
+            return
+
+        self._canvas.setCursor(Qt.PointingHandCursor)
+        if idx == self._hover_idx:
+            return
+
+        self._hover_idx = idx
+        count   = self._counts[idx]
+        sp_list = self._bar_species[idx] if idx < len(self._bar_species) else []
+        limit   = self._tooltip_species_limit()
+
+        tip = f"{self._labels[idx]}: {count} species"
+        for name in sp_list[:limit]:
+            tip += f"\n  {name}"
+        if count > limit:
+            tip += f"\n  (+{count - limit} more)"
+        n_lines = 1 + min(count, limit) + (1 if count > limit else 0)
+
+        self._hover_annot.xy = (idx, count)
+        self._hover_annot.set_text(tip)
+        self._position_tooltip(event, n_lines, (idx, count))
+        self._hover_annot.set_visible(True)
+        if self._bar_highlight is not None:
+            self._bar_highlight.set_xy((idx - 0.3, 0))
+            self._bar_highlight.set_height(count)
+            self._bar_highlight.set_visible(True)
+        self._canvas.draw_idle()
 
     def _update_heatmap_hover(self, event):
         if self._hover_annot is None:
@@ -2520,16 +2588,16 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
 
         # Draw initial chart
         if default == "month":
-            labels, counts, y_label = self._build_month_data(sightings)
+            labels, counts, species_lists, y_label = self._build_month_data(sightings)
         elif default == "day":
-            labels, counts, y_label = self._build_day_data(sightings)
+            labels, counts, species_lists, y_label = self._build_day_data(sightings)
         else:
-            labels, counts, y_label = self._build_year_data(sightings)
+            labels, counts, species_lists, y_label = self._build_year_data(sightings)
 
         if not labels:
             return False
 
-        self._draw_chart(labels, counts, y_label)
+        self._draw_chart(labels, counts, species_lists, y_label)
 
         self.mdiParent.SetChildDetailsLabels(self, filter)
 
