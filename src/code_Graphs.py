@@ -100,6 +100,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         self._new_species   = []
         self._accumulation_highlight = None
         self._life_counts   = []
+        self._location_species_lists = []
         self._scatter_x    = np.array([])
         self._scatter_y    = np.array([])
         self._scatter_ids  = []
@@ -108,6 +109,11 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         self._scatter_durs = []
         self._scatter_species = []
         self._scatter_highlight = None
+        self._named_scatter_x       = np.array([])
+        self._named_scatter_y       = np.array([])
+        self._named_scatter_names   = []
+        self._named_scatter_species = []
+        self._named_scatter_highlight = None
         self._strip_doys   = np.array([])
         self._strip_years  = np.array([])
         self._strip_dates  = []
@@ -497,7 +503,9 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         life_counts = [len(bucket[loc] & life_at_location[loc])
                        for loc in locations]
 
-        return locations, counts, life_counts
+        species_lists = [self._taxo_sort(list(bucket[loc]), sightings) for loc in locations]
+
+        return locations, counts, life_counts, species_lists
 
     def _build_scatter_data(self, checklists, sightings):
         """Split checklists into scatter data and incidental (0-duration) count.
@@ -536,6 +544,37 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             durs.append(dur)
             species_lists.append(self._taxo_sort(sp_set, sightings))
         return x, y, colors, ids, locs, dates, durs, species_lists, incidental_count
+
+    def _build_location_scatter_data(self, sightings):
+        """One dot per location: X = checklist count, Y = species count.
+
+        Returns (x_vals, y_vals, names, species_lists).
+        """
+        loc_species   = defaultdict(set)
+        loc_checklists = defaultdict(set)
+        for s in sightings:
+            loc_species[s["location"]].add(s["commonName"])
+            loc_checklists[s["location"]].add(s["checklistID"])
+        names         = sorted(loc_species.keys())
+        x_vals        = [len(loc_checklists[loc]) for loc in names]
+        y_vals        = [len(loc_species[loc])    for loc in names]
+        species_lists = [self._taxo_sort(loc_species[loc], sightings) for loc in names]
+        return x_vals, y_vals, names, species_lists
+
+    def _build_species_scatter_data(self, sightings):
+        """One dot per species: X = distinct location count, Y = individual count.
+
+        Returns (x_vals, y_vals, names).
+        """
+        sp_locations = defaultdict(set)
+        sp_indiv     = defaultdict(int)
+        for s in sightings:
+            sp_locations[s["commonName"]].add(s["location"])
+            sp_indiv[s["commonName"]] += self._parse_indiv_count(s.get("count", 0))
+        names  = self._taxo_sort(sp_locations.keys(), sightings)
+        x_vals = [len(sp_locations[sp]) for sp in names]
+        y_vals = [sp_indiv[sp]          for sp in names]
+        return x_vals, y_vals, names
 
     def _build_strip_data(self, sightings):
         """One dot per unique date the species was seen.
@@ -946,6 +985,65 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         canvas.mpl_connect('motion_notify_event', self._on_mouse_move)
         canvas.mpl_connect('button_press_event', self._on_scatter_click)
 
+    def _draw_named_scatter(self, x, y, names, x_label, y_label, species_lists=None):
+        """Scatter where each dot is a named entity (location or species).
+
+        No season colouring — uses _BAR_COLOR throughout.
+        """
+        if self._canvas is not None:
+            self._canvas.setParent(None)
+            self._canvas = None
+            self._fig = None
+
+        self._named_scatter_x       = np.array(x, dtype=float)
+        self._named_scatter_y       = np.array(y, dtype=float)
+        self._named_scatter_names   = names
+        self._named_scatter_species = species_lists or []
+
+        fig = Figure(facecolor=_BG_COLOR)
+        ax  = fig.add_subplot(111, facecolor=_AXES_COLOR)
+
+        ax.scatter(x, y, c=_BAR_COLOR, alpha=1.0, s=18, zorder=2, linewidths=0)
+
+        ax.set_xlabel(x_label, color=_TEXT_COLOR, fontsize=9)
+        ax.set_ylabel(y_label, color=_TEXT_COLOR, fontsize=9)
+        ax.tick_params(colors=_TEXT_COLOR, which="both", labelcolor=_TEXT_COLOR)
+
+        for spine in ax.spines.values():
+            spine.set_edgecolor(_GRID_COLOR)
+        ax.xaxis.grid(True, color=_GRID_COLOR, linewidth=0.5, zorder=1)
+        ax.yaxis.grid(True, color=_GRID_COLOR, linewidth=0.5, zorder=1)
+        ax.set_axisbelow(True)
+
+        fig.tight_layout()
+
+        canvas = FigureCanvasQTAgg(fig)
+        layout = self.chartWidget.layout()
+        if layout is None:
+            layout = QVBoxLayout(self.chartWidget)
+            layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(canvas)
+
+        self._fig    = fig
+        self._canvas = canvas
+        self._ax     = ax
+        self._hover_idx = -1
+
+        self._hover_annot = ax.annotate(
+            "", xy=(0, 0),
+            xytext=(12, 12), textcoords="offset points",
+            bbox=dict(boxstyle="round,pad=0.5", fc=_AXES_COLOR,
+                      ec=_BAR_COLOR, lw=1),
+            color=_TEXT_COLOR, fontsize=8,
+            visible=False, zorder=5)
+
+        self._named_scatter_highlight = ax.scatter(
+            [], [], s=55, zorder=4,
+            facecolors='none', edgecolors=_TEXT_COLOR, linewidths=1.5)
+
+        canvas.mpl_connect('motion_notify_event', self._on_mouse_move)
+        canvas.mpl_connect('button_press_event', self._on_named_scatter_click)
+
     def _get_current_data(self):
         sightings = self._filtered_sightings()
         if self._chart_type == "totalchecklists":
@@ -1275,13 +1373,14 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         canvas.mpl_connect('motion_notify_event', self._on_mouse_move)
         canvas.mpl_connect('button_press_event', self._on_accumulation_click)
 
-    def _draw_horizontal_bar_chart(self, locations, counts, life_counts):
+    def _draw_horizontal_bar_chart(self, locations, counts, life_counts, species_lists=None):
         if self._canvas is not None:
             self._canvas.setParent(None)
             self._canvas = None
             self._fig = None
 
         self._life_counts = life_counts
+        self._location_species_lists = species_lists if species_lists is not None else [[] for _ in locations]
         non_life_counts   = [t - l for t, l in zip(counts, life_counts)]
 
         fig = Figure(facecolor=_BG_COLOR)
@@ -1376,13 +1475,15 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             self._update_location_hover(event)
         elif self._chart_type == "scatter":
             self._update_scatter_hover(event)
+        elif self._chart_type in ("locationscatter", "speciesscatter"):
+            self._update_named_scatter_hover(event)
         elif self._chart_type == "strip":
             self._update_strip_hover(event)
         elif self._chart_type == "foy":
             self._update_foy_hover(event)
         elif self._chart_type == "loy":
             self._update_loy_hover(event)
-        elif self._chart_type in ("familypie", "indivpie"):
+        elif self._chart_type in ("familypie", "indivpie", "locationchecklistpie"):
             self._update_family_pie_hover(event)
         else:
             self._update_bar_hover(event)
@@ -1720,6 +1821,13 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         tip   = f"{self._labels[idx]}\n{count} species"
         if life:
             tip += f"  ·  {life} life birds"
+        sp_list = self._location_species_lists[idx] if self._location_species_lists else []
+        if sp_list:
+            limit = self._tooltip_species_limit()
+            for sp in sp_list[:limit]:
+                tip += f"\n  {sp}"
+            if len(sp_list) > limit:
+                tip += f"\n  (+{len(sp_list) - limit} more)"
 
         self._hover_annot.xy = (count, idx)
         self._hover_annot.set_text(tip)
@@ -2074,6 +2182,119 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         new_filter.setChecklistID(self._scatter_ids[idx])
         self._spawn_species_list(new_filter)
 
+    def _update_named_scatter_hover(self, event):
+        if self._hover_annot is None or len(self._named_scatter_x) == 0:
+            return
+        if event.inaxes is not self._ax or event.xdata is None or event.ydata is None:
+            if self._hover_annot.get_visible():
+                self._hover_annot.set_visible(False)
+                self._hover_idx = -1
+                if self._named_scatter_highlight is not None:
+                    self._named_scatter_highlight.set_offsets(np.empty((0, 2)))
+                self._canvas.draw_idle()
+            self._canvas.setCursor(Qt.ArrowCursor)
+            return
+
+        xlim   = self._ax.get_xlim()
+        ylim   = self._ax.get_ylim()
+        xrange = xlim[1] - xlim[0] if xlim[1] != xlim[0] else 1.0
+        yrange = ylim[1] - ylim[0] if ylim[1] != ylim[0] else 1.0
+
+        dx   = (self._named_scatter_x - event.xdata) / xrange
+        dy   = (self._named_scatter_y - event.ydata) / yrange
+        dist = np.sqrt(dx * dx + dy * dy)
+        idx  = int(np.argmin(dist))
+
+        if dist[idx] > 0.03:
+            if self._hover_annot.get_visible():
+                self._hover_annot.set_visible(False)
+                self._hover_idx = -1
+                if self._named_scatter_highlight is not None:
+                    self._named_scatter_highlight.set_offsets(np.empty((0, 2)))
+                self._canvas.draw_idle()
+            self._canvas.setCursor(Qt.ArrowCursor)
+            return
+
+        self._canvas.setCursor(Qt.PointingHandCursor)
+        if idx == self._hover_idx:
+            return
+
+        self._hover_idx = idx
+        px = float(self._named_scatter_x[idx])
+        py = float(self._named_scatter_y[idx])
+        name = self._named_scatter_names[idx]
+
+        if self._chart_type == "locationscatter":
+            sp_list = self._named_scatter_species[idx] if idx < len(self._named_scatter_species) else []
+            n_sp    = len(sp_list)
+            limit   = self._tooltip_species_limit()
+            tip     = f"{name}\n{int(py)} species  ·  {int(px)} checklists"
+            for sp in sp_list[:limit]:
+                tip += f"\n  {sp}"
+            if n_sp > limit:
+                tip += f"\n  (+{n_sp - limit} more)"
+            n_lines = 2 + min(n_sp, limit) + (1 if n_sp > limit else 0)
+        else:  # speciesscatter
+            tip     = f"{name}\n{int(px)} locations  ·  {int(py)} individuals"
+            n_lines = 2
+
+        self._hover_annot.xy = (px, py)
+        self._hover_annot.set_text(tip)
+        self._position_tooltip(event, n_lines, (px, py))
+        self._hover_annot.set_visible(True)
+        if self._named_scatter_highlight is not None:
+            self._named_scatter_highlight.set_offsets([[px, py]])
+        self._canvas.draw_idle()
+
+    def _on_named_scatter_click(self, event):
+        if event.inaxes is not self._ax or event.xdata is None or event.ydata is None:
+            return
+        if len(self._named_scatter_x) == 0:
+            return
+
+        xlim   = self._ax.get_xlim()
+        ylim   = self._ax.get_ylim()
+        xrange = xlim[1] - xlim[0] if xlim[1] != xlim[0] else 1.0
+        yrange = ylim[1] - ylim[0] if ylim[1] != ylim[0] else 1.0
+
+        dx   = (self._named_scatter_x - event.xdata) / xrange
+        dy   = (self._named_scatter_y - event.ydata) / yrange
+        dist = np.sqrt(dx * dx + dy * dy)
+        idx  = int(np.argmin(dist))
+
+        if dist[idx] > 0.03:
+            return
+
+        name = self._named_scatter_names[idx]
+        if self._chart_type == "locationscatter":
+            self._spawn_location_window(name)
+        else:  # speciesscatter
+            self._spawn_individual_window(name)
+
+    def _spawn_individual_window(self, species_name):
+        import code_Individual
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        sub = code_Individual.Individual()
+        sub.mdiParent = self.mdiParent
+        sub.FillIndividual(species_name)
+        self.mdiParent.mdiArea.addSubWindow(sub)
+        self.mdiParent.PositionChildWindow(sub, self.mdiParent)
+        sub.show()
+        sub.scaleMe()
+        QApplication.restoreOverrideCursor()
+
+    def _spawn_location_window(self, location_name):
+        import code_Location
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        sub = code_Location.Location()
+        sub.mdiParent = self.mdiParent
+        sub.FillLocation(location_name)
+        self.mdiParent.mdiArea.addSubWindow(sub)
+        self.mdiParent.PositionChildWindow(sub, self.mdiParent)
+        sub.show()
+        sub.scaleMe()
+        QApplication.restoreOverrideCursor()
+
     def _update_accumulation_hover(self, event):
         if self._hover_annot is None:
             return
@@ -2357,6 +2578,22 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
 
             self._hover_annot.set_position((x_off, y_off))
 
+    def _build_location_checklist_pie_data(self, sightings):
+        """Return (locations, counts, date_lists) sorted descending by checklist count.
+
+        date_lists[i] is a sorted list of distinct checklist dates for locations[i].
+        """
+        loc_checklists = defaultdict(set)   # location → set of checklistIDs
+        cl_dates       = {}                 # checklistID → date
+        for s in sightings:
+            loc_checklists[s["location"]].add(s["checklistID"])
+            cl_dates[s["checklistID"]] = s["date"]
+        ranked     = sorted(loc_checklists.items(), key=lambda x: len(x[1]), reverse=True)
+        locations  = [r[0] for r in ranked]
+        counts     = [len(r[1]) for r in ranked]
+        date_lists = [sorted(set(cl_dates[cid] for cid in r[1])) for r in ranked]
+        return locations, counts, date_lists
+
     def _build_family_indiv_pie_data(self, sightings):
         """Return (families, individual_totals, species_lists, species_tallies)
         by summed individual count."""
@@ -2414,7 +2651,8 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         return orders, counts, species_lists, species_tallies
 
     def _draw_family_pie_chart(self, families, counts, species_lists,
-                               label_suffix="species", species_tallies=None):
+                               label_suffix="species", species_tallies=None,
+                               label_min_pct=0.005):
         if self._canvas is not None:
             self._canvas.setParent(None)
             self._canvas = None
@@ -2440,7 +2678,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             colors.append(colorsys.hsv_to_rgb(hue, sat, val))
 
         total = sum(counts) or 1
-        display_labels = [f if (c / total) >= 0.005 else "" for f, c in zip(families, counts)]
+        display_labels = [f if (c / total) >= label_min_pct else "" for f, c in zip(families, counts)]
 
         wedges, texts, autotexts = ax.pie(
             counts, labels=display_labels, colors=colors,
@@ -2485,13 +2723,16 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             return
         for i, wedge in enumerate(self._pie_wedges):
             if wedge.contains_point([event.x, event.y]):
-                new_filter = copy.deepcopy(self.filter)
                 name = self._pie_families[i]
-                if self.rdoPieFamily.isChecked():
-                    new_filter.setFamily(name)
+                if self._chart_type == "locationchecklistpie":
+                    self._spawn_location_window(name)
                 else:
-                    new_filter.setOrder(name)
-                self._spawn_species_list(new_filter)
+                    new_filter = copy.deepcopy(self.filter)
+                    if self.rdoPieFamily.isChecked():
+                        new_filter.setFamily(name)
+                    else:
+                        new_filter.setOrder(name)
+                    self._spawn_species_list(new_filter)
                 return
 
     def _update_family_pie_hover(self, event):
@@ -2659,10 +2900,10 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
 
         if chartType == "locations":
             self.frmGranularity.setVisible(False)
-            locations, counts, life_counts = self._build_top_locations_data(sightings)
+            locations, counts, life_counts, species_lists = self._build_top_locations_data(sightings)
             if not locations:
                 return False
-            self._draw_horizontal_bar_chart(locations, counts, life_counts)
+            self._draw_horizontal_bar_chart(locations, counts, life_counts, species_lists)
             self.mdiParent.SetChildDetailsLabels(self, filter)
             self.setWindowTitle(
                 filter.buildWindowTitle(f"Top {len(locations)} Locations", self.mdiParent.db))
@@ -2747,6 +2988,39 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             self.setWindowIcon(icon)
             return True
 
+        if chartType == "locationscatter":
+            self.frmGranularity.setVisible(False)
+            x, y, names, species_lists = self._build_location_scatter_data(sightings)
+            if not names:
+                return False
+            self._draw_named_scatter(x, y, names,
+                                     x_label="Checklists", y_label="Species",
+                                     species_lists=species_lists)
+            self.mdiParent.SetChildDetailsLabels(self, filter)
+            self.setWindowTitle(
+                filter.buildWindowTitle("Locations by Species & Checklists", self.mdiParent.db))
+            icon = QIcon()
+            icon.addPixmap(QPixmap(":/icon_bird_white.png"),
+                           QIcon.Normal, QIcon.Off)
+            self.setWindowIcon(icon)
+            return True
+
+        if chartType == "speciesscatter":
+            self.frmGranularity.setVisible(False)
+            x, y, names = self._build_species_scatter_data(sightings)
+            if not names:
+                return False
+            self._draw_named_scatter(x, y, names,
+                                     x_label="Locations", y_label="Individuals")
+            self.mdiParent.SetChildDetailsLabels(self, filter)
+            self.setWindowTitle(
+                filter.buildWindowTitle("Species by Locations & Count", self.mdiParent.db))
+            icon = QIcon()
+            icon.addPixmap(QPixmap(":/icon_bird_white.png"),
+                           QIcon.Normal, QIcon.Off)
+            self.setWindowIcon(icon)
+            return True
+
         if chartType == "scatter":
             self.frmGranularity.setVisible(False)
             checklists = self.mdiParent.db.GetChecklists(filter)
@@ -2761,6 +3035,23 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             self.mdiParent.SetChildDetailsLabels(self, filter)
             self.setWindowTitle(
                 filter.buildWindowTitle("Checklist Scatter", self.mdiParent.db))
+            icon = QIcon()
+            icon.addPixmap(QPixmap(":/icon_bird_white.png"),
+                           QIcon.Normal, QIcon.Off)
+            self.setWindowIcon(icon)
+            return True
+
+        if chartType == "locationchecklistpie":
+            self.frmGranularity.setVisible(False)
+            locations, counts, date_lists = self._build_location_checklist_pie_data(sightings)
+            if not locations:
+                return False
+            self._draw_family_pie_chart(locations, counts, date_lists,
+                                        label_suffix="checklists",
+                                        label_min_pct=0.01)
+            self.mdiParent.SetChildDetailsLabels(self, filter)
+            self.setWindowTitle(
+                filter.buildWindowTitle("Locations by Checklists", self.mdiParent.db))
             icon = QIcon()
             icon.addPixmap(QPixmap(":/icon_bird_white.png"),
                            QIcon.Normal, QIcon.Off)

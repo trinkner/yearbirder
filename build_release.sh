@@ -1,5 +1,5 @@
 #!/bin/bash
-# build_release.sh — Build, sign, notarize, and staple Yearbird.app and Yearbird.dmg
+# build_release.sh — Build, sign, notarize, and staple Yearbird_vX.XX.app and .dmg
 #
 # Prerequisites:
 #   - Developer ID certificate in Keychain
@@ -10,14 +10,19 @@
 
 set -e  # exit on any error
 
+# ── Version ───────────────────────────────────────────────────────────────────
+VERSION=$(grep 'versionNumber = ' src/code_MainWindow.py | sed 's/.*"\(.*\)".*/\1/')
+APP_NAME="Yearbird_v${VERSION}"
+echo "Building ${APP_NAME}"
+
 SIGN_ID="Developer ID Application: RICHARD L TRINKNER (SPC3RCL6VT)"
 ENTS="entitlements.plist"
 KEYCHAIN_PROFILE="yearbird"
-WORK_APP="/tmp/Yearbird.app"
-WORK_ZIP="/tmp/Yearbird.zip"
-WORK_DMG="/tmp/Yearbird.dmg"
-WORK_RW_DMG="/tmp/Yearbird_rw.dmg"
-DMG_STAGING="/tmp/Yearbird_dmg_staging"
+WORK_APP="/tmp/${APP_NAME}.app"
+WORK_ZIP="/tmp/${APP_NAME}.zip"
+WORK_DMG="/tmp/${APP_NAME}.dmg"
+WORK_RW_DMG="/tmp/${APP_NAME}_rw.dmg"
+DMG_STAGING="/tmp/${APP_NAME}_dmg_staging"
 
 echo "=== Step 1: PyInstaller build ==="
 /opt/homebrew/bin/python3 -m PyInstaller Yearbird.spec --noconfirm
@@ -123,7 +128,7 @@ echo "Signature OK (hardened runtime confirmed, no broken symlinks)"
 echo ""
 echo "=== Step 5: Notarize ==="
 rm -f "$WORK_ZIP"
-cd /tmp && ditto -c -k --keepParent Yearbird.app Yearbird.zip
+cd /tmp && ditto -c -k --keepParent "${APP_NAME}.app" "${APP_NAME}.zip"
 cd - > /dev/null
 xcrun notarytool submit "$WORK_ZIP" \
     --keychain-profile "$KEYCHAIN_PROFILE" \
@@ -139,19 +144,20 @@ spctl --assess --type exec --verbose "$WORK_APP"
 
 echo ""
 echo "=== Step 8: Copy stapled app back to dist/ ==="
-ditto "$WORK_APP" dist/Yearbird.app
-echo "dist/Yearbird.app is ready."
+rm -rf "dist/${APP_NAME}.app"
+ditto "$WORK_APP" "dist/${APP_NAME}.app"
+echo "dist/${APP_NAME}.app is ready."
 
 echo ""
 echo "=== Step 9: Create DMG ==="
 # Build a staging folder with the app and an Applications symlink.
 # Use ditto (not cp -r) so the app's internal symlinks are preserved.
 rm -rf "$DMG_STAGING" && mkdir "$DMG_STAGING"
-ditto "$WORK_APP" "$DMG_STAGING/Yearbird.app"
+ditto "$WORK_APP" "$DMG_STAGING/${APP_NAME}.app"
 ln -s /Applications "$DMG_STAGING/Applications"
 
 rm -f "$WORK_DMG" "$WORK_RW_DMG"
-hdiutil create -volname "Yearbird" -srcfolder "$DMG_STAGING" -ov -format UDRW "$WORK_RW_DMG"
+hdiutil create -volname "${APP_NAME}" -srcfolder "$DMG_STAGING" -ov -format UDRW "$WORK_RW_DMG"
 hdiutil convert "$WORK_RW_DMG" -format UDZO -imagekey zlib-level=9 -o "$WORK_DMG"
 rm "$WORK_RW_DMG" && rm -rf "$DMG_STAGING"
 echo "DMG created."
@@ -175,8 +181,8 @@ spctl --assess --type open --context context:primary-signature --verbose "$WORK_
 
 echo ""
 echo "=== Step 13: Copy DMG to dist/ ==="
-cp "$WORK_DMG" dist/Yearbird.dmg
-echo "dist/Yearbird.dmg is ready for distribution."
+cp "$WORK_DMG" "dist/${APP_NAME}.dmg"
+echo "dist/${APP_NAME}.dmg is ready for distribution."
 
 echo ""
 echo "=== All done! ==="

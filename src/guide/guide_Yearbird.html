@@ -126,11 +126,14 @@
     <li><a href="#maps">Maps</a></li>
     <li><a href="#choropleth-maps">Maps – Choropleth Maps</a></li>
     <li><a href="#photos">Photos</a></li>
+    <li><a href="#animated-photo-sequence">Animated Photo Sequence</a></li>
+    <li><a href="#slideshow">Slideshow</a></li>
+    <li><a href="#species-gallery">Species Gallery</a></li>
     <li><a href="#photo-settings-file">Photo Settings File</a></li>
     <li><a href="#individual-species">Individual Species Window</a></li>
     <li><a href="#printing">Printing and PDF Export</a></li>
     <li><a href="#tips">Tips and Tricks</a></li>
-	<li><a href="#preferences">Saving Preferences</a></li>
+    <li><a href="#preferences">Saving Preferences</a></li>
   </ol>
 </div>
 
@@ -161,7 +164,7 @@
 <h2 id="main-window">2. The Main Window</h2>
 <p>Yearbird uses a <strong>Multiple Document Interface (MDI)</strong>. The main window contains:</p>
 <ul>
-  <li>A <strong>menu bar</strong> across the top with menus for File, Filter, Lists, Map, Reports, Graphs, Photos, Maps, and Windows.</li>
+  <li>A <strong>menu bar</strong> across the top with menus for File, Filter, Lists, Reports, Graphs, Maps, Photos, Windows, and User Guide.</li>
   <li>A <strong>toolbar</strong> just below the menu bar with quick-access buttons for the most common actions.</li>
   <li>A <strong>Standard Filter</strong> panel docked on the left side.</li>
   <li>A <strong>Photo Filter</strong> panel docked on the right side.</li>
@@ -200,11 +203,11 @@
 <h2 id="loading-data">3. Loading Your eBird Data</h2>
 
 <h3>Opening a data file</h3>
-<p>Choose <strong>File → Open</strong> or click the <strong>Open</strong> toolbar button. Yearbird accepts the standard eBird download CSV (the file is typically named something like <code>MyEBirdData.csv</code>).</p>
+<p>Choose <strong>File → Open eBird data file…</strong> or click the <strong>Open</strong> toolbar button. Yearbird accepts the standard eBird download CSV (the file is typically named something like <code>MyEBirdData.csv</code>).</p>
 <p>Loading time depends on the size of your dataset. A typical dataset of 10,000–50,000 sightings loads in a few seconds. Once loaded, the status bar shows the total number of sightings and species.</p>
 
 <h3>Closing a data file</h3>
-<p>Choose <strong>File → Close</strong> to unload the current dataset. Any open child windows that depend on the data will close automatically.</p>
+<p>Choose <strong>File → Close eBird data file</strong> to unload the current dataset. Any open child windows that depend on the data will close automatically.</p>
 
 <h3>What data is loaded</h3>
 <p>Yearbird reads the following fields from your eBird CSV:</p>
@@ -569,9 +572,7 @@
 <p>A bubble map where bubble area is proportional to the <strong>total number of individual birds tallied</strong> at each location. Sightings recorded with an unknown count ("X" in eBird) contribute 1 to the total. The tooltip notes how many checklists contain at least one uncounted species.</p>
 <p>Hover over a bubble to see the location name, individual count, and any caveat about uncounted entries. Click a bubble to open the Location window for that site.</p>
 
-<h3>Geolocated Photos</h3>
-<p>Open with <strong>Maps → Geolocated Photos</strong>. Available only when a Photo Settings file is loaded.</p>
-<p>Plots your photos on a clustered marker map. Each marker represents one photo; clicking it opens a popup showing a thumbnail of the photo, the species name, date, and location. Markers cluster together at lower zoom levels and spread apart as you zoom in. Multiple photos taken at exactly the same GPS coordinates are automatically spread into a Fibonacci spiral so they remain individually clickable.</p>
+<p><em>The Geolocated Photos map has moved to the <strong>Photos</strong> menu. See <a href="#photos">Section 17</a>.</em></p>
 
 <hr>
 
@@ -601,53 +602,95 @@
 <hr>
 
 <h2 id="photos">17. Photos</h2>
-<p>Yearbird can associate your personal bird photos with your eBird sightings. This unlocks a photo gallery view, displaying photos that match the filter, and filtering by camera, lens, and exposure settings using the photo filter that will appear on the right of the screen.</p>
+<p>Yearbird can associate your personal bird photos with your eBird sightings. This unlocks several photo views and lets you filter by camera, lens, and exposure settings using the Photo Filter panel on the right of the screen.</p>
 
 <h3>Overview of the photo system</h3>
 <ul>
   <li>Your photos remain in their original folders on your computer. Yearbird stores <strong>references</strong> to them, not copies.</li>
-  <li>Photo associations and metadata are stored in a <strong>Photo Settings file</strong> (a CSV file you create and save using Yearbird). See <a href="#photo-settings-file">Section 18</a>.</li>
+  <li>Photo associations and metadata are stored in a <strong>Photo Settings file</strong> (a CSV file you create and save using Yearbird). See <a href="#photo-settings-file">Section 19</a>.</li>
   <li>Yearbird reads <strong>EXIF data</strong> from each JPEG file automatically: camera model, lens, shutter speed, aperture, focal length, and ISO.</li>
 </ul>
 
-<h3>Opening the Photos window</h3>
-<p>Once a Photo Settings file is loaded, click <strong>Photos</strong> on the toolbar or choose <strong>Lists → Photos</strong>. The Photos gallery opens, showing thumbnails of all photos that match the current filter.</p>
-
-<h3>The Photos gallery</h3>
-<p>Photos are arranged in a grid. Each thumbnail shows:</p>
-<ul>
-  <li>The photo itself</li>
-  <li>The species name</li>
-  <li>The date the photo was taken</li>
-  <li>Your rating for the photo (if set)</li>
-</ul>
-<p>Click any thumbnail to open the <strong>Enlargement</strong> view for that photo.</p>
+<h3>Photos by Filter</h3>
+<p>Open with <strong>Photos → Photos by Filter</strong>, the <strong>Photos</strong> toolbar button, or <strong>Lists → Photos</strong>. Shows thumbnails of every photo matching the current Standard Filter and Photo Filter.</p>
+<p>Each thumbnail shows the photo, species name, date, and your rating. Click any thumbnail to open the <strong>Enlargement</strong> view.</p>
 
 <h3>Sorting photos</h3>
-<p>You can sort the gallery by:</p>
+<p>Use the radio buttons at the top of the Photos window to sort by:</p>
 <ul>
   <li><strong>Taxonomy</strong> — groups photos by species in taxonomic order</li>
-  <li><strong>Date</strong> — most recent first or oldest first</li>
+  <li><strong>Date</strong> — chronological order</li>
   <li><strong>Rating</strong> — highest rated first</li>
-  <li><strong>Species name</strong> — alphabetical</li>
+  <li><strong>Alphabetical</strong> — by species common name</li>
 </ul>
 
 <h3>Photo Filter</h3>
-<p>Use the <strong>Photo Filter</strong> panel (right side of the main window) to narrow the gallery by camera, lens, exposure settings, or rating. See <a href="#photo-filter">Section 5</a> for the full list of filter options.</p>
+<p>Use the <strong>Photo Filter</strong> panel (right side of the main window) to narrow results by camera, lens, exposure settings, or rating. See <a href="#photo-filter">Section 5</a> for the full list of filter options.</p>
 
 <h3>Enlargement view</h3>
-<p>Click any thumbnail to open the Enlargement view, which shows the full-resolution photo with pan and zoom. From the Enlargement view you can:</p>
+<p>Click any thumbnail in the Photos window to open the Enlargement view, which shows the photo at full size with pan and zoom. From the Enlargement view you can:</p>
 <ul>
-  <li><strong>Navigate</strong> between photos (previous/next arrows).</li>
+  <li><strong>Navigate</strong> between photos using the previous/next arrows.</li>
   <li><strong>Set or change the rating</strong> for the photo.</li>
   <li><strong>View EXIF data</strong> — camera, lens, shutter speed, aperture, focal length, ISO.</li>
   <li><strong>Detach a photo</strong> from its sighting (removes the association without deleting the file).</li>
   <li><strong>Delete a photo reference</strong> entirely from the Photo Settings.</li>
 </ul>
 
+<h3>Geolocated Photos</h3>
+<p>Open with <strong>Photos → Geolocated Photos</strong>. Available only when a Photo Settings file is loaded.</p>
+<p>Plots your geotagged photos on an interactive clustered marker map. Markers group together at lower zoom levels and spread apart as you zoom in. Hovering over a marker shows a thumbnail preview of the photo along with the species name, date, and location. Click a marker to open the <strong>Enlargement</strong> view for that photo. Multiple photos taken at exactly the same GPS coordinates are automatically fanned into a spiral so each remains individually clickable.</p>
+
+<h3 id="animated-photo-sequence">Animated Photo Sequence</h3>
+<p>Open with <strong>Photos → Animated Photo Sequence</strong>. Available only when a Photo Settings file is loaded.</p>
+<p>Animates your geotagged photos in chronological order on an interactive map, showing where and when each photo was taken. Each photo appears as a callout bubble whose triangular tail points to the exact GPS location, so the underlying map detail remains visible. The bubble displays the photo thumbnail, species name, date, and location.</p>
+<p>As the animation progresses, a small blue dot is permanently placed at each visited location, building up a breadcrumb trail of your photographic journey.</p>
+<p>Playback is controlled by the bar at the bottom of the map:</p>
+<ul>
+  <li><strong>Play / Pause</strong> — start or pause the animation.</li>
+  <li><strong>Restart</strong> — return to the first photo and clear the breadcrumb trail.</li>
+  <li><strong>Scrubber</strong> — drag to jump directly to any photo in the sequence.</li>
+  <li><strong>Speed slider</strong> — drag towards the rabbit for faster playback (minimum 0.25 seconds per photo) or towards the turtle for slower playback (maximum 5 seconds per photo).</li>
+</ul>
+<p>The caption bar below the controls shows the species name, location, and date of the currently displayed photo. Click the photo bubble at any time to open the <strong>Enlargement</strong> view for that photo.</p>
+
+<h3 id="slideshow">Slideshow</h3>
+<p>Open with <strong>Photos → Slideshow</strong>. Available only when a Photo Settings file is loaded.</p>
+<p>Displays your photos as a full-screen slideshow with smooth crossfade transitions between images. Before the slideshow begins, a dialog lets you configure it:</p>
+<ul>
+  <li><strong>Sort Order</strong> — choose how photos are sequenced:
+    <ul>
+      <li><em>Random</em> — photos appear in a randomised order (default).</li>
+      <li><em>Taxonomic</em> — grouped by species in taxonomic order.</li>
+      <li><em>Alphabetic</em> — sorted by species name A–Z.</li>
+      <li><em>By rating (highest first)</em> — your best-rated photos appear first.</li>
+      <li><em>Chronological</em> — sorted by date and time taken.</li>
+      <li><em>By location</em> — grouped alphabetically by location name.</li>
+      <li><em>By seasonal date (month / day)</em> — sorted by calendar date, ignoring year, so all January photos appear first regardless of which year they were taken.</li>
+    </ul>
+  </li>
+  <li><strong>Seconds per photo</strong> — how long each photo is displayed before the next crossfade begins (1–60 seconds).</li>
+  <li><strong>Show title bar</strong> — when checked, a dark panel at the bottom of the screen shows the species name, date, location, and a photo counter. Uncheck for a clean full-screen view with no overlay.</li>
+</ul>
+<p>Press any key or move the mouse to exit the slideshow at any time. The cursor is hidden automatically while the slideshow is running.</p>
+
 <hr>
 
-<h2 id="photo-settings-file">18. Adding Photos to the Photo Settings File</h2>
+<h2 id="species-gallery">18. Species Gallery</h2>
+<p>Open with <strong>Photos → Species Gallery</strong>. Available once a Photo Settings file is loaded.</p>
+<p>The Species Gallery displays one representative photo for each species in your collection — the highest-rated photo you have for that species. Photos are arranged in a responsive grid and sorted in <strong>taxonomic order</strong>, making it a visual life list of every species you have photographed.</p>
+<p>The number of columns adjusts automatically as you resize or maximise the window, so the grid always makes full use of the available space.</p>
+<p>Each tile shows:</p>
+<ul>
+  <li>A thumbnail of the best-rated photo for that species.</li>
+  <li>The species common name below the thumbnail.</li>
+</ul>
+<p>Hovering over a tile highlights it. <strong>Click a tile</strong> to open a Photos window showing all of your photos of that species (subject to the current filter).</p>
+<p>The window title and subtitle show how many species have at least one photo under the current filter. Like all Yearbird windows, the Species Gallery responds to the Standard Filter — for example, set a location filter to see a gallery of every species you have photographed at a particular site.</p>
+
+<hr>
+
+<h2 id="photo-settings-file">19. Adding Photos to the Photo Settings File</h2>
 <p>Yearbird uses a Photo Settings file to associate photos on your hard drive with your ebird sightings. Associating photos with your ebird sightings lets you view photos that match the main window's filter.  For example, Yearbird can show you all the photos you've taken of a species, or the photos from a certain day or from a location. Yearbird stores the photo file names, dates, times, species names, and camera information in a separate data file. Think of this file as your photo library within Yearbird.</p>
 
 <h3>Adding Photos To Yearbird</h3>
@@ -697,7 +740,7 @@
 
 <hr>
 
-<h2 id="individual-species">19. Individual Species Window</h2>
+<h2 id="individual-species">20. Individual Species Window</h2>
 <p>The Individual Species window opens when you click a species name in the Species List, or from the right-click menu in most list windows.</p>
 <p>It shows a comprehensive view of your sightings of one particular species:</p>
 <ul>
@@ -708,10 +751,12 @@
   <li><strong>Links</strong> — direct links to the species' page on Wikipedia and AllAboutBirds.org.</li>
   <li><strong>Photos</strong> — if you have photos of this species in your Photo Settings, thumbnails are shown. Click a thumbnail to open the Enlargement view.</li>
 </ul>
+<h3>Photo thumbnail in the header</h3>
+<p>If you have photos of the species in your Photo Settings file, the <strong>highest-rated photo</strong> appears as a thumbnail in the window header, between the species data panes and the action buttons. The thumbnail scales to fit the available space without distortion. Click the thumbnail to open a Photos window showing all of your photos of that species.</p>
 
 <hr>
 
-<h2 id="printing">20. Printing and PDF Export</h2>
+<h2 id="printing">21. Printing and PDF Export</h2>
 
 <h3>Printing</h3>
 <p>Click <strong>Print</strong> on the toolbar or choose <strong>File → Print</strong>. The current active child window is sent to the printer. Most list and report windows print sensibly; map and photo windows print a screenshot of the current view.</p>
@@ -721,7 +766,7 @@
 
 <hr>
 
-<h2 id="tips">21. Tips and Tricks</h2>
+<h2 id="tips">22. Tips and Tricks</h2>
 
 <h3>Keep multiple windows open for comparison</h3>
 <p>Because Yearbird is an MDI application, you can open several child windows simultaneously. For example, open a Species List filtered to one location, then open a second Species List filtered to a different location, and use <strong>Windows → Tile Windows</strong> to view them side by side.</p>
@@ -756,7 +801,7 @@
 
 <hr>
 
-<h2 id="preferences">22. Saving Preferences</h2>
+<h2 id="preferences">23. Saving Preferences</h2>
 
 <p> You can tell Yearbird which folder you use to download ebird files. Yearbird will load the most recent ebird file from that folder whenever Yearbird starts.</p>
 

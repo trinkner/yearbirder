@@ -175,6 +175,16 @@ stylesheetBase = """
         min-height: 22px;
     }
     QComboBox:hover { border-color: #4f8ef7; }
+    QComboBox:focus {
+        background: #363a4f;
+        border: 1px solid #4f8ef7;
+        border-radius: 5px;
+    }
+    QComboBox:on {
+        background: #363a4f;
+        border: 1px solid #4f8ef7;
+        border-radius: 5px;
+    }
     QComboBox QAbstractItemView {
         background: #2b2d38;
         selection-background-color: #4f8ef7;
@@ -204,9 +214,8 @@ stylesheetBase = """
     }
 
     QListWidget {
-        background: #252730;
-        border: 1px solid #3a3d4e;
-        border-radius: 4px;
+        background: #1e1f26;
+        border: none;
     }
     QListWidget::item:selected { background: #4f8ef7; color: white; }
     QListWidget::item:hover { background: #363a4f; }
@@ -291,14 +300,15 @@ stylesheetBase = """
     }
 
     QRadioButton::indicator {
-        border: 2px solid white;
+        border: 2px solid #8b8fa8;
         border-radius: 6px;
         width: 10px;
         height: 10px;
         background: transparent;
     }
     QRadioButton::indicator:checked {
-        background: white;
+        background: #4f8ef7;
+        border-color: #4f8ef7;
     }
 
     QStatusBar { background: #16171e; color: #8b8fa8; }

@@ -220,7 +220,7 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
             w2 = floor(1.75 * firstDateTextWidth)
             w3 = floor(1.75 * lastDateTextWidth)
             w4 = floor(1.3 * dateTextWidth)
-            w5 = floor(1.7 * dateTextWidth)
+            w5 = floor(1.8 * dateTextWidth)
 
             # give species name column the remaining width
             header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)

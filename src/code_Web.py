@@ -117,6 +117,57 @@ class ChoroplethBridge(QObject):
             sub.scaleMe()
 
 
+class PhotosMapBridge(QObject):
+    """JS→Python bridge for the Geolocated Photos map.
+
+    Registered on the page's QWebChannel as 'bridge'.  When a marker is
+    clicked, JavaScript calls photoClicked(idx) which opens an Enlargement
+    window for that photo.  All photos in the map are passed so the user can
+    navigate with arrow keys inside the Enlargement window.
+    """
+
+    def __init__(self, web_window, photo_entries):
+        super().__init__()
+        self._web    = web_window
+        self._entries = photo_entries   # list of [photo_dict, sighting_dict]
+
+    @Slot(int)
+    def photoClicked(self, idx):
+        import code_Enlargement
+
+        if idx < 0 or idx >= len(self._entries):
+            return
+
+        main_window = self._web.mdiParent
+        entries     = self._entries
+
+        # Enlargement expects mdiParent to be a Photos-like object with:
+        #   .mdiParent  → MainWindow
+        #   .photoList  → [[photo_dict, sighting_dict], …]
+        #   .filter     → filter object (used only for FillPhotos refresh)
+        #   .FillPhotos(filter) → called after detach/delete
+        # We satisfy this interface with a lightweight proxy.
+        class _Proxy:
+            def __init__(self):
+                self.mdiParent = main_window
+                self.photoList = entries
+                self.filter    = None
+            def FillPhotos(self, f):
+                pass   # no Photos grid window to refresh from the map
+
+        proxy = _Proxy()
+
+        sub              = code_Enlargement.Enlargement()
+        sub.mdiParent    = proxy
+        sub.photoList    = proxy.photoList
+        sub.currentIndex = idx
+
+        main_window.mdiArea.addSubWindow(sub)
+        main_window.PositionChildWindow(sub, self._web)
+        sub.show()
+        sub.fillEnlargement()
+
+
 class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
     
     resized = Signal()
@@ -359,7 +410,6 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
         for s in sightings:
             location_species[s["location"]][s["commonName"]] = None
         species_counts = {loc: len(sp) for loc, sp in location_species.items()}
-        max_count = max(species_counts.values()) if species_counts else 1
 
         location_map = folium.Map(tiles="CartoDB Positron")
 
@@ -372,7 +422,7 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
             lat, lon = float(coords[0]), float(coords[1])
             points.append([lat, lon])
             n_species = species_counts.get(name, 0)
-            radius = 4 + (n_species / max_count) * 14
+            radius = 5
             sp_sorted = list(location_species.get(name, {}).keys())
             sp_lines = "".join(f"<br>&nbsp;&nbsp;{sp}" for sp in sp_sorted[:25])
             if len(sp_sorted) > 25:
@@ -1525,12 +1575,42 @@ document.addEventListener("DOMContentLoaded", function() {{
         var map = findMap();
         if (!map) {{ setTimeout(init, 150); return; }}
 
+        // Custom tooltip div — edge-aware, dark-themed
+        var tipDiv = document.createElement('div');
+        tipDiv.style.cssText = (
+            'position:fixed; display:none; pointer-events:none; z-index:9999;' +
+            'background:#252730; color:#e2e4ec; border:1px solid #4f8ef7;' +
+            'border-radius:6px; padding:6px 10px; font-size:12px;' +
+            'max-width:300px; line-height:1.5;'
+        );
+        document.body.appendChild(tipDiv);
+
         lifers.forEach(function(lifer) {{
             var m = L.circleMarker([lifer.lat, lifer.lon], {{
                 radius:7, fillColor:lifer.color, color:'#555',
                 weight:0.8, fillOpacity:0, opacity:0
             }});
-            m.bindTooltip(lifer.species + ' (#' + lifer.num + ')<br>' + lifer.date + '<br>' + lifer.location, {{sticky: false}});
+            m.on('mouseover', function(e) {{
+                tipDiv.innerHTML = '<b>' + lifer.species + '</b> (#' + lifer.num + ')' +
+                    '<br>' + lifer.date + ' &nbsp;\u00b7&nbsp; ' + lifer.location;
+                tipDiv.style.display = 'block';
+                var mapCont = map.getContainer();
+                var mapRect = mapCont.getBoundingClientRect();
+                var pt = map.latLngToContainerPoint(e.target.getLatLng());
+                var GAP = 12;
+                var tipW = tipDiv.offsetWidth;
+                var tipH = tipDiv.offsetHeight;
+                var absX = pt.x > mapRect.width / 2
+                    ? mapRect.left + pt.x - tipW - GAP
+                    : mapRect.left + pt.x + GAP;
+                var absY = mapRect.top + pt.y - tipH / 2;
+                absY = Math.max(GAP, Math.min(absY, window.innerHeight - tipH - GAP));
+                tipDiv.style.left = absX + 'px';
+                tipDiv.style.top  = absY + 'px';
+            }});
+            m.on('mouseout', function() {{
+                tipDiv.style.display = 'none';
+            }});
             m.bindPopup(
                 '<div style="font-family:sans-serif">' +
                 '<b>' + lifer.species + '</b><br>' +
@@ -1570,14 +1650,18 @@ document.addEventListener("DOMContentLoaded", function() {{
         from folium.plugins import MarkerCluster
         import tempfile
         from pathlib import Path
+        import json
 
         self.title = "Geolocated Photos"
         self.filter = deepcopy(filter)
 
         photoSightings = self.mdiParent.db.GetSightingsWithPhotos(filter)
 
-        # Collect one marker entry per photo that has valid coordinates
-        markers = []
+        # Collect one marker entry per photo that has valid coordinates.
+        # photo_entries mirrors markers index-for-index and stores the raw
+        # [photo_dict, sighting_dict] pairs needed by Enlargement.
+        markers      = []
+        photo_entries = []
         for s in photoSightings:
             try:
                 lat = float(s["latitude"])
@@ -1595,52 +1679,23 @@ document.addEventListener("DOMContentLoaded", function() {{
                 if not file_path:
                     continue
 
-                species   = s.get("commonName", "Unknown")
-                date      = s.get("date", "")
-                location  = s.get("location", "")
-                img_uri   = Path(file_path).as_uri()
-
-                popup_html = (
-                    f'<div style="font-family:sans-serif;width:270px">'
-                    f'<b>{species}</b><br>'
-                    f'{date}&nbsp;&nbsp;{location}<br>'
-                    f'<img src="{img_uri}" '
-                    f'style="max-width:260px;max-height:220px;margin-top:5px;'
-                    f'border-radius:4px;">'
-                    f'</div>'
-                )
-                markers.append((lat, lon, popup_html, species))
+                markers.append((lat, lon,
+                                 s.get("commonName", "Unknown"),
+                                 s.get("date", ""),
+                                 s.get("location", ""),
+                                 Path(file_path).as_uri()))
+                photo_entries.append([p, s])
 
         if not markers:
             return False
 
-        # --- Sunflower-spiral jitter for co-located markers ---
-        # Photos sharing the exact same GPS point get a tiny offset arranged in
-        # a Fibonacci spiral so they separate naturally on zoom-in.
-        # Radius (degrees) = BASE * sqrt(n): ~2 m for n=2, ~45 m for n=700.
-        import math
-        from collections import defaultdict
-
-        coord_groups = defaultdict(list)
-        for i, m in enumerate(markers):
-            coord_groups[(m[0], m[1])].append(i)
-
-        GOLDEN_ANGLE = math.pi * (3.0 - math.sqrt(5.0))  # ~137.508°
-        BASE_RADIUS  = 0.000015                            # degrees per √-marker
-
-        for (lat, lon), indices in coord_groups.items():
-            n = len(indices)
-            if n <= 1:
-                continue
-            cos_lat = math.cos(math.radians(lat)) or 0.001
-            radius  = BASE_RADIUS * math.sqrt(n)
-            for k, idx in enumerate(indices):
-                r     = radius * math.sqrt((k + 0.5) / n)
-                theta = k * GOLDEN_ANGLE
-                dlat  = r * math.cos(theta)
-                dlon  = r * math.sin(theta) / cos_lat
-                old   = markers[idx]
-                markers[idx] = (lat + dlat, lon + dlon, old[2], old[3])
+        photo_js_data = json.dumps(
+            [{"lat": m[0], "lon": m[1],
+              "species": m[2], "date": m[3], "location": m[4], "img": m[5],
+              "idx": i}
+             for i, m in enumerate(markers)],
+            ensure_ascii=False,
+        )
 
         # Centre the map on the mean of all photo locations
         avg_lat = sum(m[0] for m in markers) / len(markers)
@@ -1652,20 +1707,12 @@ document.addEventListener("DOMContentLoaded", function() {{
             tiles="CartoDB Positron",
         )
 
-        cluster = MarkerCluster(
-            options={
-                "spiderfyOnMaxZoom": True,
-                "spiderfyDistanceMultiplier": 2,
-                "disableClusteringAtZoom": 18,
-            }
-        ).add_to(photo_map)
-
-        for lat, lon, popup_html, species in markers:
-            folium.Marker(
-                location=[lat, lon],
-                popup=folium.Popup(popup_html, max_width=280),
-                tooltip=species,
-            ).add_to(cluster)
+        # Add an empty MarkerCluster so Folium loads the markercluster JS
+        # library; the actual markers are built entirely in injected JS below.
+        MarkerCluster(options={
+            "spiderfyOnMaxZoom": True,
+            "spiderfyDistanceMultiplier": 2,
+        }).add_to(photo_map)
 
         # Fit map to the bounds of all markers
         lats = [m[0] for m in markers]
@@ -1673,6 +1720,114 @@ document.addEventListener("DOMContentLoaded", function() {{
         photo_map.fit_bounds([[min(lats), min(lons)], [max(lats), max(lons)]])
 
         html = photo_map.get_root().render()
+
+        # --- QWebChannel bridge for click-to-enlarge ---
+        self._photosBridge = PhotosMapBridge(self, photo_entries)
+        channel = QWebChannel(self.webView.page())
+        channel.registerObject("bridge", self._photosBridge)
+        self.webView.page().setWebChannel(channel)
+
+        qwc_file = QFile(":/qtwebchannel/qwebchannel.js")
+        qwc_file.open(QIODevice.OpenModeFlag.ReadOnly)
+        qwc_js = bytes(qwc_file.readAll()).decode("utf-8")
+        qwc_file.close()
+
+        # Inject custom JS: creates markers in a markerClusterGroup, wires up
+        # an edge-aware photo tooltip (mousemove) and a click-to-enlarge handler.
+        # The image container has a fixed size so the div is stable before the
+        # image loads, keeping the positioning calculation correct.
+        inject = f"""
+<script>
+{qwc_js}
+(function() {{
+    var photoData = {photo_js_data};
+
+    var tipDiv = document.createElement('div');
+    tipDiv.style.cssText = (
+        'position:fixed; display:none; pointer-events:none; z-index:9999;' +
+        'background:#252730; color:#e2e4ec; border:2px solid #4f8ef7;' +
+        'border-radius:8px; padding:10px 12px; font-family:sans-serif;' +
+        'box-shadow:0 4px 20px rgba(0,0,0,0.55);'
+    );
+    document.body.appendChild(tipDiv);
+
+    function showTip(e, d) {{
+        tipDiv.innerHTML = (
+            '<b style="font-size:13px">' + d.species + '</b><br>' +
+            '<span style="font-size:11px; color:#aaa">' +
+                d.date + ' \u00b7 ' + d.location +
+            '</span>' +
+            '<div style="width:280px; height:190px; overflow:hidden;' +
+                        'background:#1e1f26; border-radius:4px; margin-top:7px">' +
+                '<img src="' + d.img + '" ' +
+                     'style="width:100%; height:100%; object-fit:contain">' +
+            '</div>'
+        );
+        tipDiv.style.display = 'block';
+
+        var cx   = e.originalEvent.clientX;
+        var cy   = e.originalEvent.clientY;
+        var GAP  = 14;
+        var tipW = tipDiv.offsetWidth;
+        var tipH = tipDiv.offsetHeight;
+
+        // Flip left when cursor is in the right half of the viewport.
+        var absX = (cx > window.innerWidth / 2)
+            ? cx - tipW - GAP
+            : cx + GAP;
+        absX = Math.max(GAP, Math.min(absX, window.innerWidth  - tipW - GAP));
+
+        var absY = cy - tipH / 2;
+        absY = Math.max(GAP, Math.min(absY, window.innerHeight - tipH - GAP));
+
+        tipDiv.style.left = absX + 'px';
+        tipDiv.style.top  = absY + 'px';
+    }}
+
+    function findMap() {{
+        var keys = Object.keys(window);
+        for (var i = 0; i < keys.length; i++) {{
+            try {{
+                var obj = window[keys[i]];
+                if (obj && obj instanceof L.Map) return obj;
+            }} catch(ignore) {{}}
+        }}
+        return null;
+    }}
+
+    // Set up the Qt bridge as soon as the channel transport is available.
+    new QWebChannel(qt.webChannelTransport, function(channel) {{
+        window.photoBridge = channel.objects.bridge;
+    }});
+
+    function init() {{
+        var map = findMap();
+        if (!map) {{ setTimeout(init, 150); return; }}
+
+        var cluster = L.markerClusterGroup({{
+            spiderfyOnMaxZoom: true,
+            spiderfyDistanceMultiplier: 2,
+        }});
+
+        photoData.forEach(function(d) {{
+            var marker = L.marker([d.lat, d.lon]);
+            marker.on('mousemove', function(e) {{ showTip(e, d); }});
+            marker.on('mouseout',  function()  {{ tipDiv.style.display = 'none'; }});
+            marker.on('click', function() {{
+                tipDiv.style.display = 'none';
+                if (window.photoBridge) window.photoBridge.photoClicked(d.idx);
+            }});
+            cluster.addLayer(marker);
+        }});
+
+        map.addLayer(cluster);
+    }}
+
+    init();
+}})();
+</script>
+"""
+        html = html.replace("</body>", inject + "\n</body>")
 
         settings = QWebEngineProfile.defaultProfile().settings()
         settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
@@ -1684,6 +1839,337 @@ document.addEventListener("DOMContentLoaded", function() {{
 
         self.webView.setUrl(QUrl.fromLocalFile(tmp_path))
         self._buildFilterTitle(filter, "Geolocated Photos", count=len(markers), countUnit="Photos")
+
+        return True
+
+
+    def loadAnimatedPhotoSequenceMap(self, filter):
+        """Animate geolocated photos appearing on the map in chronological order.
+
+        Each marker shows a thumbnail of the photo at its GPS location.
+        Thumbnails accumulate as the animation plays.  The most recently revealed
+        photo is highlighted with a blue border; previous photos keep a dark border.
+        Clicking any thumbnail opens an Enlargement window for that photo.
+        """
+        from copy import deepcopy
+        import folium
+        import json
+        import tempfile
+        from pathlib import Path
+
+        self.title = "Animated Photo Sequence"
+        self.filter = deepcopy(filter)
+
+        # ── Collect geolocated photos sorted chronologically ─────────────
+        photoSightings = self.mdiParent.db.GetSightingsWithPhotos(filter)
+
+        entries  = []   # [photo_dict, sighting_dict] for Enlargement
+        photos   = []   # map data dicts
+
+        for s in sorted(photoSightings,
+                        key=lambda x: (x.get("date", ""), x.get("time", ""))):
+            try:
+                lat = float(s["latitude"])
+                lon = float(s["longitude"])
+            except (ValueError, TypeError, KeyError):
+                continue
+            if lat == 0.0 and lon == 0.0:
+                continue
+
+            for p in s["photos"]:
+                if not self.mdiParent.db.TestIndividualPhoto(p, filter):
+                    continue
+                file_path = p.get("fileName", "")
+                if not file_path:
+                    continue
+
+                idx = len(entries)
+                entries.append([p, s])
+                photos.append({
+                    "idx":      idx,
+                    "lat":      lat,
+                    "lon":      lon,
+                    "img":      Path(file_path).as_uri(),
+                    "species":  s.get("commonName", ""),
+                    "date":     s.get("date", ""),
+                    "location": s.get("location", ""),
+                })
+
+        if not photos:
+            return False
+
+        total      = len(photos)
+        photos_js  = json.dumps(photos, ensure_ascii=False)
+
+        # ── Base Folium map ───────────────────────────────────────────────
+        lats = [p["lat"] for p in photos]
+        lons = [p["lon"] for p in photos]
+
+        photo_map = folium.Map(
+            location=[sum(lats) / total, sum(lons) / total],
+            zoom_start=4,
+            tiles="CartoDB Positron",
+        )
+        photo_map.fit_bounds([[min(lats), min(lons)], [max(lats), max(lons)]])
+
+        html = photo_map.get_root().render()
+
+        # ── QWebChannel bridge (click → Enlargement) ─────────────────────
+        self._photosBridge = PhotosMapBridge(self, entries)
+        channel = QWebChannel(self.webView.page())
+        channel.registerObject("bridge", self._photosBridge)
+        self.webView.page().setWebChannel(channel)
+
+        qwc_file = QFile(":/qtwebchannel/qwebchannel.js")
+        qwc_file.open(QIODevice.OpenModeFlag.ReadOnly)
+        qwc_js = bytes(qwc_file.readAll()).decode("utf-8")
+        qwc_file.close()
+
+        animation = f"""
+<style>
+#aps-bar {{
+    position:absolute; bottom:28px; left:50%; transform:translateX(-50%);
+    z-index:1000;
+    background:rgba(255,255,255,0.93);
+    border-radius:10px;
+    box-shadow:0 2px 10px rgba(0,0,0,0.25);
+    padding:7px 14px 8px;
+    display:flex; flex-direction:column; align-items:stretch; gap:5px;
+    font-family:sans-serif; font-size:13px;
+    white-space:nowrap; user-select:none;
+}}
+#aps-controls {{
+    display:flex; align-items:center; gap:10px;
+}}
+#aps-bar button {{
+    background:none; border:none; cursor:pointer;
+    font-size:17px; padding:0 2px; line-height:1;
+}}
+#aps-slider {{ width:200px; cursor:pointer; }}
+#aps-speed  {{ width:65px;  cursor:pointer; vertical-align:middle; }}
+#aps-info   {{ min-width:120px; color:#333; }}
+#aps-caption {{
+    text-align:center; font-size:12px; color:#444;
+    min-height:15px; letter-spacing:0.01em;
+}}
+</style>
+<div id="aps-bar">
+  <div id="aps-controls">
+    <button id="aps-restart" title="Restart">&#9198;</button>
+    <button id="aps-play"    title="Play / Pause">&#9654;</button>
+    <input  id="aps-slider"  type="range" min="0" max="{total}" value="0">
+    <span   id="aps-info">0 / {total} photos</span>
+    <label  title="Animation speed" style="display:flex;align-items:center;gap:4px">
+        &#x1F422;<input id="aps-speed" type="range" min="0" max="10" value="1">&#x1F407;
+    </label>
+  </div>
+  <div id="aps-caption"></div>
+</div>
+<script>
+{qwc_js}
+(function() {{
+    var photos  = {photos_js};
+    var mkrs    = [];
+    var dots    = [];
+    var shown   = 0;
+    var current = -1;
+    var playing = false;
+    var timer   = null;
+    var DELAYS  = [5000, 3500, 2500, 1800, 1300, 950, 700, 500, 375, 300, 250];
+
+    // Set up the Qt bridge for click-to-enlarge.
+    new QWebChannel(qt.webChannelTransport, function(ch) {{
+        window.photoBridge = ch.objects.bridge;
+    }});
+
+    function delayMs() {{
+        return DELAYS[parseInt(document.getElementById('aps-speed').value)] || 150;
+    }}
+
+    function updateUI() {{
+        var idx = Math.max(0, shown - 1);
+        document.getElementById('aps-info').textContent = shown + ' / ' + photos.length + ' photos';
+        document.getElementById('aps-slider').value = shown;
+        var capEl = document.getElementById('aps-caption');
+        if (shown > 0) {{
+            var p = photos[idx];
+            capEl.innerHTML = '<b>' + p.species + '</b> &nbsp;\u00b7&nbsp; ' + p.location + ' &nbsp;\u00b7&nbsp; ' + p.date;
+        }} else {{
+            capEl.textContent = '';
+        }}
+    }}
+
+    // Show/hide each thumbnail.  pointer-events is also toggled so that hidden
+    // markers (opacity:0) cannot intercept clicks intended for the visible one.
+    function setThumbVisible(i, visible) {{
+        var m = mkrs[i];
+        if (!m || !m._icon) return;
+        m._icon.style.pointerEvents = visible ? '' : 'none';
+        var container = m._icon.firstChild;
+        if (!container) return;
+        container.style.opacity = visible ? '1' : '0';
+    }}
+
+    function showAt(idx) {{
+        if (current >= 0) setThumbVisible(current, false);
+        current = idx;
+        if (current >= 0 && current < photos.length) {{
+            setThumbVisible(current, true);
+            dots[current].setStyle({{opacity: 1, fillOpacity: 0.9}});
+            shown = current + 1;
+        }} else {{
+            shown = 0;
+        }}
+        updateUI();
+    }}
+
+    function resetMarkers() {{
+        if (current >= 0) setThumbVisible(current, false);
+        current = -1;
+        shown = 0;
+        for (var i = 0; i < dots.length; i++) {{
+            dots[i].setStyle({{opacity: 0, fillOpacity: 0}});
+        }}
+        updateUI();
+    }}
+
+    function scheduleStep() {{
+        timer = setTimeout(function() {{
+            if (!playing) return;
+            if (shown < photos.length) {{ showAt(shown); scheduleStep(); }}
+            else pause();
+        }}, delayMs());
+    }}
+
+    function play() {{
+        if (shown >= photos.length) resetMarkers();
+        playing = true;
+        document.getElementById('aps-play').innerHTML = '&#9646;&#9646;';
+        scheduleStep();
+    }}
+
+    function pause() {{
+        playing = false;
+        clearTimeout(timer);
+        document.getElementById('aps-play').innerHTML = '&#9654;';
+    }}
+
+    document.getElementById('aps-play').onclick    = function() {{ if (playing) pause(); else play(); }};
+    document.getElementById('aps-restart').onclick = function() {{ pause(); resetMarkers(); }};
+    document.getElementById('aps-slider').oninput  = function() {{
+        var target = parseInt(this.value);
+        pause();
+        if (target === 0) resetMarkers();
+        else showAt(target - 1);
+    }};
+
+    // Lock the control bar width to its maximum before animation starts.
+    function fixBarWidth() {{
+        var bar = document.getElementById('aps-bar');
+        var capEl = document.getElementById('aps-caption');
+        var best = photos.reduce(function(b, p) {{
+            var len = p.species.length + p.location.length + p.date.length;
+            return len > b.len ? {{len: len, p: p}} : b;
+        }}, {{len: 0, p: null}});
+        if (best.p) {{
+            var p = best.p;
+            capEl.innerHTML = '<b>' + p.species + '</b> &nbsp;\u00b7&nbsp; ' + p.location + ' &nbsp;\u00b7&nbsp; ' + p.date;
+            bar.style.minWidth = bar.offsetWidth + 'px';
+            capEl.textContent = '';
+        }}
+    }}
+    fixBarWidth();
+
+    function findMap() {{
+        var keys = Object.keys(window);
+        for (var i = 0; i < keys.length; i++) {{
+            try {{
+                var obj = window[keys[i]];
+                if (obj && obj instanceof L.Map) return obj;
+            }} catch(e) {{}}
+        }}
+        return null;
+    }}
+
+    function init() {{
+        var map = findMap();
+        if (!map) {{ setTimeout(init, 150); return; }}
+
+        photos.forEach(function(p) {{
+            // Outer wrapper: a flex-column that holds the card + triangle tail.
+            // opacity, cursor and transition live here so setThumbVisible works.
+            // iconAnchor is set to the tip of the triangle so the location point
+            // is marked precisely while the card floats above it.
+            var iconHtml = (
+                '<div style="opacity:0; pointer-events:none; width:160px; display:flex; flex-direction:column;' +
+                    'align-items:center; cursor:pointer; transition:opacity 0.2s;">' +
+                    '<div style="width:160px; background:#252730;' +
+                        'border:2px solid #4f8ef7; border-radius:6px;' +
+                        'overflow:hidden; box-shadow:0 3px 10px rgba(0,0,0,0.55);' +
+                        'font-family:sans-serif; line-height:1.3;">' +
+                        '<img src="' + p.img + '" ' +
+                             'style="width:160px; height:110px; object-fit:cover; display:block;">' +
+                        '<div style="padding:4px 6px 5px;">' +
+                            '<div style="font-size:11px; font-weight:bold; color:#e2e4ec;' +
+                                 'white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + p.species + '</div>' +
+                            '<div style="font-size:10px; color:#8b8fa8;' +
+                                 'white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + p.date + '</div>' +
+                            '<div style="font-size:10px; color:#8b8fa8;' +
+                                 'white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + p.location + '</div>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div style="width:0; height:0;' +
+                         'border-left:10px solid transparent;' +
+                         'border-right:10px solid transparent;' +
+                         'border-top:12px solid #4f8ef7;' +
+                         'margin-top:-1px;"></div>' +
+                '</div>'
+            );
+            var m = L.marker([p.lat, p.lon], {{
+                icon: L.divIcon({{
+                    html: iconHtml,
+                    iconSize:   [160, 176],
+                    iconAnchor: [80, 176],
+                    className:  ''
+                }})
+            }});
+            m.on('click', function() {{
+                if (window.photoBridge) window.photoBridge.photoClicked(p.idx);
+            }});
+            m.addTo(map);
+            mkrs.push(m);
+
+            var dot = L.circleMarker([p.lat, p.lon], {{
+                radius:      5,
+                fillColor:   '#4f8ef7',
+                color:       '#ffffff',
+                weight:      1.5,
+                opacity:     0,
+                fillOpacity: 0,
+            }});
+            dot.addTo(map);
+            dots.push(dot);
+        }});
+
+        setTimeout(play, 300);
+    }}
+
+    init();
+}})();
+</script>
+"""
+        html = html.replace("</body>", animation + "\n</body>")
+
+        settings = QWebEngineProfile.defaultProfile().settings()
+        settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
+        settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessFileUrls, True)
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as f:
+            f.write(html)
+            tmp_path = f.name
+
+        self.webView.setUrl(QUrl.fromLocalFile(tmp_path))
+        self._buildFilterTitle(filter, "Animated Photo Sequence", count=total, countUnit="Photos")
 
         return True
 
@@ -1769,6 +2255,7 @@ document.addEventListener("DOMContentLoaded", function() {{
             tiles="CartoDB Positron",
         )
 
+        tip_data = {}
         for lat, lon, location, total_mins, count, untimed in points:
             r = radius_for(total_mins, count)
             untimed_line = (
@@ -1776,26 +2263,19 @@ document.addEventListener("DOMContentLoaded", function() {{
                 if 0 < untimed < count else ""
             )
             if mode == 'time':
-                tooltip_text = (
-                    f"{location}<br>"
+                tip_data[location] = (
+                    f"<b>{location}</b><br>"
                     f"{fmt_duration(total_mins)} &nbsp;·&nbsp; "
                     f"{count} checklist{'s' if count != 1 else ''}"
                     f"{untimed_line}"
                 )
             else:
-                tooltip_text = (
-                    f"{location}<br>"
+                tip_data[location] = (
+                    f"<b>{location}</b><br>"
                     f"{count} checklist{'s' if count != 1 else ''} &nbsp;·&nbsp; "
                     f"{fmt_duration(total_mins)}"
                     f"{untimed_line}"
                 )
-            popup_html = (
-                f'<div style="font-family:sans-serif;min-width:160px">'
-                f'<b>{location}</b><br>'
-                f'Total time: {fmt_duration(total_mins)}<br>'
-                f'Checklists: {count}'
-                f'</div>'
-            )
             marker = folium.CircleMarker(
                 location=[lat, lon],
                 radius=r,
@@ -1804,8 +2284,6 @@ document.addEventListener("DOMContentLoaded", function() {{
                 fill=True,
                 fill_color="#4f8ef7",
                 fill_opacity=0.65,
-                tooltip=folium.Tooltip(tooltip_text),
-                popup=folium.Popup(popup_html, max_width=260),
             )
             marker.options["locationName"] = location
             marker.add_to(effort_map)
@@ -1815,7 +2293,86 @@ document.addEventListener("DOMContentLoaded", function() {{
         effort_map.fit_bounds([[min(lats), min(lons)], [max(lats), max(lons)]])
 
         html = effort_map.get_root().render()
-        html = self._inject_circle_marker_bridge(html)
+
+        import json as _json
+        tip_data_json = _json.dumps(tip_data, ensure_ascii=False)
+
+        self._mapBridge = MapBridge(self)
+        channel = QWebChannel(self.webView.page())
+        channel.registerObject("bridge", self._mapBridge)
+        self.webView.page().setWebChannel(channel)
+
+        qwc_file = QFile(":/qtwebchannel/qwebchannel.js")
+        qwc_file.open(QIODevice.OpenModeFlag.ReadOnly)
+        qwc_js = bytes(qwc_file.readAll()).decode("utf-8")
+        qwc_file.close()
+
+        inject_js = f"""
+<script>
+{qwc_js}
+(function() {{
+    var tipDiv = document.createElement('div');
+    tipDiv.style.cssText = (
+        'position:fixed; display:none; pointer-events:none; z-index:9999;' +
+        'background:#252730; color:#e2e4ec; border:1px solid #4f8ef7;' +
+        'border-radius:6px; padding:6px 10px; font-size:12px;' +
+        'max-width:300px; line-height:1.5;'
+    );
+    document.body.appendChild(tipDiv);
+    var tipData = {tip_data_json};
+    function findMap() {{
+        var keys = Object.keys(window);
+        for (var i = 0; i < keys.length; i++) {{
+            try {{ var o = window[keys[i]]; if (o && o instanceof L.Map) return o; }}
+            catch(e) {{}}
+        }}
+        return null;
+    }}
+    function init() {{
+        var map = findMap();
+        if (!map) {{ setTimeout(init, 150); return; }}
+        new QWebChannel(qt.webChannelTransport, function(channel) {{
+            window.bridge = channel.objects.bridge;
+            map.eachLayer(function(layer) {{
+                if (!(layer instanceof L.CircleMarker)) return;
+                var name      = layer.options.locationName;
+                var origColor = layer.options.color;
+                var origWeight = layer.options.weight;
+                if (!name) return;
+                layer.on('click', function() {{
+                    window.bridge.locationClicked(name);
+                }});
+                layer.on('mouseover', function(e) {{
+                    this.setStyle({{ color: '#ff8800', weight: 3 }});
+                    var html = tipData[name];
+                    if (!html) return;
+                    tipDiv.innerHTML = html;
+                    tipDiv.style.display = 'block';
+                    var mapCont = map.getContainer();
+                    var mapRect = mapCont.getBoundingClientRect();
+                    var pt = map.latLngToContainerPoint(e.target.getLatLng());
+                    var GAP = 12;
+                    var tipW = tipDiv.offsetWidth;
+                    var tipH = tipDiv.offsetHeight;
+                    var absX = pt.x > mapRect.width / 2
+                        ? mapRect.left + pt.x - tipW - GAP
+                        : mapRect.left + pt.x + GAP;
+                    var absY = mapRect.top + pt.y - tipH / 2;
+                    absY = Math.max(GAP, Math.min(absY, window.innerHeight - tipH - GAP));
+                    tipDiv.style.left = absX + 'px';
+                    tipDiv.style.top  = absY + 'px';
+                }});
+                layer.on('mouseout', function() {{
+                    this.setStyle({{ color: origColor, weight: origWeight }});
+                    tipDiv.style.display = 'none';
+                }});
+            }});
+        }});
+    }}
+    init();
+}})();
+</script>"""
+        html = html.replace("</body>", inject_js + "\n</body>")
 
         settings = QWebEngineProfile.defaultProfile().settings()
         settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
@@ -1970,21 +2527,31 @@ document.addEventListener("DOMContentLoaded", function() {{
             tiles="CartoDB Positron",
         )
 
+        # Build tooltip data for both modes
+        tip_data = {}
         for lat, lon, location, metric in points:
-            unknown_cl_count = len(loc_unknown_cl.get(location, set()))
-            unknown_cl_line = (
-                f"<br>{unknown_cl_count} checklist{'s' if unknown_cl_count != 1 else ''}"
-                f" do not include specific count for some species;"
-                f" these entries add 1 to the total."
-                if mode == 'individuals' and unknown_cl_count > 0 else ""
-            )
-            tooltip_text = f"{location}<br>{metric:,} {metric_label}{unknown_cl_line}"
-            popup_html = (
-                f'<div style="font-family:sans-serif;min-width:160px">'
-                f'<b>{location}</b><br>'
-                f'{metric_label.capitalize()}: {metric:,}'
-                f'</div>'
-            )
+            if mode == 'species':
+                sp_sorted = list(loc_species.get(location, {}).keys())
+                sp_lines = "".join(f"<br>&nbsp;&nbsp;{sp}" for sp in sp_sorted[:25])
+                if len(sp_sorted) > 25:
+                    sp_lines += f"<br>&nbsp;&nbsp;(+{len(sp_sorted) - 25} more)"
+                tip_data[location] = f"<b>{location}</b><br>{metric:,} species{sp_lines}"
+            else:
+                unknown_cl_count = len(loc_unknown_cl.get(location, set()))
+                unknown_cl_line = (
+                    f"<br>{unknown_cl_count} checklist{'s' if unknown_cl_count != 1 else ''}"
+                    f" do not include a specific count for some species;"
+                    f" these entries add 1 to the total."
+                    if unknown_cl_count > 0 else ""
+                )
+                tip_data[location] = (
+                    f"<b>{location}</b><br>{metric:,} {metric_label}{unknown_cl_line}"
+                )
+
+        import json
+        tip_data_json = json.dumps(tip_data, ensure_ascii=False)
+
+        for lat, lon, location, metric in points:
             marker = folium.CircleMarker(
                 location=[lat, lon],
                 radius=radius_for(metric),
@@ -1993,8 +2560,6 @@ document.addEventListener("DOMContentLoaded", function() {{
                 fill=True,
                 fill_color="#4f8ef7",
                 fill_opacity=0.65,
-                tooltip=folium.Tooltip(tooltip_text),
-                popup=folium.Popup(popup_html, max_width=260),
             )
             marker.options["locationName"] = location
             marker.add_to(bubble_map)
@@ -2004,7 +2569,83 @@ document.addEventListener("DOMContentLoaded", function() {{
         bubble_map.fit_bounds([[min(lats), min(lons)], [max(lats), max(lons)]])
 
         html = bubble_map.get_root().render()
-        html = self._inject_circle_marker_bridge(html)
+
+        self._mapBridge = MapBridge(self)
+        channel = QWebChannel(self.webView.page())
+        channel.registerObject("bridge", self._mapBridge)
+        self.webView.page().setWebChannel(channel)
+
+        qwc_file = QFile(":/qtwebchannel/qwebchannel.js")
+        qwc_file.open(QIODevice.OpenModeFlag.ReadOnly)
+        qwc_js = bytes(qwc_file.readAll()).decode("utf-8")
+        qwc_file.close()
+
+        inject_js = f"""
+<script>
+{qwc_js}
+(function() {{
+    var tipDiv = document.createElement('div');
+    tipDiv.style.cssText = (
+        'position:fixed; display:none; pointer-events:none; z-index:9999;' +
+        'background:#252730; color:#e2e4ec; border:1px solid #4f8ef7;' +
+        'border-radius:6px; padding:6px 10px; font-size:12px;' +
+        'max-width:300px; line-height:1.5;'
+    );
+    document.body.appendChild(tipDiv);
+    var tipData = {tip_data_json};
+    function findMap() {{
+        var keys = Object.keys(window);
+        for (var i = 0; i < keys.length; i++) {{
+            try {{ var o = window[keys[i]]; if (o && o instanceof L.Map) return o; }}
+            catch(e) {{}}
+        }}
+        return null;
+    }}
+    function init() {{
+        var map = findMap();
+        if (!map) {{ setTimeout(init, 150); return; }}
+        new QWebChannel(qt.webChannelTransport, function(channel) {{
+            window.bridge = channel.objects.bridge;
+            map.eachLayer(function(layer) {{
+                if (!(layer instanceof L.CircleMarker)) return;
+                var name      = layer.options.locationName;
+                var origColor = layer.options.color;
+                var origWeight = layer.options.weight;
+                if (!name) return;
+                layer.on('click', function() {{
+                    window.bridge.locationClicked(name);
+                }});
+                layer.on('mouseover', function(e) {{
+                    this.setStyle({{ color: '#ff8800', weight: 3 }});
+                    var html = tipData[name];
+                    if (!html) return;
+                    tipDiv.innerHTML = html;
+                    tipDiv.style.display = 'block';
+                    var mapCont = map.getContainer();
+                    var mapRect = mapCont.getBoundingClientRect();
+                    var pt = map.latLngToContainerPoint(e.target.getLatLng());
+                    var GAP = 12;
+                    var tipW = tipDiv.offsetWidth;
+                    var tipH = tipDiv.offsetHeight;
+                    var absX = pt.x > mapRect.width / 2
+                        ? mapRect.left + pt.x - tipW - GAP
+                        : mapRect.left + pt.x + GAP;
+                    var absY = mapRect.top + pt.y - tipH / 2;
+                    absY = Math.max(GAP, Math.min(absY, window.innerHeight - tipH - GAP));
+                    tipDiv.style.left = absX + 'px';
+                    tipDiv.style.top  = absY + 'px';
+                }});
+                layer.on('mouseout', function() {{
+                    this.setStyle({{ color: origColor, weight: origWeight }});
+                    tipDiv.style.display = 'none';
+                }});
+            }});
+        }});
+    }}
+    init();
+}})();
+</script>"""
+        html = html.replace("</body>", inject_js + "\n</body>")
 
         settings = QWebEngineProfile.defaultProfile().settings()
         settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)

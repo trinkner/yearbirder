@@ -1,6 +1,10 @@
 <table><tr>
 <td><img src="icons/Yearbird_Icon_1024.png" alt="Yearbird" height="120"></td>
-<td><img src="icons/Yearbird_Screenshot.jpg" alt="Yearbird screenshot" height="120"></td>
+<td><img src="src/readme_photos/demo_Lists.png" alt="Lists" height="120"></td>
+<td><img src="src/readme_photos/demo_Reports1.png" alt="Reports" height="120"></td>
+<td><img src="src/readme_photos/demo_Graphs1.png" alt="Graphs" height="120"></td>
+<td><img src="src/readme_photos/demo_Maps1.png" alt="Maps" height="120"></td>
+<td><img src="src/readme_photos/demo_Photos1.png" alt="Photos" height="120"></td>
 </tr></table>
 
 # Yearbird
@@ -14,23 +18,28 @@ Yearbird lets you filter, browse, and visualise your personal eBird sightings in
 ## Features
 
 - **Species, Locations, and Checklists lists** — sortable, filterable tables of your sightings
+- **Individual Species window** — full sighting history, location and year breakdowns, monthly patterns, and photo thumbnails for any species
+- **Location window** — complete sighting history for a single location, with species list, yearly and monthly breakdowns, and a map showing the site
 - **Date Totals** — species counts by year, month, and individual date
 - **Location Totals** — species counts by region, country, state, county, and named location
 - **Powerful filter panel** — filter everything simultaneously by region, country, state, county, location, taxonomic order, family, species, date range, and seasonal range
 - **Big Report** — comprehensive multi-tab report combining species, dates, locations, and checklists
 - **Compare Lists** — compare any two species lists side by side
-- **Graphs** — eleven chart types:
+- **Graphs** — fourteen chart types:
   - *Total Species Bar Graph* — species count per year
   - *Cumulative Species Curve* — cumulative species seen over time
   - *Species Heatmap* — species count by month and year
   - *Species Accumulation* — new species added each year vs. repeats
   - *Top Locations* — top 20 locations by species count
   - *Checklist Scatter* — duration vs. species count per checklist, coloured by season
+  - *Locations by Species & Checklists* — locations plotted by species count vs. checklist count
+  - *Species by Locations & Count* — species plotted by distinct location count vs. individual count
   - *Phenology Chart* — sighting dates by day-of-year across years
   - *First of Year Chart* — first sighting of each species per year, plotted by month
   - *Last of Year Chart* — last sighting of each species per year, plotted by month
   - *Pie Chart by Species* — species count by taxonomic family or order
   - *Pie Chart by Individual Tallies* — individual bird count by taxonomic family or order
+  - *Locations by Checklists* — checklist count by location as a pie chart
 - **Maps** — eight interactive map types:
   - *Locations Map* — all your sighting locations plotted on a zoomable map
   - *Animated Lifer Map* — watch your life list build up chronologically, dot by dot
@@ -41,7 +50,9 @@ Yearbird lets you filter, browse, and visualise your personal eBird sightings in
   - *Choropleth by Species* — US states, US counties, Canada, India, Great Britain, and world countries shaded by species count
   - *Choropleth by Checklists* — same regions shaded by checklist count
 - **Photos** — associate your JPEG bird photos with your sightings; browse, filter, and rate them by camera, lens, aperture, shutter speed, focal length, and ISO
-- **Individual Species window** — full sighting history, location and year breakdowns, monthly patterns, and photo thumbnails for any species
+  - *Photos by Filter* — thumbnail gallery of every photo matching the current filter, sortable by taxonomy, date, rating, or name
+  - *Species Gallery* — one best-rated photo per species, arranged in taxonomic order; click any tile to see all photos of that species
+  - *Geolocated Photos* — geotagged photos plotted on a clustered interactive map; hover for a thumbnail preview, click to open the full enlargement
 - **Print and PDF export** — export any window to the printer or a PDF file
 
 ---

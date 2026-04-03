@@ -26,6 +26,7 @@ from PySide6.QtCore import (
     QSize,
     Qt,
     QThread,
+    QTimer,
     )
 
 from PySide6.QtWidgets import (
@@ -41,7 +42,6 @@ from PySide6.QtWidgets import (
 
 class threadGetPhotoData(QThread):
 
-    sigProcessedPhoto = Signal(dict)
     sigThreadFinished = Signal()
 
     def __init__(self):
@@ -50,10 +50,14 @@ class threadGetPhotoData(QThread):
 
         self.parent = ""
         self.workQueue = None
+        self.resultQueue = None
 
     def __del__(self):
 
-        self.wait()
+        try:
+            self.wait()
+        except RuntimeError:
+            pass
 
 
     def run(self):
@@ -90,7 +94,7 @@ class threadGetPhotoData(QThread):
             thisPhotoDataEntry["pixMap"] = pixMap
             thisPhotoDataEntry["comboData"] = comboData
 
-            self.sigProcessedPhoto.emit(thisPhotoDataEntry)
+            self.resultQueue.put(thisPhotoDataEntry)
             self.workQueue.task_done()
 
         self.sigThreadFinished.emit()
@@ -121,24 +125,48 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         # dynamic thread pool — sized to CPU count, capped at 8 for disk-bound work
         self.threadCount = min(os.cpu_count() or 4, 8)
         self.workQueue = queue.Queue()
+        self.resultQueue = queue.Queue()
         self.threadsRemaining = 0
         self.threads = []
+        self._loadedCount = 0
+        self._totalFiles = 0
+        self._threadsToStart = 0
 
         for _ in range(self.threadCount):
             t = threadGetPhotoData()
             t.parent = self
             t.workQueue = self.workQueue
-            t.sigProcessedPhoto.connect(self.threadProcessedPhoto)
+            t.resultQueue = self.resultQueue
             t.sigThreadFinished.connect(self.threadFinished)
             self.threads.append(t)
+
+        # Timer drains resultQueue in the main thread at regular intervals,
+        # keeping the event loop free so Cocoa can flush the display normally.
+        self._drainTimer = QTimer(self)
+        self._drainTimer.timeout.connect(self._drainResultQueue)
         
         icon = QIcon()
         icon.addPixmap(QPixmap(":/icon_camera_white.png"), QIcon.Normal, QIcon.Off)
         self.setWindowIcon(icon) 
 
 
+    def closeEvent(self, event):
+        self._drainTimer.stop()
+        while not self.workQueue.empty():
+            try:
+                self.workQueue.get_nowait()
+                self.workQueue.task_done()
+            except queue.Empty:
+                break
+        while not self.resultQueue.empty():
+            try:
+                self.resultQueue.get_nowait()
+            except queue.Empty:
+                break
+        super(self.__class__, self).closeEvent(event)
+
     def resizeEvent(self, event):
-        # routine to handle resize event        
+        # routine to handle resize event
         self.resized.emit()
         return super(self.__class__, self).resizeEvent(event)
         
@@ -206,30 +234,60 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         for item in allowedPhotoFiles:
             self.workQueue.put(item)
 
-        # start only as many threads as there are photos to process
-        threadsToStart = min(self.threadCount, len(allowedPhotoFiles))
-        self.threadsRemaining = threadsToStart
-        for i in range(threadsToStart):
-            self.threads[i].start()
+        self._totalFiles = len(allowedPhotoFiles)
+        self._loadedCount = 0
+        self._threadsToStart = min(self.threadCount, len(allowedPhotoFiles))
+        self.threadsRemaining = self._threadsToStart
+
+        self.mdiParent.lblStatusBarMessage.setVisible(True)
+        self.mdiParent.lblStatusBarMessage.setText("Loading photos...")
+        QApplication.processEvents()
+
+        # Defer thread start until the event loop regains control so the UI
+        # is fully laid out before loading begins.
+        QTimer.singleShot(0, self._startThreads)
                 
     
-    def threadProcessedPhoto(self, thisPhotoDataEntry):
+    def _startThreads(self):
+        for i in range(self._threadsToStart):
+            self.threads[i].start()
+        self._drainTimer.start(50)
 
-        self.insertPhotoIntoTable(
-            thisPhotoDataEntry["row"],
-            thisPhotoDataEntry["photoData"],
-            thisPhotoDataEntry["photoMatchData"],
-            thisPhotoDataEntry["pixMap"],
-            thisPhotoDataEntry["comboData"],
-            )                         
-   
-   
+    def _drainResultQueue(self):
+        prevCount = self._loadedCount
+
+        while True:
+            try:
+                entry = self.resultQueue.get_nowait()
+            except queue.Empty:
+                break
+
+            self.insertPhotoIntoTable(
+                entry["row"],
+                entry["photoData"],
+                entry["photoMatchData"],
+                entry["pixMap"],
+                entry["comboData"],
+            )
+            self._loadedCount += 1
+
+        if self._loadedCount > 0 and (
+                self._loadedCount // 10 > prevCount // 10 or prevCount == 0):
+            self.mdiParent.lblStatusBarMessage.setText(
+                f"Loading photos: {self._loadedCount} of {self._totalFiles}...")
+
+        if self.threadsRemaining == 0 and self.resultQueue.empty():
+            self._drainTimer.stop()
+            self._finishLoading()
+
+    def _finishLoading(self):
+        self.scrollArea.verticalScrollBar().setValue(0)
+        self.mdiParent.lblStatusBarMessage.setText("")
+        self.mdiParent.lblStatusBarMessage.setVisible(False)
+        QApplication.restoreOverrideCursor()
+
     def threadFinished(self):
-
         self.threadsRemaining -= 1
-        if self.threadsRemaining == 0:
-            self.scrollArea.verticalScrollBar().setValue(0)
-            QApplication.restoreOverrideCursor()
               
                                 
                                  

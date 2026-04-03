@@ -13,17 +13,21 @@ import code_Stylesheet
 from PySide6.QtGui import (
     QCursor,
     QFont,
-    QFontMetrics
+    QFontMetrics,
+    QImageReader,
+    QPixmap,
     )
 
 from PySide6.QtCore import (
     Qt,
     QSize,
+    QTimer,
     Signal,
     )
 
 from PySide6.QtWidgets import (
     QApplication,
+    QLabel,
     QTableWidgetItem,
     QHeaderView,
     QMdiSubWindow,
@@ -46,7 +50,8 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
         super(self.__class__, self).__init__()
         self.setupUi(self)
         self.setAttribute(Qt.WA_DeleteOnClose,True)
-        self.mdiParent = ""        
+        self.mdiParent = ""
+        self._photoPixmap = None
         self.resized.connect(self.resizeMe)                    
         self.trLocations.currentItemChanged.connect(self.FillDates)
         self.trLocations.itemDoubleClicked.connect(self.CreateLocation)
@@ -306,20 +311,50 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
 
         self.lblLocations.setText("Locations: " + str(locationCount))  
             
-        # add a photo button if the db holds photos of this species
+        # Load best-rated photo into the center pane, and add a Photos button
         filter = code_Filter.Filter()
-        filter.setSpeciesName(Species) 
-        
+        filter.setSpeciesName(Species)
+
         photoSightings = self.mdiParent.db.GetSightingsWithPhotos(filter)
-        
+
         if len(photoSightings) > 0:
+            # Find the highest-rated photo across all sightings
+            best_rating = -1.0
+            best_file = None
+            for s in photoSightings:
+                for p in s["photos"]:
+                    try:
+                        rating = float(p["rating"]) if p["rating"] else 0.0
+                    except (ValueError, TypeError):
+                        rating = 0.0
+                    if rating > best_rating:
+                        best_rating = rating
+                        best_file = p["fileName"]
+
+            if best_file:
+                reader = QImageReader(best_file)
+                reader.setAutoTransform(True)
+                imgSize = reader.size()
+                if imgSize.isValid():
+                    # Load at a generous cap — _updatePhotoThumb scales to fit the pane
+                    imgSize.scale(QSize(800, 600), Qt.KeepAspectRatio)
+                    reader.setScaledSize(imgSize)
+                pm = QPixmap.fromImage(reader.read())
+                if not pm.isNull():
+                    self._photoPixmap = pm
+                    self.framePhoto.setVisible(True)
+                    self.lblPhotoThumb.setCursor(Qt.PointingHandCursor)
+                    self.lblPhotoThumb.mousePressEvent = lambda _e: self.createPhotos()
+
             btnPhotos = QPushButton()
             btnPhotos.setText("Photos")
             btnPhotos.clicked.connect(self.createPhotos)
             self.verticalLayout_10.addWidget(btnPhotos)
 
         self.scaleMe()
-        self.resizeMe()            
+        self.resizeMe()
+        # Defer one tick so Qt has completed the first layout pass before scaling
+        QTimer.singleShot(0, self._updatePhotoThumb)            
 
         
     def FillDates(self):
@@ -798,11 +833,22 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
         return super(self.__class__, self).resizeEvent(event)
         
         
+    def _updatePhotoThumb(self):
+        """Scale the stored pixmap to fill the center pane, preserving aspect ratio."""
+        if self._photoPixmap is None or self._photoPixmap.isNull():
+            return
+        lbl = self.lblPhotoThumb
+        if lbl.width() > 0 and lbl.height() > 0:
+            lbl.setPixmap(
+                self._photoPixmap.scaled(lbl.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            )
+
     def resizeMe(self):
 
         windowWidth =  self.frameGeometry().width()
         windowHeight = self.frameGeometry().height()
         self.scrollArea.setGeometry(5, 27, windowWidth -10 , windowHeight-35)
+        self._updatePhotoThumb()
 
 
     def scaleMe(self):
@@ -835,11 +881,20 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
         textWidth= int(metrics.boundingRect("2222-22-22").width())
         myQSize = QSize(int(textWidth * 1.1), int(textHeight * 1.75))
 
-        self.buttonWikipedia.resize(self.buttonWikipedia.x(), textHeight)
-        self.buttonAudubon.resize(self.buttonWikipedia.x(), textHeight)
-        self.buttonAllAboutBirds.resize(self.buttonWikipedia.x(), textHeight)
-        self.buttonChecklists.resize(self.buttonWikipedia.x(), textHeight)
-        self.buttonMap.resize(self.buttonWikipedia.x(), textHeight)
+        # Fixed height for all buttons: text height + comfortable padding, all uniform
+        btnHeight = textHeight + 12
+        for i in range(self.verticalLayout_10.count()):
+            item = self.verticalLayout_10.itemAt(i)
+            if item and item.widget():
+                item.widget().setFixedHeight(btnHeight)
+
+        # Cap both the photo pane and the entire header to the button stack height.
+        # This keeps the header compact regardless of font size or window size.
+        numBtns = self.verticalLayout_10.count()
+        stackHeight = (numBtns * btnHeight
+                       + max(0, numBtns - 1) * self.verticalLayout_10.spacing())
+        self.framePhoto.setMaximumHeight(stackHeight)
+        self.frameTop.setMaximumHeight(stackHeight)
 
         root = self.trLocations.invisibleRootItem()
         for i in range(root.childCount()):

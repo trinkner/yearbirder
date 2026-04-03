@@ -13,6 +13,7 @@ import code_LocationTotals
 import code_DateTotals
 import code_Graphs
 import code_Photos
+import code_SpeciesGallery
 import code_ManagePhotos
 import code_Preferences
 import code_Stylesheet
@@ -35,7 +36,6 @@ from math import (
 
 from PySide6.QtGui import (
     QAction,
-    QCursor,
     QFont,
     QFontMetrics,
     QIcon,
@@ -48,20 +48,21 @@ from PySide6.QtCore import (
     Qt,
     QDate,
     QSize,
-    QThread,
-    Signal,
     QTimer,
     QEvent
     )
     
 from PySide6.QtWidgets import (
     QApplication,
+    QDialog,
     QMdiArea,
     QMessageBox,
     QMainWindow,
     QFileDialog,
     QSlider,
     QLabel,
+    QProgressBar,
+    QVBoxLayout,
     QProxyStyle,
     QStyle,
     QStyleOptionToolButton
@@ -71,6 +72,62 @@ from PySide6.QtPrintSupport import (
     QPrintDialog,
     QPrinter
     )
+
+
+class _LoadProgressDialog(QDialog):
+    """Frameless progress dialog shown while an eBird data file loads."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
+        self.setModal(True)
+        self.setFixedWidth(380)
+
+        self.setStyleSheet("""
+            QDialog {
+                background: #1e1f26;
+                border: 2px solid #4f8ef7;
+                border-radius: 10px;
+            }
+            QLabel {
+                color: #e2e4ec;
+                font-size: 13px;
+                background: transparent;
+            }
+            QProgressBar {
+                background: #252730;
+                border: 1px solid #3a3d4e;
+                border-radius: 5px;
+                min-height: 20px;
+                text-align: center;
+                color: #e2e4ec;
+                font-size: 11px;
+            }
+            QProgressBar::chunk {
+                background: #4f8ef7;
+                border-radius: 4px;
+            }
+        """)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(28, 24, 28, 24)
+        layout.setSpacing(16)
+
+        lbl = QLabel("Loading eBird data\u2026")
+        lbl.setAlignment(Qt.AlignCenter)
+        layout.addWidget(lbl)
+
+        self._bar = QProgressBar()
+        self._bar.setRange(0, 100)
+        self._bar.setValue(0)
+        layout.addWidget(self._bar)
+
+    def setValue(self, v):
+        self._bar.setValue(v)
+
+    def closeEvent(self, event):
+        event.ignore()   # user cannot close while load is in progress
+
 
 class _WhiteIconToolbarStyle(QProxyStyle):
     """Proxy style that draws white icons on toolbar buttons, leaving menu icons unchanged."""
@@ -99,8 +156,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
     fontSize = 11
     scaleFactor = 1
     rowHeight = 16  # default; recomputed in ScaleDisplay() and __init__
-    versionNumber = "1.2"
-    versionDate = "March 30, 2026"
+    versionNumber = "1.25"
+    versionDate = "April 2, 2026"
 
     def __init__(self):
         super(self.__class__, self).__init__()
@@ -166,11 +223,13 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         _sz = self.toolBar.iconSize()
         self.toolBar.setIconSize(QSize(int(_sz.width() * 0.9), int(_sz.height() * 0.9)))
 
+        self.actionOpen.setIconText("Open")
+
         # Equalise toolbar button widths to the widest label
         fm = self.toolBar.fontMetrics()
         toolbarIconSize = self.toolBar.iconSize()
         maxWidth = max(
-            (max(toolbarIconSize.width(), fm.boundingRect(action.text()).width())
+            (max(toolbarIconSize.width(), fm.boundingRect(action.iconText()).width())
              for action in self.toolBar.actions()
              if not action.isSeparator()),
             default=24
@@ -180,7 +239,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             btn = self.toolBar.widgetForAction(action)
             if btn is not None:
                 btn.setFixedWidth(buttonWidth)
-        
+
         self.actionOpen.triggered.connect(self.openDataFileClicked)
         self.actionClose.triggered.connect(self.closeDataFile)
 
@@ -220,6 +279,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionCreatePDF.triggered.connect(self.CreatePDF)
         self.actionFamilies.triggered.connect(self.CreateIndivPieChart)
         self.actionPhotos.triggered.connect(self.createPhotosReport)
+        self.actionPhotosByFilter.triggered.connect(self.createPhotosReport)
+        self.actionSpeciesGallery.triggered.connect(self.createSpeciesGallery)
         self.actionBigReport.triggered.connect(self.CreateBigReport)
         self.actionBarGraph.triggered.connect(self.CreateBarGraph)
         self.actionTotalChecklists.triggered.connect(self.CreateTotalChecklistsGraph)
@@ -234,6 +295,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionPhenology.triggered.connect(self.CreatePhenologyChart)
         self.actionFOY.triggered.connect(self.CreateFOYChart)
         self.actionLOY.triggered.connect(self.CreateLOYChart)
+        self.actionLocationScatter.triggered.connect(self.CreateLocationScatterChart)
+        self.actionSpeciesScatter.triggered.connect(self.CreateSpeciesScatterChart)
+        self.actionLocationChecklistPie.triggered.connect(self.CreateLocationChecklistPieChart)
         self.actionFamilyPie.triggered.connect(self.CreateFamilyPieChart)
         self.actionIndivPie.triggered.connect(self.CreateIndivPieChart)
         self.actionMap.triggered.connect(self.CreateMap)
@@ -244,7 +308,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionSavePhotoSettings.triggered.connect(self.savePhotoSettings)
         self.actionAddPhotos.triggered.connect(self.addPhotos)
         self.actionEditPhotosByFilter.triggered.connect(self.createEditPhotosByFilter)
+        self.actionEditPhotosByFilter.setVisible(False)
         self.actionUpdateEXIFDataForAllPhotos.triggered.connect(self.updateEXIFDataForAllPhotos)
+        self.actionUpdateEXIFDataForAllPhotos.setVisible(False)
         
         self.actionUS_States.triggered.connect(self.createChoroplethUSStates)
         self.actionUS_Counties.triggered.connect(self.createChoroplethUSCounties)
@@ -259,7 +325,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionGB_Counties_Checklists.triggered.connect(self.createChoroplethGBCountiesChecklists)
         self.actionWorld_Countries_Checklists.triggered.connect(self.createChoroplethWorldCountriesChecklists)
         self.actionGeolocatedPhotos.triggered.connect(self.createGeolocatedPhotosMap)
-        self.actionGeolocatedPhotos.setEnabled(False)
+        self.actionAnimatedPhotoSequence.triggered.connect(self.createAnimatedPhotoSequenceMap)
+        self.actionSlideshow.triggered.connect(self.createSlideshow)
         self.actionLifeListMap.triggered.connect(self.createLifeListMap)
         self.actionEffortMap.triggered.connect(self.createEffortMap)
         self.actionEffortMapByChecklists.triggered.connect(self.createEffortMapByChecklists)
@@ -271,7 +338,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         for d in range(1,  32):
             self.cboStartSeasonalRangeDate.addItem(str(d))
             self.cboEndSeasonalRangeDate.addItem(str(d))
-        self.cboDateOptions.addItems(["No Date Filter",  "Use Calendars Below",  "This Year",  "This Month",  "Today",  "Yesterday", "Last Weekend"])            
+        self.cboDateOptions.addItems(["No Date Filter",  "Use Calendars Below",  "This Year",  "Last Year",  "This Month",  "Today",  "Yesterday", "Last Weekend"])            
         self.cboSeasonalRangeOptions.addItems([
             "No Seasonal Range",  
             "Use Range Below",  
@@ -443,8 +510,13 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             if self.db.photoDataFileOpenFlag == True:
                 self.fillPhotoComboBoxes()
                 self.showPhotoFilter()
-                self.actionGeolocatedPhotos.setEnabled(True)
-            
+                self.actionGeolocatedPhotos.setVisible(True)
+                self.actionGeolocatedPhotosSeparator.setVisible(True)
+                self.actionAnimatedPhotoSequence.setVisible(True)
+                self.actionSlideshow.setVisible(True)
+                self.actionEditPhotosByFilter.setVisible(True)
+                self.actionUpdateEXIFDataForAllPhotos.setVisible(True)
+
             self.showFileDataMessage()
             
             
@@ -468,21 +540,21 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             a.setFont(QFont("Helvetica", self.fontSize))                    
                 
         # scale the standard and photo filter docks
-                
+
         filterFrameChildren = (
             self.frmFilter.children() +
-            self.frmPhotoFilter.children() +           
+            self.frmPhotoFilter.children() +
             self.frmStartSeasonalRange.children() +
-            self.frmEndSeasonalRange.children()+
-            self.frmShutterSpeedRange.children() + 
-            self.frmApertureRange.children() + 
+            self.frmEndSeasonalRange.children() +
+            self.frmShutterSpeedRange.children() +
+            self.frmApertureRange.children() +
             self.frmIsoRange.children() +
             self.frmFocalLengthRange.children() +
             self.frmRatingRange.children()
             )
-                
+
         for w in filterFrameChildren:
-                         
+
             if w.objectName()[0:3] == "cbo":
                 w.setFont(QFont("Helvetica", self.fontSize))
                 metrics = w.fontMetrics()
@@ -493,11 +565,10 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 itemTextHeight = metrics.height()  # full line height; independent of current text content
                 w.setMinimumWidth(floor(1.1 * itemTextWidth))
                 w.setMinimumHeight(floor(2 * itemTextHeight))
-                w.setMaximumHeight(floor(2 * itemTextHeight))
-                w.resize(int(2 * itemTextHeight), int(2 * itemTextWidth))
-       
+                w.setMaximumHeight(16777215)  # QWIDGETSIZE_MAX — unconstrained
+
             if w.objectName()[0:3] == "lbl":
-                w.setFont(QFont("Helvetica", self.fontSize))    
+                w.setFont(QFont("Helvetica", self.fontSize))
                 metrics = w.fontMetrics()
                 labelText = w.text()
                 itemTextWidth = metrics.boundingRect(labelText).width()
@@ -505,17 +576,17 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 w.setMinimumWidth(floor(itemTextWidth))
                 w.setMinimumHeight(floor(itemTextHeight))
                 w.setMaximumHeight(floor(itemTextHeight))
-                w.resize(itemTextHeight, itemTextWidth)  
+                w.resize(itemTextHeight, itemTextWidth)
                 w.setStyleSheet("QLabel { font: bold }");
-                                      
-            if w.objectName()[0:3] == "cal":              
-                w.setFont(QFont("Helvetica", self.fontSize))    
+
+            if w.objectName()[0:3] == "cal":
+                w.setFont(QFont("Helvetica", self.fontSize))
                 metrics = w.fontMetrics()
                 startDate = (
-                            str(self.calStartDate.date().year()) 
-                            + "-" 
-                            + str(self.calStartDate.date().month()) 
-                            + "-" 
+                            str(self.calStartDate.date().year())
+                            + "-"
+                            + str(self.calStartDate.date().month())
+                            + "-"
                             + str(self.calStartDate.date().day()))
                 itemTextWidth = metrics.boundingRect(startDate).width()
                 itemTextHeight = metrics.boundingRect(startDate).height()
@@ -535,9 +606,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             ):
             w.setMinimumWidth(floor(2 * itemTextWidth))
             w.setMinimumHeight(floor(2 * itemTextHeight))
-            w.setMaximumHeight(floor(2 * itemTextHeight))
-            w.resize(int(2 * itemTextHeight), int(2 * itemTextWidth))
-            w.adjustSize()
+            w.setMaximumHeight(16777215)  # QWIDGETSIZE_MAX — unconstrained
 
             
         self.scrPhotoFilter.setMinimumHeight(0)
@@ -635,7 +704,12 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
         self.showPhotoFilter()
 
-        self.actionGeolocatedPhotos.setEnabled(True)
+        self.actionGeolocatedPhotos.setVisible(True)
+        self.actionGeolocatedPhotosSeparator.setVisible(True)
+        self.actionAnimatedPhotoSequence.setVisible(True)
+        self.actionSlideshow.setVisible(True)
+        self.actionEditPhotosByFilter.setVisible(True)
+        self.actionUpdateEXIFDataForAllPhotos.setVisible(True)
 
 
     def closePhotoSettings(self):
@@ -643,7 +717,12 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.clearPhotoFilter()
         self.hidePhotoFilter()
         self.db.ClearPhotoSettings()
-        self.actionGeolocatedPhotos.setEnabled(False)
+        self.actionGeolocatedPhotos.setVisible(False)
+        self.actionGeolocatedPhotosSeparator.setVisible(False)
+        self.actionAnimatedPhotoSequence.setVisible(False)
+        self.actionSlideshow.setVisible(False)
+        self.actionEditPhotosByFilter.setVisible(False)
+        self.actionUpdateEXIFDataForAllPhotos.setVisible(False)
         
         
     def addPhotos(self):
@@ -790,7 +869,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.cboEndFocalLengthRange,
             ):
             w.setMinimumHeight(cboHeight)
-            w.setMaximumHeight(cboHeight)
+            w.setMaximumHeight(16777215)  # QWIDGETSIZE_MAX — unconstrained
 
         for w in (
             self.frmShutterSpeedRange,
@@ -799,7 +878,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.frmFocalLengthRange,
             ):
             w.setMinimumHeight(cboHeight)
-            w.setMaximumHeight(cboHeight)
+            w.setMaximumHeight(16777215)  # QWIDGETSIZE_MAX — unconstrained
 
 
     def removeUnfoundPhotos(self):
@@ -817,7 +896,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
     def createPreferences(self):
         
 
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
         
         sub = code_Preferences.Preferences()
 
@@ -831,7 +909,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.PositionChildWindow(sub,  self)
         sub.show()
             
-        QApplication.restoreOverrideCursor()         
 
 
     def createPhotosReport(self):
@@ -840,7 +917,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()   
             return
         
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
         
         filter = self.GetFilter()
         # create new Location Totals child window        
@@ -859,8 +935,23 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             # abort if filter found no photos
             sub.close()
             self.CreateMessageNoResults()
-            
-        QApplication.restoreOverrideCursor()         
+
+
+    def createSpeciesGallery(self):
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+
+        filter = self.GetFilter()
+        sub = code_SpeciesGallery.SpeciesGallery()
+        sub.mdiParent = self
+        self.mdiArea.addSubWindow(sub)
+        self.PositionChildWindow(sub, self)
+        sub.show()
+
+        if sub.FillGallery(filter) is False:
+            sub.close()
+            self.CreateMessageNoResults()
 
 
     def setCountryFilter(self, country):
@@ -943,7 +1034,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()   
             return
         
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
 
         # create new Date Totals child window        
         sub = code_ManagePhotos.ManagePhotos()
@@ -965,7 +1055,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoResults()
             sub.close()
 
-        QApplication.restoreOverrideCursor() 
 
 
     def setSeasonalRangeFilter(self, month):
@@ -1039,7 +1128,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         
         
     def CreateMessageNoFile(self):
-        QApplication.restoreOverrideCursor() 
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Icon.Information)
         msg.setText("No ebird data is currently loaded.\n\nPlease open an eBird data file.")
@@ -1050,7 +1138,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
     def CreateMessageNoResults(self):
         
-        QApplication.restoreOverrideCursor() 
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Icon.Information)
         msg.setText("No sightings match the current filter settings.")
@@ -1117,7 +1204,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         if self.db.photosNeedSaving is True:
             
             # ask if user wants to save photo settings
-            QApplication.restoreOverrideCursor() 
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Icon.Information)
             msg.setText("Some photo attachment settings have not been saved\n\nDo you want to save them?")
@@ -1179,14 +1265,41 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             fname = QFileDialog.getOpenFileName(self,"QFileDialog.getOpenFileNames()", "","eBird Data Files (*.csv *.zip)")[0]   
                 
         if fname != "":
-            
-            QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
-                        
+
+            # --- Load the main eBird CSV with a progress dialog. ---
+            # ReadDataFile is CPU-bound Python (CSV + dict work), so it holds
+            # the GIL throughout; a background thread can't help here.  Instead
+            # run it synchronously and pump the event loop via processEvents()
+            # inside the progress callback so the bar repaints as rows are read.
+            dlg = _LoadProgressDialog(self)
+            dlg.adjustSize()
+            mw = self.geometry()
+            dlg.move(
+                mw.center().x() - dlg.width()  // 2,
+                mw.center().y() - dlg.height() // 2,
+            )
+            dlg.show()
             QApplication.processEvents()
 
-            MainWindow.db.ReadDataFile(fname)            
-            
-            # Load helper files using resource_path from Code_DataBase
+            def _progress(v):
+                dlg.setValue(v)
+                QApplication.processEvents()
+
+            MainWindow.db.ReadDataFile(fname, progress_callback=_progress)
+            dlg.accept()
+
+            # If loading failed (e.g. bad zip file), show a message and stop.
+            if not MainWindow.db.eBirdFileOpenFlag:
+                QMessageBox.warning(
+                    self,
+                    "File failed to load",
+                    "The file failed to load.\n\n"
+                    "Please check that it is a valid eBird data file.",
+                )
+                return
+
+            # Helper files are small and fast; load them synchronously.
+            QApplication.processEvents()
 
             # Taxonomy file
             taxonomyFile = code_DataBase.resource_path("eBird_Taxonomy.csv")
@@ -1202,8 +1315,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             bblCodeFile = code_DataBase.resource_path("eBird_BBLCodes.csv")
             if os.path.isfile(bblCodeFile):
                 MainWindow.db.ReadBBLCodeFile(bblCodeFile)
-                                             
-        QApplication.restoreOverrideCursor()
+
 
 
     def CreateBigReport(self): 
@@ -1259,7 +1371,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 if reply != QMessageBox.StandardButton.Yes:
                     return
 
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
         
         # create new Analysis child window
         sub = code_BigReport.BigReport()
@@ -1281,7 +1392,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             sub.show()
             QTimer.singleShot(0, sub.scaleMe)
 
-        QApplication.restoreOverrideCursor()
 
 
     def CreateChecklistsList(self): 
@@ -1293,7 +1403,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()   
             return
             
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))            
         
         # get the current filter settings in a list to pass to child
         filter = self.GetFilter()
@@ -1319,7 +1428,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoResults()
             sub.close()
 
-        QApplication.restoreOverrideCursor()
                     
                  
     def CreatePDF(self):
@@ -1388,7 +1496,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()   
             return
             
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))            
         
         # get the current filter settings in a list to pass to child
         filter = self.GetFilter()
@@ -1413,7 +1520,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoResults()
             sub.close()
 
-        QApplication.restoreOverrideCursor()
 
 
     def CreateLocationTotals(self):   
@@ -1423,7 +1529,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()   
             return
         
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
         
         filter = self.GetFilter()
         # create new Location Totals child window        
@@ -1448,12 +1553,10 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoResults()
             sub.close()
 
-        QApplication.restoreOverrideCursor()
 
 
     def CreateAboutYearbird(self):
 
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
 
         sub = code_Web.Web()
 
@@ -1468,12 +1571,10 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.PositionChildWindow(sub,  self)
         sub.show()
 
-        QApplication.restoreOverrideCursor()
 
 
     def CreateUserGuide(self):
 
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
 
         sub = code_Web.Web()
         sub.mdiParent = self
@@ -1483,7 +1584,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.PositionChildWindow(sub, self)
         sub.show()
 
-        QApplication.restoreOverrideCursor()
 
 
     def CreateMap(self):   
@@ -1493,7 +1593,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()   
             return
         
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
         
         filter = self.GetFilter()
         # create new Location Totals child window        
@@ -1515,7 +1614,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoResults()
             sub.close()
             
-        QApplication.restoreOverrideCursor() 
 
         
     def CreateDateTotals(self):  
@@ -1525,7 +1623,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()   
             return
         
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
 
         # create new Date Totals child window        
         sub = code_DateTotals.DateTotals()
@@ -1548,7 +1645,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoResults()
             sub.close()
 
-        QApplication.restoreOverrideCursor()
 
 
     def CreateBarGraph(self):
@@ -1557,7 +1653,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()
             return
 
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
 
         sub = code_Graphs.Graphs()
         sub.mdiParent = self
@@ -1571,7 +1666,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoResults()
             sub.close()
 
-        QApplication.restoreOverrideCursor()
 
     def CreateTotalChecklistsGraph(self):
 
@@ -1579,7 +1673,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()
             return
 
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
 
         sub = code_Graphs.Graphs()
         sub.mdiParent = self
@@ -1593,7 +1686,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoResults()
             sub.close()
 
-        QApplication.restoreOverrideCursor()
 
     def CreateTotalLocationsGraph(self):
 
@@ -1601,7 +1693,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()
             return
 
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
 
         sub = code_Graphs.Graphs()
         sub.mdiParent = self
@@ -1615,7 +1706,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoResults()
             sub.close()
 
-        QApplication.restoreOverrideCursor()
 
     def CreateCumulativeCurve(self):
 
@@ -1623,7 +1713,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()
             return
 
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
 
         sub = code_Graphs.Graphs()
         sub.mdiParent = self
@@ -1637,7 +1726,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoResults()
             sub.close()
 
-        QApplication.restoreOverrideCursor()
 
     def CreateCumulativeLocationsCurve(self):
 
@@ -1645,7 +1733,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()
             return
 
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
 
         sub = code_Graphs.Graphs()
         sub.mdiParent = self
@@ -1659,7 +1746,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoResults()
             sub.close()
 
-        QApplication.restoreOverrideCursor()
 
     def CreateCumulativeFamiliesCurve(self):
 
@@ -1667,7 +1753,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()
             return
 
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
 
         sub = code_Graphs.Graphs()
         sub.mdiParent = self
@@ -1681,7 +1766,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoResults()
             sub.close()
 
-        QApplication.restoreOverrideCursor()
 
     def CreateHeatmap(self):
 
@@ -1689,7 +1773,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()
             return
 
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
 
         sub = code_Graphs.Graphs()
         sub.mdiParent = self
@@ -1703,7 +1786,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoResults()
             sub.close()
 
-        QApplication.restoreOverrideCursor()
 
     def CreateAccumulationChart(self):
 
@@ -1711,7 +1793,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()
             return
 
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
 
         sub = code_Graphs.Graphs()
         sub.mdiParent = self
@@ -1725,7 +1806,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoResults()
             sub.close()
 
-        QApplication.restoreOverrideCursor()
 
 
     def CreateTopLocations(self):
@@ -1734,7 +1814,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()
             return
 
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
 
         sub = code_Graphs.Graphs()
         sub.mdiParent = self
@@ -1748,7 +1827,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoResults()
             sub.close()
 
-        QApplication.restoreOverrideCursor()
 
     def CreateScatterChart(self):
 
@@ -1756,7 +1834,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()
             return
 
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
 
         sub = code_Graphs.Graphs()
         sub.mdiParent = self
@@ -1770,7 +1847,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoResults()
             sub.close()
 
-        QApplication.restoreOverrideCursor()
 
     def CreatePhenologyChart(self):
 
@@ -1795,7 +1871,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             if reply == QMessageBox.No:
                 return
 
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
 
         sub = code_Graphs.Graphs()
         sub.mdiParent = self
@@ -1809,7 +1884,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoResults()
             sub.close()
 
-        QApplication.restoreOverrideCursor()
 
     def CreateFOYChart(self):
 
@@ -1817,7 +1891,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()
             return
 
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
 
         sub = code_Graphs.Graphs()
         sub.mdiParent = self
@@ -1831,7 +1904,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoResults()
             sub.close()
 
-        QApplication.restoreOverrideCursor()
 
     def CreateLOYChart(self):
 
@@ -1839,7 +1911,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()
             return
 
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
 
         sub = code_Graphs.Graphs()
         sub.mdiParent = self
@@ -1853,7 +1924,46 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoResults()
             sub.close()
 
-        QApplication.restoreOverrideCursor()
+
+    def CreateLocationScatterChart(self):
+
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+
+
+        sub = code_Graphs.Graphs()
+        sub.mdiParent = self
+
+        if sub.FillGraph(self.GetFilter(), "locationscatter") is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+            QTimer.singleShot(0, sub.scaleMe)
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+
+
+    def CreateSpeciesScatterChart(self):
+
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+
+
+        sub = code_Graphs.Graphs()
+        sub.mdiParent = self
+
+        if sub.FillGraph(self.GetFilter(), "speciesscatter") is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+            QTimer.singleShot(0, sub.scaleMe)
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+
 
     def CreateIndivPieChart(self):
 
@@ -1861,7 +1971,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()
             return
 
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
 
         sub = code_Graphs.Graphs()
         sub.mdiParent = self
@@ -1875,7 +1984,26 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoResults()
             sub.close()
 
-        QApplication.restoreOverrideCursor()
+
+    def CreateLocationChecklistPieChart(self):
+
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+
+
+        sub = code_Graphs.Graphs()
+        sub.mdiParent = self
+
+        if sub.FillGraph(self.GetFilter(), "locationchecklistpie") is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+            QTimer.singleShot(0, sub.scaleMe)
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+
 
     def CreateFamilyPieChart(self):
 
@@ -1883,7 +2011,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()
             return
 
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
 
         sub = code_Graphs.Graphs()
         sub.mdiParent = self
@@ -1897,7 +2024,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoResults()
             sub.close()
 
-        QApplication.restoreOverrideCursor()
 
     def CreateFamiliesReport(self):
 
@@ -1906,7 +2032,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()   
             return
         
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
         
         # create Families Report child window
         sub = code_Families.Families()
@@ -1939,7 +2064,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoResults()
             sub.close()
         
-        QApplication.restoreOverrideCursor()   
            
            
     def CreateCompareLists(self):    
@@ -1949,7 +2073,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()   
             return
         
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
         
         # create new Compare child window
         sub = code_Compare.Compare()
@@ -1969,7 +2092,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
         else:
             
-            QApplication.restoreOverrideCursor() 
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Icon.Information)
             msg.setText("Fewer than two lists are available to compare. \n\nCreate two or more species lists before trying to compare them.")
@@ -1978,7 +2100,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             msg.exec()            
             sub.close()
 
-        QApplication.restoreOverrideCursor()   
 
 
     def CreateLocationsList(self):      
@@ -1988,7 +2109,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()   
             return
 
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
         
         filter = self.GetFilter()
                 
@@ -2012,7 +2132,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoResults()
             sub.close()
 
-        QApplication.restoreOverrideCursor()
         
         
     def GetFilter(self):
@@ -2129,14 +2248,21 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         if self.cboDateOptions.currentText() == "This Year":
 
             now = datetime.datetime.now()
-            
+
             # set startDate to January 1 of this year
             startDate = str(now.year) + "-01-01"
-            
+
             # set endDate to December 31 of this year
             endDate = str(now.year) + "-12-31"
 
-        
+        if self.cboDateOptions.currentText() == "Last Year":
+
+            now = datetime.datetime.now()
+            lastYear = str(now.year - 1)
+            startDate = lastYear + "-01-01"
+            endDate = lastYear + "-12-31"
+
+
         # Check if This Month radio button is checked
         # if so, create yyyy-mm-01 and yyyy-mm-31 dates
         # We'll need to get the correct number for the last day of the month
@@ -3081,8 +3207,33 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 
             else:
                 self.highlightFilterElement(self.cboDateOptions)
-                self.unhighlightFilterElement(self.calStartDate)                
+                self.unhighlightFilterElement(self.calStartDate)
                 self.unhighlightFilterElement(self.calEndDate)
+
+                now = datetime.datetime.now()
+                if thisOption == "Today":
+                    startDate = endDate = now.strftime("%Y-%m-%d")
+                elif thisOption == "Yesterday":
+                    yesterday = now + datetime.timedelta(days=-1)
+                    startDate = endDate = yesterday.strftime("%Y-%m-%d")
+                elif thisOption == "Last Weekend":
+                    lastSunday = now + datetime.timedelta(days=0 - now.weekday() - 1)
+                    lastSaturday = lastSunday + datetime.timedelta(days=-1)
+                    startDate = lastSaturday.strftime("%Y-%m-%d")
+                    endDate = lastSunday.strftime("%Y-%m-%d")
+                elif thisOption == "This Year":
+                    startDate = now.strftime("%Y-01-01")
+                    endDate = now.strftime("%Y-12-31")
+                elif thisOption == "Last Year":
+                    lastYear = str(now.year - 1)
+                    startDate = lastYear + "-01-01"
+                    endDate = lastYear + "-12-31"
+                elif thisOption == "This Month":
+                    startDate = now.strftime("%Y-%m-01")
+                    dayInNextMonth = now.replace(day=28) + datetime.timedelta(days=4)
+                    lastDay = dayInNextMonth.replace(day=1) + datetime.timedelta(days=-1)
+                    endDate = lastDay.strftime("%Y-%m-%d")
+                self.setDateFilter(startDate, endDate)
 
 
     def ComboFamiliesChanged(self):
@@ -3480,7 +3631,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()   
             return
         
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
         
         filter = self.GetFilter()
         # create new Location Totals child window        
@@ -3502,7 +3652,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoResults()
             sub.close()
             
-        QApplication.restoreOverrideCursor() 
         
 
     def createChoroplethGBCounties(self):
@@ -3511,7 +3660,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()
             return
 
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
 
         filter = self.GetFilter()
         sub = code_Web.Web()
@@ -3525,7 +3673,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoResults()
             sub.close()
 
-        QApplication.restoreOverrideCursor()
 
 
     def createChoroplethIndiaStates(self):
@@ -3534,7 +3681,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()
             return
 
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
 
         filter = self.GetFilter()
         sub = code_Web.Web()
@@ -3548,7 +3694,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoResults()
             sub.close()
 
-        QApplication.restoreOverrideCursor()
 
 
     def createChoroplethCanadaProvinces(self):
@@ -3558,7 +3703,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()
             return
 
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
 
         filter = self.GetFilter()
         sub = code_Web.Web()
@@ -3572,7 +3716,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoResults()
             sub.close()
 
-        QApplication.restoreOverrideCursor()
 
 
     def createChoroplethUSCounties(self):
@@ -3582,7 +3725,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()   
             return
         
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
         
         filter = self.GetFilter()
         # create new Location Totals child window        
@@ -3604,7 +3746,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoResults()
             sub.close()
             
-        QApplication.restoreOverrideCursor()         
         
     
     def createChoroplethWorldCountries(self):
@@ -3614,7 +3755,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()   
             return
         
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
         
         filter = self.GetFilter()
         # create new Location Totals child window        
@@ -3636,14 +3776,12 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoResults()
             sub.close()
 
-        QApplication.restoreOverrideCursor()
 
 
     def createChoroplethUSStatesChecklists(self):
         if MainWindow.db.eBirdFileOpenFlag is not True:
             self.CreateMessageNoFile()
             return
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
         filter = self.GetFilter()
         sub = code_Web.Web()
         sub.mdiParent = self
@@ -3654,14 +3792,12 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         else:
             self.CreateMessageNoResults()
             sub.close()
-        QApplication.restoreOverrideCursor()
 
 
     def createChoroplethUSCountiesChecklists(self):
         if MainWindow.db.eBirdFileOpenFlag is not True:
             self.CreateMessageNoFile()
             return
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
         filter = self.GetFilter()
         sub = code_Web.Web()
         sub.mdiParent = self
@@ -3672,14 +3808,12 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         else:
             self.CreateMessageNoResults()
             sub.close()
-        QApplication.restoreOverrideCursor()
 
 
     def createChoroplethCanadaProvincesChecklists(self):
         if MainWindow.db.eBirdFileOpenFlag is not True:
             self.CreateMessageNoFile()
             return
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
         filter = self.GetFilter()
         sub = code_Web.Web()
         sub.mdiParent = self
@@ -3690,14 +3824,12 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         else:
             self.CreateMessageNoResults()
             sub.close()
-        QApplication.restoreOverrideCursor()
 
 
     def createChoroplethIndiaStatesChecklists(self):
         if MainWindow.db.eBirdFileOpenFlag is not True:
             self.CreateMessageNoFile()
             return
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
         filter = self.GetFilter()
         sub = code_Web.Web()
         sub.mdiParent = self
@@ -3708,14 +3840,12 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         else:
             self.CreateMessageNoResults()
             sub.close()
-        QApplication.restoreOverrideCursor()
 
 
     def createChoroplethGBCountiesChecklists(self):
         if MainWindow.db.eBirdFileOpenFlag is not True:
             self.CreateMessageNoFile()
             return
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
         filter = self.GetFilter()
         sub = code_Web.Web()
         sub.mdiParent = self
@@ -3726,14 +3856,12 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         else:
             self.CreateMessageNoResults()
             sub.close()
-        QApplication.restoreOverrideCursor()
 
 
     def createChoroplethWorldCountriesChecklists(self):
         if MainWindow.db.eBirdFileOpenFlag is not True:
             self.CreateMessageNoFile()
             return
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
         filter = self.GetFilter()
         sub = code_Web.Web()
         sub.mdiParent = self
@@ -3744,14 +3872,12 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         else:
             self.CreateMessageNoResults()
             sub.close()
-        QApplication.restoreOverrideCursor()
 
 
     def createGeolocatedPhotosMap(self):
         if MainWindow.db.eBirdFileOpenFlag is not True:
             self.CreateMessageNoFile()
             return
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
         filter = self.GetFilter()
         sub = code_Web.Web()
         sub.mdiParent = self
@@ -3762,14 +3888,49 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         else:
             self.CreateMessageNoResults()
             sub.close()
-        QApplication.restoreOverrideCursor()
+
+
+    def createAnimatedPhotoSequenceMap(self):
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+        filter = self.GetFilter()
+        sub = code_Web.Web()
+        sub.mdiParent = self
+        if sub.loadAnimatedPhotoSequenceMap(filter) is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+
+
+    def createSlideshow(self):
+        import code_Slideshow
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+        filter = self.GetFilter()
+        dlg = code_Slideshow.SlideshowDialog(self)
+        if dlg.exec() != code_Slideshow.QDialog.DialogCode.Accepted:
+            return
+        photoList = code_Slideshow.buildPhotoList(
+            MainWindow.db, filter, dlg.sortOrder()
+        )
+        if not photoList:
+            self.CreateMessageNoResults()
+            return
+        self._slideshow = code_Slideshow.SlideshowWindow(
+            photoList, dlg.secondsPerPhoto(), dlg.showTitleBar()
+        )
+        self._slideshow.show()
 
 
     def createLifeListMap(self):
         if MainWindow.db.eBirdFileOpenFlag is not True:
             self.CreateMessageNoFile()
             return
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
         filter = self.GetFilter()
         sub = code_Web.Web()
         sub.mdiParent = self
@@ -3780,14 +3941,12 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         else:
             self.CreateMessageNoResults()
             sub.close()
-        QApplication.restoreOverrideCursor()
 
 
     def createEffortMap(self):
         if MainWindow.db.eBirdFileOpenFlag is not True:
             self.CreateMessageNoFile()
             return
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
         filter = self.GetFilter()
         sub = code_Web.Web()
         sub.mdiParent = self
@@ -3798,13 +3957,11 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         else:
             self.CreateMessageNoResults()
             sub.close()
-        QApplication.restoreOverrideCursor()
 
     def createEffortMapByChecklists(self):
         if MainWindow.db.eBirdFileOpenFlag is not True:
             self.CreateMessageNoFile()
             return
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
         filter = self.GetFilter()
         sub = code_Web.Web()
         sub.mdiParent = self
@@ -3815,14 +3972,12 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         else:
             self.CreateMessageNoResults()
             sub.close()
-        QApplication.restoreOverrideCursor()
 
 
     def createSpeciesTotalMap(self):
         if MainWindow.db.eBirdFileOpenFlag is not True:
             self.CreateMessageNoFile()
             return
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
         filter = self.GetFilter()
         sub = code_Web.Web()
         sub.mdiParent = self
@@ -3833,13 +3988,11 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         else:
             self.CreateMessageNoResults()
             sub.close()
-        QApplication.restoreOverrideCursor()
 
     def createIndividualsTotalMap(self):
         if MainWindow.db.eBirdFileOpenFlag is not True:
             self.CreateMessageNoFile()
             return
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
         filter = self.GetFilter()
         sub = code_Web.Web()
         sub.mdiParent = self
@@ -3850,7 +4003,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         else:
             self.CreateMessageNoResults()
             sub.close()
-        QApplication.restoreOverrideCursor()
 
     def createChoroplethWorldSubregion1(self):
         
@@ -3859,7 +4011,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()   
             return
         
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
         
         filter = self.GetFilter()
         # create new Location Totals child window        
@@ -3881,7 +4032,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoResults()
             sub.close()
             
-        QApplication.restoreOverrideCursor()         
 
 
 
