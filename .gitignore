@@ -42,6 +42,13 @@ Yearbirder_Screenshot.jpg
 
 # User data files
 photoData.csv
+MyEBirdData.csv
+
+# Temp/test files
+src/testpdf.pdf
+
+# Local instruction files
+yearbirder_pyinstaller_instructions.txt
 
 # Old code backups
 src/code_Photos_OLD.py
