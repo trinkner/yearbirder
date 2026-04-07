@@ -161,7 +161,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
     fontSize = 11
     scaleFactor = 1
     rowHeight = 16  # default; recomputed in ScaleDisplay() and __init__
-    versionNumber = "1.26"
+    versionNumber = "1.27"
     versionDate = "April 7, 2026"
     taxonomyYear = ""
 
@@ -700,6 +700,10 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.clearPhotoFilter()
         self.hidePhotoFilter()
         self.db.ClearPhotoSettings()
+
+        for w in list(self.mdiArea.subWindowList()):
+            if w.objectName() == "frmStats":
+                w.close()
         self.actionGeolocatedPhotos.setVisible(False)
         self.actionGeolocatedPhotosSeparator.setVisible(False)
         self.actionAnimatedPhotoSequence.setVisible(False)

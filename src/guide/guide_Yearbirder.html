@@ -125,11 +125,11 @@
     <li><a href="#graphs">Graphs</a></li>
     <li><a href="#maps">Maps</a></li>
     <li><a href="#choropleth-maps">Maps – Choropleth Maps</a></li>
-    <li><a href="#photos">Photos</a></li>
+    <li><a href="#photo-settings-file">Adding Photos to Yearbirder</a></li>
+    <li><a href="#photos">Viewing Photos</a></li>
     <li><a href="#animated-photo-sequence">Animated Sequence Map</a></li>
     <li><a href="#slideshow">Slideshow</a></li>
     <li><a href="#species-gallery">Species Gallery</a></li>
-    <li><a href="#photo-settings-file">Photo Settings File</a></li>
     <li><a href="#individual-species">Individual Species Window</a></li>
     <li><a href="#printing">Printing and PDF Export</a></li>
     <li><a href="#tips">Tips and Tricks</a></li>
@@ -155,9 +155,10 @@
 <ul>
   <li>Click <strong>Map</strong> to see all your sighting locations plotted on an interactive map.</li>
   <li>Click <strong>Date Totals</strong> to see which years, months, and individual dates you recorded the most species.</li>
-  <li>Click <strong>Photos</strong> (after setting up a Photo Settings file — see <a href="#photos">Section 17</a>) to browse your bird photos alongside their sighting data.</li>
+  <li>Click <strong>Photos</strong> (after setting up a Photo Settings file — see <a href="#photo-settings-file">Section 17</a>) to browse your bird photos alongside their sighting data.</li>
 </ul>
 <p>You are up and running. Everything else in this guide describes these features in detail.</p>
+<p>Note that if some checklists include exotic species, the totals that Yearbirder calculates may not match the totals reported by eBird. The data file you download from eBird does not specify which sightings are exotics, so Yearbirder cannot exclude them from its totals.</p>
 
 <hr>
 
@@ -205,6 +206,7 @@
 <h3>Opening a data file</h3>
 <p>Choose <strong>File → Open eBird data file…</strong> or click the <strong>Open</strong> toolbar button. Yearbirder accepts the standard eBird download data file (typically named something like <code>MyEBirdData.zip</code>).</p>
 <p>Loading time depends on the size of your dataset. A typical dataset of 10,000–50,000 sightings loads in a few seconds. Once loaded, the status bar shows the total number of sightings and species.</p>
+<p>To avoid having to open your eBird data file manually every time you use Yearbirder, save it as a preference (see <a href="#preferences">Section 23 — Saving Preferences</a>) so that Yearbirder opens it automatically at startup.</p>
 
 <h3>Closing a data file</h3>
 <p>Choose <strong>File → Close eBird data file</strong> to unload the current dataset. Any open windows that depend on the data will close automatically.</p>
@@ -283,7 +285,7 @@
 <hr>
 
 <h2 id="photo-filter">5. The Photo Filter</h2>
-<p>The <strong>Photo Filter</strong> panel is hidden until you open a Photo Settings file (see <a href="#photo-settings-file">Section 18</a>), at which point it appears automatically on the right side of the main window. It filters photo-related results in addition to the Standard Filter — only photos that match <em>both</em> the Standard Filter and the Photo Filter are shown.</p>
+<p>The <strong>Photo Filter</strong> panel is hidden until you open a Photo Settings file (see <a href="#photo-settings-file">Section 17</a>), at which point it appears automatically on the right side of the main window. It filters photo-related results in addition to the Standard Filter — only photos that match <em>both</em> the Standard Filter and the Photo Filter are shown.</p>
 <table>
   <thead><tr><th>Filter</th><th>Description</th></tr></thead>
   <tbody>
@@ -319,7 +321,7 @@
 <p>The window title shows the total count — for example, <em>"Species: New York (42 Species)"</em>.</p>
 
 <h3>Clicking a species</h3>
-<p>Click any species name to open an <strong>Individual Species</strong> window (see <a href="#individual-species">Section 19</a>) showing the full history of your sightings of that species.</p>
+<p>Click any species name to open an <strong>Individual Species</strong> window (see <a href="#individual-species">Section 20</a>) showing the full history of your sightings of that species.</p>
 
 <h3>Right-click menu</h3>
 <p>Right-clicking a row in the species table offers options to set the species as the active filter, open associated web pages, or open the individual species window.</p>
@@ -572,7 +574,7 @@
 <p>A bubble map where bubble area is proportional to the <strong>total number of individual birds tallied</strong> at each location. Sightings recorded with an unknown count ("X" in eBird) contribute 1 to the total. The tooltip notes how many checklists contain at least one uncounted species.</p>
 <p>Hover over a bubble to see the location name, individual count, and any caveat about uncounted entries. Click a bubble to open the Location window for that site.</p>
 
-<p><em>The Geolocated Photos map has moved to the <strong>Photos</strong> menu. See <a href="#photos">Section 17</a>.</em></p>
+<p><em>The Geolocated Photos map has moved to the <strong>Photos</strong> menu. See <a href="#photos">Section 18</a>.</em></p>
 
 <hr>
 
@@ -601,13 +603,69 @@
 
 <hr>
 
-<h2 id="photos">17. Photos</h2>
+<h2 id="photo-settings-file">17. Adding Photos to Yearbirder</h2>
+<p>Yearbirder uses a Photo Settings file to associate photos on your hard drive with your ebird sightings. Associating photos with your ebird sightings lets you view photos that match the main window's filter.  For example, Yearbirder can show you all the photos you've taken of a species, or the photos from a certain day or from a location. Yearbirder stores the photo file names, dates, times, species names, and camera information in a separate data file. Think of this file as your photo library within Yearbirder.</p>
+
+<h3>Adding Photos To Yearbirder</h3>
+<ol>
+  <li>Choose <strong>Photos → Add Photos</strong>.</li>
+  <li>A file dialog opens. Navigate to the folder containing your bird photos and select one or more JPEG files. You can select multiple photos at once — there is no need to add them one at a time:
+    <ul>
+      <li><strong>Mac:</strong> hold <strong>Command (&#8984;)</strong> and click to select individual photos, or hold <strong>Shift</strong> and click to select a contiguous range.</li>
+      <li><strong>Windows:</strong> hold <strong>Ctrl</strong> and click to select individual photos, or hold <strong>Shift</strong> and click to select a contiguous range.</li>
+    </ul>
+  </li>
+  <li>For each photo, Yearbirder asks you to identify the associated bird species and sighting date. To make this easier, Yearbirder uses each photo's filename and the date and time the photo was taken to suggest the most likely species and checklist — so in many cases you only need to confirm the suggestion rather than search from scratch. If the correct sighting location and date does not appear as an option, make sure that you have logged that sighting in eBird itself; you cannot add a photo to Yearbirder unless that sighting is also in your eBird data.</li>
+  <li>Once you have associated photos, choose <strong>Photos → Save Photo Settings</strong> to save your Photo Settings file. Remember where youy save this file, as you will want to open it in the future to view your photos with Yearbirder.</li>
+</ol>
+
+<h3>Opening an existing Photo Settings file</h3>
+<p>Choose <strong>Photos → Open Photo Settings File</strong> and navigate to your saved <code>.csv</code> file. Yearbirder loads all photo associations and EXIF data. The Photo Filter panel becomes active.</p>
+<p>To avoid having to open your Photo Settings file manually every time you use Yearbirder, save it as a preference (see <a href="#preferences">Section 23 — Saving Preferences</a>) so that Yearbirder opens it automatically at startup.</p>
+
+<h3>Saving changes</h3>
+<p>After adding, editing, or removing photo associations, choose <strong>Photos → Save Photo Settings</strong> to write changes back to the file. Yearbirder will warn you if you try to close the file with unsaved changes.</p>
+
+<h3>Closing the Photo Settings file</h3>
+<p>Choose <strong>Photos → Close Photo Settings File</strong>. This unloads all photo data from memory. The Photo Filter panel becomes inactive.</p>
+
+<h3>Adding more photos</h3>
+<p>With a Photo Settings file already loaded, choose <strong>Photos → Add Photos</strong> to import additional photos. The new associations are merged into the existing file; save afterwards.</p>
+
+<h3>Editing photos by filter</h3>
+<p>Choose <strong>Photos → Edit Photos by Filter</strong> to make batch changes — for example, to update the rating of all photos from a particular outing, or to reassign a group of photos to a different species.</p>
+
+<h3>Updating EXIF data</h3>
+<p>If you have moved or re-exported your photo files, choose <strong>Photos → Update EXIF Data for All Photos</strong>. Yearbirder re-reads the EXIF metadata from every file referenced in the Photo Settings and updates its records. This is also useful if you use photo editing software that writes new EXIF tags.</p>
+
+<h3>Cleaning up missing references</h3>
+<p>If photos have been moved or deleted from your hard drive, Yearbirder may show broken references. Use <strong>Photos → Remove Missing Photo References</strong> to scan for and remove any associations pointing to files that no longer exist.</p>
+
+<h3>What the Photo Settings file contains</h3>
+<p>The data file stores one row per photo reference, with columns for:</p>
+<ul>
+  <li>File path to the JPEG</li>
+  <li>Associated species common name</li>
+  <li>Associated sighting date</li>
+  <li>Your personal rating</li>
+  <li>Camera model (from EXIF)</li>
+  <li>Lens model (from EXIF)</li>
+  <li>Shutter speed (from EXIF)</li>
+  <li>Aperture (from EXIF)</li>
+  <li>Focal length (from EXIF)</li>
+  <li>ISO (from EXIF)</li>
+</ul>
+<p>You can open the data file in a spreadsheet application to inspect or bulk-edit values, but be careful to preserve the column order and formatting.</p>
+
+<hr>
+
+<h2 id="photos">18. Viewing Photos</h2>
 <p>Yearbirder can associate your personal bird photos with your eBird sightings. This unlocks several photo views and lets you filter by camera, lens, and exposure settings using the Photo Filter panel on the right of the screen.</p>
 
 <h3>Overview of the photo system</h3>
 <ul>
   <li>Your photos remain in their original folders on your computer. Yearbirder stores <strong>references</strong> to them, not copies.</li>
-  <li>Photo associations and metadata are stored in a <strong>Photo Settings file</strong> (a data file you create and save using Yearbirder). See <a href="#photo-settings-file">Section 19</a>.</li>
+  <li>Photo associations and metadata are stored in a <strong>Photo Settings file</strong> (a data file you create and save using Yearbirder). See <a href="#photo-settings-file">Section 17</a>.</li>
   <li>Yearbirder reads <strong>EXIF data</strong> from each JPEG file automatically: camera model, lens, shutter speed, aperture, focal length, and ISO.</li>
 </ul>
 
@@ -676,7 +734,7 @@
 
 <hr>
 
-<h2 id="species-gallery">18. Species Gallery</h2>
+<h2 id="species-gallery">19. Species Gallery</h2>
 <p>Open with <strong>Photos → Species Gallery</strong>. Available once a Photo Settings file is loaded.</p>
 <p>The Species Gallery displays one representative photo for each species in your collection — the highest-rated photo you have for that species. Photos are arranged in a responsive grid and sorted in <strong>taxonomic order</strong>, making it a visual life list of every species you have photographed.</p>
 <p>The number of columns adjusts automatically as you resize or maximise the window, so the grid always makes full use of the available space.</p>
@@ -687,56 +745,6 @@
 </ul>
 <p>Hovering over a tile highlights it. <strong>Click a tile</strong> to open a Photos window showing all of your photos of that species (subject to the current filter).</p>
 <p>The window title and subtitle show how many species have at least one photo under the current filter. Like all Yearbirder windows, the Species Gallery responds to the Standard Filter — for example, set a location filter to see a gallery of every species you have photographed at a particular site.</p>
-
-<hr>
-
-<h2 id="photo-settings-file">19. Adding Photos to the Photo Settings File</h2>
-<p>Yearbirder uses a Photo Settings file to associate photos on your hard drive with your ebird sightings. Associating photos with your ebird sightings lets you view photos that match the main window's filter.  For example, Yearbirder can show you all the photos you've taken of a species, or the photos from a certain day or from a location. Yearbirder stores the photo file names, dates, times, species names, and camera information in a separate data file. Think of this file as your photo library within Yearbirder.</p>
-
-<h3>Adding Photos To Yearbirder</h3>
-<ol>
-  <li>Choose <strong>Photos → Add Photos</strong>.</li>
-  <li>A file dialog opens. Navigate to the folder containing your bird photos and select one or more JPEG files.</li>
-  <li>For each photo, Yearbirder asks you to identify the associated bird species and sighting date.  If the correct sighting location and date does not appear as an option, make sure that you have logged that sighting in ebird itself; you cannot add a photo to Yearbirder unless that sighting is also in your eBird data.</li>
-  <li>Once you have associated photos, choose <strong>Photos → Save Photo Settings</strong> to save your Photo Settings file. Remember where youy save this file, as you will want to open it in the future to view your photos with Yearbirder.</li>
-</ol>
-
-<h3>Opening an existing Photo Settings file</h3>
-<p>Choose <strong>Photos → Open Photo Settings File</strong> and navigate to your saved <code>.csv</code> file. Yearbirder loads all photo associations and EXIF data. The Photo Filter panel becomes active.</p>
-
-<h3>Saving changes</h3>
-<p>After adding, editing, or removing photo associations, choose <strong>Photos → Save Photo Settings</strong> to write changes back to the file. Yearbirder will warn you if you try to close the file with unsaved changes.</p>
-
-<h3>Closing the Photo Settings file</h3>
-<p>Choose <strong>Photos → Close Photo Settings File</strong>. This unloads all photo data from memory. The Photo Filter panel becomes inactive.</p>
-
-<h3>Adding more photos</h3>
-<p>With a Photo Settings file already loaded, choose <strong>Photos → Add Photos</strong> to import additional photos. The new associations are merged into the existing file; save afterwards.</p>
-
-<h3>Editing photos by filter</h3>
-<p>Choose <strong>Photos → Edit Photos by Filter</strong> to make batch changes — for example, to update the rating of all photos from a particular outing, or to reassign a group of photos to a different species.</p>
-
-<h3>Updating EXIF data</h3>
-<p>If you have moved or re-exported your photo files, choose <strong>Photos → Update EXIF Data for All Photos</strong>. Yearbirder re-reads the EXIF metadata from every file referenced in the Photo Settings and updates its records. This is also useful if you use photo editing software that writes new EXIF tags.</p>
-
-<h3>Cleaning up missing references</h3>
-<p>If photos have been moved or deleted from your hard drive, Yearbirder may show broken references. Use <strong>Photos → Remove Missing Photo References</strong> to scan for and remove any associations pointing to files that no longer exist.</p>
-
-<h3>What the Photo Settings file contains</h3>
-<p>The data file stores one row per photo reference, with columns for:</p>
-<ul>
-  <li>File path to the JPEG</li>
-  <li>Associated species common name</li>
-  <li>Associated sighting date</li>
-  <li>Your personal rating</li>
-  <li>Camera model (from EXIF)</li>
-  <li>Lens model (from EXIF)</li>
-  <li>Shutter speed (from EXIF)</li>
-  <li>Aperture (from EXIF)</li>
-  <li>Focal length (from EXIF)</li>
-  <li>ISO (from EXIF)</li>
-</ul>
-<p>You can open the data file in a spreadsheet application to inspect or bulk-edit values, but be careful to preserve the column order and formatting.</p>
 
 <hr>
 

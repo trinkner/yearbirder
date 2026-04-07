@@ -1,6 +1,25 @@
+import os
+import sys
+
+# Set a persistent MPLCONFIGDIR before matplotlib is imported anywhere.
+# PyInstaller's pyi_rth_mplconfig.py hook normally creates a new temp directory
+# on every launch, forcing matplotlib to rebuild its font cache from scratch
+# (~15 seconds). Pointing MPLCONFIGDIR at a stable location lets the cache
+# persist between launches and eliminates that delay.
+if sys.platform == "darwin":
+    _mpl_cache = os.path.join(
+        os.path.expanduser("~"), "Library", "Application Support",
+        "Yearbirder", "matplotlib"
+    )
+else:
+    _mpl_cache = os.path.join(
+        os.path.expanduser("~"), ".yearbirder", "matplotlib"
+    )
+os.makedirs(_mpl_cache, exist_ok=True)
+os.environ["MPLCONFIGDIR"] = _mpl_cache
+
 import code_MainWindow
 import code_Stylesheet
-import sys
 
 from PySide6.QtWidgets import (
     QApplication,

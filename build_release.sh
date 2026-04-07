@@ -22,17 +22,18 @@ if [[ "$VERSION_CONFIRMED" != "y" && "$VERSION_CONFIRMED" != "Y" ]]; then
     exit 1
 fi
 
-APP_NAME="Yearbirder_v${VERSION}"
-echo "Building ${APP_NAME}"
+APP_NAME="Yearbirder"
+DMG_NAME="Yearbirder_v${VERSION}"
+echo "Building ${DMG_NAME}"
 
 SIGN_ID="Developer ID Application: RICHARD L TRINKNER (SPC3RCL6VT)"
 ENTS="entitlements.plist"
 KEYCHAIN_PROFILE="yearbirder"
 WORK_APP="/tmp/${APP_NAME}.app"
 WORK_ZIP="/tmp/${APP_NAME}.zip"
-WORK_DMG="/tmp/${APP_NAME}.dmg"
-WORK_RW_DMG="/tmp/${APP_NAME}_rw.dmg"
-DMG_STAGING="/tmp/${APP_NAME}_dmg_staging"
+WORK_DMG="/tmp/${DMG_NAME}.dmg"
+WORK_RW_DMG="/tmp/${DMG_NAME}_rw.dmg"
+DMG_STAGING="/tmp/${DMG_NAME}_dmg_staging"
 
 echo "=== Step 1: PyInstaller build ==="
 /opt/homebrew/bin/python3 -m PyInstaller Yearbirder.spec --noconfirm
@@ -167,7 +168,7 @@ ditto "$WORK_APP" "$DMG_STAGING/${APP_NAME}.app"
 ln -s /Applications "$DMG_STAGING/Applications"
 
 rm -f "$WORK_DMG" "$WORK_RW_DMG"
-hdiutil create -volname "${APP_NAME}" -srcfolder "$DMG_STAGING" -ov -format UDRW "$WORK_RW_DMG"
+hdiutil create -volname "${DMG_NAME}" -srcfolder "$DMG_STAGING" -ov -format UDRW "$WORK_RW_DMG"
 hdiutil convert "$WORK_RW_DMG" -format UDZO -imagekey zlib-level=9 -o "$WORK_DMG"
 rm "$WORK_RW_DMG" && rm -rf "$DMG_STAGING"
 echo "DMG created."
@@ -191,8 +192,8 @@ spctl --assess --type open --context context:primary-signature --verbose "$WORK_
 
 echo ""
 echo "=== Step 13: Copy DMG to dist/ ==="
-cp "$WORK_DMG" "dist/${APP_NAME}.dmg"
-echo "dist/${APP_NAME}.dmg is ready for distribution."
+cp "$WORK_DMG" "dist/${DMG_NAME}.dmg"
+echo "dist/${DMG_NAME}.dmg is ready for distribution."
 
 echo ""
 echo "=== All done! ==="

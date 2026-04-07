@@ -21,16 +21,9 @@ class Stats(QMdiSubWindow, form_Stats.Ui_frmStats):
         self.mdiParent = ""
         self.filter = code_Filter.Filter()
         self._stats = {}
+        self.webView = None   # created lazily in FillStats to avoid starting
+                              # the QtWebEngineProcess at app startup
         self.resized.connect(self.resizeMe)
-
-        self.webView = QWebEngineView(self)
-        self.webView.setObjectName("webView")
-        # Match the page background to the dark theme so there is no white flash
-        # before the HTML content finishes rendering.
-        self.webView.page().setBackgroundColor(QColor("#1e1f26"))
-        # Allow local HTML to load without cross-origin issues
-        QWebEngineProfile.defaultProfile().settings().setAttribute(
-            QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, False)
 
 
     def resizeEvent(self, event):
@@ -42,7 +35,8 @@ class Stats(QMdiSubWindow, form_Stats.Ui_frmStats):
         windowWidth  = self.frameGeometry().width()
         windowHeight = self.frameGeometry().height()
         self.scrollArea.setGeometry(5, 27, windowWidth - 10, windowHeight - 35)
-        self.webView.setGeometry(5, 27, windowWidth - 10, windowHeight - 35)
+        if self.webView is not None:
+            self.webView.setGeometry(5, 27, windowWidth - 10, windowHeight - 35)
 
 
     def scaleMe(self):
@@ -62,6 +56,19 @@ class Stats(QMdiSubWindow, form_Stats.Ui_frmStats):
         has_photos = self.mdiParent.db.photoDataFileOpenFlag
         self._stats = self._computeStats(sightings, has_photos)
         self._has_photos = has_photos
+
+        # Lazy-create the QWebEngineView the first time it's needed.
+        # This defers the expensive QtWebEngineProcess startup until the
+        # Stats window is actually populated, keeping app launch fast.
+        if self.webView is None:
+            self.webView = QWebEngineView(self)
+            self.webView.setObjectName("webView")
+            self.webView.page().setBackgroundColor(QColor("#1e1f26"))
+            QWebEngineProfile.defaultProfile().settings().setAttribute(
+                QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, False)
+            windowWidth  = self.frameGeometry().width()
+            windowHeight = self.frameGeometry().height()
+            self.webView.setGeometry(5, 27, windowWidth - 10, windowHeight - 35)
 
         self.setWindowTitle(filter.buildWindowTitle("Statistics", self.mdiParent.db))
         self.webView.setHtml(self._generateHtml(self._stats, self._has_photos, dark=True))
