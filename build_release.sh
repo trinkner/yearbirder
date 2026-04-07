@@ -1,23 +1,33 @@
 #!/bin/bash
-# build_release.sh — Build, sign, notarize, and staple Yearbird_vX.XX.app and .dmg
+# build_release.sh — Build, sign, notarize, and staple Yearbirder_vX.XX.app and .dmg
 #
 # Prerequisites:
 #   - Developer ID certificate in Keychain
-#   - notarytool credentials stored: xcrun notarytool store-credentials "yearbird"
+#   - notarytool credentials stored: xcrun notarytool store-credentials "yearbirder"
 #   - PySide6 and PyInstaller installed under /opt/homebrew/bin/python3 (NOT the project venv)
 #
 # Usage:  ./build_release.sh
 
 set -e  # exit on any error
 
-# ── Version ───────────────────────────────────────────────────────────────────
+# ── Version check ─────────────────────────────────────────────────────────────
 VERSION=$(grep 'versionNumber = ' src/code_MainWindow.py | sed 's/.*"\(.*\)".*/\1/')
-APP_NAME="Yearbird_v${VERSION}"
+VERSION_DATE=$(grep 'versionDate = ' src/code_MainWindow.py | sed 's/.*"\(.*\)".*/\1/')
+echo ""
+echo "Current version in code_MainWindow.py: ${VERSION}  (${VERSION_DATE})"
+echo ""
+read -p "Have you updated the version number? (y/n): " VERSION_CONFIRMED
+if [[ "$VERSION_CONFIRMED" != "y" && "$VERSION_CONFIRMED" != "Y" ]]; then
+    echo "Please update versionNumber and versionDate in src/code_MainWindow.py, then re-run."
+    exit 1
+fi
+
+APP_NAME="Yearbirder_v${VERSION}"
 echo "Building ${APP_NAME}"
 
 SIGN_ID="Developer ID Application: RICHARD L TRINKNER (SPC3RCL6VT)"
 ENTS="entitlements.plist"
-KEYCHAIN_PROFILE="yearbird"
+KEYCHAIN_PROFILE="yearbirder"
 WORK_APP="/tmp/${APP_NAME}.app"
 WORK_ZIP="/tmp/${APP_NAME}.zip"
 WORK_DMG="/tmp/${APP_NAME}.dmg"
@@ -25,14 +35,14 @@ WORK_RW_DMG="/tmp/${APP_NAME}_rw.dmg"
 DMG_STAGING="/tmp/${APP_NAME}_dmg_staging"
 
 echo "=== Step 1: PyInstaller build ==="
-/opt/homebrew/bin/python3 -m PyInstaller Yearbird.spec --noconfirm
+/opt/homebrew/bin/python3 -m PyInstaller Yearbirder.spec --noconfirm
 echo "Build complete."
 
 echo ""
 echo "=== Step 2: Copy to /tmp (preserving symlinks) and clean ==="
 rm -rf "$WORK_APP"
 # ditto preserves macOS symlinks (cp -r does not)
-ditto dist/Yearbird.app "$WORK_APP"
+ditto dist/Yearbirder.app "$WORK_APP"
 # Remove Dropbox extended attributes that break codesign
 xattr -cr "$WORK_APP"
 # Remove .dist-info dirs — not code objects, cause codesign to choke
@@ -59,7 +69,7 @@ echo "  3a: dylibs and .so files signed"
 
 # 3b. Plain Mach-O executables in PySide6 flat dir and Qt/libexec
 # (balsam, lupdate, lrelease, balsamui, qmlformat, qsb, svgtoqml, qmllint, qmlls, rcc, etc.)
-# Use maxdepth 1 + file-type check — avoids path-filter bugs with find inside Yearbird.app
+# Use maxdepth 1 + file-type check — avoids path-filter bugs with find inside Yearbirder.app
 for dir in \
     "$WORK_APP/Contents/Frameworks/PySide6" \
     "$WORK_APP/Contents/Frameworks/PySide6/Qt/libexec"; do
@@ -110,7 +120,7 @@ echo ""
 echo "=== Step 4: Verify signature ==="
 codesign --verify --verbose "$WORK_APP"
 # Confirm hardened runtime flag is set
-codesign --display --verbose=4 "$WORK_APP/Contents/MacOS/Yearbird" 2>&1 | grep "flags=.*runtime" || {
+codesign --display --verbose=4 "$WORK_APP/Contents/MacOS/Yearbirder" 2>&1 | grep "flags=.*runtime" || {
     echo "ERROR: Hardened runtime flag not set!"; exit 1
 }
 # Confirm no broken symlinks (would cause spctl to reject even after notarization)

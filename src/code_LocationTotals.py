@@ -54,6 +54,7 @@ class LocationTotals(QMdiSubWindow, form_LocationTotals.Ui_frmLocationTotals):
         _container = QWidget()
         self.setupUi(_container)
         self.setWidget(_container)
+        self.setObjectName("frmLocationTotals")
         self.setAttribute(Qt.WA_DeleteOnClose,True)
         self.mdiParent = ""        
         self.resized.connect(self.resizeMe)                            
@@ -411,14 +412,15 @@ class LocationTotals(QMdiSubWindow, form_LocationTotals.Ui_frmLocationTotals):
         locationDict = defaultdict()
         
         minimalSightingList = self.mdiParent.db.GetMinimalFilteredSightingsList(filter)
-        
+        cf = self.mdiParent.db.CompileFilter(filter)
+
         for s in minimalSightingList:
-            
+
             # Consider only full species, not slash or spuh or hybrid entries
             commonName = s["commonName"]
             if "/" not in commonName and "sp." not in commonName and " x " not in commonName:
-                
-                if self.mdiParent.db.TestSighting(s,  filter) is True:
+
+                if self.mdiParent.db.TestSightingCompiled(s, cf) is True:
                     for r in s["regionCodes"]:
                         dbRegions.add(r)  
                     dbCountries.add(s["country"])

@@ -161,8 +161,12 @@ class Location(QMdiSubWindow, form_Location.Ui_frmLocation):
         header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         
         self.lblLocation.setText(location)
-        self.lblFirstVisited.setText("First visited: " + thisLocationDates[0])
-        self.lblMostRecentlyVisited.setText("Most recently visited: " + thisLocationDates[len(thisLocationDates)-1])
+        if thisLocationDates:
+            self.lblFirstVisited.setText("First visited: " + thisLocationDates[0])
+            self.lblMostRecentlyVisited.setText("Most recently visited: " + thisLocationDates[-1])
+        else:
+            self.lblFirstVisited.setText("First visited: —")
+            self.lblMostRecentlyVisited.setText("Most recently visited: —")
         
         dateArray = []
         for d in thisLocationDates:
@@ -461,8 +465,8 @@ class Location(QMdiSubWindow, form_Location.Ui_frmLocation):
  
         # create filter set to our current location
         filter = code_Filter.Filter()
-        filter.setLocationType = "Location"
-        filter.setLocationName =  self.lblLocation.text()
+        filter.setLocationType("Location")
+        filter.setLocationName(self.lblLocation.text())
 
         # for each date in tblDates, find the species and display them in a table
         for r in range(self.tblDates.rowCount()):

@@ -27,7 +27,9 @@ from PySide6.QtCore import (
     QObject,
     QIODevice,
     QByteArray,
-    QBuffer
+    QBuffer,
+    QEventLoop,
+    QTimer
     )
 
 from PySide6.QtWebChannel import QWebChannel
@@ -832,7 +834,18 @@ document.addEventListener("DOMContentLoaded", function() {{
         
 
     def html(self):
-    
+
+        # Ensure all lazy-loaded tabs are populated before generating the PDF.
+        if not self.newDatesLoaded:
+            self._fillNewDates()
+            self.newDatesLoaded = True
+        if not self.newRegionsLoaded:
+            self._fillNewRegions()
+            self.newRegionsLoaded = True
+        if not self.newLocationsLoaded:
+            self._fillNewLocations()
+            self.newLocationsLoaded = True
+
         QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
 
         # create start to basic html format
@@ -884,10 +897,22 @@ document.addEventListener("DOMContentLoaded", function() {{
             "</H3>"
             )    
             
-        # grab the map image from the map tap
+        # Switch to the map tab and run the event loop briefly so Chromium's
+        # compositor has time to paint the QWebEngineView before we grab it.
+        # processEvents() alone is not enough — the GPU compositor is async.
+        previousTab = self.tabAnalysis.currentIndex()
+        mapTabIndex = self.tabAnalysis.indexOf(self.tabMap)
+        self.tabAnalysis.setCurrentIndex(mapTabIndex)
+        loop = QEventLoop()
+        QTimer.singleShot(600, loop.quit)
+        loop.exec()
+
+        # grab the map image from the map tab
         # process it into a byte array and encode it
         # so we can insert it inline into the html
         myPixmap = self.webMap.grab()
+
+        self.tabAnalysis.setCurrentIndex(previousTab)
         myPixmap = myPixmap.scaledToWidth(600, Qt.SmoothTransformation)
 
         myByteArray = QByteArray()
@@ -1142,7 +1167,10 @@ document.addEventListener("DOMContentLoaded", function() {{
         else:
             # loopthrough the species listed in lstNewLifeSpecies
             for r in range(self.tblNewYearSpecies.rowCount()):
-            
+
+                if self.tblNewYearSpecies.item(r, 1) is None:
+                    continue
+
                 html = html + (
                     "<td>" +
                     self.tblNewYearSpecies.item(r, 1).text() +
@@ -1189,7 +1217,10 @@ document.addEventListener("DOMContentLoaded", function() {{
         
             # loopthrough the species listed in lstNewLifeSpecies
             for r in range(self.tblNewMonthSpecies.rowCount()):
-            
+
+                if self.tblNewMonthSpecies.item(r, 1) is None:
+                    continue
+
                 html = html + (
                     "<td>" +
                     self.tblNewMonthSpecies.item(r, 1).text() +

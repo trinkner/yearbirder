@@ -20,7 +20,7 @@ class Ui_frmPreferences(object):
         frmPreferences.setMinimumSize(QtCore.QSize(200, 300))
         frmPreferences.setSizeIncrement(QtCore.QSize(0, 0))
         icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap(":/icon_Yearbird_small.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon.addPixmap(QtGui.QPixmap(":/icon_Yearbirder_small.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         frmPreferences.setWindowIcon(icon)
         self.grpStartupFolder = QtWidgets.QGroupBox(frmPreferences)
         self.grpStartupFolder.setGeometry(QtCore.QRect(10, 30, 828, 127))
@@ -112,7 +112,7 @@ class Ui_frmPreferences(object):
         _translate = QtCore.QCoreApplication.translate
         frmPreferences.setWindowTitle(_translate("frmPreferences", "Preferences"))
         self.grpStartupFolder.setTitle(_translate("frmPreferences", "Startup Folder"))
-        self.chkStartupFolder.setText(_translate("frmPreferences", "Set eBird data folder. At startup, Yearbird will open the most recent eBird file in the folder (e.g., your download folder)."))
+        self.chkStartupFolder.setText(_translate("frmPreferences", "Set eBird data folder. At startup, Yearbirder will open the most recent eBird file in the folder (e.g., your download folder)."))
         self.btnSelectStartupFolder.setText(_translate("frmPreferences", "Select"))
         self.grpPhotoDataFile.setTitle(_translate("frmPreferences", "Photo Data File"))
         self.chkPhotoDataFile.setText(_translate("frmPreferences", "Load photo data file at startup. (Only helpful if you have photos.)"))

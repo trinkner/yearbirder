@@ -1,5 +1,5 @@
 setup(
-    name='yearbird',
+    name='yearbirder',
     version='1.0',
     install_requires=[
         'pyqt5',

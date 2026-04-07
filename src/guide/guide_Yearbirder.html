@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Yearbird User Guide</title>
+  <title>Yearbirder User Guide</title>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -102,7 +102,7 @@
 </head>
 <body>
 
-<h1>Yearbird User Guide</h1>
+<h1>Yearbirder User Guide</h1>
 <p><em>A desktop application for exploring and analysing your personal eBird data</em></p>
 
 <hr>
@@ -126,7 +126,7 @@
     <li><a href="#maps">Maps</a></li>
     <li><a href="#choropleth-maps">Maps – Choropleth Maps</a></li>
     <li><a href="#photos">Photos</a></li>
-    <li><a href="#animated-photo-sequence">Animated Photo Sequence</a></li>
+    <li><a href="#animated-photo-sequence">Animated Sequence Map</a></li>
     <li><a href="#slideshow">Slideshow</a></li>
     <li><a href="#species-gallery">Species Gallery</a></li>
     <li><a href="#photo-settings-file">Photo Settings File</a></li>
@@ -143,10 +143,10 @@
 <p>This section gets you from a fresh install to your first results in five minutes.</p>
 
 <h3>Step 1 — Download your eBird data</h3>
-<p>With a browser such as Chrome, Safari, or Edge, go to <a href="https://ebird.org/downloadMyData">https://ebird.org/downloadMyData</a>, and choose <strong>Request My Observations</strong>. eBird will email you a link to a <code>.zip</code> file containing your complete sightings history. Open the email, click the link, and save the file somewhere easy to find. Yearbird can open the <code>.zip</code> file directly — there is no need to unzip it first. By default, most browsers will save the file in your Downloads folder.</p>
+<p>With a browser such as Chrome, Safari, or Edge, go to <a href="https://ebird.org/downloadMyData">https://ebird.org/downloadMyData</a>, and choose <strong>Request My Observations</strong>. eBird will email you a link to a <code>.zip</code> file containing your complete sightings history. Open the email, click the link, and save the file somewhere easy to find. Yearbirder can open the <code>.zip</code> file directly — there is no need to unzip it first. By default, most browsers will save the file in your Downloads folder.</p>
 
-<h3>Step 2 — Open your data in Yearbird</h3>
-<p>Launch Yearbird. Click the <strong>Open</strong> button on the toolbar (or choose <strong>File → Open</strong>). Navigate to the <code>.zip</code> file you downloaded and click <strong>Open</strong>. Yearbird loads your data and displays list of the species in the file.</p>
+<h3>Step 2 — Open your data in Yearbirder</h3>
+<p>Launch Yearbirder. Click the <strong>Open</strong> button on the toolbar (or choose <strong>File → Open</strong>). Navigate to the <code>.zip</code> file you downloaded and click <strong>Open</strong>. Yearbirder loads your data and displays list of the species in the file.</p>
 
 <h3>Step 3 — Generate your first list</h3>
 <p>Browse through the options on the filter on the left side of the screen.  Set a few filter options, like county or family, and then click the <strong>Species</strong> button on the toolbar. A new window opens showing the species you have recorded, sorted taxonomically, along with the first date, most recent date, and checklist count for each. You can click on the column headers to sort the columns. You can also right-click on any information in the list to send that information to the filter.</p>
@@ -162,13 +162,13 @@
 <hr>
 
 <h2 id="main-window">2. The Main Window</h2>
-<p>Yearbird uses a <strong>Multiple Document Interface (MDI)</strong>. The main window contains:</p>
+<p>Yearbirder allows many report, map, and graph windows to be open at the same time. The main window contains:</p>
 <ul>
   <li>A <strong>menu bar</strong> across the top with menus for File, Filter, Lists, Reports, Graphs, Maps, Photos, Windows, and User Guide.</li>
   <li>A <strong>toolbar</strong> just below the menu bar with quick-access buttons for the most common actions.</li>
   <li>A <strong>Standard Filter</strong> panel docked on the left side.</li>
   <li>A <strong>Photo Filter</strong> panel docked on the right side.</li>
-  <li>A large <strong>MDI area</strong> in the centre where all child windows (lists, reports, maps, photos) are displayed.</li>
+  <li>A large central area where all open windows (lists, reports, maps, photos) are displayed.</li>
   <li>A <strong>status bar</strong> at the very bottom showing the current data file and record counts.</li>
 </ul>
 
@@ -177,8 +177,8 @@
   <thead><tr><th>Button</th><th>Action</th></tr></thead>
   <tbody>
     <tr><td>Open</td><td>Open an eBird data file</td></tr>
-    <tr><td>Print</td><td>Print the active child window</td></tr>
-    <tr><td>Create PDF</td><td>Export the active child window to PDF</td></tr>
+    <tr><td>Print</td><td>Print the active window</td></tr>
+    <tr><td>Create PDF</td><td>Export the active window to PDF</td></tr>
     <tr><td>Clear all filters</td><td>Reset every filter to its default (all) state</td></tr>
     <tr><td>Species</td><td>Open a Species List window</td></tr>
     <tr><td>Locations</td><td>Open a Locations List window</td></tr>
@@ -194,23 +194,23 @@
   </tbody>
 </table>
 
-<h3>MDI child windows</h3>
-<p>Any number of child windows can be open at the same time. Use <strong>Windows → Tile Windows</strong> or <strong>Windows → Cascade Windows</strong> to arrange them. Close individual windows with their close button, or close all at once with <strong>Windows → Close All Windows</strong>.</p>
-<p>Each child window's title bar shows a descriptive label that reflects the active filter — for example, <em>"Species: Warbler; New York; 2024 (42 Species)"</em>.</p>
+<h3>Working with multiple windows</h3>
+<p>Any number of windows can be open at the same time. Use <strong>Windows → Tile Windows</strong> or <strong>Windows → Cascade Windows</strong> to arrange them. Close individual windows with their close button, or close all at once with <strong>Windows → Close All Windows</strong>.</p>
+<p>Each window's title bar shows a descriptive label that reflects the active filter — for example, <em>"Species: Warbler; New York; 2024 (42 Species)"</em>.</p>
 
 <hr>
 
 <h2 id="loading-data">3. Loading Your eBird Data</h2>
 
 <h3>Opening a data file</h3>
-<p>Choose <strong>File → Open eBird data file…</strong> or click the <strong>Open</strong> toolbar button. Yearbird accepts the standard eBird download CSV (the file is typically named something like <code>MyEBirdData.csv</code>).</p>
+<p>Choose <strong>File → Open eBird data file…</strong> or click the <strong>Open</strong> toolbar button. Yearbirder accepts the standard eBird download data file (typically named something like <code>MyEBirdData.zip</code>).</p>
 <p>Loading time depends on the size of your dataset. A typical dataset of 10,000–50,000 sightings loads in a few seconds. Once loaded, the status bar shows the total number of sightings and species.</p>
 
 <h3>Closing a data file</h3>
-<p>Choose <strong>File → Close eBird data file</strong> to unload the current dataset. Any open child windows that depend on the data will close automatically.</p>
+<p>Choose <strong>File → Close eBird data file</strong> to unload the current dataset. Any open windows that depend on the data will close automatically.</p>
 
 <h3>What data is loaded</h3>
-<p>Yearbird reads the following fields from your eBird CSV:</p>
+<p>Yearbirder reads the following fields from your eBird data file:</p>
 <ul>
   <li>Species common name and scientific name</li>
   <li>Taxonomic order, family, and order</li>
@@ -224,7 +224,7 @@
 <hr>
 
 <h2 id="standard-filter">4. The Standard Filter</h2>
-<p>The <strong>Standard Filter</strong> panel is the primary way to focus every report and list on the data you care about. It is docked on the left side of the main window and always visible. All open child windows update immediately whenever you change any filter setting.</p>
+<p>The <strong>Standard Filter</strong> panel is the primary way to focus every report and list on the data you care about. It is docked on the left side of the main window and always visible. All open windows update immediately whenever you change any filter setting.</p>
 
 <h3>Location filters</h3>
 <p>The location filters are <strong>hierarchical</strong> — selecting a more specific level automatically constrains the broader levels. You can filter at any one of these levels:</p>
@@ -410,7 +410,7 @@
 
 <h2 id="big-report">12. Big Report</h2>
 <p>Open with <strong>Reports → Big Report</strong> or the <strong>Big Report</strong> toolbar button.</p>
-<p>The Big Report is the most comprehensive single report in Yearbird. It combines multiple dimensions of your data into one window with multiple tabs:</p>
+<p>The Big Report is the most comprehensive single report in Yearbirder. It combines multiple dimensions of your data into one window with multiple tabs:</p>
 <ul>
   <li><strong>Species</strong> — Full species list with counts, first and last dates.</li>
   <li><strong>Dates</strong> — Date-by-date breakdown of species seen.</li>
@@ -507,7 +507,7 @@
   <li>Whether the timing has shifted over the years</li>
   <li>Unusually early or late individual records</li>
 </ul>
-<p>If no species, family, or order filter is set, Yearbird will warn you before generating the chart, since plotting all species together produces a very cluttered result.</p>
+<p>If no species, family, or order filter is set, Yearbirder will warn you before generating the chart, since plotting all species together produces a very cluttered result.</p>
 <p>Hover over a dot to see the exact date and the location or locations seen that day. Click a dot to open a Species List for that date.</p>
 
 <h3>First of Year Chart</h3>
@@ -533,7 +533,7 @@
 <hr>
 
 <h2 id="maps">15. Maps</h2>
-<p>Yearbird's <strong>Maps</strong> menu offers a range of interactive map types. All maps are pan-and-zoom capable using your mouse or trackpad, respond to the Standard Filter, and open in MDI child windows like any other report. Hovering over a marker or bubble shows a tooltip; clicking most markers opens the <strong>Location</strong> window for that site.</p>
+<p>Yearbirder's <strong>Maps</strong> menu offers a range of interactive map types. All maps are pan-and-zoom capable using your mouse or trackpad, respond to the Standard Filter, and open just like any other report. Hovering over a marker or bubble shows a tooltip; clicking most markers opens the <strong>Location</strong> window for that site.</p>
 
 <h3>Location Map</h3>
 <p>Open with the <strong>Map</strong> toolbar button or <strong>Map → Map</strong>.</p>
@@ -602,13 +602,13 @@
 <hr>
 
 <h2 id="photos">17. Photos</h2>
-<p>Yearbird can associate your personal bird photos with your eBird sightings. This unlocks several photo views and lets you filter by camera, lens, and exposure settings using the Photo Filter panel on the right of the screen.</p>
+<p>Yearbirder can associate your personal bird photos with your eBird sightings. This unlocks several photo views and lets you filter by camera, lens, and exposure settings using the Photo Filter panel on the right of the screen.</p>
 
 <h3>Overview of the photo system</h3>
 <ul>
-  <li>Your photos remain in their original folders on your computer. Yearbird stores <strong>references</strong> to them, not copies.</li>
-  <li>Photo associations and metadata are stored in a <strong>Photo Settings file</strong> (a CSV file you create and save using Yearbird). See <a href="#photo-settings-file">Section 19</a>.</li>
-  <li>Yearbird reads <strong>EXIF data</strong> from each JPEG file automatically: camera model, lens, shutter speed, aperture, focal length, and ISO.</li>
+  <li>Your photos remain in their original folders on your computer. Yearbirder stores <strong>references</strong> to them, not copies.</li>
+  <li>Photo associations and metadata are stored in a <strong>Photo Settings file</strong> (a data file you create and save using Yearbirder). See <a href="#photo-settings-file">Section 19</a>.</li>
+  <li>Yearbirder reads <strong>EXIF data</strong> from each JPEG file automatically: camera model, lens, shutter speed, aperture, focal length, and ISO.</li>
 </ul>
 
 <h3>Photos by Filter</h3>
@@ -641,8 +641,8 @@
 <p>Open with <strong>Photos → Geolocated Photos</strong>. Available only when a Photo Settings file is loaded.</p>
 <p>Plots your geotagged photos on an interactive clustered marker map. Markers group together at lower zoom levels and spread apart as you zoom in. Hovering over a marker shows a thumbnail preview of the photo along with the species name, date, and location. Click a marker to open the <strong>Enlargement</strong> view for that photo. Multiple photos taken at exactly the same GPS coordinates are automatically fanned into a spiral so each remains individually clickable.</p>
 
-<h3 id="animated-photo-sequence">Animated Photo Sequence</h3>
-<p>Open with <strong>Photos → Animated Photo Sequence</strong>. Available only when a Photo Settings file is loaded.</p>
+<h3 id="animated-photo-sequence">Animated Sequence Map</h3>
+<p>Open with <strong>Photos → Animated Sequence Map</strong>. Available only when a Photo Settings file is loaded.</p>
 <p>Animates your geotagged photos in chronological order on an interactive map, showing where and when each photo was taken. Each photo appears as a callout bubble whose triangular tail points to the exact GPS location, so the underlying map detail remains visible. The bubble displays the photo thumbnail, species name, date, and location.</p>
 <p>As the animation progresses, a small blue dot is permanently placed at each visited location, building up a breadcrumb trail of your photographic journey.</p>
 <p>Playback is controlled by the bar at the bottom of the map:</p>
@@ -686,26 +686,26 @@
   <li>The species common name below the thumbnail.</li>
 </ul>
 <p>Hovering over a tile highlights it. <strong>Click a tile</strong> to open a Photos window showing all of your photos of that species (subject to the current filter).</p>
-<p>The window title and subtitle show how many species have at least one photo under the current filter. Like all Yearbird windows, the Species Gallery responds to the Standard Filter — for example, set a location filter to see a gallery of every species you have photographed at a particular site.</p>
+<p>The window title and subtitle show how many species have at least one photo under the current filter. Like all Yearbirder windows, the Species Gallery responds to the Standard Filter — for example, set a location filter to see a gallery of every species you have photographed at a particular site.</p>
 
 <hr>
 
 <h2 id="photo-settings-file">19. Adding Photos to the Photo Settings File</h2>
-<p>Yearbird uses a Photo Settings file to associate photos on your hard drive with your ebird sightings. Associating photos with your ebird sightings lets you view photos that match the main window's filter.  For example, Yearbird can show you all the photos you've taken of a species, or the photos from a certain day or from a location. Yearbird stores the photo file names, dates, times, species names, and camera information in a separate data file. Think of this file as your photo library within Yearbird.</p>
+<p>Yearbirder uses a Photo Settings file to associate photos on your hard drive with your ebird sightings. Associating photos with your ebird sightings lets you view photos that match the main window's filter.  For example, Yearbirder can show you all the photos you've taken of a species, or the photos from a certain day or from a location. Yearbirder stores the photo file names, dates, times, species names, and camera information in a separate data file. Think of this file as your photo library within Yearbirder.</p>
 
-<h3>Adding Photos To Yearbird</h3>
+<h3>Adding Photos To Yearbirder</h3>
 <ol>
   <li>Choose <strong>Photos → Add Photos</strong>.</li>
   <li>A file dialog opens. Navigate to the folder containing your bird photos and select one or more JPEG files.</li>
-  <li>For each photo, Yearbird asks you to identify the associated bird species and sighting date.  If the correct sighting location and date does not appear as an option, make sure that you have logged that sighting in ebird itself; you cannot add a photo to Yearbird unless that sighting is also in your eBird data.</li>
-  <li>Once you have associated photos, choose <strong>Photos → Save Photo Settings</strong> to save your Photo Settings file. Remember where youy save this file, as you will want to open it in the future to view your photos with Yearbird.</li>
+  <li>For each photo, Yearbirder asks you to identify the associated bird species and sighting date.  If the correct sighting location and date does not appear as an option, make sure that you have logged that sighting in ebird itself; you cannot add a photo to Yearbirder unless that sighting is also in your eBird data.</li>
+  <li>Once you have associated photos, choose <strong>Photos → Save Photo Settings</strong> to save your Photo Settings file. Remember where youy save this file, as you will want to open it in the future to view your photos with Yearbirder.</li>
 </ol>
 
 <h3>Opening an existing Photo Settings file</h3>
-<p>Choose <strong>Photos → Open Photo Settings File</strong> and navigate to your saved <code>.csv</code> file. Yearbird loads all photo associations and EXIF data. The Photo Filter panel becomes active.</p>
+<p>Choose <strong>Photos → Open Photo Settings File</strong> and navigate to your saved <code>.csv</code> file. Yearbirder loads all photo associations and EXIF data. The Photo Filter panel becomes active.</p>
 
 <h3>Saving changes</h3>
-<p>After adding, editing, or removing photo associations, choose <strong>Photos → Save Photo Settings</strong> to write changes back to the file. Yearbird will warn you if you try to close the file with unsaved changes.</p>
+<p>After adding, editing, or removing photo associations, choose <strong>Photos → Save Photo Settings</strong> to write changes back to the file. Yearbirder will warn you if you try to close the file with unsaved changes.</p>
 
 <h3>Closing the Photo Settings file</h3>
 <p>Choose <strong>Photos → Close Photo Settings File</strong>. This unloads all photo data from memory. The Photo Filter panel becomes inactive.</p>
@@ -717,13 +717,13 @@
 <p>Choose <strong>Photos → Edit Photos by Filter</strong> to make batch changes — for example, to update the rating of all photos from a particular outing, or to reassign a group of photos to a different species.</p>
 
 <h3>Updating EXIF data</h3>
-<p>If you have moved or re-exported your photo files, choose <strong>Photos → Update EXIF Data for All Photos</strong>. Yearbird re-reads the EXIF metadata from every file referenced in the Photo Settings and updates its records. This is also useful if you use photo editing software that writes new EXIF tags.</p>
+<p>If you have moved or re-exported your photo files, choose <strong>Photos → Update EXIF Data for All Photos</strong>. Yearbirder re-reads the EXIF metadata from every file referenced in the Photo Settings and updates its records. This is also useful if you use photo editing software that writes new EXIF tags.</p>
 
 <h3>Cleaning up missing references</h3>
-<p>If photos have been moved or deleted from your hard drive, Yearbird may show broken references. Use <strong>Photos → Remove Missing Photo References</strong> to scan for and remove any associations pointing to files that no longer exist.</p>
+<p>If photos have been moved or deleted from your hard drive, Yearbirder may show broken references. Use <strong>Photos → Remove Missing Photo References</strong> to scan for and remove any associations pointing to files that no longer exist.</p>
 
 <h3>What the Photo Settings file contains</h3>
-<p>The CSV file stores one row per photo reference, with columns for:</p>
+<p>The data file stores one row per photo reference, with columns for:</p>
 <ul>
   <li>File path to the JPEG</li>
   <li>Associated species common name</li>
@@ -736,7 +736,7 @@
   <li>Focal length (from EXIF)</li>
   <li>ISO (from EXIF)</li>
 </ul>
-<p>You can open the CSV in a spreadsheet application to inspect or bulk-edit values, but be careful to preserve the column order and formatting.</p>
+<p>You can open the data file in a spreadsheet application to inspect or bulk-edit values, but be careful to preserve the column order and formatting.</p>
 
 <hr>
 
@@ -759,17 +759,17 @@
 <h2 id="printing">21. Printing and PDF Export</h2>
 
 <h3>Printing</h3>
-<p>Click <strong>Print</strong> on the toolbar or choose <strong>File → Print</strong>. The current active child window is sent to the printer. Most list and report windows print sensibly; map and photo windows print a screenshot of the current view.</p>
+<p>Click <strong>Print</strong> on the toolbar or choose <strong>File → Print</strong>. The currently active window is sent to the printer. Most list and report windows print sensibly; map and photo windows print a screenshot of the current view.</p>
 
 <h3>PDF Export</h3>
-<p>Click <strong>Create PDF</strong> on the toolbar or choose <strong>File → Create PDF</strong>. Yearbird exports the active child window to a PDF file. A file save dialog lets you choose the destination. This is the recommended way to save or share a specific view of your data.</p>
+<p>Click <strong>Create PDF</strong> on the toolbar or choose <strong>File → Create PDF</strong>. Yearbirder exports the active window to a PDF file. A file save dialog lets you choose the destination. This is the recommended way to save or share a specific view of your data.</p>
 
 <hr>
 
 <h2 id="tips">22. Tips and Tricks</h2>
 
 <h3>Keep multiple windows open for comparison</h3>
-<p>Because Yearbird is an MDI application, you can open several child windows simultaneously. For example, open a Species List filtered to one location, then open a second Species List filtered to a different location, and use <strong>Windows → Tile Windows</strong> to view them side by side.</p>
+<p>Yearbirder allows many windows to be open at the same time. For example, open a Species List filtered to one location, then open a second Species List filtered to a different location, and use <strong>Windows → Tile Windows</strong> to view them side by side.</p>
 
 <h3>Seasonal migration analysis</h3>
 <p>Set the seasonal range filter to a narrow window (for example, May 1–May 15) and open the Date Totals report. You will see how your spring migration counts vary from year to year across those same two weeks.</p>
@@ -794,7 +794,7 @@
 <h3>Photo workflow tips</h3>
 <ul>
   <li><strong>Rate your photos immediately</strong> after a field outing while the session is fresh. Use the Enlargement view to assign ratings of 1–5.</li>
-  <li><strong>Back up your Photo Settings CSV</strong> alongside your eBird data file. It is the only record of your photo associations.</li>
+  <li><strong>Back up your Photo Settings data file</strong> alongside your eBird data file. It is the only record of your photo associations.</li>
   <li><strong>Use the Photo Filter to find your best shots</strong>: set Rating Range to 4–5 and open the Photos gallery to see only your highest-rated photos.</li>
   <li><strong>Update EXIF data</strong> after any significant photo editing session or file reorganisation to keep the metadata in sync.</li>
 </ul>
@@ -803,16 +803,16 @@
 
 <h2 id="preferences">23. Saving Preferences</h2>
 
-<p> You can tell Yearbird which folder you use to download ebird files. Yearbird will load the most recent ebird file from that folder whenever Yearbird starts.</p>
+<p> You can tell Yearbirder which folder you use to download ebird files. Yearbirder will load the most recent ebird file from that folder whenever Yearbirder starts.</p>
 
-<p>You can also tell Yearbird which Photo Settings file to use automatically when it starts.</p>
+<p>You can also tell Yearbirder which Photo Settings file to use automatically when it starts.</p>
 
-<p>Click <strong>Yearbird → Preferences</strong> on the menu bar to set your preferences.</p>
+<p>Click <strong>Yearbirder → Preferences</strong> on the menu bar to set your preferences.</p>
 
 <hr>
 
 <div class="footer">
-  <p>Yearbird is free, open-source software licensed under the GNU General Public License v3.<br>
+  <p>Yearbirder is free, open-source software licensed under the GNU General Public License v3.<br>
   Created by Richard Trinkner.</p>
 </div>
 

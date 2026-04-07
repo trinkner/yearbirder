@@ -210,17 +210,45 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
    
    
     def html(self):
-    
+
 #         QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+
+        # Build heading: type (H1) and filter details (H2).
+        # When _buildFilterTitle was used, self.title is already "Type: filter details".
+        # For maps/photos that set a plain self.title, use self.filter to build the description.
+        title = getattr(self, 'title', '')
+        filter_obj = getattr(self, 'filter', None)
+
+        if ': ' in title:
+            type_part, filter_part = title.split(': ', 1)
+            heading = '<h1>' + type_part + '</h1><h2>' + filter_part + '</h2>'
+        elif filter_obj is not None:
+            full_title = filter_obj.buildWindowTitle(title, self.mdiParent.db)
+            if ': ' in full_title:
+                type_part, filter_part = full_title.split(': ', 1)
+                heading = '<h1>' + type_part + '</h1><h2>' + filter_part + '</h2>'
+            else:
+                heading = '<h1>' + full_title + '</h1>'
+        else:
+            heading = '<h1>' + title + '</h1>' if title else ''
 
         html = """
             <!DOCTYPE html>
             <html>
             <head>
             </head>
+            <style>
+            * {
+                font-family: "Times New Roman", Times, serif;
+            }
+            h1 { font-size: 18pt; margin-bottom: 4px; }
+            h2 { font-size: 13pt; font-weight: normal; margin-top: 0; }
+            </style>
             <body>
             """
-        
+
+        html = html + heading
+
         myPixmap = self.webView.grab()
         myPixmap = myPixmap.scaledToWidth(600, Qt.SmoothTransformation)
 
@@ -230,21 +258,21 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
         myPixmap.save(myBuffer, "PNG")
 
         encodedImage = base64.b64encode(myByteArray)
-        
+
         html = html + ("""
-        <img src="data:image/png;base64, 
+        <img src="data:image/png;base64,
         """)
-        
+
         html = html + str(encodedImage)[1:]
-        
+
         html = html + ("""
             <font size>
             </body>
             </html>
             """)
-        
-#         QApplication.restoreOverrideCursor()   
-        
+
+#         QApplication.restoreOverrideCursor()
+
         return(html)
         
        
@@ -260,9 +288,9 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
         self.resize(windowWidth, windowHeight)
 
 
-    def loadAboutYearbird(self):
+    def loadAboutYearbirder(self):
         
-        self.title= "About Yearbird"
+        self.title= "About Yearbirder"
         
         self.contentType = "About"
                     
@@ -270,7 +298,7 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
 <html>
 <head>
 <meta charset="utf-8">
-<title>About Yearbird</title>
+<title>About Yearbirder</title>
 <style>
   body {
     background-color: #1e1f26;
@@ -316,18 +344,18 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
 </style>
 </head>
 <body>
-<h1>Yearbird</h1>
+<h1>Yearbirder</h1>
 """
         html += f'<p class="subtitle">Version {self.mdiParent.versionNumber} &nbsp;&bull;&nbsp; {self.mdiParent.versionDate}</p>'
         html += """
 <p class="description">
-  Yearbird is a free, open-source application for analyzing personal eBird sightings.<br>
+  Yearbirder is a desktop app to help birders analyze, visualize and map their personal eBird sightings and, optionally, their bird photography. Yearbirder is a free and open-source Python application.<br>
   Created by Richard Trinkner.
 </p>
 
 <h2>Licenses</h2>
 <ul>
-  <li><b>Yearbird</b> is licensed under the GNU General Public License, version 3.</li>
+  <li><b>Yearbirder</b> is licensed under the GNU General Public License, version 3.</li>
   <li><b>PySide6</b>, by The Qt Company, is used under the GNU Lesser General Public
       License (LGPL) version 3, which permits free non-commercial use.</li>
   <li><b>Matplotlib</b>, by the Matplotlib Development Team, is used under the
@@ -348,7 +376,7 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
 
         self.webView.setHtml(html)
                 
-        self.setWindowTitle("About Yearbird")
+        self.setWindowTitle("About Yearbirder")
 
         return(True)
 
@@ -361,7 +389,7 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
             base_path = sys._MEIPASS
         else:
             base_path = os.path.dirname(os.path.abspath(__file__))
-        guide_path = os.path.join(base_path, "guide", "guide_Yearbird.html")
+        guide_path = os.path.join(base_path, "guide", "guide_Yearbirder.html")
         self.webView.load(QUrl.fromLocalFile(guide_path))
         self.resizeMe()
         self.scaleMe()
@@ -411,7 +439,7 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
             location_species[s["location"]][s["commonName"]] = None
         species_counts = {loc: len(sp) for loc, sp in location_species.items()}
 
-        location_map = folium.Map(tiles="CartoDB Positron")
+        location_map = folium.Map(tiles="CartoDB Voyager")
 
         # Build tooltip HTML for each location; stored in a JS dict for
         # the custom positioned tooltip (not folium.Tooltip, which can't be
@@ -569,13 +597,28 @@ document.addEventListener("DOMContentLoaded", function() {{
 
 
     def _lerp_orange(self, value, max_value):
-        """Return a hex color interpolated from cream to orange based on value/max_value."""
+        """Return a hex color across a 3-stop yellow → orange → deep red gradient.
+
+        Uses a square-root scale for good spread across skewed distributions.
+        Blue stays at zero throughout to maintain full saturation at every shade.
+        Stop 1 (t=0.0): #ffff6e (light yellow)
+        Stop 2 (t=0.5): #ff6600 (vivid orange)
+        Stop 3 (t=1.0): #880000 (deep dark red)
+        """
         if value == 0 or max_value == 0:
-            return '#f0f0f0'
-        t = min(value / (max_value * 0.75), 1.0)
-        r = 255
-        g = int(240 + t * (119 - 240))
-        b = int(227 + t * (0 - 227))
+            return '#e8e8e8'
+        import math
+        t = min(math.sqrt(value / max_value), 1.0)
+        if t < 0.5:
+            s = t * 2                          # 0 → 1 across first half
+            r = 255
+            g = int(255 + s * (102 - 255))     # 255 → 102
+            b = int(110 * (1 - s))             # 110 →   0  (lightens yellow, fades out by orange)
+        else:
+            s = (t - 0.5) * 2                  # 0 → 1 across second half
+            r = int(255 + s * (136 - 255))     # 255 → 136
+            g = int(102 + s * (  0 - 102))     # 102 →   0
+            b = 0
         return f'#{r:02x}{g:02x}{b:02x}'
 
 
@@ -701,11 +744,12 @@ document.addEventListener("DOMContentLoaded", function() {{
         self.filter = deepcopy(filter)
 
         minimalSightingList = self.mdiParent.db.GetMinimalFilteredSightingsList(filter)
+        cf = self.mdiParent.db.CompileFilter(filter)
 
         stateDict = defaultdict()
         for s in minimalSightingList:
             if s["country"] == "US":
-                if self.mdiParent.db.TestSighting(s, filter):
+                if self.mdiParent.db.TestSightingCompiled(s, cf):
                     key = s["state"][3:5]
                     if key not in stateDict:
                         stateDict[key] = []
@@ -767,7 +811,7 @@ document.addEventListener("DOMContentLoaded", function() {{
                 f["properties"].pop("clickKey", None)
                 f["properties"].pop("tipKey",   None)
 
-        state_map = folium.Map(location=[39.5, -98.3], zoom_start=4, tiles="CartoDB Positron")
+        state_map = folium.Map(location=[39.5, -98.3], zoom_start=4, tiles="CartoDB Voyager")
 
         folium.GeoJson(
             geo_file,
@@ -809,10 +853,11 @@ document.addEventListener("DOMContentLoaded", function() {{
 
         provDict = defaultdict()
         minimalSightingList = self.mdiParent.db.GetMinimalFilteredSightingsList(filter)
+        cf = self.mdiParent.db.CompileFilter(filter)
 
         for s in minimalSightingList:
             if s["country"] == "CA":
-                if self.mdiParent.db.TestSighting(s, filter):
+                if self.mdiParent.db.TestSightingCompiled(s, cf):
                     provCode = s["state"][3:5]
                     if provCode not in provDict:
                         provDict[provCode] = []
@@ -874,7 +919,7 @@ document.addEventListener("DOMContentLoaded", function() {{
                 f["properties"].pop("clickKey", None)
                 f["properties"].pop("tipKey",   None)
 
-        prov_map = folium.Map(location=[62, -96], zoom_start=3, tiles="CartoDB Positron")
+        prov_map = folium.Map(location=[62, -96], zoom_start=3, tiles="CartoDB Voyager")
 
         folium.GeoJson(
             geo_file,
@@ -915,10 +960,11 @@ document.addEventListener("DOMContentLoaded", function() {{
 
         stateDict = defaultdict()
         minimalSightingList = self.mdiParent.db.GetMinimalFilteredSightingsList(filter)
+        cf = self.mdiParent.db.CompileFilter(filter)
 
         for s in minimalSightingList:
             if s["country"] == "IN":
-                if self.mdiParent.db.TestSighting(s, filter):
+                if self.mdiParent.db.TestSightingCompiled(s, cf):
                     stateCode = s["state"]
                     if stateCode not in stateDict:
                         stateDict[stateCode] = []
@@ -980,7 +1026,7 @@ document.addEventListener("DOMContentLoaded", function() {{
                 f["properties"].pop("clickKey", None)
                 f["properties"].pop("tipKey",   None)
 
-        state_map = folium.Map(location=[22, 80], zoom_start=4, tiles="CartoDB Positron")
+        state_map = folium.Map(location=[22, 80], zoom_start=4, tiles="CartoDB Voyager")
 
         folium.GeoJson(
             geo_file,
@@ -1021,10 +1067,11 @@ document.addEventListener("DOMContentLoaded", function() {{
 
         countyDict = defaultdict()
         minimalSightingList = self.mdiParent.db.GetMinimalFilteredSightingsList(filter)
+        cf = self.mdiParent.db.CompileFilter(filter)
 
         for s in minimalSightingList:
             if s["country"] == "GB":
-                if self.mdiParent.db.TestSighting(s, filter):
+                if self.mdiParent.db.TestSightingCompiled(s, cf):
                     county = s.get("county", "")
                     if county != "":
                         countyName = county.split(" (")[0].strip()
@@ -1087,7 +1134,7 @@ document.addEventListener("DOMContentLoaded", function() {{
                 f["properties"].pop("clickKey", None)
                 f["properties"].pop("tipKey",   None)
 
-        county_map = folium.Map(location=[54, -2], zoom_start=5, tiles="CartoDB Positron")
+        county_map = folium.Map(location=[54, -2], zoom_start=5, tiles="CartoDB Voyager")
 
         folium.GeoJson(
             geo_file,
@@ -1130,11 +1177,12 @@ document.addEventListener("DOMContentLoaded", function() {{
 
         countyDict = defaultdict()
         minimalSightingList = self.mdiParent.db.GetMinimalFilteredSightingsList(filter)
+        cf = self.mdiParent.db.CompileFilter(filter)
 
         for s in minimalSightingList:
             if s["country"] == "US" and s["state"] not in ["US-HI", "US-AK"]:
                 if "countyCode" in s.keys():
-                    if self.mdiParent.db.TestSighting(s, filter):
+                    if self.mdiParent.db.TestSightingCompiled(s, cf):
                         key = s["countyCode"]
                         if key not in countyDict:
                             countyDict[key] = []
@@ -1198,7 +1246,7 @@ document.addEventListener("DOMContentLoaded", function() {{
                 f["properties"].pop("clickKey", None)
                 f["properties"].pop("tipKey",   None)
 
-        county_map = folium.Map(location=[39.5, -98.3], zoom_start=4, tiles="CartoDB Positron")
+        county_map = folium.Map(location=[39.5, -98.3], zoom_start=4, tiles="CartoDB Voyager")
 
         folium.GeoJson(
             geo_file,
@@ -1247,9 +1295,10 @@ document.addEventListener("DOMContentLoaded", function() {{
 
         countryDict = defaultdict()
         minimalSightingList = self.mdiParent.db.GetMinimalFilteredSightingsList(filter)
+        cf = self.mdiParent.db.CompileFilter(filter)
 
         for s in minimalSightingList:
-            if self.mdiParent.db.TestSighting(s, filter):
+            if self.mdiParent.db.TestSightingCompiled(s, cf):
                 key = s["country"]
                 if key not in countryDict:
                     countryDict[key] = []
@@ -1311,7 +1360,7 @@ document.addEventListener("DOMContentLoaded", function() {{
                 f["properties"].pop("clickKey", None)
                 f["properties"].pop("tipKey",   None)
 
-        choro_map = folium.Map(location=[1, 1], zoom_start=1, tiles="CartoDB Positron")
+        choro_map = folium.Map(location=[1, 1], zoom_start=1, tiles="CartoDB Voyager")
 
         folium.GeoJson(
             geo_file,
@@ -1365,12 +1414,13 @@ document.addEventListener("DOMContentLoaded", function() {{
 
         # ── Collect lifers: first qualifying sighting of each species ──────
         minimal = self.mdiParent.db.GetMinimalFilteredSightingsList(filter)
+        cf = self.mdiParent.db.CompileFilter(filter)
         minimal_sorted = sorted(minimal, key=lambda s: (s.get("date", ""), s.get("time", "")))
 
         seen   = set()
         lifers = []
         for s in minimal_sorted:
-            if not self.mdiParent.db.TestSighting(s, filter):
+            if not self.mdiParent.db.TestSightingCompiled(s, cf):
                 continue
             name = s.get("commonName", "")
             if "/" in name or "sp." in name or " x " in name:
@@ -1410,7 +1460,7 @@ document.addEventListener("DOMContentLoaded", function() {{
         life_map = folium.Map(
             location=[sum(lats) / total, sum(lons) / total],
             zoom_start=4,
-            tiles="CartoDB Positron",
+            tiles="CartoDB Voyager",
         )
         life_map.fit_bounds([[min(lats), min(lons)], [max(lats), max(lons)]])
 
@@ -1704,7 +1754,7 @@ document.addEventListener("DOMContentLoaded", function() {{
         photo_map = folium.Map(
             location=[avg_lat, avg_lon],
             zoom_start=5,
-            tiles="CartoDB Positron",
+            tiles="CartoDB Voyager",
         )
 
         # Add an empty MarkerCluster so Folium loads the markercluster JS
@@ -1857,7 +1907,7 @@ document.addEventListener("DOMContentLoaded", function() {{
         import tempfile
         from pathlib import Path
 
-        self.title = "Animated Photo Sequence"
+        self.title = "Animated Sequence Map"
         self.filter = deepcopy(filter)
 
         # ── Collect geolocated photos sorted chronologically ─────────────
@@ -1908,7 +1958,7 @@ document.addEventListener("DOMContentLoaded", function() {{
         photo_map = folium.Map(
             location=[sum(lats) / total, sum(lons) / total],
             zoom_start=4,
-            tiles="CartoDB Positron",
+            tiles="CartoDB Voyager",
         )
         photo_map.fit_bounds([[min(lats), min(lons)], [max(lats), max(lons)]])
 
@@ -2169,7 +2219,7 @@ document.addEventListener("DOMContentLoaded", function() {{
             tmp_path = f.name
 
         self.webView.setUrl(QUrl.fromLocalFile(tmp_path))
-        self._buildFilterTitle(filter, "Animated Photo Sequence", count=total, countUnit="Photos")
+        self._buildFilterTitle(filter, "Animated Sequence Map", count=total, countUnit="Photos")
 
         return True
 
@@ -2252,7 +2302,7 @@ document.addEventListener("DOMContentLoaded", function() {{
         effort_map = folium.Map(
             location=[avg_lat, avg_lon],
             zoom_start=5,
-            tiles="CartoDB Positron",
+            tiles="CartoDB Voyager",
         )
 
         tip_data = {}
@@ -2524,7 +2574,7 @@ document.addEventListener("DOMContentLoaded", function() {{
         bubble_map = folium.Map(
             location=[avg_lat, avg_lon],
             zoom_start=5,
-            tiles="CartoDB Positron",
+            tiles="CartoDB Voyager",
         )
 
         # Build tooltip data for both modes

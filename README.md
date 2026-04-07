@@ -1,5 +1,5 @@
 <table><tr>
-<td><img src="icons/Yearbird_Icon_1024.png" alt="Yearbird" height="120"></td>
+<td><img src="icons/Yearbirder_Icon_1024.png" alt="Yearbirder" height="120"></td>
 <td><img src="src/readme_photos/demo_Lists.png" alt="Lists" height="120"></td>
 <td><img src="src/readme_photos/demo_Reports1.png" alt="Reports" height="120"></td>
 <td><img src="src/readme_photos/demo_Graphs1.png" alt="Graphs" height="120"></td>
@@ -7,11 +7,11 @@
 <td><img src="src/readme_photos/demo_Photos1.png" alt="Photos" height="120"></td>
 </tr></table>
 
-# Yearbird
+# Yearbirder
 
 A desktop application for exploring and analysing your personal [eBird](https://ebird.org) data and your personal photos of birds.
 
-Yearbird lets you filter, browse, and visualise your personal eBird sightings in ways the eBird website does not — across every location, species, date, and season in your personal history. If you are a bird photogrpaher, Yearbird also lets you sort, filter and view your photos in the same way.
+Yearbirder lets you filter, browse, and visualise your personal eBird sightings in ways the eBird website does not — across every location, species, date, and season in your personal history. If you are a bird photogrpaher, Yearbirder also lets you sort, filter and view your photos in the same way.
 
 ---
 
@@ -61,7 +61,7 @@ Yearbird lets you filter, browse, and visualise your personal eBird sightings in
 
 A pre-built, signed, and notarized macOS app is available on the [Releases page](https://github.com/trinkner/yearbird/releases/latest).
 
-Download `Yearbird.dmg`, open it, and drag Yearbird to your Applications folder.
+Download `Yearbirder.dmg`, open it, and drag Yearbirder to your Applications folder.
 
 ---
 
@@ -81,10 +81,10 @@ pip install pyside6 folium natsort piexif
 
 ---
 
-## Running Yearbird
+## Running Yearbirder
 
 ```
-python3 yearbird.py
+python3 yearbirder.py
 ```
 
 ---
@@ -94,24 +94,24 @@ python3 yearbird.py
 1. Go to [https://ebird.org/downloadMyData](https://ebird.org/downloadMyData)
 2. Click **Request My Observations**
 3. eBird will email you a link to download a `.csv` file containing your complete sightings history
-4. In Yearbird, click **File → Open** and select that file
+4. In Yearbirder, click **File → Open** and select that file
 
 ---
 
 ## Building a Standalone App (macOS)
 
-Yearbird uses [PyInstaller](https://pyinstaller.org) to create a distributable `.app` bundle. From the project root directory:
+Yearbirder uses [PyInstaller](https://pyinstaller.org) to create a distributable `.app` bundle. From the project root directory:
 
 ```
-pyinstaller Yearbird.spec
+pyinstaller Yearbirder.spec
 ```
 
-The finished app will be in `dist/Yearbird.app`.
+The finished app will be in `dist/Yearbirder.app`.
 
 ---
 
 ## License
 
-Yearbird is free, open-source software licensed under the [GNU General Public License v3](https://www.gnu.org/licenses/gpl-3.0.html).
+Yearbirder is free, open-source software licensed under the [GNU General Public License v3](https://www.gnu.org/licenses/gpl-3.0.html).
 
 Created by Richard Trinkner.

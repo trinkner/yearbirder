@@ -71,9 +71,12 @@ class DataBase():
         self.countyDict = {}
         self.locationDict = {}
         self.checklistDict = {}
+        self.orderDict = {}
+        self.familyDict = {}
         self.familySpeciesDict = {}
         self.orderSpeciesDict = {}
         self.bblCodeDict = {}
+        self._regionCache = {}
         self._seenLocations = set()
         self.photoDataFile = ""
         self.startupFolder = ""
@@ -793,6 +796,281 @@ class DataBase():
         self.countryStateCodeFileFound = True
 
 
+    def _computeRegionCodes(self, country, state):
+        """Compute region code list for a (country, state) pair, with caching."""
+        key = (country, state)
+        cached = self._regionCache.get(key)
+        if cached is not None:
+            return cached
+
+        regionCodes = []
+
+        # ----------------------------------------
+        # add ABA if in US, Canada, or St. Pierre et Miquelon, but exclude Hawaii
+        if country in ["US", "CA", "PM"]:
+            if state != "US-HI":
+                regionCodes.append("ABA")
+
+        # ----------------------------------------
+        # add AOU if if in US, Canada, St. Pierre et Miquelon, Mexico, Central America
+        if country in [
+            "US", "CA", "PM", "MX", "GT", "SV", "HN", "CR", "PA",
+            "CU", "HT", "DO", "JM", "KY", "PR", "VG", "VI", "AI",
+            "MF", "BL", "BQ", "KN", "AG", "MS", "GP", "DM", "BS",
+            "BB", "GD", "LC", "VC", "BM", "CP", "NI"
+            ]:
+            regionCodes.append("AOU")
+
+        if state in [
+            "CO-SAP", "UM-67", "UM-71"
+            ]:
+            regionCodes.append("AOU")
+
+        # ----------------------------------------
+        # add USL if if in Lower 48 US states listing region as designated by eBird
+
+        if country == "US":
+            if state not in ["US-AK", "US-HI"]:
+                regionCodes.append("USL")
+
+
+        #---------------------------------------
+        # add AFR if if in Africa
+        if country in [
+            "DZ", "AO", "SH", "BJ", "BW", "BF", "BI", "CM", "CV", "CF", "TD",
+            "KM", "CG", "CD", "DJ", "GQ", "ER", "SZ", "ET", "GA", "GM",
+            "GH", "GN", "GW", "CI", "KE", "LS", "LR", "LY", "MG", "MW", "ML",
+            "MR", "MU", "YT", "MA", "MZ", "NA", "NE", "NG", "ST", "RE", "RW",
+            "ST", "SN", "SC", "SL", "SO", "ZA", "SS", "SH", "SD", "SZ", "TZ",
+            "TG", "TN", "UG", "CD", "ZM", "TZ", "ZW"
+            ]:
+            regionCodes.append("AFR")
+
+        if state == "ES-CN":
+            regionCodes.append("AFR")
+
+        if country == "EG":
+            if state not in ["EG-PTS", "EG-JS", "EG-SIN"]:
+                regionCodes.append("AFR")
+
+        # ----------------------------------------
+        # add ASI if if in Asia
+        if country in [
+            "AF", "AM", "AZ", "BH", "BD", "BT", "BN", "KH", "CN", "CX", "CC",
+            "IO", "GE", "HK", "IN", "IR", "IQ", "IL", "JP", "JO",
+            "KW", "KG", "LA", "LB", "MO", "MY", "MV", "MN", "MM", "NP", "KP",
+            "OM", "PK", "PS", "PH", "QA", "SA", "SG", "KR", "LK", "SY", "TW",
+            "TJ", "TH", "TM", "AE", "UZ", "VN", "YE", "SD", "SZ", "TZ",
+            "TG", "TN", "UG", "CD", "ZM", "TZ", "ZW"
+            ]:
+            regionCodes.append("ASI")
+
+        if country == "TR":
+            if state not in ["TR-22", "TR-39", "TR-59"]:
+                regionCodes.append("ASI")
+
+        if country == "KZ":
+            if state not in ["KZ-ATY", "KZ-ZAP"]:
+                regionCodes.append("ASI")
+
+        if country == "ID":
+            if state != "ID-IJ":
+                regionCodes.append("ASI")
+
+        if country == "EG":
+            if state in ["EG-PTS", "EG-JS", "EG-SIN"]:
+                regionCodes.append("ASI")
+
+        if country == "RU":
+            if state in [
+                "RU-YAN", "RU-KHM", "RU-TYU", "RU-OMS", "RU-TOM", "RU-NVS",
+                "RU-ALT", "RU-KEM", "RU-AL", "RU-KK", "RU-KYA", "RU-TY",
+                "RU-IRK", "RU-SA", "RU-BU", "RU-ZAB", "RU-AMU", "RU-KHA",
+                "RU-YEV", "RU-PRI", "RU-MAG", "RU-CHU", "RU-KAM", "RU-SAK"
+                ]:
+                regionCodes.append("ASI")
+
+        # ----------------------------------------
+        # add ATL if if in Atlantic listing region
+
+        # Note that pelagic sightings more than 200 miles from a state
+        # will not be counted here because I don't know how to calculate
+        # if a log/lat sighting is 200 miles from a state
+
+        if country in [
+            "BM", "FK", "SH"
+            ]:
+            regionCodes.append("ATL")
+
+
+        # ----------------------------------------
+        # add AUE if if in Australasia (eBird) listing region
+
+        if country in [
+            "AU", "AC", "NF", "NZ", "SB", "VU", "NC", "PG",
+            ]:
+            regionCodes.append("AUE")
+
+        if state in [
+            "ID-IJ", "ID-MA"
+            ]:
+            regionCodes.append("AUE")
+
+
+        # ----------------------------------------
+        # add AUA if if in Australasia (ABA) listing region
+
+        if country in [
+            "AU", "ID"
+            ]:
+            regionCodes.append("AUA")
+
+
+        # ----------------------------------------
+        # add AUS if if in Australia listing region as designated by eBird
+
+        if country in [
+            "AU", "HM", "CX", "CC", "NF", "AC"
+            ]:
+            regionCodes.append("AUS")
+
+
+        # ----------------------------------------
+        # add EUR if if in Europe listing region as designated by eBird
+
+        if country in [
+            "AL", "AD", "AT", "BY", "BE", "BA", "BG", "HR", "CY", "CZ", "DK",
+            "EE", "FO", "FI", "FR", "DE", "GI", "GR", "HU", "IS", "IE", "IM",
+            "IT", "RS", "LV", "LI", "LT", "LU", "MK", "MT", "MD", "MC", "ME",
+            "NL", "NO", "PL", "PT", "RO", "RU", "SM", "RS", "SK", "SI",
+            "SE", "CH", "UA", "GB", "VA", "JE"
+            ]:
+            regionCodes.append("EUR")
+
+        # include Spain, but not Canaries
+        if country == "ES":
+            if state != "ES-CN":
+                regionCodes.append("EUR")
+
+        # include Russia, but exclude Asian regions of Russia
+        if country == "RU":
+            if state not in [
+                "RU-YAN", "RU-KHM", "RU-TYU", "RU-OMS", "RU-TOM", "RU-NVS",
+                "RU-ALT", "RU-KEM", "RU-AL", "RU-KK", "RU-KYA", "RU-TY",
+                "RU-IRK", "RU-SA", "RU-BU", "RU-ZAB", "RU-AMU", "RU-KHA",
+                "RU-YEV", "RU-PRI", "RU-MAG", "RU-CHU", "RU-KAM", "RU-SAK"
+                ]:
+                    regionCodes.append("EUR")
+
+        # include European areas of Turkey
+        if state in ["TR-22", "TR-39", "TR-59"]:
+            regionCodes.append("EUR")
+
+        # include European areas of Kazakhstan
+        if state in ["KZ-ATY", "KZ-ZAP"]:
+            regionCodes.append("EUR")
+
+
+        # ----------------------------------------
+        # add NAM if if in North America listing region as designated by eBird
+
+        if country in [
+            "CA", "PM", "MX", "GT", "SV", "HN", "CR", "PA",
+            "CU", "HT", "DO", "JM", "KY", "PR", "VG", "VI", "AI",
+            "MF", "BL", "BQ", "KN", "AG", "MS", "GP", "DM", "BS",
+            "BB", "GD", "LC", "VC", "BM", "CP", "GL", "NI"
+            ]:
+            regionCodes.append("NAM")
+
+        if state in [
+            "CO-SAP"
+            ]:
+            regionCodes.append("NAM")
+
+        if country == "US":
+            if state != "US-HI":
+                regionCodes.append("NAM")
+
+
+        # ----------------------------------------
+        # add SAM if if in South America listing region as designated by eBird
+
+        if country in [
+            "AR", "BO", "BR", "CL", "CO", "FK", "GF",
+            "GY", "GY", "PY", "PE", "SR", "UY", "VE", "TT", "CW", "AW"
+            ]:
+            regionCodes.append("SAM")
+
+        if state in [
+            "BQ-BO"
+            ]:
+            regionCodes.append("SAM")
+
+        if country == "EC" and state != "EC-W":
+            regionCodes.append("SAM")
+
+
+        # ----------------------------------------
+        # add WIN if if in West Indies listing region as designated by eBird
+
+        if country in [
+            "AI", "AG", "AW", "BS", "BB", "VG", "KY", "VI"
+            "CU", "DM", "DO", "GD", "GP", "HT", "JM", "MQ",
+            "MS", "AN", "PR", "KN", "LC", "VC", "TT", "TC"
+            ]:
+            regionCodes.append("WIN")
+
+        if state == "CO-SAP":
+            regionCodes.append("WIN")
+
+
+        # ----------------------------------------
+        # add CAM if if in Central America listing region as designated by eBird
+
+        if country in [
+            "BZ", "CR", "SV", "GT", "HN", "NI", "PA"
+            ]:
+            regionCodes.append("CAM")
+
+
+        # ----------------------------------------
+        # add SPO if if in South Polar listing region as designated by eBird
+
+        if country in [
+            "AQ", "BV", "GS", "HM"
+            ]:
+            regionCodes.append("SPO")
+
+
+        # ----------------------------------------
+        # add WH if if in Western Hemisphere listing region as designated by eBird
+
+        if "NAM" in regionCodes:
+            regionCodes.append("WHE")
+
+        if "SAM" in regionCodes:
+            regionCodes.append("WHE")
+
+        if country in [
+            "CP", "BM", "FK"
+            ]:
+            regionCodes.append("WHE")
+
+        if state in [
+            "US-HI", "UM-67", "UM-71", "EC-W"
+            ]:
+            regionCodes.append("WHE")
+
+
+        # ------------------------------------------------------
+        # add EH if in Eastern Hemisphere  (not Western, and not South Polar)
+
+        if "WHE" not in regionCodes and "SPO" not in regionCodes:
+            regionCodes.append("EHE")
+
+        self._regionCache[key] = regionCodes
+        return regionCodes
+
     def ReadDataFile(self, DataFile, progress_callback=None):
 
         self.ClearDatabase()
@@ -905,7 +1183,7 @@ class DataBase():
             if thisSightingDict["distance"] is None:
                 thisSightingDict["distance"] = ""
             if thisSightingDict["observers"] is None:
-                thisSightingDict["observers"] = ""            
+                thisSightingDict["observers"] = ""
             if thisSightingDict["breedingCode"] is None:
                 thisSightingDict["breedingCode"] = ""
             if "Observation Details" in line:
@@ -915,10 +1193,10 @@ class DataBase():
             if thisSightingDict["speciesComments"] is None:
                 thisSightingDict["speciesComments"] = ""
             if thisSightingDict["checklistComments"] is None:
-                thisSightingDict["checklistComments"] = ""    
+                thisSightingDict["checklistComments"] = ""
             thisSightingDict["family"] = ""
-            thisSightingDict["order"] = "" 
-                            
+            thisSightingDict["order"] = ""
+
             # If a US sighting, use countyCodeDict to assign the unique 5-digit FIPS code for the county
             # we'll use this for choropleths
             if thisSightingDict["country"] == "US" and thisSightingDict["state"] not in ["US-HI", "US-AK"]:
@@ -927,274 +1205,11 @@ class DataBase():
                     fips = self._countyFipsLookup.get((countyNameWithoutParentheses, thisSightingDict["state"][3:5]))
                     if fips:
                         thisSightingDict["countyCode"] = fips
-                
-                                         
-            # add abbreviations for the regions recognized by eBird
-            
-            # ----------------------------------------            
-            # add ABA if in US, Canada, or St. Pierre et Miquelon, but exclude Hawaii
-            if thisSightingDict["country"] in ["US", "CA", "PM"]:
-                if thisSightingDict["state"] != "US-HI":
-                    thisSightingDict["regionCodes"].append("ABA")
-            
-            # ----------------------------------------            
-            # add AOU if if in US, Canada, St. Pierre et Miquelon, Mexico, Central America
-            if thisSightingDict["country"] in [
-                "US", "CA", "PM", "MX", "GT", "SV", "HN", "CR", "PA",
-                "CU", "HT", "DO", "JM", "KY", "PR", "VG", "VI", "AI",
-                "MF", "BL", "BQ", "KN", "AG", "MS", "GP", "DM", "BS",
-                "BB", "GD", "LC", "VC", "BM", "CP", "NI"
-                ]:
-                thisSightingDict["regionCodes"].append("AOU")
-            
-            if thisSightingDict["state"] in [
-                "CO-SAP", "UM-67", "UM-71"
-                ]:
-                thisSightingDict["regionCodes"].append("AOU")
 
-            # ----------------------------------------        
-            # add USL if if in Lower 48 US states listing region as designated by eBird
-                        
-            if thisSightingDict["country"] == "US":
-                if thisSightingDict["state"] not in ["US-AK", "US-HI"]:
-                    thisSightingDict["regionCodes"].append("USL")
+            # compute region codes using cached helper
+            regionCodes = self._computeRegionCodes(thisSightingDict["country"], thisSightingDict["state"])
+            thisSightingDict["regionCodes"] = regionCodes
 
-            
-            #--------------------------------------- 
-            # add AFR if if in Africa
-            if thisSightingDict["country"] in [
-                "DZ", "AO", "SH", "BJ", "BW", "BF", "BI", "CM", "CV", "CF", "TD", 
-                "KM", "CG", "CD", "DJ", "GQ", "ER", "SZ", "ET", "GA", "GM", 
-                "GH", "GN", "GW", "CI", "KE", "LS", "LR", "LY", "MG", "MW", "ML", 
-                "MR", "MU", "YT", "MA", "MZ", "NA", "NE", "NG", "ST", "RE", "RW", 
-                "ST", "SN", "SC", "SL", "SO", "ZA", "SS", "SH", "SD", "SZ", "TZ", 
-                "TG", "TN", "UG", "CD", "ZM", "TZ", "ZW"
-                ]:
-                thisSightingDict["regionCodes"].append("AFR")
-            
-            if thisSightingDict["state"] == "ES-CN":
-                thisSightingDict["regionCodes"].append("AFR")
-                
-            if thisSightingDict["country"] == "EG":
-                if thisSightingDict["state"] not in ["EG-PTS", "EG-JS", "EG-SIN"]:
-                    thisSightingDict["regionCodes"].append("AFR")
-
-            # ----------------------------------------        
-            # add ASI if if in Asia
-            if thisSightingDict["country"] in [        
-                "AF", "AM", "AZ", "BH", "BD", "BT", "BN", "KH", "CN", "CX", "CC", 
-                "IO", "GE", "HK", "IN", "IR", "IQ", "IL", "JP", "JO", 
-                "KW", "KG", "LA", "LB", "MO", "MY", "MV", "MN", "MM", "NP", "KP", 
-                "OM", "PK", "PS", "PH", "QA", "SA", "SG", "KR", "LK", "SY", "TW", 
-                "TJ", "TH", "TM", "AE", "UZ", "VN", "YE", "SD", "SZ", "TZ", 
-                "TG", "TN", "UG", "CD", "ZM", "TZ", "ZW"
-                ]:
-                thisSightingDict["regionCodes"].append("ASI")
-            
-            if thisSightingDict["country"] == "TR":
-                if thisSightingDict["state"] not in ["TR-22", "TR-39", "TR-59"]:
-                    thisSightingDict["regionCodes"].append("ASI")
-
-            if thisSightingDict["country"] == "KZ":
-                if thisSightingDict["state"] not in ["KZ-ATY", "KZ-ZAP"]:
-                    thisSightingDict["regionCodes"].append("ASI")
-
-            if thisSightingDict["country"] == "ID":
-                if thisSightingDict["state"] != "ID-IJ":
-                    thisSightingDict["regionCodes"].append("ASI")
-                                    
-            if thisSightingDict["country"] == "EG":
-                if thisSightingDict["state"] in ["EG-PTS", "EG-JS", "EG-SIN"]:
-                    thisSightingDict["regionCodes"].append("ASI")
-                    
-            if thisSightingDict["country"] == "RU":
-                if thisSightingDict["state"] in [
-                    "RU-YAN", "RU-KHM", "RU-TYU", "RU-OMS", "RU-TOM", "RU-NVS",
-                    "RU-ALT", "RU-KEM", "RU-AL", "RU-KK", "RU-KYA", "RU-TY",
-                    "RU-IRK", "RU-SA", "RU-BU", "RU-ZAB", "RU-AMU", "RU-KHA",
-                    "RU-YEV", "RU-PRI", "RU-MAG", "RU-CHU", "RU-KAM", "RU-SAK"
-                    ]:
-                    thisSightingDict["regionCodes"].append("ASI")                    
-
-            # ----------------------------------------        
-            # add ATL if if in Atlantic listing region
-            
-            # Note that pelagic sightings more than 200 miles from a state
-            # will not be counted here because I don't know how to calculate
-            # if a log/lat sighting is 200 miles from a state
-            
-            if thisSightingDict["country"] in [        
-                "BM", "FK", "SH"
-                ]:
-                thisSightingDict["regionCodes"].append("ATL")
-
-
-            # ----------------------------------------        
-            # add AUE if if in Australasia (eBird) listing region
-                        
-            if thisSightingDict["country"] in [        
-                "AU", "AC", "NF", "NZ", "SB", "VU", "NC", "PG", 
-                ]:
-                thisSightingDict["regionCodes"].append("AUE")
-
-            if thisSightingDict["state"] in [        
-                "ID-IJ", "ID-MA" 
-                ]:
-                thisSightingDict["regionCodes"].append("AUE")
-
-
-            # ----------------------------------------        
-            # add AUA if if in Australasia (ABA) listing region
-                        
-            if thisSightingDict["country"] in [        
-                "AU", "ID" 
-                ]:
-                thisSightingDict["regionCodes"].append("AUA")
-                
-
-            # ----------------------------------------        
-            # add AUS if if in Australia listing region as designated by eBird
-                        
-            if thisSightingDict["country"] in [        
-                "AU", "HM", "CX", "CC", "NF", "AC"
-                ]:
-                thisSightingDict["regionCodes"].append("AUS")
-
-
-            # ----------------------------------------        
-            # add EUR if if in Europe listing region as designated by eBird
-                        
-            if thisSightingDict["country"] in [        
-                "AL", "AD", "AT", "BY", "BE", "BA", "BG", "HR", "CY", "CZ", "DK", 
-                "EE", "FO", "FI", "FR", "DE", "GI", "GR", "HU", "IS", "IE", "IM", 
-                "IT", "RS", "LV", "LI", "LT", "LU", "MK", "MT", "MD", "MC", "ME", 
-                "NL", "NO", "PL", "PT", "RO", "RU", "SM", "RS", "SK", "SI", 
-                "SE", "CH", "UA", "GB", "VA", "JE"
-                ]:
-                thisSightingDict["regionCodes"].append("EUR")  
-                
-            # include Spain, but not Canaries
-            if thisSightingDict["country"] == "ES":
-                if thisSightingDict["state"] != "ES-CN":
-                    thisSightingDict["regionCodes"].append("EUR") 
-                
-            # include Russia, but exclude Asian regions of Russia
-            if thisSightingDict["country"] == "RU":
-                if thisSightingDict["state"] not in [
-                    "RU-YAN", "RU-KHM", "RU-TYU", "RU-OMS", "RU-TOM", "RU-NVS",
-                    "RU-ALT", "RU-KEM", "RU-AL", "RU-KK", "RU-KYA", "RU-TY",
-                    "RU-IRK", "RU-SA", "RU-BU", "RU-ZAB", "RU-AMU", "RU-KHA",
-                    "RU-YEV", "RU-PRI", "RU-MAG", "RU-CHU", "RU-KAM", "RU-SAK"
-                    ]:             
-                        thisSightingDict["regionCodes"].append("EUR")  
-
-            # include European areas of Turkey
-            if thisSightingDict["state"] in ["TR-22", "TR-39", "TR-59"]:
-                thisSightingDict["regionCodes"].append("EUR")
-
-            # include European areas of Kazakhstan
-            if thisSightingDict["state"] in ["KZ-ATY", "KZ-ZAP"]:
-                thisSightingDict["regionCodes"].append("EUR")
-                
-                
-            # ----------------------------------------        
-            # add NAM if if in North America listing region as designated by eBird
-                        
-            if thisSightingDict["country"] in [
-                "CA", "PM", "MX", "GT", "SV", "HN", "CR", "PA",
-                "CU", "HT", "DO", "JM", "KY", "PR", "VG", "VI", "AI",
-                "MF", "BL", "BQ", "KN", "AG", "MS", "GP", "DM", "BS",
-                "BB", "GD", "LC", "VC", "BM", "CP", "GL", "NI"
-                ]:
-                thisSightingDict["regionCodes"].append("NAM") 
-                
-            if thisSightingDict["state"] in [
-                "CO-SAP"
-                ]:
-                thisSightingDict["regionCodes"].append("NAM")
-
-            if thisSightingDict["country"] == "US":
-                if thisSightingDict["state"] != "US-HI":
-                    thisSightingDict["regionCodes"].append("NAM")                
-
-   
-            # ----------------------------------------        
-            # add SAM if if in South America listing region as designated by eBird
-                        
-            if thisSightingDict["country"] in [
-                "AR", "BO", "BR", "CL", "CO", "FK", "GF", 
-                "GY", "GY", "PY", "PE", "SR", "UY", "VE", "TT", "CW", "AW"
-                ]:
-                thisSightingDict["regionCodes"].append("SAM") 
-                
-            if thisSightingDict["state"] in [
-                "BQ-BO"
-                ]:
-                thisSightingDict["regionCodes"].append("SAM")
-            
-            if thisSightingDict["country"] == "EC" and thisSightingDict["state"] != "EC-W":
-                thisSightingDict["regionCodes"].append("SAM")
-                
-
-            # ----------------------------------------        
-            # add WIN if if in West Indies listing region as designated by eBird
-                        
-            if thisSightingDict["country"] in [
-                "AI", "AG", "AW", "BS", "BB", "VG", "KY", "VI"
-                "CU", "DM", "DO", "GD", "GP", "HT", "JM", "MQ", 
-                "MS", "AN", "PR", "KN", "LC", "VC", "TT", "TC" 
-                ]:
-                thisSightingDict["regionCodes"].append("WIN") 
-            
-            if thisSightingDict["state"] == "CO-SAP":
-                thisSightingDict["regionCodes"].append("WIN")
-
-
-            # ----------------------------------------        
-            # add CAM if if in Central America listing region as designated by eBird
-                        
-            if thisSightingDict["country"] in [
-                "BZ", "CR", "SV", "GT", "HN", "NI", "PA"
-                ]:
-                thisSightingDict["regionCodes"].append("CAM")
-
-                
-            # ----------------------------------------        
-            # add SPO if if in South Polar listing region as designated by eBird
-                        
-            if thisSightingDict["country"] in [
-                "AQ", "BV", "GS", "HM"
-                ]:
-                thisSightingDict["regionCodes"].append("SPO") 
- 
-                
-            # ----------------------------------------        
-            # add WH if if in Western Hemisphere listing region as designated by eBird
-                        
-            if "NAM" in thisSightingDict["regionCodes"]:
-                thisSightingDict["regionCodes"].append("WHE")                 
-
-            if "SAM" in thisSightingDict["regionCodes"]:
-                thisSightingDict["regionCodes"].append("WHE")
-                
-            if thisSightingDict["country"] in [
-                "CP", "BM", "FK"
-                ]:
-                thisSightingDict["regionCodes"].append("WHE")                 
-                
-            if thisSightingDict["state"] in [
-                "US-HI", "UM-67", "UM-71", "EC-W"  
-                ]:
-                thisSightingDict["regionCodes"].append("WHE") 
-                
-            
-            # ------------------------------------------------------    
-            # add EH if in Eastern Hemisphere  (not Western, and not South Polar)
-            
-            if "WHE" not in thisSightingDict["regionCodes"] and "SPO" not in thisSightingDict["regionCodes"]:
-                thisSightingDict["regionCodes"].append("EHE")  
-                
-                                
             # add sighting to checklistDict, even if it's a sp or / species
             # use checklistID as the key
             checklistID = thisSightingDict["checklistID"]
@@ -1327,67 +1342,76 @@ class DataBase():
 
 
     def ReadTaxonomyDataFile(self, taxonomyDataFile):
-        
-        # initialize variable to hold the csv data from the taxonomy file
-        taxonomyData = []
-        # open the CSV taxonomy file, using "replace" for any problematic characters
+
+        # open the CSV taxonomy file and build a dict keyed by SCI_NAME for O(1) lookup
         with open(taxonomyDataFile, "r", errors='replace') as csvfile:
-            csvdata = csv.reader(csvfile, delimiter=',', quotechar='"')
-            # store the csv data in a list for easier searching later on
-            for row in csvdata:
-                taxonomyData.append(row)
+            csvdata = csv.DictReader(csvfile, delimiter=',', quotechar='"')
+            taxDict = {row["SCI_NAME"]: row for row in csvdata}
 
-        # initialize thisSciName variable
+        # determine which column name this file uses for taxonomic order
+        firstRow = next(iter(taxDict.values())) if taxDict else {}
+        orderCol = "ORDER1" if "ORDER1" in firstRow else "ORDER"
+
+        # track minimum TAXON_ORDER per family/order for taxonomic sorting
+        familyTaxonOrder = {}   # family -> min TAXON_ORDER float
+        orderTaxonOrder  = {}   # order  -> min TAXON_ORDER float
+        masterFamilyOrderSet = set()
+
+        # loop through sighting list to get each species and add order and family
         thisSciName = ""
+        thisOrder = ""
+        thisFamily = ""
+        thisQuickEntryCode = ""
 
-        # loop through sighting list to get each species, compare it, and add order and family
         for s in self.sightingList:
 
-            # if this species already has a order/family found, no need to search database again.
-            # But if species does not have order/family found, we need to  search the database
+            # if this species already has order/family found, no need to search again
             if thisSciName != s["scientificName"]:
-                                
-                for line in taxonomyData:
 
-                    # if species matches, save the order and family names for the next time we find the species
-                    # species will be found in the sighting file in taxonomic order, so each species will be chunked together
-                    if s["scientificName"] == line[4]:  # sci names match    
-                                                
-                        thisSciName = line[4]
-                        thisOrder = line[5]
-                        thisFamily = line[6]
-                        thisQuickEntryCode = line[2]
-   
-                        if thisFamily not in self.familyList:
-                            self.familyList.append(thisFamily)                        
+                taxEntry = taxDict.get(s["scientificName"])
+                if taxEntry:
+                    thisSciName = taxEntry["SCI_NAME"]
+                    thisOrder = taxEntry[orderCol]
+                    thisFamily = taxEntry["FAMILY"]
+                    thisQuickEntryCode = taxEntry["SPECIES_CODE"]
 
-                        if thisOrder not in self.orderList:
-                            self.orderList.append(thisOrder)  
-                            
-                        if [thisFamily, thisOrder] not in self.masterFamilyOrderList:
-                            self.masterFamilyOrderList.append([thisFamily, thisOrder])
+                    try:
+                        taxon_order = float(taxEntry.get("TAXON_ORDER", 0))
+                    except (ValueError, TypeError):
+                        taxon_order = 0.0
+                    if thisFamily and (thisFamily not in familyTaxonOrder or taxon_order < familyTaxonOrder[thisFamily]):
+                        familyTaxonOrder[thisFamily] = taxon_order
+                    if thisOrder and (thisOrder not in orderTaxonOrder or taxon_order < orderTaxonOrder[thisOrder]):
+                        orderTaxonOrder[thisOrder] = taxon_order
+                    masterFamilyOrderSet.add((thisFamily, thisOrder))
 
-                        # add species to orderSpeciesDict:
-                        if thisOrder not in self.orderSpeciesDict:
-                            self.orderSpeciesDict[thisOrder] = [s["commonName"]]
-                        else:
-                            self.orderSpeciesDict[thisOrder].append(s["commonName"]) 
-                            
-                        # add species to familySpeciesDict:
-                        if thisFamily not in self.familySpeciesDict:
-                            self.familySpeciesDict[thisFamily] = [s["commonName"]]
-                        else:
-                            self.familySpeciesDict[thisFamily].append(s["commonName"]) 
-                        
-                        # already found info, no need to continue for this species
-                        break
-                        
-            # append the order and family names to the sighting            
+                    # add species to orderSpeciesDict
+                    if thisOrder not in self.orderSpeciesDict:
+                        self.orderSpeciesDict[thisOrder] = [s["commonName"]]
+                    else:
+                        self.orderSpeciesDict[thisOrder].append(s["commonName"])
+
+                    # add species to familySpeciesDict
+                    if thisFamily not in self.familySpeciesDict:
+                        self.familySpeciesDict[thisFamily] = [s["commonName"]]
+                    else:
+                        self.familySpeciesDict[thisFamily].append(s["commonName"])
+
+            # append the order and family names to the sighting
             s["order"] = thisOrder
-            s["family"] = thisFamily 
+            s["family"] = thisFamily
             s["quickEntryCode"] = thisQuickEntryCode
 
-        csvfile.close()
+            # populate orderDict and familyDict for fast filtering
+            if thisOrder:
+                self.orderDict.setdefault(thisOrder, []).append(s)
+            if thisFamily:
+                self.familyDict.setdefault(thisFamily, []).append(s)
+
+        # sort by taxonomic order and store
+        self.familyList = sorted(familyTaxonOrder.keys(), key=lambda f: familyTaxonOrder[f])
+        self.orderList  = sorted(orderTaxonOrder.keys(),  key=lambda o: orderTaxonOrder[o])
+        self.masterFamilyOrderList = [[f, o] for f, o in masterFamilyOrderSet]
 
 
     def ReadBBLCodeFile(self, bblFile):
@@ -1403,53 +1427,56 @@ class DataBase():
                 
     def GetFamilies(self, filter, filteredSightingList=[]):
         familiesList = []
-        
+
         # set filteredSightingList to master list if no filteredSightingList specified
         if filteredSightingList == []:
             filteredSightingList = self.GetMinimalFilteredSightingsList(filter)
-        
+
         # for each sighting, test date if necessary. Append new dates to return list.
         # don't consider spuh or slash species
+        cf = self.CompileFilter(filter)
         for s in filteredSightingList:
             if "sp." not in s["commonName"] and "/" not in s["commonName"] and " x " not in s["commonName"]:
-                if self.TestSighting(s, filter) is True:
+                if self.TestSightingCompiled(s, cf) is True:
                     if s["family"] not in familiesList:
                         familiesList.append(s["family"])
-        
+
         return(familiesList)
 
     def GetSightings(self, filter):
         returnList = []
-        
-        filteredSightingList = self.GetMinimalFilteredSightingsList(filter)          
 
+        filteredSightingList = self.GetMinimalFilteredSightingsList(filter)
+
+        cf = self.CompileFilter(filter)
         for s in filteredSightingList:
             # this is not a single checklist, so remove spuh and slash sightings
             if filter.getChecklistID() == "":
                 commonName = s["commonName"]
                 # if "/" not in commonName and "sp." not in commonName:
-                if self.TestSighting(s, filter) is True:
+                if self.TestSightingCompiled(s, cf) is True:
                     returnList.append(s)
             else:
                 # this is a single checklist, so allow spuh and slash sightings
-                if self.TestSighting(s, filter) is True:
-                    returnList.append(s)        
-        
+                if self.TestSightingCompiled(s, cf) is True:
+                    returnList.append(s)
+
         return(returnList)
 
 
     def GetSpeciesWithPhotos(self, filter):
         returnSet = set()
-        
+
         filteredSightingList = self.GetMinimalFilteredSightingsList(filter)
 
+        cf = self.CompileFilter(filter)
         for s in filteredSightingList:
             commonName = s["commonName"]
             if "/" not in commonName and "sp." not in commonName:
-                if self.TestSighting(s, filter) is True:
+                if self.TestSightingCompiled(s, cf) is True:
                     if "photos" in s:
-                        returnSet.add(s["commonName"])      
-        
+                        returnSet.add(s["commonName"])
+
         return(returnSet)
 
 
@@ -1472,15 +1499,16 @@ class DataBase():
 
         filteredSightingList = self.GetMinimalFilteredSightingsList(filter)
 
+        cf = self.CompileFilter(filter)
         for s in filteredSightingList:
             commonName = s["commonName"]
             # if "/" not in commonName and "sp." not in commonName:
-            if self.TestSighting(s, filter) is True:
+            if self.TestSightingCompiled(s, cf) is True:
                 if "photos" in s:
                     if s["photos"][0]["fileName"] not in photosFound:
                         photosFound.add(s["photos"][0]["fileName"])
                         returnList.append(s)
-        
+
         returnList = sorted(returnList, key=lambda x: (float(x["taxonomicOrder"]), x["date"], x["time"]))
 
         return(returnList)
@@ -1504,17 +1532,18 @@ class DataBase():
 
     def GetSpecies(self, filter, filteredSightingList=[]):
         speciesList = []
-        
+
         # set filteredSightingList to master list if no filteredSightingList specified
         if filteredSightingList == []:
             filteredSightingList = self.GetMinimalFilteredSightingsList(filter)
 
         # for each sighting, test filter. Append filtered species to return list.
+        cf = self.CompileFilter(filter)
         for s in filteredSightingList:
-            if self.TestSighting(s, filter) is True:
+            if self.TestSightingCompiled(s, cf) is True:
                 if s["commonName"] not in speciesList:
                     speciesList.append(s["commonName"])
-        
+
         return(speciesList)
 
 
@@ -1528,14 +1557,16 @@ class DataBase():
         locationType = filter.getLocationType()
         locationName = filter.getLocationName()
         checklistID = filter.getChecklistID()
-        
+        order = filter.getOrder()
+        family = filter.getFamily()
+
         # if we're dealing with a sp. or slash species,
         # we need to return the whole database since those sightings
         # aren't in dictionaries
         if "sp." in speciesName or "/" in speciesName:
             return(self.sightingList)
-        
-        # use narrowest subset possible, according to filter            
+
+        # use narrowest subset possible, according to filter
         if checklistID != "":
             returnList = self.checklistDict[checklistID]
         elif speciesName != "" and speciesName in self.speciesDict:
@@ -1543,12 +1574,20 @@ class DataBase():
         elif speciesList != []:
             for sp in speciesList:
                 for s in self.speciesDict[sp]:
-                    returnList. append(s)
+                    returnList.append(s)
         elif startDate != "" and startDate == endDate:
             if startDate in self.dateDict:
                 returnList = self.dateDict[startDate]
             else:
                 returnList = []
+        elif startDate != "" and endDate != "":
+            startYear = startDate[:4]
+            endYear = endDate[:4]
+            if startYear == endYear:
+                returnList = self.yearDict.get(startYear, [])
+            else:
+                for y in range(int(startYear), int(endYear) + 1):
+                    returnList.extend(self.yearDict.get(str(y), []))
         elif locationType == "Country":
             returnList = self.countryDict[locationName]
         elif locationType == "State":
@@ -1556,10 +1595,14 @@ class DataBase():
         elif locationType == "County":
             returnList = self.countyDict[locationName]
         elif locationType == "Location" and locationName in self.locationDict:
-            returnList = self.locationDict[locationName]                
+            returnList = self.locationDict[locationName]
+        elif order != "" and order in self.orderDict:
+            returnList = self.orderDict[order]
+        elif family != "" and family in self.familyDict:
+            returnList = self.familyDict[family]
         else:
-            returnList = self.sightingList  
-        
+            returnList = self.sightingList
+
         return(returnList)
 
     def GetSpeciesWithData(self, filter, filteredSightingList=[], includeSpecies="Species"):
@@ -1575,9 +1618,10 @@ class DataBase():
             filteredSightingList = self.GetMinimalFilteredSightingsList(filter)
             
         # loop through sightingList and check each sighting for the filtered list criteria
+        cf = self.CompileFilter(filter)
         for sighting in filteredSightingList:
-            
-            if self.TestSighting(sighting, filter) is True:
+
+            if self.TestSightingCompiled(sighting, cf) is True:
                 
                 # store the sighting date so we can get first and last later
                 # include the taxonomy entry so we can sort the list by taxonomy later
@@ -1651,24 +1695,25 @@ class DataBase():
 
     def GetUniqueSpeciesForLocation(self, filter, location, speciesList, filteredSightingList=[],):
         uniqueSpeciesList = []
-        
+
         # set filteredSightingList to master list if no filteredSightingList specified
         if filteredSightingList == []:
             filteredSightingList = self.GetMinimalFilteredSightings(filter)
-        
+
         # for each sighting, test date if necessary. Append new dates to return list.
+        cf = self.CompileFilter(filter)
         for species in speciesList:
             isSeenNowhereElse = True
             for s in filteredSightingList:
-                if self.TestSighting(s, filter) is True:
+                if self.TestSightingCompiled(s, cf) is True:
                     if s["commonName"] == species and s["location"] != location:
                         isSeenNowhereElse = False
                         break
-                
+
             if isSeenNowhereElse == True:
                 if species not in uniqueSpeciesList:
                     uniqueSpeciesList.append(species)
-                    
+
         return(uniqueSpeciesList)
 
 
@@ -1860,42 +1905,78 @@ class DataBase():
         return(True)
 
     
-    def TestSighting(self, sighting, filter):
-        
-        locationType = filter.getLocationType()  # str   choices are Region, Country, County, State, Location, or ""
-        locationName = filter.getLocationName()  # str   name of region or location  or ""
-        startDate = filter.getStartDate()  # str   format yyyy-mm-dd  or ""
-        endDate = filter.getEndDate()  # str   format yyyy-mm-dd  or ""
-        startSeasonalMonth = filter.getStartSeasonalMonth()  # str   format mm
-        startSeasonalDay = filter.getStartSeasonalDay()  # str   format dd
-        endSeasonalMonth = filter.getEndSeasonalMonth()  # str   format  dd
-        endSeasonalDay = filter.getEndSeasonalDay()  # str   format dd
-        checklistID = filter.getChecklistID()  # str   checklistID
-        sightingDate = sighting["date"]  # str   format yyyy-mm-dd
-        speciesName = filter.getSpeciesName()  # str   species Name
-        speciesList = filter.getSpeciesList()  # list  of species names
-        scientificName = filter.getScientificName() #str    scientific name
-        order = filter.getOrder()  # str   order name
-        family = filter.getFamily()  # str   family name
-        time = filter.getTime()  # str   format HH:DD in 24-hour format
-        commonNameSearch = filter.getCommonNameSearch()
+    def CompileFilter(self, filter):
+        """Extract all filter parameters into a dict for use with TestSightingCompiled."""
+        return {
+            'locationType':       filter.getLocationType(),
+            'locationName':       filter.getLocationName(),
+            'startDate':          filter.getStartDate(),
+            'endDate':            filter.getEndDate(),
+            'startSeasonalMonth': filter.getStartSeasonalMonth(),
+            'startSeasonalDay':   filter.getStartSeasonalDay(),
+            'endSeasonalMonth':   filter.getEndSeasonalMonth(),
+            'endSeasonalDay':     filter.getEndSeasonalDay(),
+            'checklistID':        filter.getChecklistID(),
+            'speciesName':        filter.getSpeciesName(),
+            'speciesList':        filter.getSpeciesList(),
+            'scientificName':     filter.getScientificName(),
+            'order':              filter.getOrder(),
+            'family':             filter.getFamily(),
+            'time':               filter.getTime(),
+            'commonNameSearch':   filter.getCommonNameSearch(),
+            'sightingHasPhoto':   filter.getSightingHasPhoto(),
+            'speciesHasPhoto':    filter.getSpeciesHasPhoto(),
+            'validPhotoSpecies':  filter.getValidPhotoSpecies(),
+            'camera':             filter.getCamera(),
+            'lens':               filter.getLens(),
+            'startShutterSpeed':  filter.getStartShutterSpeed(),
+            'endShutterSpeed':    filter.getEndShutterSpeed(),
+            'startAperture':      filter.getStartAperture(),
+            'endAperture':        filter.getEndAperture(),
+            'startFocalLength':   filter.getStartFocalLength(),
+            'endFocalLength':     filter.getEndFocalLength(),
+            'startIso':           filter.getStartIso(),
+            'endIso':             filter.getEndIso(),
+            'startRating':        filter.getStartRating(),
+            'endRating':          filter.getEndRating(),
+        }
 
-        sightingHasPhoto = filter.getSightingHasPhoto()
-        speciesHasPhoto = filter.getSpeciesHasPhoto()
-        validPhotoSpecies = filter.getValidPhotoSpecies()
-        camera = filter.getCamera()
-        lens = filter.getLens()
-        startShutterSpeed = filter.getStartShutterSpeed()
-        endShutterSpeed = filter.getEndShutterSpeed()
-        startAperture = filter.getStartAperture()
-        endAperture = filter.getEndAperture()
-        startFocalLength = filter.getStartFocalLength()
-        endFocalLength = filter.getEndFocalLength()
-        startIso = filter.getStartIso()
-        endIso = filter.getEndIso()
-        startRating = filter.getStartRating()
-        endRating = filter.getEndRating()
-                
+    def TestSightingCompiled(self, sighting, cf):
+
+        locationType = cf['locationType']
+        locationName = cf['locationName']
+        startDate = cf['startDate']
+        endDate = cf['endDate']
+        startSeasonalMonth = cf['startSeasonalMonth']
+        startSeasonalDay = cf['startSeasonalDay']
+        endSeasonalMonth = cf['endSeasonalMonth']
+        endSeasonalDay = cf['endSeasonalDay']
+        checklistID = cf['checklistID']
+        sightingDate = sighting["date"]
+        speciesName = cf['speciesName']
+        speciesList = cf['speciesList']
+        scientificName = cf['scientificName']
+        order = cf['order']
+        family = cf['family']
+        time = cf['time']
+        commonNameSearch = cf['commonNameSearch']
+
+        sightingHasPhoto = cf['sightingHasPhoto']
+        speciesHasPhoto = cf['speciesHasPhoto']
+        validPhotoSpecies = cf['validPhotoSpecies']
+        camera = cf['camera']
+        lens = cf['lens']
+        startShutterSpeed = cf['startShutterSpeed']
+        endShutterSpeed = cf['endShutterSpeed']
+        startAperture = cf['startAperture']
+        endAperture = cf['endAperture']
+        startFocalLength = cf['startFocalLength']
+        endFocalLength = cf['endFocalLength']
+        startIso = cf['startIso']
+        endIso = cf['endIso']
+        startRating = cf['startRating']
+        endRating = cf['endRating']
+
         # Check every filter setting. Return False immediately if sighting fails.
         # If sighting survives the filter, return True
 
@@ -1908,27 +1989,27 @@ class DataBase():
             startShutterSpeed != "" or
             endShutterSpeed != "" or
             startAperture != "" or
-            endAperture != "" or           
+            endAperture != "" or
             startFocalLength != "" or
-            endFocalLength != "" or            
+            endFocalLength != "" or
             startIso != "" or
             endIso != "" or
-            speciesHasPhoto == "Photographed" or  
+            speciesHasPhoto == "Photographed" or
             startRating != "" or
-            endRating != ""       
+            endRating != ""
             ):
             if "photos" not in sighting:
                 return(False)
-        
+
         # reject if "no photo" was specified but sighting has photo
         if sightingHasPhoto == "No photo":
             if "photos" in sighting:
                 return(False)
-        
-        # if user selected a value for whether a species has a photo, 
+
+        # if user selected a value for whether a species has a photo,
         # check if commonName is in the supplied set.
         # if we're checking for "Photographed," the supplied set contains photographed species
-        # if we're checking for "Not pPhotographed," the supplied set contains UNphotographed species     
+        # if we're checking for "Not pPhotographed," the supplied set contains UNphotographed species
         if validPhotoSpecies != []:
             if sighting["commonName"] not in validPhotoSpecies:
                 return(False)
@@ -1947,12 +2028,12 @@ class DataBase():
                         return(False)
                 else:
                     return(False)
-                
+
             else:
                 if commonNameSearch.lower() not in sighting["commonName"].lower():
                     if commonNameSearch.lower() not in sighting["subspeciesName"].lower():
                         return(False)
-            
+
         # if a checklistID has been specified, check if sighting matches
         if checklistID != "":
             if checklistID != sighting["checklistID"]:
@@ -1977,11 +2058,11 @@ class DataBase():
         if family != "":
             if family != sighting["family"]:
                 return(False)
-                
+
         # if speciesList has been specified, check it
         if speciesList != []:
             if sighting["commonName"] not in speciesList:
-                return(False)                    
+                return(False)
 
         # if time has been specified, check it
         # don't try checking if sighting is an historical sighting without a time
@@ -1989,7 +2070,7 @@ class DataBase():
             # if time exactly matches sighting start time, it passes the filter test
             # if time doesn't match exactly, check whether time is between start time and end time
             if time != sighting["time"]:
-                                
+
                 # now use DateTime functions so we can add duration minutes to find end time efficiently
                 # adding duration minutes could take us to a new hour, day, month, or year
                 durationMinutes = sighting["duration"]
@@ -1997,18 +2078,18 @@ class DataBase():
                     durationMinutes = 0
                 else:
                     durationMinutes = int(durationMinutes)
-                    
+
                 filterDateTime = datetime.datetime(int(startDate[0:4]), int(startDate[5:7]), int(startDate[8:10]), int(time[0:2]), int(time[3:5]))
 
                 sightingStartDateTime = datetime.datetime(int(sightingDate[0:4]), int(sightingDate[5:7]), int(sightingDate[8:10]), int(sighting["time"][0:2]), int(sighting["time"][3:5]))
-                
+
                 sightingTimeDelta = datetime.timedelta(0, 0, 0, 0, durationMinutes)
                 sightingEndDateTime = sightingStartDateTime + sightingTimeDelta
-                
-                if not ((sightingStartDateTime <= filterDateTime) and (filterDateTime <= sightingEndDateTime)):                
-                
+
+                if not ((sightingStartDateTime <= filterDateTime) and (filterDateTime <= sightingEndDateTime)):
+
                     return(False)
-                
+
         # check if location matches for sighting; flag species that fit the location
         # no need to check if locationType is ""
         if not locationType == "":
@@ -2020,23 +2101,23 @@ class DataBase():
                     return(False)
             if locationType == "State":
                 if not locationName == sighting["state"]:
-                    return(False)   
+                    return(False)
             if locationType == "County":
                 if not locationName == sighting["county"]:
                     return(False)
             if locationType == "Location":
                 if not locationName == sighting["location"]:
-                    return(False)                    
-        
+                    return(False)
+
         # check date for matches for sighting range or seasonal range; disqualify sighting if date doesn't fit specific date range
         if not ((startDate == "") or (endDate == "")):
             # if sightingDate is before start date
             if sightingDate < startDate:
                 return(False)
             # if sightingDate is after end date
-            if sightingDate > endDate: 
+            if sightingDate > endDate:
                 return(False)
-        
+
         # check for seasonal range using month and date parts; disqualify sighting if date doesn't fit in seasonal range
         if not ((startSeasonalMonth == "") or (endSeasonalMonth == "")):
             sightingMonth = sightingDate[5:7]
@@ -2053,7 +2134,7 @@ class DataBase():
                 if sightingMonth == endSeasonalMonth:
                     if sightingDay > endSeasonalDay:
                         return(False)
-            # if endSeasonalMonth is earlier than startSeasonalMonth (e.g., October to February)                                        
+            # if endSeasonalMonth is earlier than startSeasonalMonth (e.g., October to February)
             if startSeasonalMonth > endSeasonalMonth:
                 if sightingMonth < startSeasonalMonth:
                     if sightingMonth > endSeasonalMonth:
@@ -2086,12 +2167,12 @@ class DataBase():
                         return(False)
                     if not sightingMonth == startSeasonalMonth:
                         return(False)
-        
+
         # check photo settings
         # note that a sighting can have several attached photos
         # we only reject a sighting here if all attached photos fail
         # For each sighting, test each photo. If any photo passes filter, the sighting passes filter
-        
+
         if camera != "":
             cameraOK = False
             for p in sighting["photos"]:
@@ -2099,14 +2180,14 @@ class DataBase():
                     cameraOK = True
             if cameraOK is False:
                 return(False)
-        
+
         if lens != "":
             lensOK = False
             for p in sighting["photos"]:
                 if lens == p["lens"]:
                     lensOK= True
             if lensOK is False:
-                return(False)      
+                return(False)
 
         if startShutterSpeed != "" and endShutterSpeed == "":
             shutterSpeedOK = False
@@ -2122,7 +2203,7 @@ class DataBase():
                     if shutterSpeed <= filterStartShutterSpeed:
                         shutterSpeedOK= True
             if shutterSpeedOK is False:
-                return(False)   
+                return(False)
 
         if startShutterSpeed == "" and endShutterSpeed != "":
             shutterSpeedOK = False
@@ -2138,8 +2219,8 @@ class DataBase():
                     if shutterSpeed >= filterEndShutterSpeed:
                         shutterSpeedOK= True
             if shutterSpeedOK is False:
-                return(False)  
-                            
+                return(False)
+
         if endShutterSpeed != "" and startShutterSpeed != "":
             shutterSpeedOK= False
             filterStartShutterSpeed = startShutterSpeed[2:]
@@ -2156,8 +2237,8 @@ class DataBase():
                     if shutterSpeed <= filterStartShutterSpeed and shutterSpeed >= filterEndShutterSpeed:
                         shutterSpeedOK = True
             if shutterSpeedOK is False:
-                return(False)  
-                             
+                return(False)
+
         if startAperture != "" and endAperture == "":
             apertureOK = False
             filterStartAperture = float(startAperture)
@@ -2170,7 +2251,7 @@ class DataBase():
                     if aperture >= filterStartAperture:
                         apertureOK= True
             if apertureOK is False:
-                return(False)   
+                return(False)
 
         if startAperture == "" and endAperture != "":
             apertureOK = False
@@ -2184,8 +2265,8 @@ class DataBase():
                     if aperture >= filterEndAperture:
                         apertureOK= True
             if apertureOK is False:
-                return(False)  
-                            
+                return(False)
+
         if endAperture != "" and startAperture != "":
             apertureOK= False
             filterStartAperture = float(startAperture)
@@ -2199,7 +2280,7 @@ class DataBase():
                     if aperture >= filterStartAperture and aperture <= filterEndAperture:
                         apertureOK = True
             if apertureOK is False:
-                return(False)  
+                return(False)
 
         if startIso != "" and endIso == "":
             isoOK = False
@@ -2213,7 +2294,7 @@ class DataBase():
                     if iso >= filterStartIso:
                         isoOK= True
             if isoOK is False:
-                return(False)   
+                return(False)
 
         if startIso == "" and endIso != "":
             isoOK = False
@@ -2227,8 +2308,8 @@ class DataBase():
                     if iso <= filterEndIso:
                         isoOK= True
             if isoOK is False:
-                return(False)  
-                            
+                return(False)
+
         if endIso != "" and startIso != "":
             isoOK= False
             filterStartIso = int(startIso)
@@ -2242,40 +2323,40 @@ class DataBase():
                     if iso >= filterStartIso and iso <= filterEndIso:
                         isoOK = True
             if isoOK is False:
-                return(False)  
+                return(False)
 
         if startFocalLength != "" and endFocalLength == "":
             focalLengthOK = False
-            filterStartFocalLength = startFocalLength.split(" mm")[0]            
+            filterStartFocalLength = startFocalLength.split(" mm")[0]
             filterStartFocalLength = int(filterStartFocalLength)
             # check each photo and set flag to true if at least one photo passes test
             # reject if all photos fail this test
             for p in sighting["photos"]:
                 focalLength = p["focalLength"]
                 if focalLength != "":
-                    focalLength = focalLength.split(" mm")[0]                    
+                    focalLength = focalLength.split(" mm")[0]
                     focalLength = int(focalLength)
                     if focalLength >= filterStartFocalLength:
                         focalLengthOK= True
             if focalLengthOK is False:
-                return(False)   
+                return(False)
 
         if startFocalLength == "" and endFocalLength != "":
             focalLengthOK = False
-            filterEndFocalLength = endFocalLength.split(" mm")[0]            
+            filterEndFocalLength = endFocalLength.split(" mm")[0]
             filterEndFocalLength = int(filterEndFocalLength)
             # check each photo and set flag to true if at least one photo passes test
             # reject if all photos fail this test
             for p in sighting["photos"]:
                 focalLength = p["focalLength"]
                 if focalLength != "":
-                    focalLength = focalLength.split(" mm")[0]                    
+                    focalLength = focalLength.split(" mm")[0]
                     focalLength = int(focalLength)
                     if focalLength <= filterEndFocalLength:
                         focalLengthOK= True
             if focalLengthOK is False:
-                return(False)  
-                            
+                return(False)
+
         if endFocalLength != "" and startFocalLength != "":
             focalLengthOK= False
             filterStartFocalLength = startFocalLength.split(" mm")[0]
@@ -2287,12 +2368,12 @@ class DataBase():
                 # convert the string to an integer
                 focalLength = p["focalLength"]
                 if focalLength != "":
-                    focalLength = focalLength.split(" mm")[0]                    
+                    focalLength = focalLength.split(" mm")[0]
                     focalLength = int(focalLength)
                     if focalLength >= filterStartFocalLength and focalLength <= filterEndFocalLength:
                         focalLengthOK = True
             if focalLengthOK is False:
-                return(False)  
+                return(False)
 
         if startRating != "" and endRating == "":
             ratingOK = False
@@ -2306,7 +2387,7 @@ class DataBase():
                     if rating >= filterStartRating:
                         ratingOK= True
             if ratingOK is False:
-                return(False)   
+                return(False)
 
         if startRating == "" and endRating != "":
             ratingOK = False
@@ -2320,8 +2401,8 @@ class DataBase():
                     if rating >= filterEndRating:
                         ratingOK= True
             if ratingOK is False:
-                return(False)  
-                            
+                return(False)
+
         if endRating != "" and startRating != "":
             ratingOK= False
             filterStartRating = int(startRating)
@@ -2335,49 +2416,54 @@ class DataBase():
                     if rating >= filterStartRating and rating <= filterEndRating:
                         ratingOK = True
             if ratingOK is False:
-                return(False) 
+                return(False)
 
-        # if we've arrived here, the sighting passes the filter. 
+        # if we've arrived here, the sighting passes the filter.
         return(True)
+
+    def TestSighting(self, sighting, filter):
+        return self.TestSightingCompiled(sighting, self.CompileFilter(filter))
 
 
     def GetDates(self, filter, filteredSightingList=[]):
         dateList = set()
         needToCheckFilter = False
-                
+
         # set filteredSightingList to master list if no filteredSightingList specified
         if filteredSightingList == []:
             filteredSightingList = self.GetMinimalFilteredSightingsList(filter)
             needToCheckFilter = True
-                
+
         # for each sighting, test date if necessary. Append new dates to return list.
+        cf = self.CompileFilter(filter)
         for s in filteredSightingList:
             if needToCheckFilter is True:
-                if self.TestSighting(s, filter) is True:
+                if self.TestSightingCompiled(s, cf) is True:
                     dateList.add(s["date"])
             else:
                 dateList.add(s["date"])
-        
-        # convert the set to a list and sort it. 
+
+        # convert the set to a list and sort it.
         dateList = list(dateList)
         dateList.sort()
-        
+
         return(dateList)
 
 
     def GetStartTimes(self, filter, filteredSightingList=[]):
         timeList = set()
         needToCheckFilter = False
-                
+
         # set filteredSightingList to master list if no filteredSightingList specified
         if filteredSightingList == []:
             filteredSightingList = self.GetMinimalFilteredSightingsList(filter)
             needToCheckFilter = True
-                
+
         # for each sighting, test time if necessary. Append new times to return list.
+        cf = self.CompileFilter(filter)
         for s in filteredSightingList:
             if needToCheckFilter is True:
-                if self.TestSighting(s, filter) is True:
+                if self.TestSightingCompiled(s, cf) is True:
                     timeList.add(s["time"])
             else:
                 timeList.add(s["time"])
@@ -2389,8 +2475,9 @@ class DataBase():
         return(timeList)
     
     def ClearDatabase(self):
-        
+
         self.eBirdFileOpenFlag = False
+        self.photoDataFileOpenFlag = False
         self.countryStateCodeFileFound = False
         self.allSpeciesList = []
         self.familyList = []
@@ -2411,6 +2498,9 @@ class DataBase():
         self.countyDict = {}
         self.locationDict = {}
         self.checklistDict = {}
+        self.orderDict = {}
+        self.familyDict = {}
+        self._regionCache = {}
 
     def ClearPhotoSettings(self):
         
@@ -2435,11 +2525,12 @@ class DataBase():
         
         # speed retreaval by choosing minimal set of sightings to search
         minimalSightingList = self.GetMinimalFilteredSightingsList(filter)
-                
+
         # gather the IDs of checklists that match the filter
+        cf = self.CompileFilter(filter)
         for s in minimalSightingList:
-            if self.TestSighting(s, filter) is True:
-                checklistIDs .add(s["checklistID"])
+            if self.TestSightingCompiled(s, cf) is True:
+                checklistIDs.add(s["checklistID"])
         
         # get all the sightings that match these checklistIDs
         for c in checklistIDs:
@@ -2551,20 +2642,21 @@ class DataBase():
             filteredSightingList = self.GetMinimalFilteredSightingsList(filter)
             
         sightingFound = False
-        
+
         # for each sighting, test date if necessary. Append new dates to return list.
+        cf = self.CompileFilter(filter)
         for s in filteredSightingList:
-            
+
             # If a single species is specified:
-            # since the file is ordered by species taxonomically, we can stop for loop when we've 
+            # since the file is ordered by species taxonomically, we can stop for loop when we've
             # found a species, processed all its entries, and then moved on to a different species
             # this prevents us from needlessly checking all sightings in the whole database
             if speciesName != "":
                 if sightingFound is True:
                     if s["commonName"] != speciesName and speciesName != s["subspeciesName"]:
                         break
-                    
-            if self.TestSighting(s, filter) is True:
+
+            if self.TestSightingCompiled(s, cf) is True:
                 
                 sightingFound = True
                                     
@@ -2626,14 +2718,15 @@ class DataBase():
         return tempSpeciesDict
 
     def GetNewCountrySpecies(self, filter, filteredSightingList, sightingListForSpeciesSubset, speciesList):
-        
+
         countries = set()
         countrySpecies = []
         tempFilter = deepcopy(filter)
-        
+
         # loop through sightingListForSpeciesSubset to gather relevant country names
+        cf = self.CompileFilter(tempFilter)
         for s in sightingListForSpeciesSubset:
-            if self.TestSighting(s, tempFilter) is True:
+            if self.TestSightingCompiled(s, cf) is True:
                 countries.add(s["country"])
         countries = list(countries)
         countries.sort()
@@ -2665,16 +2758,17 @@ class DataBase():
         return(countrySpecies)
 
     def GetNewCountySpecies(self, filter, filteredSightingList, sightingListForSpeciesSubset, speciesList):
-        
+
         # find which years are in the filtered sightingsfor the species in question
         counties = set()
         countySpecies = []
         tempFilter = deepcopy(filter)
 
         # loop through speciesWithFirstLastDates to gather county names for sightings subset
+        cf = self.CompileFilter(tempFilter)
         for s in sightingListForSpeciesSubset:
             county = s["county"]
-            if self.TestSighting(s, tempFilter) is True:
+            if self.TestSightingCompiled(s, cf) is True:
                 if county != "":
                     counties.add(county)
         counties = list(counties)
@@ -2720,14 +2814,15 @@ class DataBase():
         return(lifeSpecies)
 
     def GetNewLocationSpecies(self, filter, filteredSightingList, sightingListForSpeciesSubset, speciesList):
-        
+
         # find which years are in the filtered sightingsfor the species in question
         locations = set()
         locationSpecies = []
         tempFilter = deepcopy(filter)
-        
+
+        cf = self.CompileFilter(filter)
         for s in sightingListForSpeciesSubset:
-            if self.TestSighting(s, filter) is True:
+            if self.TestSightingCompiled(s, cf) is True:
                 locations.add(s["location"])
         locations = list(locations)
         locations.sort()
@@ -2752,13 +2847,14 @@ class DataBase():
         return(locationSpecies)            
 
     def GetNewMonthSpecies(self, filter, filteredSightingList, sightingListForSpeciesSubset):
-        
+
         # find which months are in the filtered sightingsfor the species in question
         months = set()
         monthSpecies = []
-        
+
+        cf = self.CompileFilter(filter)
         for s in sightingListForSpeciesSubset:
-            if self.TestSighting(s, filter) is True:
+            if self.TestSightingCompiled(s, cf) is True:
                 months.add(s["date"][5:7])
         months = list(months)
         months.sort()
@@ -2790,14 +2886,15 @@ class DataBase():
         return(monthSpecies)
 
     def GetNewStateSpecies(self, filter, filteredSightingList, sightingListForSpeciesSubset, speciesList):
-        
+
         # find which years are in the filtered sightingsfor the species in question
         states = set()
         stateSpecies = []
         tempFilter = deepcopy(filter)
-        
+
+        cf = self.CompileFilter(tempFilter)
         for s in sightingListForSpeciesSubset:
-            if self.TestSighting(s, tempFilter) is True:
+            if self.TestSightingCompiled(s, cf) is True:
                 states.add(s["state"])
         states = list(states)
         states.sort()
@@ -2821,14 +2918,15 @@ class DataBase():
         return(stateSpecies)
 
     def GetNewYearSpecies(self, filter, filteredSightingList, sightingListForSpeciesSubset):
-        
+
         # find which years are in the filtered sightingsfor the species in question
         years = set()
         yearSpecies = []
         thisFilter = deepcopy(filter)
-        
+
+        cf = self.CompileFilter(filter)
         for s in sightingListForSpeciesSubset:
-            if self.TestSighting(s, filter) is True:
+            if self.TestSightingCompiled(s, cf) is True:
                 years.add(s["date"][0:4])
         years = list(years)
         years.sort()
@@ -2995,7 +3093,7 @@ class DataBase():
     def dumpDatabaseToFile(self):
         
         # routine used only in debugging
-        f = open("yearbird_Db_Dump.txt", "w+")
+        f = open("yearbirder_Db_Dump.txt", "w+")
         for s in self.sightingList:
             f.write(str(s))
             f.write("\n")
@@ -3051,8 +3149,8 @@ class DataBase():
 
     def readPreferences(self):
 
-        prefs_dir = os.path.expanduser("~/Library/Application Support/Yearbird")
-        prefs_path = os.path.join(prefs_dir, "yearbirdPreferences.txt")
+        prefs_dir = os.path.expanduser("~/Library/Application Support/Yearbirder")
+        prefs_path = os.path.join(prefs_dir, "yearbirderPreferences.txt")
 
         if not os.path.isfile(prefs_path):
             return  # No preferences saved yet
@@ -3070,10 +3168,10 @@ class DataBase():
                 
     
     def writePreferences(self):
-        prefs_dir = os.path.expanduser("~/Library/Application Support/Yearbird")
+        prefs_dir = os.path.expanduser("~/Library/Application Support/Yearbirder")
         os.makedirs(prefs_dir, exist_ok=True)
 
-        prefs_path = os.path.join(prefs_dir, "yearbirdPreferences.txt")
+        prefs_path = os.path.join(prefs_dir, "yearbirderPreferences.txt")
 
         with open(prefs_path, "w") as f:
             f.write("startupFolder=" + self.startupFolder + "\n")

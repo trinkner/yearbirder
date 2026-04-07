@@ -16,7 +16,7 @@ datas = [
     ("src/in-states.json", "."),
     ("src/gb-counties.json", "."),
     ("src/eBird_BBLCodes.csv", "."),
-    ("src/eBird_Taxonomy.csv", "."),
+    ("src/eBird_Taxonomy_2025.csv", "."),
     ("src/ebird_api_ref_location_eBird_list_subnational1.csv", "."),
 ]
 
@@ -35,7 +35,7 @@ hiddenimports = [
 ]
 
 a = Analysis(
-    ["src/yearbird.py"],
+    ["src/yearbirder.py"],
     pathex=[],
     binaries=[],
     datas=datas,
@@ -55,7 +55,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="Yearbird",
+    name="Yearbirder",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -69,14 +69,14 @@ coll = COLLECT(
     a.datas,
     strip=False,
     upx=False,
-    name="Yearbird",
+    name="Yearbirder",
 )
 
 app = BUNDLE(
     coll,
-    name="Yearbird.app",
-    icon="icons/Yearbird.icns",
-    bundle_identifier="com.trinkner.yearbird",
+    name="Yearbirder.app",
+    icon="icons/Yearbirder.icns",
+    bundle_identifier="com.trinkner.yearbirder",
     codesign_identity=None,
     entitlements_file=None,
 )

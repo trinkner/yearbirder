@@ -344,14 +344,15 @@ class DateTotals(QMdiSubWindow, form_DateTotals.Ui_frmDateTotals):
         dateDict = defaultdict()
         
         minimalSightingList = self.mdiParent.db.GetMinimalFilteredSightingsList(filter)
-        
+        cf = self.mdiParent.db.CompileFilter(filter)
+
         for sighting in minimalSightingList:
-            
+
             # Consider only full species, not slash or spuh or hybrid entries
             commonName = sighting["commonName"]
             if ("/" not in commonName) and ("sp." not in commonName) and " x " not in commonName:
-            
-                if self.mdiParent.db.TestSighting(sighting,  filter) is True:
+
+                if self.mdiParent.db.TestSightingCompiled(sighting, cf) is True:
                     dbYears.add(sighting["date"][0:4])
                     dbMonths.add(sighting["date"][5:7])
                     dbDates.add(sighting["date"])

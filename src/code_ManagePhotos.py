@@ -1157,9 +1157,10 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         self.mdiParent.db.photosNeedSaving = True
         
         self.mdiParent.db.refreshPhotoLists()
-        
+
         self.mdiParent.fillPhotoComboBoxes()
-    
+        self.mdiParent.CreateStatsOnLoad()
+
         # close the window
         self.close()
         

@@ -137,7 +137,7 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
                 actionToggleFullScreen = menu.addAction("Full screen (F10)")
                 
             menu.addSeparator()
-            actionDetachFile = menu.addAction("Detach photo from Yearbird")
+            actionDetachFile = menu.addAction("Detach photo from Yearbirder")
             menu.addSeparator()
             actionDeleteFile = menu.addAction("Delete photo from file system")
             
@@ -461,7 +461,7 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
     def detachFile(self):
         
         # remove photo from database, but don't delete it from file system
-        msgText = "Detach \n\n" + self.photoList[self.currentIndex][0]["fileName"] + "\n\n from Yearbird?"
+        msgText = "Detach \n\n" + self.photoList[self.currentIndex][0]["fileName"] + "\n\n from Yearbirder?"
         msgText = msgText + "\n\n(File will NOT be deleted from file system)"
         
         msg = QMessageBox()
@@ -488,22 +488,23 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
             # advance display to next photo
             if len(self.photoList) == 0:
                 self.close()
-                
-            if self.currentIndex < len(self.photoList):                        
-                self.changeEnlargement()            
-            
+                return
+
+            if self.currentIndex < len(self.photoList):
+                self.changeEnlargement()
+
             else:
                 self.currentIndex -= 1
                 self.changeEnlargement()
-                                        
+
             # set flag for requiring photo file save
             self.mdiParent.mdiParent.db.photosNeedSaving = True
 
-            
+
     def deleteFile(self):
         
         # remove photo from database, but don't delete it from file system
-        msgText = "Permanently delete \n\n" + self.photoList[self.currentIndex][0]["fileName"] + "\n\n from Yearbird and the file system?"
+        msgText = "Permanently delete \n\n" + self.photoList[self.currentIndex][0]["fileName"] + "\n\n from Yearbirder and the file system?"
         
         msg = QMessageBox()
         msg.setText(msgText)
@@ -526,17 +527,18 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
             # advance display to next photo
             if len(self.photoList) == 0:
                 self.close()
-                
-            if self.currentIndex < len(self.photoList):                        
-                self.changeEnlargement()            
-            
+                return
+
+            if self.currentIndex < len(self.photoList):
+                self.changeEnlargement()
+
             else:
                 self.currentIndex -= 1
                 self.changeEnlargement()
-                                        
+
             # set flag for requiring photo file save
-            self.mdiParent.mdiParent.db.photosNeedSaving = True  
-            
+            self.mdiParent.mdiParent.db.photosNeedSaving = True
+
             # delete file from file system
             if os.path.isfile(currentPhoto):
                 try:

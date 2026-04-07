@@ -3,6 +3,7 @@
 # import the GUI forms that we create with Qt Creator
 import code_DataBase
 import code_BigReport
+import code_Stats
 import code_Filter
 import code_Find 
 import code_Lists
@@ -23,6 +24,8 @@ import form_MDIMain
 # import basic Python libraries
 import sys
 import os
+import glob
+import re
 import subprocess
 import datetime
 
@@ -47,6 +50,7 @@ from PySide6.QtGui import (
 from PySide6.QtCore import (
     Qt,
     QDate,
+    QMarginsF,
     QSize,
     QTimer,
     QEvent
@@ -72,6 +76,7 @@ from PySide6.QtPrintSupport import (
     QPrintDialog,
     QPrinter
     )
+from PySide6.QtGui import QPageSize, QPageLayout
 
 
 class _LoadProgressDialog(QDialog):
@@ -156,14 +161,15 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
     fontSize = 11
     scaleFactor = 1
     rowHeight = 16  # default; recomputed in ScaleDisplay() and __init__
-    versionNumber = "1.25"
-    versionDate = "April 2, 2026"
+    versionNumber = "1.26"
+    versionDate = "April 7, 2026"
+    taxonomyYear = ""
 
     def __init__(self):
         super(self.__class__, self).__init__()
         self.setupUi(self)
         self.setCentralWidget(self.mdiArea)
-        self.actionAboutYearbird.setText("About Yearbird")
+        self.actionAboutYearbirder.setText("About Yearbirder")
 
         # The form sets scrPhotoFilter with AlignTop + stretch=0, which prevents it
         # from expanding to fill the dock and causes a spurious scroll bar.
@@ -187,6 +193,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.actionLocationTotals: ":/icon_locationtotals.png",
             self.actionCompareLists:   ":/icon_compare.png",
             self.actionBigReport:      ":/icon_tripreport.png",
+            self.actionStats:          ":/icon_datetotals.png",
             self.actionPhotos:         ":/icon_camera.png",
             self.actionFind:           ":/icon_find.png",
             self.actionClearAllFilters:":/icon_filter.png",
@@ -207,6 +214,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.actionLocationTotals: QIcon(QPixmap(":/icon_locationtotals_white.png")),
             self.actionCompareLists:   QIcon(QPixmap(":/icon_compare_white.png")),
             self.actionBigReport:      QIcon(QPixmap(":/icon_tripreport_white.png")),
+            self.actionStats:          QIcon(QPixmap(":/icon_datetotals_white.png")),
             self.actionPhotos:         QIcon(QPixmap(":/icon_camera_white.png")),
             self.actionFind:           QIcon(QPixmap(":/icon_find_white.png")),
             self.actionClearAllFilters:QIcon(QPixmap(":/icon_filter_white.png")),
@@ -243,15 +251,15 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionOpen.triggered.connect(self.openDataFileClicked)
         self.actionClose.triggered.connect(self.closeDataFile)
 
-        self.actionAboutYearbird.triggered.connect(self.CreateAboutYearbird)
+        self.actionAboutYearbirder.triggered.connect(self.CreateAboutYearbirder)
         self.actionUserGuide.triggered.connect(self.CreateUserGuide)
 
         # macOS intercepts any QAction named "About …" and moves it to the Application
-        # menu, so actionAboutYearbird never stays in the User Guide dropdown.
+        # menu, so actionAboutYearbirder never stays in the User Guide dropdown.
         # Create a separate action with NoRole so macOS leaves it in place.
-        _aboutAction = QAction("About Yearbird", self)
+        _aboutAction = QAction("About Yearbirder", self)
         _aboutAction.setMenuRole(QAction.MenuRole.NoRole)
-        _aboutAction.triggered.connect(self.CreateAboutYearbird)
+        _aboutAction.triggered.connect(self.CreateAboutYearbirder)
         self.menuHelp.addSeparator()
         self.menuHelp.addAction(_aboutAction)        
         self.actionPreferences.triggered.connect(self.createPreferences)
@@ -282,6 +290,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionPhotosByFilter.triggered.connect(self.createPhotosReport)
         self.actionSpeciesGallery.triggered.connect(self.createSpeciesGallery)
         self.actionBigReport.triggered.connect(self.CreateBigReport)
+        self.actionStats.triggered.connect(self.CreateStats)
         self.actionBarGraph.triggered.connect(self.CreateBarGraph)
         self.actionTotalChecklists.triggered.connect(self.CreateTotalChecklistsGraph)
         self.actionTotalLocations.triggered.connect(self.CreateTotalLocationsGraph)
@@ -420,7 +429,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.dckPhotoFilter.setMinimumWidth(235)
         self.dckFilter.setMinimumWidth(215)
         
-        self.setWindowTitle("Yearbird v. " + self.versionNumber)
+        self.setWindowTitle("Yearbirder v. " + self.versionNumber)
 
         self.HideMainWindowOptions()
         
@@ -619,35 +628,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             
 
     def showFileDataMessage(self):
-        
-        countSightings = len(self.db.sightingList)
-        
-        countSpecies = 0
-        for s in self.db.allSpeciesList:
-            if " x " not in s:
-                countSpecies += 1
-        
-        # create blank filter to get all sightings with photos
-        filter = code_Filter.Filter()
-        
-        photoSightings = self.db.GetSightingsWithPhotos(filter)
-        
-        countPhotos = 0
-        
-        for ps in photoSightings:
-            countPhotos = countPhotos + len(ps["photos"])
-        
-        countPhotoSightings = len(self.db.GetSightingsWithPhotos(filter))
-    
-        msgText = "Yearbird loaded " + format(countSightings, ',') + " sightings, including " + format(countSpecies, ",") + " species.\n\n"
-        msgText = msgText + "Yearbird attached " + format(countPhotos, ",") + " photos to " + format(countPhotoSightings, ",") + " sightings."
-        
-        msg = QMessageBox()
-        msg.setIcon(QMessageBox.Icon.Information)
-        msg.setText(msgText)
-        msg.setWindowTitle("eBird Data File")
-        msg.setStandardButtons(QMessageBox.StandardButton.Ok)
-        msg.exec()        
+        self.CreateStatsOnLoad()
         
 
     def clearAllFilters(self):
@@ -690,7 +671,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
     def openPhotoSettings(self, photoDataFile = ""):
                     
         # open data file
-        fname = QFileDialog.getOpenFileName(self,"Select Yearbird Photo Data File", "","Yearbird Photo Data File (*.csv)")
+        fname = QFileDialog.getOpenFileName(self,"Select Yearbirder Photo Data File", "","Yearbirder Photo Data File (*.csv)")
         
         # check if user pressed cancel or if we have a file name to open
         if fname[0] == "":
@@ -710,6 +691,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionSlideshow.setVisible(True)
         self.actionEditPhotosByFilter.setVisible(True)
         self.actionUpdateEXIFDataForAllPhotos.setVisible(True)
+
+        self.CreateStatsOnLoad()
 
 
     def closePhotoSettings(self):
@@ -778,7 +761,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         photoFileInUse = self.db.photoDataFile
         
         # open save dialog box to get name of photo settings file
-        fname = QFileDialog.getSaveFileName(self, "Save Photo Settings File", photoFileInUse, "Yearbird Photo Settings File (*.csv)")
+        fname = QFileDialog.getSaveFileName(self, "Save Photo Settings File", photoFileInUse, "Yearbirder Photo Settings File (*.csv)")
         
         # check if user pressed cancel or if we have a file name for saving
         if fname[0] == "":
@@ -887,7 +870,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Icon.Information)
-        msg.setText("Yearbird removed " + str(countRemovedPhotos) + " references to unfound photos from its database.\n\nRemember to save your photo settings to a file.\n\n(No files were deleted from your computer.)")
+        msg.setText("Yearbirder removed " + str(countRemovedPhotos) + " references to unfound photos from its database.\n\nRemember to save your photo settings to a file.\n\n(No files were deleted from your computer.)")
         msg.setWindowTitle("Removed Photo References")
         msg.setStandardButtons(QMessageBox.StandardButton.Ok)
         msg.exec()        
@@ -1223,13 +1206,14 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.ResetMainWindow()
         self.db.ClearDatabase()
         self.clearStandardFilter()
-                
+
         self.OpenDataFile()
 
         if MainWindow.db.eBirdFileOpenFlag is True:
             self.FillMainComboBoxes()
-            self.dckFilter.setVisible(True)        
+            self.dckFilter.setVisible(True)
             self.CreateSpeciesList()
+            self.CreateStatsOnLoad()
 
 
     def OpenDataFile(self, startupFolder = ""):  
@@ -1301,10 +1285,14 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             # Helper files are small and fast; load them synchronously.
             QApplication.processEvents()
 
-            # Taxonomy file
-            taxonomyFile = code_DataBase.resource_path("eBird_Taxonomy.csv")
-            if os.path.isfile(taxonomyFile):
+            # Taxonomy file: find the most recent eBird_Taxonomy*.csv
+            resourceDir = os.path.dirname(code_DataBase.resource_path("eBird_Taxonomy.csv"))
+            taxonomyMatches = glob.glob(os.path.join(resourceDir, "eBird_Taxonomy*.csv"))
+            taxonomyFile = max(taxonomyMatches) if taxonomyMatches else None
+            if taxonomyFile:
                 MainWindow.db.ReadTaxonomyDataFile(taxonomyFile)
+                yearMatch = re.search(r'(\d{4})', os.path.basename(taxonomyFile))
+                MainWindow.taxonomyYear = yearMatch.group(1) if yearMatch else ""
 
             # Country/state code file
             countryStateCodeFile = code_DataBase.resource_path("ebird_api_ref_location_eBird_list_subnational1.csv")
@@ -1394,13 +1382,69 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
 
 
-    def CreateChecklistsList(self): 
+    def CreateStats(self):
+        if MainWindow.db.eBirdFileOpenFlag is False:
+            self.CreateMessageNoFile()
+            return
+
+        sub = code_Stats.Stats()
+        sub.mdiParent = self
+
+        if sub.FillStats(self.GetFilter()) is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+            QTimer.singleShot(0, sub.scaleMe)
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+
+
+    def CreateStatsOnLoad(self):
+        """Show a Stats window (all data, no filter) after a file load.
+
+        Closes any existing Stats windows first, then creates a fresh one
+        centered in the MDI area.
+        """
+        if not MainWindow.db.eBirdFileOpenFlag:
+            return
+
+        # close any existing Stats windows so we don't pile them up
+        for w in list(self.mdiArea.subWindowList()):
+            if w.objectName() == "frmStats":
+                w.close()
+
+        sub = code_Stats.Stats()
+        sub.mdiParent = self
+
+        if sub.FillStats(code_Filter.Filter()) is True:
+            self.mdiArea.addSubWindow(sub)
+            sub.show()
+            sub.scaleMe()
+            # center in the MDI area
+            mdi_w = self.mdiArea.width()
+            mdi_h = self.mdiArea.height()
+            x = max(0, (mdi_w - sub.width()) // 2)
+            y = max(0, (mdi_h - sub.height()) // 2)
+            sub.move(x, y)
+            # Defer activation so any signals fired by photo loading
+            # (e.g. fillPhotoComboBoxes) don't re-raise another window on top.
+            QTimer.singleShot(0, lambda: (
+                self.mdiArea.setActiveSubWindow(sub),
+                sub.raise_(),
+                sub.setFocus(),
+            ))
+        else:
+            sub.close()
+
+
+    def CreateChecklistsList(self):
         # Create Filtered List button was clicked
         # create filtered species list child
-        
+
         # if no data file is currently open, abort
         if MainWindow.db.eBirdFileOpenFlag is False:
-            self.CreateMessageNoFile()   
+            self.CreateMessageNoFile()
             return
             
         
@@ -1431,20 +1475,23 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                     
                  
     def CreatePDF(self):
-        
+
         activeWindow = self.mdiArea.activeSubWindow()
 
         if activeWindow is None:
             return
 
         if activeWindow.objectName() in ([
-            "frmSpeciesList", 
-            "frmFamilies", 
-            "frmCompare", 
-            "frmDateTotals", 
-            "frmLocationTotals", 
-            "frmWeb", 
-            "frmIndividual", 
+            "frmSpeciesList",
+            "frmFamilies",
+            "frmCompare",
+            "frmDateTotals",
+            "frmLocationTotals",
+            "frmWeb",
+            "frmGraphs",
+            "frmPhotos",
+            "frmStats",
+            "frmIndividual",
             "frmLocation",
             "frmBigReport"
             ]):
@@ -1457,11 +1504,11 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             
             # set printer to PDF output, Letter size
             printer.setOutputFormat(QPrinter.PdfFormat)
-            printer.setPaperSize(QPrinter.Letter);
-            printer.setPageMargins(20, 10, 10, 10, QPrinter.Millimeter)
+            printer.setPageSize(QPageSize(QPageSize.PageSizeId.Letter))
+            printer.setPageMargins(QMarginsF(20, 10, 10, 10), QPageLayout.Unit.Millimeter)
 
             # set the document to the printer's page size
-            pageSize = printer.paperSize(QPrinter.Point)
+            pageSize = printer.pageLayout().fullRect(QPageLayout.Unit.Point).size()
             document.setPageSize(pageSize)
             
             filename = QFileDialog.getSaveFileName(self, "Save PDF File", "", "PDF Files (*.pdf)")
@@ -1555,7 +1602,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
 
 
-    def CreateAboutYearbird(self):
+    def CreateAboutYearbirder(self):
 
 
         sub = code_Web.Web()
@@ -1564,7 +1611,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         sub.mdiParent = self
 
         # call the child's routine to fill it with data
-        sub.loadAboutYearbird()
+        sub.loadAboutYearbirder()
 
         # add and position the child to our MDI area
         self.mdiArea.addSubWindow(sub)
@@ -2710,7 +2757,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         # clear and repopulate photo filter cbo boxes with updated data
         self.fillPhotoComboBoxes()                 
 
-        msgText = "Yearbird updated EXIF data for all attached photos.\n\nRemember to save your photo data file to make these updates permanent."
+        msgText = "Yearbirder updated EXIF data for all attached photos.\n\nRemember to save your photo data file to make these updates permanent."
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Icon.Information)
         msg.setText(msgText)

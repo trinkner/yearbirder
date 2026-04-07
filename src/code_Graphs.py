@@ -1,3 +1,4 @@
+import base64
 import copy
 import calendar
 import colorsys
@@ -14,7 +15,7 @@ from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.patches import Patch, Rectangle
 
 from PySide6.QtGui import QCursor, QFont, QIcon, QPixmap
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QByteArray, QBuffer, QIODevice
 from PySide6.QtWidgets import QApplication, QMdiSubWindow, QVBoxLayout, QMessageBox
 
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
@@ -193,6 +194,55 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         windowHeight = int(580 * scaleFactor)
         self.resize(windowWidth, windowHeight)
 
+    def html(self):
+        title = self.windowTitle()
+        if ': ' in title:
+            type_part, filter_part = title.split(': ', 1)
+            heading = '<h1>' + type_part + '</h1><h2>' + filter_part + '</h2>'
+        else:
+            heading = '<h1>' + title + '</h1>'
+
+        myPixmap = self.chartWidget.grab()
+        myPixmap = myPixmap.scaledToWidth(600, Qt.SmoothTransformation)
+
+        myByteArray = QByteArray()
+        myBuffer = QBuffer(myByteArray)
+        myBuffer.open(QIODevice.OpenModeFlag.WriteOnly)
+        myPixmap.save(myBuffer, "PNG")
+
+        encodedImage = base64.b64encode(myByteArray)
+
+        html = """
+            <!DOCTYPE html>
+            <html>
+            <head>
+            </head>
+            <style>
+            * {
+                font-family: "Times New Roman", Times, serif;
+            }
+            h1 { font-size: 18pt; margin-bottom: 4px; }
+            h2 { font-size: 13pt; font-weight: normal; margin-top: 0; }
+            </style>
+            <body>
+            """
+
+        html = html + heading
+
+        html = html + ("""
+        <img src="data:image/png;base64,
+        """)
+
+        html = html + str(encodedImage)[1:]
+
+        html = html + ("""
+            <font size>
+            </body>
+            </html>
+            """)
+
+        return html
+
     # ------------------------------------------------------------------
     # Radio button handler
     # ------------------------------------------------------------------
@@ -279,12 +329,13 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
     def _filtered_sightings(self):
         """Minimal filtered list, excluding slash / spuh / hybrid entries."""
         minimal = self.mdiParent.db.GetMinimalFilteredSightingsList(self.filter)
+        cf = self.mdiParent.db.CompileFilter(self.filter)
         result = []
         for s in minimal:
             name = s["commonName"]
             if "/" in name or "sp." in name or " x " in name:
                 continue
-            if self.mdiParent.db.TestSighting(s, self.filter):
+            if self.mdiParent.db.TestSightingCompiled(s, cf):
                 result.append(s)
         return result
 
@@ -1225,7 +1276,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
 
         # Custom colormap: near-black for low counts → app blue for high counts
         cmap = LinearSegmentedColormap.from_list(
-            'yearbird_heat', ['#a0c4ff', _BAR_COLOR, '#1e4a8a', '#1a2a45'])
+            'yearbirder_heat', ['#a0c4ff', _BAR_COLOR, '#1e4a8a', '#1a2a45'])
         cmap.set_bad(color=_GRID_COLOR)   # no-data cells
 
         masked = np.ma.masked_where(grid == 0, grid)

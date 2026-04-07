@@ -28,7 +28,7 @@ dist/
 
 # Developer notes and local instructions
 DeveloperNotes.txt
-Yearbird_PyInstaller_Instructions.txt
+Yearbirder_PyInstaller_Instructions.txt
 
 # Claude Code memory
 .claude/
@@ -38,7 +38,7 @@ backup/
 
 # Screenshots and temp files
 Screenshot.jpg
-Yearbird_Screenshot.jpg
+Yearbirder_Screenshot.jpg
 
 # User data files
 photoData.csv
