@@ -664,7 +664,7 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         return pm
 
 
-    def cboLocationChanged(self, row):
+    def cboLocationChanged(self, row, _index=None):
         
         if self.fillingCombos == False:
             self.fillingCombos = True
@@ -695,7 +695,7 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
             self.fillingCombos = False
 
 
-    def cboDateChanged(self, row):
+    def cboDateChanged(self, row, _index=None):
         
         if self.fillingCombos is False:
 
@@ -727,7 +727,7 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
             self.fillingCombos = False
 
 
-    def cboTimeChanged(self, row):
+    def cboTimeChanged(self, row, _index=None):
 
         if self.fillingCombos is False:
             
@@ -753,7 +753,7 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
             self.fillingCombos = False
 
 
-    def cboCommonNameChanged(self, row):
+    def cboCommonNameChanged(self, row, _index=None):
 
         if self.fillingCombos is False:
                     

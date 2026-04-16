@@ -8,6 +8,7 @@ import numpy as np
 
 import form_Graphs
 import code_Lists
+import code_Photos
 
 from collections import defaultdict
 from math import floor
@@ -22,8 +23,8 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
 
 # App colour palette (matches code_Stylesheet.py)
-_BAR_COLOR    = "#4f8ef7"
-_REPEAT_COLOR = "#3a5c8a"   # muted blue for "seen before" stacked segment
+from code_Stylesheet import (CHART_PRIMARY, CHART_SECONDARY,
+                             PHOTO_PRIMARY, PHOTO_SECONDARY)
 _BG_COLOR     = "#1e1f26"
 _AXES_COLOR   = "#252730"
 _TEXT_COLOR   = "#e2e4ec"
@@ -33,7 +34,7 @@ _GREY_COLOR   = "#5a5e73"   # disabled-looking text
 _MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                 "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
-_DAY_LIMIT   = 100
+_DAY_LIMIT   = 1000
 _TOP_N_LOCS  = 20
 
 _SEASON_COLORS = {
@@ -115,19 +116,22 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         self._named_scatter_names   = []
         self._named_scatter_species = []
         self._named_scatter_highlight = None
-        self._strip_doys   = np.array([])
-        self._strip_years  = np.array([])
-        self._strip_dates  = []
-        self._strip_locs   = []
+        self._strip_doys    = np.array([])
+        self._strip_years   = np.array([])
+        self._strip_dates   = []
+        self._strip_locs    = []
+        self._strip_species = []
         self._strip_highlight = None
         self._foy_doys      = np.array([])
         self._foy_years     = np.array([])
         self._foy_dates     = []
+        self._foy_locs      = []
         self._foy_species   = []
         self._foy_highlight = None
         self._loy_doys      = np.array([])
         self._loy_years     = np.array([])
         self._loy_dates     = []
+        self._loy_locs      = []
         self._loy_species   = []
         self._loy_highlight = None
         self._pie_families    = []   # family/order name per wedge
@@ -143,14 +147,15 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         self._bar_species    = []
         self._bar_highlight  = None
         self._bar_item_label = "species"
+        self._bar_species_tallies = []
+        self._bar_color    = CHART_PRIMARY
+        self._repeat_color = CHART_SECONDARY
         self._heatmap_years = []
         self._heatmap_grid         = None
         self._heatmap_species_grid = None
         self._heatmap_highlight    = None
         self._too_many_days = False
         self._day_count = 0
-        self._too_many_month_years = False
-        self._month_year_count = 0
         self._current_granularity = "year"   # "year" | "month" | "monthyear" | "day"
 
         self.resized.connect(self.resizeMe)
@@ -244,6 +249,37 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         return html
 
     # ------------------------------------------------------------------
+    # Colour palette selection
+    # ------------------------------------------------------------------
+
+    def _setup_colors(self):
+        """Switch to yellow palette when the graph involves the photo filter."""
+        photo_chart_types = {"totalphotos", "ytdphotos", "photopie"}
+        is_photo = self._chart_type in photo_chart_types
+        if not is_photo and self.filter is not None:
+            f = self.filter
+            is_photo = bool(
+                f.sightingHasPhoto or f.speciesHasPhoto or f.validPhotoSpecies
+                or f.camera or f.lens
+                or f.startShutterSpeed or f.endShutterSpeed
+                or f.startAperture    or f.endAperture
+                or f.startFocalLength or f.endFocalLength
+                or f.startIso         or f.endIso
+                or f.startRating      or f.endRating
+            )
+        if is_photo:
+            self._bar_color    = PHOTO_PRIMARY
+            self._repeat_color = PHOTO_SECONDARY
+        else:
+            self._bar_color    = CHART_PRIMARY
+            self._repeat_color = CHART_SECONDARY
+
+        rdo_style = self._rdo_checked_style()
+        for btn in (self.rdoYear, self.rdoMonth, self.rdoMonthYear, self.rdoDay,
+                    self.rdoPieFamily, self.rdoPieOrder):
+            btn.setStyleSheet(rdo_style)
+
+    # ------------------------------------------------------------------
     # Radio button handler
     # ------------------------------------------------------------------
 
@@ -255,24 +291,6 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
 
         # If the user clicks By Day when it's over the limit, show a message
         # and silently revert to the previous valid selection.
-        if self.rdoMonthYear.isChecked() and self._too_many_month_years:
-            for btn in (self.rdoYear, self.rdoMonth, self.rdoMonthYear, self.rdoDay):
-                btn.blockSignals(True)
-            if self._current_granularity == "month":
-                self.rdoMonth.setChecked(True)
-            else:
-                self.rdoYear.setChecked(True)
-            for btn in (self.rdoYear, self.rdoMonth, self.rdoMonthYear, self.rdoDay):
-                btn.blockSignals(False)
-            QMessageBox.information(
-                self,
-                "Too Many Month-Years",
-                f"The current filter returned {self._month_year_count} month-year "
-                f"combinations, which is more than the {_DAY_LIMIT}-bar limit for "
-                "By Month-Year view.\n\n"
-                "Narrow your date filter and try again.")
-            return
-
         if self.rdoDay.isChecked() and self._too_many_days:
             for btn in (self.rdoYear, self.rdoMonth, self.rdoMonthYear, self.rdoDay):
                 btn.blockSignals(True)
@@ -288,7 +306,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
                 self,
                 "Too Many Days",
                 f"The current filter returned {self._day_count} days, "
-                f"which is more than the {_DAY_LIMIT}-day limit for By Day view.\n\n"
+                f"which is more than the {_DAY_LIMIT:,}-day limit for By Day view.\n\n"
                 "Narrow your date filter and try again.")
             return
 
@@ -308,19 +326,21 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
     # Day-button visual state
     # ------------------------------------------------------------------
 
+    def _rdo_checked_style(self):
+        """Return the QSS snippet that colours checked indicators with the current palette."""
+        c = self._bar_color
+        return f"QRadioButton::indicator:checked {{ background: {c}; border-color: {c}; }}"
+
     def _update_month_year_button_style(self):
-        if self._too_many_month_years:
-            self.rdoMonthYear.setStyleSheet(
-                f"QRadioButton {{ color: {_GREY_COLOR}; }}")
-        else:
-            self.rdoMonthYear.setStyleSheet("")
+        self.rdoMonthYear.setStyleSheet(self._rdo_checked_style())
 
     def _update_day_button_style(self):
+        base = self._rdo_checked_style()
         if self._too_many_days:
             self.rdoDay.setStyleSheet(
-                f"QRadioButton {{ color: {_GREY_COLOR}; }}")
+                f"QRadioButton {{ color: {_GREY_COLOR}; }} {base}")
         else:
-            self.rdoDay.setStyleSheet("")
+            self.rdoDay.setStyleSheet(base)
 
     # ------------------------------------------------------------------
     # Data builders
@@ -347,6 +367,177 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         counts = [len(bucket[k]) for k in labels]
         species_lists = [self._taxo_sort(bucket[k], sightings) for k in labels]
         return labels, counts, species_lists, "Species per Year"
+
+    def _build_ytd_data(self, sightings):
+        """For each year, count species seen up to today's month/day (YTD) and for
+        the full calendar year.
+
+        Returns (years, ytd_counts, full_counts, ytd_recent_items, today) where
+        years is sorted most-recent-first and ytd_recent_items[i] lists species
+        sorted by their first-seen date within that year's YTD window, most-recent first.
+        """
+        today = datetime.date.today()
+        ytd_cutoff = f"{today.month:02d}-{today.day:02d}"  # "MM-DD"
+
+        year_all = defaultdict(set)
+        year_ytd = defaultdict(set)
+        year_ytd_first: dict[str, dict[str, str]] = defaultdict(dict)
+
+        for s in sightings:
+            year = s["date"][0:4]
+            name = s["commonName"]
+            date = s["date"]
+            year_all[year].add(name)
+            if date[5:10] <= ytd_cutoff:
+                year_ytd[year].add(name)
+                prev = year_ytd_first[year].get(name)
+                if prev is None or date < prev:
+                    year_ytd_first[year][name] = date
+
+        if not year_all:
+            return [], [], [], [], today
+
+        years = sorted(year_all.keys(), reverse=True)
+        ytd_counts = [len(year_ytd[y]) for y in years]
+        full_counts = [len(year_all[y]) for y in years]
+
+        ytd_recent_items = []
+        for y in years:
+            first_seen = year_ytd_first[y]
+            ytd_recent_items.append(
+                sorted(first_seen, key=lambda sp: first_seen[sp], reverse=True))
+
+        return years, ytd_counts, full_counts, ytd_recent_items, today
+
+    def _build_ytd_locations_data(self, sightings):
+        """For each year, count distinct locations visited up to today's month/day
+        (YTD) and for the full calendar year.
+
+        Returns (years, ytd_counts, full_counts, ytd_recent_items, today) where
+        years is sorted most-recent-first and ytd_recent_items[i] lists locations
+        sorted by their first-visit date within that year's YTD window, most-recent first.
+        """
+        today = datetime.date.today()
+        ytd_cutoff = f"{today.month:02d}-{today.day:02d}"  # "MM-DD"
+
+        year_all = defaultdict(set)
+        year_ytd = defaultdict(set)
+        year_ytd_first: dict[str, dict[str, str]] = defaultdict(dict)
+
+        for s in sightings:
+            year = s["date"][0:4]
+            loc  = s["location"]
+            date = s["date"]
+            year_all[year].add(loc)
+            if date[5:10] <= ytd_cutoff:
+                year_ytd[year].add(loc)
+                prev = year_ytd_first[year].get(loc)
+                if prev is None or date < prev:
+                    year_ytd_first[year][loc] = date
+
+        if not year_all:
+            return [], [], [], [], today
+
+        years = sorted(year_all.keys(), reverse=True)
+        ytd_counts = [len(year_ytd[y]) for y in years]
+        full_counts = [len(year_all[y]) for y in years]
+
+        ytd_recent_items = []
+        for y in years:
+            first_seen = year_ytd_first[y]
+            ytd_recent_items.append(
+                sorted(first_seen, key=lambda loc: first_seen[loc], reverse=True))
+
+        return years, ytd_counts, full_counts, ytd_recent_items, today
+
+    def _build_ytd_checklists_data(self, sightings):
+        """For each year, count distinct checklists submitted up to today's
+        month/day (YTD) and for the full calendar year.
+
+        Returns (years, ytd_counts, full_counts, ytd_recent_items, today) where
+        ytd_recent_items[i] lists 'YYYY-MM-DD  Location' strings for the most
+        recently submitted checklists within that year's YTD window.
+        """
+        today = datetime.date.today()
+        ytd_cutoff = f"{today.month:02d}-{today.day:02d}"  # "MM-DD"
+
+        year_all = defaultdict(set)   # year → set of checklistIDs
+        year_ytd = defaultdict(set)   # year → set of checklistIDs (YTD only)
+        cl_info  = {}                 # checklistID → (date, location)
+
+        for s in sightings:
+            year = s["date"][0:4]
+            cid  = s["checklistID"]
+            year_all[year].add(cid)
+            cl_info[cid] = (s["date"], s["location"])
+            if s["date"][5:10] <= ytd_cutoff:
+                year_ytd[year].add(cid)
+
+        if not year_all:
+            return [], [], [], [], today
+
+        years      = sorted(year_all.keys(), reverse=True)
+        ytd_counts = [len(year_ytd[y]) for y in years]
+        full_counts = [len(year_all[y]) for y in years]
+
+        # Most-recently-submitted first: sort by checklist date descending
+        ytd_recent_items = []
+        for y in years:
+            sorted_cls = sorted(
+                year_ytd[y],
+                key=lambda cid: cl_info[cid][0],
+                reverse=True)
+            ytd_recent_items.append(
+                [f"{cl_info[cid][0]}  {cl_info[cid][1]}" for cid in sorted_cls])
+
+        return years, ytd_counts, full_counts, ytd_recent_items, today
+
+    def _build_ytd_photos_data(self, sightings):
+        """For each year, count photos taken up to today's month/day (YTD) and
+        for the full calendar year.
+
+        Returns (years, ytd_counts, full_counts, ytd_recent_items, today) where
+        ytd_recent_items[i] lists 'YYYY-MM-DD  Species' strings for the most
+        recently photographed species within that year's YTD window.
+        """
+        today = datetime.date.today()
+        ytd_cutoff = f"{today.month:02d}-{today.day:02d}"  # "MM-DD"
+
+        year_all = defaultdict(int)   # year → total photo count
+        year_ytd = defaultdict(int)   # year → YTD photo count
+        # year → {species: most-recent sighting date within YTD}
+        year_ytd_sp_date: dict[str, dict[str, str]] = defaultdict(dict)
+
+        for s in sightings:
+            photos = s.get("photos", [])
+            if not photos:
+                continue
+            year    = s["date"][0:4]
+            n       = len(photos)
+            year_all[year] += n
+            if s["date"][5:10] <= ytd_cutoff:
+                year_ytd[year] += n
+                species = s["commonName"]
+                date    = s["date"]
+                prev = year_ytd_sp_date[year].get(species)
+                if prev is None or date > prev:
+                    year_ytd_sp_date[year][species] = date
+
+        if not year_all:
+            return [], [], [], [], today
+
+        years      = sorted(year_all.keys(), reverse=True)
+        ytd_counts = [year_ytd[y] for y in years]
+        full_counts = [year_all[y] for y in years]
+
+        ytd_recent_items = []
+        for y in years:
+            sp_date = year_ytd_sp_date[y]
+            sorted_pairs = sorted(sp_date.items(), key=lambda x: x[1], reverse=True)
+            ytd_recent_items.append(
+                [f"{date}  {sp}" for sp, date in sorted_pairs])
+
+        return years, ytd_counts, full_counts, ytd_recent_items, today
 
     def _build_month_data(self, sightings):
         bucket = defaultdict(set)
@@ -417,6 +608,36 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         suffix = {"year": "per Year", "month": "per Month",
                   "monthyear": "per Month", "day": "per Day"}[granularity]
         return labels, counts, location_lists, f"Locations {suffix}"
+
+    def _build_photo_count_data(self, sightings, granularity):
+        """Return (labels, counts, species_lists, species_tallies, y_label).
+
+        counts[i] = total photos in period
+        species_lists[i] = species names sorted by photo count descending
+        species_tallies[i] = parallel photo counts for each species
+        """
+        bucket = defaultdict(lambda: defaultdict(int))  # period_key → species → photo_count
+        for s in sightings:
+            photos = s.get("photos", [])
+            if not photos:
+                continue
+            key = _period_key(s["date"], granularity)
+            bucket[key][s["commonName"]] += len(photos)
+
+        keys   = sorted(bucket.keys())
+        labels = _period_labels(keys, granularity)
+        counts = [sum(bucket[k].values()) for k in keys]
+
+        species_lists   = []
+        species_tallies = []
+        for k in keys:
+            sorted_species = sorted(bucket[k].items(), key=lambda x: x[1], reverse=True)
+            species_lists.append([sp for sp, _ in sorted_species])
+            species_tallies.append([cnt for _, cnt in sorted_species])
+
+        suffix = {"year": "per Year", "month": "per Month",
+                  "monthyear": "per Month", "day": "per Day"}[granularity]
+        return labels, counts, species_lists, species_tallies, f"Photographs {suffix}"
 
     def _build_cumulative_data(self, sightings):
         daily = defaultdict(set)
@@ -630,15 +851,17 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
     def _build_strip_data(self, sightings):
         """One dot per unique date the species was seen.
 
-        Returns (doys, years, dates, loc_lists, colors) sorted chronologically.
-        loc_lists[i] is a sorted list of locations where the species was seen
-        on dates[i].
+        Returns (doys, years, dates, loc_lists, species_lists, colors) sorted
+        chronologically.  loc_lists[i] and species_lists[i] are sorted lists of
+        the locations / filter-matching species seen on dates[i].
         """
-        date_locs = defaultdict(set)
+        date_locs    = defaultdict(set)
+        date_species = defaultdict(set)
         for s in sightings:
             date_locs[s["date"]].add(s["location"])
+            date_species[s["date"]].add(s["commonName"])
 
-        doys, years, dates_out, loc_lists, colors = [], [], [], [], []
+        doys, years, dates_out, loc_lists, species_lists, colors = [], [], [], [], [], []
 
         for d in sorted(date_locs.keys()):
             year  = int(d[0:4])
@@ -653,20 +876,22 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             years.append(year)
             dates_out.append(d)
             loc_lists.append(sorted(date_locs[d]))
+            species_lists.append(sorted(date_species[d]))
             colors.append(_SEASON_COLORS[season])
 
-        return doys, years, dates_out, loc_lists, colors
+        return doys, years, dates_out, loc_lists, species_lists, colors
 
-    def _draw_strip_chart(self, doys, years, dates, loc_lists, colors):
+    def _draw_strip_chart(self, doys, years, dates, loc_lists, species_lists, colors):
         if self._canvas is not None:
             self._canvas.setParent(None)
             self._canvas = None
             self._fig = None
 
-        self._strip_doys  = np.array(doys,  dtype=float)
-        self._strip_years = np.array(years, dtype=float)
-        self._strip_dates = dates
-        self._strip_locs  = loc_lists
+        self._strip_doys    = np.array(doys,  dtype=float)
+        self._strip_years   = np.array(years, dtype=float)
+        self._strip_dates   = dates
+        self._strip_locs    = loc_lists
+        self._strip_species = species_lists
 
         fig = Figure(facecolor=_BG_COLOR)
         ax  = fig.add_subplot(111, facecolor=_AXES_COLOR)
@@ -724,7 +949,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             "", xy=(0, 0),
             xytext=(12, 12), textcoords="offset points",
             bbox=dict(boxstyle="round,pad=0.5", fc=_AXES_COLOR,
-                      ec=_BAR_COLOR, lw=1),
+                      ec=self._bar_color, lw=1),
             color=_TEXT_COLOR, fontsize=8,
             visible=False, zorder=5)
 
@@ -739,22 +964,27 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         """One dot per unique first-of-year date, aggregating all species
         whose first sighting in that year falls on that date.
 
-        Returns (doys, years, dates, species_lists, colors) where
-        species_lists[i] is a sorted list of species names sharing that dot.
+        Returns (doys, years, dates, loc_lists, species_lists, colors) where
+        loc_lists[i] is a sorted list of locations for the FOY sightings on
+        that date, and species_lists[i] is a sorted list of species names.
         """
-        # (species, year) → earliest date string
-        foy = {}
+        # (species, year) → earliest date string and its location
+        foy     = {}
+        foy_loc = {}
         for s in sightings:
             key = (s["commonName"], s["date"][0:4])
             if key not in foy or s["date"] < foy[key]:
-                foy[key] = s["date"]
+                foy[key]     = s["date"]
+                foy_loc[key] = s["location"]
 
-        # Aggregate: date → list of species (date string already encodes year)
+        # Aggregate by date
         date_species = defaultdict(list)
-        for (species, _year_str), date in foy.items():
+        date_locs    = defaultdict(set)
+        for (species, year_str), date in foy.items():
             date_species[date].append(species)
+            date_locs[date].add(foy_loc[(species, year_str)])
 
-        doys, years, dates_out, species_lists, colors = [], [], [], [], []
+        doys, years, dates_out, loc_lists, species_lists, colors = [], [], [], [], [], []
         for date, sp_list in date_species.items():
             year  = int(date[0:4])
             month = int(date[5:7])
@@ -767,12 +997,13 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             doys.append(doy)
             years.append(year)
             dates_out.append(date)
+            loc_lists.append(sorted(date_locs[date]))
             species_lists.append(self._taxo_sort(sp_list, sightings))
             colors.append(_SEASON_COLORS[season])
 
-        return doys, years, dates_out, species_lists, colors
+        return doys, years, dates_out, loc_lists, species_lists, colors
 
-    def _draw_foy_chart(self, doys, years, dates, species, colors):
+    def _draw_foy_chart(self, doys, years, dates, loc_lists, species, colors):
         if self._canvas is not None:
             self._canvas.setParent(None)
             self._canvas = None
@@ -781,6 +1012,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         self._foy_doys    = np.array(doys,  dtype=float)
         self._foy_years   = np.array(years, dtype=float)
         self._foy_dates   = dates
+        self._foy_locs    = loc_lists
         self._foy_species = species
 
         fig = Figure(facecolor=_BG_COLOR)
@@ -838,7 +1070,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             "", xy=(0, 0),
             xytext=(12, 12), textcoords="offset points",
             bbox=dict(boxstyle="round,pad=0.5", fc=_AXES_COLOR,
-                      ec=_BAR_COLOR, lw=1),
+                      ec=self._bar_color, lw=1),
             color=_TEXT_COLOR, fontsize=8,
             visible=False, zorder=5)
 
@@ -853,21 +1085,27 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         """One dot per unique last-of-year date, aggregating all species
         whose last sighting in that year falls on that date.
 
-        Returns (doys, years, dates, species_lists, colors).
+        Returns (doys, years, dates, loc_lists, species_lists, colors) where
+        loc_lists[i] is a sorted list of locations for the LOY sightings on
+        that date, and species_lists[i] is a sorted list of species names.
         """
-        # (species, year) → latest date string
-        loy = {}
+        # (species, year) → latest date string and its location
+        loy     = {}
+        loy_loc = {}
         for s in sightings:
             key = (s["commonName"], s["date"][0:4])
             if key not in loy or s["date"] > loy[key]:
-                loy[key] = s["date"]
+                loy[key]     = s["date"]
+                loy_loc[key] = s["location"]
 
-        # Aggregate: date → list of species
+        # Aggregate by date
         date_species = defaultdict(list)
-        for (species, _year_str), date in loy.items():
+        date_locs    = defaultdict(set)
+        for (species, year_str), date in loy.items():
             date_species[date].append(species)
+            date_locs[date].add(loy_loc[(species, year_str)])
 
-        doys, years, dates_out, species_lists, colors = [], [], [], [], []
+        doys, years, dates_out, loc_lists, species_lists, colors = [], [], [], [], [], []
         for date, sp_list in date_species.items():
             year  = int(date[0:4])
             month = int(date[5:7])
@@ -880,12 +1118,13 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             doys.append(doy)
             years.append(year)
             dates_out.append(date)
+            loc_lists.append(sorted(date_locs[date]))
             species_lists.append(self._taxo_sort(sp_list, sightings))
             colors.append(_SEASON_COLORS[season])
 
-        return doys, years, dates_out, species_lists, colors
+        return doys, years, dates_out, loc_lists, species_lists, colors
 
-    def _draw_loy_chart(self, doys, years, dates, species, colors):
+    def _draw_loy_chart(self, doys, years, dates, loc_lists, species, colors):
         if self._canvas is not None:
             self._canvas.setParent(None)
             self._canvas = None
@@ -894,6 +1133,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         self._loy_doys    = np.array(doys,  dtype=float)
         self._loy_years   = np.array(years, dtype=float)
         self._loy_dates   = dates
+        self._loy_locs    = loc_lists
         self._loy_species = species
 
         fig = Figure(facecolor=_BG_COLOR)
@@ -947,7 +1187,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             "", xy=(0, 0),
             xytext=(12, 12), textcoords="offset points",
             bbox=dict(boxstyle="round,pad=0.5", fc=_AXES_COLOR,
-                      ec=_BAR_COLOR, lw=1),
+                      ec=self._bar_color, lw=1),
             color=_TEXT_COLOR, fontsize=8,
             visible=False, zorder=5)
 
@@ -1025,7 +1265,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             "", xy=(0, 0),
             xytext=(12, 12), textcoords="offset points",
             bbox=dict(boxstyle="round,pad=0.5", fc=_AXES_COLOR,
-                      ec=_BAR_COLOR, lw=1),
+                      ec=self._bar_color, lw=1),
             color=_TEXT_COLOR, fontsize=8,
             visible=False, zorder=5)
 
@@ -1039,7 +1279,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
     def _draw_named_scatter(self, x, y, names, x_label, y_label, species_lists=None):
         """Scatter where each dot is a named entity (location or species).
 
-        No season colouring — uses _BAR_COLOR throughout.
+        No season colouring — uses self._bar_color throughout.
         """
         if self._canvas is not None:
             self._canvas.setParent(None)
@@ -1054,7 +1294,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         fig = Figure(facecolor=_BG_COLOR)
         ax  = fig.add_subplot(111, facecolor=_AXES_COLOR)
 
-        ax.scatter(x, y, c=_BAR_COLOR, alpha=1.0, s=18, zorder=2, linewidths=0)
+        ax.scatter(x, y, c=self._bar_color, alpha=1.0, s=18, zorder=2, linewidths=0)
 
         ax.set_xlabel(x_label, color=_TEXT_COLOR, fontsize=9)
         ax.set_ylabel(y_label, color=_TEXT_COLOR, fontsize=9)
@@ -1084,7 +1324,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             "", xy=(0, 0),
             xytext=(12, 12), textcoords="offset points",
             bbox=dict(boxstyle="round,pad=0.5", fc=_AXES_COLOR,
-                      ec=_BAR_COLOR, lw=1),
+                      ec=self._bar_color, lw=1),
             color=_TEXT_COLOR, fontsize=8,
             visible=False, zorder=5)
 
@@ -1101,6 +1341,10 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             return self._build_checklist_count_data(sightings, self._current_granularity)
         if self._chart_type == "totallocations":
             return self._build_location_count_data(sightings, self._current_granularity)
+        if self._chart_type == "totalphotos":
+            labels, counts, sp_lists, sp_tallies, y_label = self._build_photo_count_data(sightings, self._current_granularity)
+            self._bar_species_tallies = sp_tallies
+            return labels, counts, sp_lists, y_label
         # Default: species bar chart
         if self._current_granularity == "month":
             return self._build_month_data(sightings)
@@ -1123,19 +1367,26 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         fig = Figure(facecolor=_BG_COLOR)
         ax  = fig.add_subplot(111, facecolor=_AXES_COLOR)
 
-        x_pos = range(len(labels))
-        bars = ax.bar(x_pos, counts, color=_BAR_COLOR, width=0.6, zorder=2)
+        n     = len(labels)
+        x_pos = range(n)
+        bars  = ax.bar(x_pos, counts, color=self._bar_color, width=0.6, zorder=2)
 
-        many = len(labels) > 10
-        ax.bar_label(bars, padding=3, color=_TEXT_COLOR,
-                     fontsize=7 if many else 9)
+        many = n > 10
+        if n <= 50:
+            ax.bar_label(bars, padding=3, color=_TEXT_COLOR,
+                         fontsize=7 if many else 9)
 
-        ax.set_xticks(list(x_pos))
+        # Limit x-axis labels to ~50 via dynamic stride when there are many bars
+        stride      = max(1, n // 50) if n > 50 else 1
+        tick_idx    = list(range(0, n, stride))
+        tick_labels = [labels[i] for i in tick_idx]
+
+        ax.set_xticks(tick_idx)
         if many:
-            ax.set_xticklabels(labels, rotation=45, ha="right",
+            ax.set_xticklabels(tick_labels, rotation=45, ha="right",
                                color=_TEXT_COLOR, fontsize=7)
         else:
-            ax.set_xticklabels(labels, color=_TEXT_COLOR, fontsize=9)
+            ax.set_xticklabels(tick_labels, color=_TEXT_COLOR, fontsize=9)
 
         ax.set_ylabel(y_label, color=_TEXT_COLOR, fontsize=9)
         ax.tick_params(colors=_TEXT_COLOR, which="both", labelcolor=_TEXT_COLOR)
@@ -1169,7 +1420,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             "", xy=(0, 0),
             xytext=(12, 12), textcoords="offset points",
             bbox=dict(boxstyle="round,pad=0.5", fc=_AXES_COLOR,
-                      ec=_BAR_COLOR, lw=1),
+                      ec=self._bar_color, lw=1),
             color=_TEXT_COLOR, fontsize=8,
             visible=False, zorder=5)
 
@@ -1192,8 +1443,8 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         ax  = fig.add_subplot(111, facecolor=_AXES_COLOR)
 
         x_pos = list(range(len(labels)))
-        ax.plot(x_pos, counts, color=_BAR_COLOR, linewidth=1.5, zorder=2)
-        ax.fill_between(x_pos, counts, alpha=0.15, color=_BAR_COLOR, zorder=1)
+        ax.plot(x_pos, counts, color=self._bar_color, linewidth=1.5, zorder=2)
+        ax.fill_between(x_pos, counts, alpha=0.15, color=self._bar_color, zorder=1)
 
         # Annotate final value
         ax.annotate(str(counts[-1]),
@@ -1250,7 +1501,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             "", xy=(0, 0),
             xytext=(12, 12), textcoords="offset points",
             bbox=dict(boxstyle="round,pad=0.5", fc=_AXES_COLOR,
-                      ec=_BAR_COLOR, lw=1),
+                      ec=self._bar_color, lw=1),
             color=_TEXT_COLOR, fontsize=8,
             visible=False, zorder=5)
 
@@ -1276,7 +1527,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
 
         # Custom colormap: near-black for low counts → app blue for high counts
         cmap = LinearSegmentedColormap.from_list(
-            'yearbirder_heat', ['#a0c4ff', _BAR_COLOR, '#1e4a8a', '#1a2a45'])
+            'yearbirder_heat', ['#a0c4ff', self._bar_color, '#1e4a8a', '#1a2a45'])
         cmap.set_bad(color=_GRID_COLOR)   # no-data cells
 
         masked = np.ma.masked_where(grid == 0, grid)
@@ -1327,7 +1578,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             "", xy=(0, 0),
             xytext=(12, 12), textcoords="offset points",
             bbox=dict(boxstyle="round,pad=0.5", fc=_AXES_COLOR,
-                      ec=_BAR_COLOR, lw=1),
+                      ec=self._bar_color, lw=1),
             color=_TEXT_COLOR, fontsize=8,
             visible=False, zorder=5)
 
@@ -1355,9 +1606,9 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         ax  = fig.add_subplot(111, facecolor=_AXES_COLOR)
 
         x_pos = list(range(len(labels)))
-        ax.bar(x_pos, repeat_counts, color=_REPEAT_COLOR, width=0.6,
+        ax.bar(x_pos, repeat_counts, color=self._repeat_color, width=0.6,
                label="Seen Before", zorder=2)
-        ax.bar(x_pos, new_counts, bottom=repeat_counts, color=_BAR_COLOR,
+        ax.bar(x_pos, new_counts, bottom=repeat_counts, color=self._bar_color,
                width=0.6, label="New", zorder=2)
 
         many     = len(labels) > 10
@@ -1410,7 +1661,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             "", xy=(0, 0),
             xytext=(12, 12), textcoords="offset points",
             bbox=dict(boxstyle="round,pad=0.5", fc=_AXES_COLOR,
-                      ec=_BAR_COLOR, lw=1),
+                      ec=self._bar_color, lw=1),
             color=_TEXT_COLOR, fontsize=8,
             visible=False, zorder=5)
 
@@ -1440,12 +1691,12 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         y_pos = list(range(len(locations)))
 
         # Non-life-bird segment (left portion)
-        ax.barh(y_pos, non_life_counts, color=_REPEAT_COLOR, height=0.6,
+        ax.barh(y_pos, non_life_counts, color=self._repeat_color, height=0.6,
                 label="Previously seen", zorder=2)
 
         # Life-bird segment (right portion, bright blue)
         life_bars = ax.barh(y_pos, life_counts, left=non_life_counts,
-                            color=_BAR_COLOR, height=0.6,
+                            color=self._bar_color, height=0.6,
                             label="Life birds", zorder=2)
 
         # Total count label at the end of each full bar
@@ -1497,12 +1748,124 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             "", xy=(0, 0),
             xytext=(12, 12), textcoords="offset points",
             bbox=dict(boxstyle="round,pad=0.5", fc=_AXES_COLOR,
-                      ec=_BAR_COLOR, lw=1),
+                      ec=self._bar_color, lw=1),
             color=_TEXT_COLOR, fontsize=8,
             visible=False, zorder=5)
 
         canvas.mpl_connect('motion_notify_event', self._on_mouse_move)
         canvas.mpl_connect('button_press_event', self._on_location_click)
+
+    def _draw_ytd_chart(self, years, ytd_counts, full_counts, ytd_recent_items,
+                        item_label, today):
+        """Draw a horizontal YTD bar chart for either species or locations.
+
+        item_label  "species" or "locations" — used in tooltip text.
+        """
+        if self._canvas is not None:
+            self._canvas.setParent(None)
+            self._canvas = None
+            self._fig = None
+
+        self._ytd_years        = years
+        self._ytd_ytd_counts   = ytd_counts
+        self._ytd_full_counts  = full_counts
+        self._ytd_recent_items = ytd_recent_items
+        self._ytd_item_label   = item_label
+
+        n = len(years)
+        current_year = str(today.year)
+        today_label = today.strftime("%-d %b")  # e.g. "10 Apr"
+
+        y_pos = list(range(n))
+        max_val = max(full_counts) if full_counts else 1
+
+        fig = Figure(facecolor=_BG_COLOR)
+        ax = fig.add_subplot(111, facecolor=_BG_COLOR)
+
+        # Gray extension bars (full_count − ytd_count) for past years
+        for i, year in enumerate(years):
+            if year != current_year:
+                extra = full_counts[i] - ytd_counts[i]
+                if extra > 0:
+                    ax.barh(i, extra, left=ytd_counts[i], color=self._repeat_color,
+                            height=0.5, zorder=2)
+
+        # Blue YTD bars
+        ax.barh(y_pos, ytd_counts, color=self._bar_color, height=0.5, zorder=3)
+
+        # Label layout: reserve left margin for year + YTD count text
+        left_margin = max_val * 0.20
+
+        for i, year in enumerate(years):
+            is_current = (year == current_year)
+            weight = "bold" if is_current else "normal"
+
+            # Year label
+            ax.text(-left_margin, i, year,
+                    ha="left", va="center",
+                    color=_TEXT_COLOR, fontsize=10, fontweight=weight)
+
+            # YTD species count in green, right-aligned just before bar start
+            ax.text(-left_margin * 0.15, i, str(ytd_counts[i]),
+                    ha="right", va="center",
+                    color=self._bar_color, fontsize=10, fontweight="bold")
+
+            # Full year total at right end of gray bar (past years only)
+            if year != current_year and full_counts[i] > 0:
+                ax.text(full_counts[i] + max_val * 0.025, i, str(full_counts[i]),
+                        ha="left", va="center",
+                        color=_TEXT_COLOR, fontsize=10)
+
+        # Column header labels above the top bar
+        header_y = -0.8
+        ax.text(0, header_y, today_label, ha="left", va="center",
+                color=_GREY_COLOR, fontsize=8)
+        ax.text(max_val, header_y, "31 Dec", ha="right", va="center",
+                color=_GREY_COLOR, fontsize=8)
+
+        # Clean axes
+        ax.set_yticks([])
+        ax.set_xticks([])
+        for spine in ax.spines.values():
+            spine.set_visible(False)
+
+        ax.set_xlim(-left_margin * 1.1, max_val * 1.15)
+        # Set ylim before inverting: -1.2 will become the visual top (header row),
+        # n - 0.5 will become the visual bottom.
+        ax.set_ylim(-1.2, n - 0.5)
+        ax.invert_yaxis()
+
+        fig.tight_layout()
+
+        canvas = FigureCanvasQTAgg(fig)
+        layout = self.chartWidget.layout()
+        if layout is None:
+            layout = QVBoxLayout(self.chartWidget)
+            layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(canvas)
+
+        self._fig = fig
+        self._canvas = canvas
+        self._ax = ax
+        self._hover_idx = -1
+
+        self._hover_annot = ax.annotate(
+            "", xy=(0, 0),
+            xytext=(12, 12), textcoords="offset points",
+            bbox=dict(boxstyle="round,pad=0.5", fc=_AXES_COLOR,
+                      ec=self._bar_color, lw=1),
+            color=_TEXT_COLOR, fontsize=8,
+            visible=False, zorder=5)
+
+        # Horizontal highlight outline (width updated on each hover event)
+        highlight_rect = Rectangle((0, -0.25), 1, 0.5,
+                                   linewidth=1.5, edgecolor=_TEXT_COLOR,
+                                   facecolor="none", visible=False, zorder=4)
+        ax.add_patch(highlight_rect)
+        self._bar_highlight = highlight_rect
+
+        canvas.mpl_connect('motion_notify_event', self._on_mouse_move)
+        canvas.mpl_connect('button_press_event', self._on_ytd_click)
 
     # ------------------------------------------------------------------
     # Bar click → spawn species list
@@ -1512,7 +1875,9 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
     _MONTH_DAYS = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 
     def _on_mouse_move(self, event):
-        if self._chart_type == "cumulative":
+        if self._chart_type in ("ytdreport", "ytdlocations", "ytdchecklists", "ytdphotos"):
+            self._update_ytd_hover(event)
+        elif self._chart_type == "cumulative":
             self._update_hover_annotation(event)
         elif self._chart_type == "cumulativelocations":
             self._update_cumulative_locations_hover(event)
@@ -1534,7 +1899,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             self._update_foy_hover(event)
         elif self._chart_type == "loy":
             self._update_loy_hover(event)
-        elif self._chart_type in ("familypie", "indivpie", "locationchecklistpie"):
+        elif self._chart_type in ("familypie", "indivpie", "locationchecklistpie", "photopie"):
             self._update_family_pie_hover(event)
         else:
             self._update_bar_hover(event)
@@ -1730,6 +2095,28 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
 
         if self._chart_type == "totallocations":
             self._spawn_locations_list(new_filter)
+        elif self._chart_type == "totalphotos":
+            self._spawn_photos_window(new_filter)
+        else:
+            self._spawn_species_list(new_filter)
+
+    def _on_ytd_click(self, event):
+        """Click on a YTD bar opens the appropriate child window for that year (YTD only)."""
+        if event.inaxes is not self._ax or event.ydata is None:
+            return
+        # y-axis is inverted: index 0 = top row (most recent year)
+        bar_idx = int(round(event.ydata))
+        if not (0 <= bar_idx < len(self._ytd_years)):
+            return
+
+        year = self._ytd_years[bar_idx]
+        today = datetime.date.today()
+        new_filter = copy.deepcopy(self.filter)
+        new_filter.setStartDate(f"{year}-01-01")
+        new_filter.setEndDate(f"{year}-{today.month:02d}-{today.day:02d}")
+
+        if self._chart_type == "ytdphotos":
+            self._spawn_photos_window(new_filter)
         else:
             self._spawn_species_list(new_filter)
 
@@ -1767,11 +2154,21 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         limit   = self._tooltip_species_limit()
 
         tip = f"{self._labels[idx]}: {count} {self._bar_item_label}"
-        for name in sp_list[:limit]:
-            tip += f"\n  {name}"
-        if count > limit:
-            tip += f"\n  (+{count - limit} more)"
-        n_lines = 1 + min(count, limit) + (1 if count > limit else 0)
+        if self._chart_type == "totalphotos" and idx < len(self._bar_species_tallies):
+            tallies = self._bar_species_tallies[idx]
+            num_sp  = len(sp_list)
+            for i, name in enumerate(sp_list[:limit]):
+                tally = tallies[i] if i < len(tallies) else ""
+                tip += f"\n  {name} ({tally})"
+            if num_sp > limit:
+                tip += f"\n  (+{num_sp - limit} more)"
+            n_lines = 1 + min(num_sp, limit) + (1 if num_sp > limit else 0)
+        else:
+            for name in sp_list[:limit]:
+                tip += f"\n  {name}"
+            if count > limit:
+                tip += f"\n  (+{count - limit} more)"
+            n_lines = 1 + min(count, limit) + (1 if count > limit else 0)
 
         self._hover_annot.xy = (idx, count)
         self._hover_annot.set_text(tip)
@@ -1886,6 +2283,79 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         self._hover_annot.set_visible(True)
         self._canvas.draw_idle()
 
+    def _update_ytd_hover(self, event):
+        if self._hover_annot is None:
+            return
+        if event.inaxes is not self._ax or event.ydata is None:
+            if self._hover_annot.get_visible():
+                self._hover_annot.set_visible(False)
+                if self._bar_highlight is not None:
+                    self._bar_highlight.set_visible(False)
+                self._hover_idx = -1
+                self._canvas.draw_idle()
+            self._canvas.setCursor(Qt.ArrowCursor)
+            return
+
+        idx = int(round(event.ydata))
+        if not (0 <= idx < len(self._ytd_years)):
+            if self._hover_annot.get_visible():
+                self._hover_annot.set_visible(False)
+                if self._bar_highlight is not None:
+                    self._bar_highlight.set_visible(False)
+                self._hover_idx = -1
+                self._canvas.draw_idle()
+            self._canvas.setCursor(Qt.ArrowCursor)
+            return
+
+        self._canvas.setCursor(Qt.PointingHandCursor)
+        if idx == self._hover_idx:
+            return
+
+        self._hover_idx = idx
+        year       = self._ytd_years[idx]
+        ytd_count  = self._ytd_ytd_counts[idx]
+        full_count = self._ytd_full_counts[idx]
+        item_list  = self._ytd_recent_items[idx] if self._ytd_recent_items else []
+        item_label = getattr(self, "_ytd_item_label", "species")
+
+        # Compute limit using the actual space available from the cursor position.
+        ax_bbox      = self._ax.get_window_extent()
+        ax_center_px = (ax_bbox.y0 + ax_bbox.y1) / 2
+        if event.y > ax_center_px:
+            available_px = event.y - ax_bbox.y0
+        else:
+            available_px = ax_bbox.y1 - event.y
+        # _tooltip_species_limit budgets for 2 overhead lines (header + "more").
+        # YTD has 4: header, blank line, heading row, and "more".
+        limit = max(3, self._tooltip_species_limit(available_px) - 2)
+
+        if item_label == "checklists":
+            recent_label = "Most recent:"
+        elif item_label == "photos":
+            recent_label = "Most recently photographed:"
+        else:
+            recent_label = "Most recently added:"
+        tip = f"{year}: {ytd_count} {item_label} YTD"
+        if year != str(datetime.date.today().year):
+            tip += f"  /  {full_count} full year"
+        tip += f"\n\n{recent_label}"
+        for item in item_list[:limit]:
+            tip += f"\n  {item}"
+        if len(item_list) > limit:
+            tip += f"\n  (+{len(item_list) - limit} more)"
+        n_lines = 3 + min(len(item_list), limit) + (1 if len(item_list) > limit else 0)
+
+        bar_width = full_count if year != str(datetime.date.today().year) else ytd_count
+        self._hover_annot.xy = (ytd_count, idx)
+        self._hover_annot.set_text(tip)
+        self._position_tooltip(event, n_lines, (ytd_count, idx))
+        self._hover_annot.set_visible(True)
+        if self._bar_highlight is not None:
+            self._bar_highlight.set_xy((0, idx - 0.25))
+            self._bar_highlight.set_width(bar_width)
+            self._bar_highlight.set_visible(True)
+        self._canvas.draw_idle()
+
     def _on_location_click(self, event):
         if event.inaxes is not self._ax or event.ydata is None:
             return
@@ -1938,14 +2408,24 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         px = float(self._strip_doys[idx])
         py = float(self._strip_years[idx])
 
-        date = self._strip_dates[idx]
-        locs = self._strip_locs[idx]
+        date    = self._strip_dates[idx]
+        locs    = self._strip_locs[idx]
+        sp_list = self._strip_species[idx] if idx < len(self._strip_species) else []
+        limit   = self._tooltip_species_limit()
+
         loc_text = locs[0] if len(locs) == 1 else f"{locs[0]} + {len(locs)-1} more"
         tip = f"{date}\n{loc_text}"
 
+        n_sp = len(sp_list)
+        for name in sp_list[:limit]:
+            tip += f"\n  {name}"
+        if n_sp > limit:
+            tip += f"\n  (+{n_sp - limit} more)"
+        n_lines = 2 + min(n_sp, limit) + (1 if n_sp > limit else 0)
+
         self._hover_annot.xy = (px, py)
         self._hover_annot.set_text(tip)
-        self._position_tooltip(event, 2, (px, py))
+        self._position_tooltip(event, n_lines, (px, py))
         self._hover_annot.set_visible(True)
         if self._strip_highlight is not None:
             self._strip_highlight.set_offsets([[px, py]])
@@ -2018,15 +2498,18 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         py = float(self._foy_years[idx])
 
         date     = self._foy_dates[idx]
+        locs     = self._foy_locs[idx] if idx < len(self._foy_locs) else []
         sp_list  = self._foy_species[idx]
         n        = len(sp_list)
         limit    = self._tooltip_species_limit()
-        tip      = f"{date}  ·  {n} FOY species"
+
+        loc_text = locs[0] if len(locs) == 1 else f"{locs[0]} + {len(locs)-1} more"
+        tip      = f"{date}  ·  {n} FOY species\n{loc_text}"
         for name in sp_list[:limit]:
             tip += f"\n  {name}"
         if n > limit:
             tip += f"\n  (+{n - limit} more)"
-        n_lines = 1 + min(n, limit) + (1 if n > limit else 0)
+        n_lines = 2 + min(n, limit) + (1 if n > limit else 0)
 
         self._hover_annot.xy = (px, py)
         self._hover_annot.set_text(tip)
@@ -2103,15 +2586,18 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         py = float(self._loy_years[idx])
 
         date     = self._loy_dates[idx]
+        locs     = self._loy_locs[idx] if idx < len(self._loy_locs) else []
         sp_list  = self._loy_species[idx]
         n        = len(sp_list)
         limit    = self._tooltip_species_limit()
-        tip      = f"{date}  ·  {n} LOY species"
+
+        loc_text = locs[0] if len(locs) == 1 else f"{locs[0]} + {len(locs)-1} more"
+        tip      = f"{date}  ·  {n} LOY species\n{loc_text}"
         for name in sp_list[:limit]:
             tip += f"\n  {name}"
         if n > limit:
             tip += f"\n  (+{n - limit} more)"
-        n_lines = 1 + min(n, limit) + (1 if n > limit else 0)
+        n_lines = 2 + min(n, limit) + (1 if n > limit else 0)
 
         self._hover_annot.xy = (px, py)
         self._hover_annot.set_text(tip)
@@ -2469,6 +2955,18 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             sub.close()
         QApplication.restoreOverrideCursor()
 
+    def _spawn_photos_window(self, filter):
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        sub = code_Photos.Photos()
+        sub.mdiParent = self.mdiParent
+        self.mdiParent.mdiArea.addSubWindow(sub)
+        self.mdiParent.PositionChildWindow(sub, self.mdiParent)
+        sub.show()
+        if sub.FillPhotos(filter) is False:
+            self.mdiParent.CreateMessageNoResults()
+            sub.close()
+        QApplication.restoreOverrideCursor()
+
     # ------------------------------------------------------------------
     # Family Pie Chart
     # ------------------------------------------------------------------
@@ -2534,8 +3032,12 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
     _TIP_GAP_PX      = 12
     _TIP_FALLBACK_W  = 280
 
-    def _tooltip_species_limit(self):
+    def _tooltip_species_limit(self, available_px=None):
         """Return max species to show in a tooltip, scaled to available height.
+
+        available_px    if supplied, use this as the height budget instead of
+                        the full axes height.  Pass a cursor-relative value to
+                        prevent the tooltip from overflowing the window edge.
 
         For charts that use offset-point annotations (bar, line, scatter etc.)
         the relevant constraint is the *axes* height, which excludes tick labels,
@@ -2544,47 +3046,49 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         Shares _TIP_LINE_PX/_TIP_PAD_PX/_TIP_MAX_FRAC with the positioning code
         so the limit and the height estimate are always consistent.
         """
-        if self._ax is not None:
-            h = self._ax.get_window_extent().height or 400
-        elif self._fig is not None:
-            h = self._fig.get_window_extent().height or 400
-        else:
-            return 25
-        usable_px = h * self._TIP_MAX_FRAC - self._TIP_PAD_PX
+        if available_px is None:
+            if self._ax is not None:
+                h = self._ax.get_window_extent().height or 400
+            elif self._fig is not None:
+                h = self._fig.get_window_extent().height or 400
+            else:
+                return 25
+            available_px = h * self._TIP_MAX_FRAC
+        usable_px = available_px - self._TIP_PAD_PX
         # Subtract 2: one for the header line, one for the potential "more" line
         return max(5, int(usable_px / self._TIP_LINE_PX) - 2)
 
     def _position_tooltip(self, event, n_lines, anchor_data_xy=None):
         """Set self._hover_annot position so it appears beside the cursor.
 
-        Must be called *after* set_text() so the rendered width is correct.
+        Must be called *after* set_text() so the rendered dimensions are correct.
 
         anchor_data_xy  (x_data, y_data) for offset-point charts (bar,
                         cumulative, scatter, heatmap, FOY/LOY, strip).
                         Pass None for pie charts (figure-fraction mode).
-        n_lines         estimated text-line count for height calculation.
+        n_lines         estimated text-line count (used only for pie fallback).
         """
-        # Actual rendered tooltip width — measured from the live renderer so
-        # long family/species names are handled correctly.
+        # Actual rendered tooltip dimensions — measured from the live renderer.
+        # This avoids any DPI / font-scaling mismatch between the limit
+        # calculation and the height estimate.
         try:
-            tip_w_px = self._hover_annot.get_window_extent(
-                self._canvas.get_renderer()).width
+            renderer  = self._canvas.get_renderer()
+            ann_box   = self._hover_annot.get_window_extent(renderer)
+            tip_w_px  = ann_box.width
+            tip_h_px  = ann_box.height
         except Exception:
-            tip_w_px = self._TIP_FALLBACK_W
+            tip_w_px  = self._TIP_FALLBACK_W
+            tip_h_px  = (n_lines * self._TIP_LINE_PX + self._TIP_PAD_PX)
 
         # Left/right decision: place tooltip on the opposite side of centre.
         fig_bbox        = self._fig.get_window_extent()
         right_of_center = event.x > fig_bbox.x0 + fig_bbox.width / 2
 
-        tip_height_pts = n_lines * 11 + 20
-
         if anchor_data_xy is None:
             # ── PIE CHART: figure-fraction coords ───────────────────────
             fig_w      = fig_bbox.width  or 600
             fig_h      = fig_bbox.height or 400
-            tip_h_frac = min(
-                (n_lines * self._TIP_LINE_PX + self._TIP_PAD_PX) / fig_h,
-                self._TIP_MAX_FRAC)
+            tip_h_frac = min(tip_h_px / fig_h, self._TIP_MAX_FRAC)
             tip_w_frac = min(tip_w_px / fig_w, 0.70)
             gap_frac   = self._TIP_GAP_PX / fig_w
             MARGIN     = 0.02
@@ -2606,8 +3110,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
 
         else:
             # ── OFFSET-POINT charts ──────────────────────────────────────
-            tip_height_px = tip_height_pts * (self._fig.dpi / 72)
-            ax_bbox       = self._ax.get_window_extent()
+            ax_bbox = self._ax.get_window_extent()
 
             # Anchor in display pixels; clamp y to axes bounds (guards against
             # bars/points that extend above the y-axis view limit).
@@ -2623,9 +3126,25 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
                 x_off_px = event.x - anchor_x_px + gap_px
             x_off = x_off_px * (72 / self._fig.dpi)
 
-            # y: vertically centre the tooltip in the axes.
+            # y: cursor-relative placement, clamped within axes bounds.
+            # Above midpoint → top edge aligns with cursor (tooltip goes down).
+            # Below midpoint → bottom edge aligns with cursor (tooltip goes up).
             ax_center_px = (ax_bbox.y0 + ax_bbox.y1) / 2
-            y_off = (ax_center_px - anchor_y_px - tip_height_px / 2) * (72 / self._fig.dpi)
+            margin_px    = 4
+            if event.y > ax_center_px:
+                tip_top_px    = event.y
+                tip_bottom_px = tip_top_px - tip_h_px
+            else:
+                tip_bottom_px = event.y
+                tip_top_px    = tip_bottom_px + tip_h_px
+            # Clamp so tooltip stays within the axes area
+            if tip_bottom_px < ax_bbox.y0 + margin_px:
+                tip_bottom_px = ax_bbox.y0 + margin_px
+                tip_top_px    = tip_bottom_px + tip_h_px
+            if tip_top_px > ax_bbox.y1 - margin_px:
+                tip_top_px    = ax_bbox.y1 - margin_px
+                tip_bottom_px = tip_top_px - tip_h_px
+            y_off = (tip_bottom_px - anchor_y_px) * (72 / self._fig.dpi)
 
             self._hover_annot.set_position((x_off, y_off))
 
@@ -2674,6 +3193,66 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         ]
         return families, counts, species_lists, species_tallies
 
+    def _build_family_photo_pie_data(self, sightings):
+        """Return (families, photo_totals, species_lists, species_tallies)
+        by summed photo count, sorted descending."""
+        family_total  = defaultdict(int)
+        family_sp_cnt = defaultdict(lambda: defaultdict(int))
+        for s in sightings:
+            photos = s.get("photos", [])
+            if not photos:
+                continue
+            fam = s.get("family", "") or "Unknown"
+            n   = len(photos)
+            family_total[fam]               += n
+            family_sp_cnt[fam][s["commonName"]] += n
+        ranked = sorted(
+            ((fam, tot) for fam, tot in family_total.items() if tot > 0),
+            key=lambda x: x[1], reverse=True)
+        if not ranked:
+            return [], [], [], []
+        families = [r[0] for r in ranked]
+        counts   = [r[1] for r in ranked]
+        species_lists = [
+            sorted(family_sp_cnt[fam], key=lambda sp: -family_sp_cnt[fam][sp])
+            for fam in families
+        ]
+        species_tallies = [
+            [family_sp_cnt[fam][sp] for sp in sp_list]
+            for fam, sp_list in zip(families, species_lists)
+        ]
+        return families, counts, species_lists, species_tallies
+
+    def _build_order_photo_pie_data(self, sightings):
+        """Return (orders, photo_totals, species_lists, species_tallies)
+        by summed photo count, sorted descending."""
+        order_total  = defaultdict(int)
+        order_sp_cnt = defaultdict(lambda: defaultdict(int))
+        for s in sightings:
+            photos = s.get("photos", [])
+            if not photos:
+                continue
+            order = s.get("order", "") or "Unknown"
+            n     = len(photos)
+            order_total[order]               += n
+            order_sp_cnt[order][s["commonName"]] += n
+        ranked = sorted(
+            ((ord_, tot) for ord_, tot in order_total.items() if tot > 0),
+            key=lambda x: x[1], reverse=True)
+        if not ranked:
+            return [], [], [], []
+        orders  = [r[0] for r in ranked]
+        counts  = [r[1] for r in ranked]
+        species_lists = [
+            sorted(order_sp_cnt[ord_], key=lambda sp: -order_sp_cnt[ord_][sp])
+            for ord_ in orders
+        ]
+        species_tallies = [
+            [order_sp_cnt[ord_][sp] for sp in sp_list]
+            for ord_, sp_list in zip(orders, species_lists)
+        ]
+        return orders, counts, species_lists, species_tallies
+
     def _build_order_indiv_pie_data(self, sightings):
         """Return (orders, individual_totals, species_lists, species_tallies)
         by summed individual count."""
@@ -2719,14 +3298,21 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         fig = Figure(facecolor=_BG_COLOR)
         ax  = fig.add_subplot(111, facecolor=_BG_COLOR)
 
-        # Build a colour cycle that steps through the app's blue palette
+        # Build a colour cycle — blue/teal for standard charts, amber/gold for photo charts
         n = len(families)
         colors = []
-        for i in range(n):
-            hue = (0.58 + i * 0.37 / max(n, 1)) % 1.0   # sweep around blue/teal range
-            sat = 0.55 + 0.3 * (i % 2)
-            val = 0.55 + 0.25 * ((i // 2) % 2)
-            colors.append(colorsys.hsv_to_rgb(hue, sat, val))
+        if self._bar_color == PHOTO_PRIMARY:
+            for i in range(n):
+                hue = (0.12 + i * 0.10 / max(n, 1)) % 1.0   # sweep golden yellow → yellow-green
+                sat = 0.60 + 0.25 * (i % 2)
+                val = 0.60 + 0.25 * ((i // 2) % 2)
+                colors.append(colorsys.hsv_to_rgb(hue, sat, val))
+        else:
+            for i in range(n):
+                hue = (0.58 + i * 0.37 / max(n, 1)) % 1.0   # sweep around blue/teal range
+                sat = 0.55 + 0.3 * (i % 2)
+                val = 0.55 + 0.25 * ((i // 2) % 2)
+                colors.append(colorsys.hsv_to_rgb(hue, sat, val))
 
         total = sum(counts) or 1
         display_labels = [f if (c / total) >= label_min_pct else "" for f, c in zip(families, counts)]
@@ -2761,7 +3347,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             "", xy=(0.5, 0.5), xycoords="figure fraction",
             xytext=(0.5, 0.5), textcoords="figure fraction",
             bbox=dict(boxstyle="round,pad=0.5", fc=_AXES_COLOR,
-                      ec=_BAR_COLOR, lw=1),
+                      ec=self._bar_color, lw=1),
             color=_TEXT_COLOR, fontsize=8,
             visible=False, zorder=5,
             annotation_clip=False)
@@ -2777,6 +3363,13 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
                 name = self._pie_families[i]
                 if self._chart_type == "locationchecklistpie":
                     self._spawn_location_window(name)
+                elif self._chart_type == "photopie":
+                    new_filter = copy.deepcopy(self.filter)
+                    if self.rdoPieFamily.isChecked():
+                        new_filter.setFamily(name)
+                    else:
+                        new_filter.setOrder(name)
+                    self._spawn_photos_window(new_filter)
                 else:
                     new_filter = copy.deepcopy(self.filter)
                     if self.rdoPieFamily.isChecked():
@@ -2869,6 +3462,24 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             self.filter.buildWindowTitle(
                 f"Pie Chart by Species – {title_kind}", self.mdiParent.db))
 
+    def _redraw_photo_pie(self):
+        """Rebuild photo-count pie when the Family/Order radio changes."""
+        sightings = self._filtered_sightings()
+        if not sightings:
+            return
+        if self.rdoPieFamily.isChecked():
+            labels, counts, species_lists, species_tallies = self._build_family_photo_pie_data(sightings)
+            title_kind = "Families"
+        else:
+            labels, counts, species_lists, species_tallies = self._build_order_photo_pie_data(sightings)
+            title_kind = "Orders"
+        self._draw_family_pie_chart(labels, counts, species_lists,
+                                    label_suffix="photos",
+                                    species_tallies=species_tallies)
+        self.setWindowTitle(
+            self.filter.buildWindowTitle(
+                f"Pie Chart by Photographs – {title_kind}", self.mdiParent.db))
+
     def _redraw_indiv_pie(self):
         """Rebuild individual-tally pie when the Family/Order radio changes."""
         sightings = self._filtered_sightings()
@@ -2894,6 +3505,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
     def FillGraph(self, filter, chartType="bar"):
         self.filter = filter
         self._chart_type = chartType
+        self._setup_colors()
 
         sightings = self._filtered_sightings()
         if not sightings:
@@ -2964,6 +3576,70 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             self.setWindowIcon(icon)
             return True
 
+        if chartType == "ytdreport":
+            self.frmGranularity.setVisible(False)
+            years, ytd_counts, full_counts, ytd_recent_items, today = self._build_ytd_data(sightings)
+            if not years:
+                return False
+            self._draw_ytd_chart(years, ytd_counts, full_counts, ytd_recent_items,
+                                 "species", today)
+            self.mdiParent.SetChildDetailsLabels(self, filter)
+            self.setWindowTitle(
+                filter.buildWindowTitle("YTD Report by Species", self.mdiParent.db))
+            icon = QIcon()
+            icon.addPixmap(QPixmap(":/icon_bird_white.png"),
+                           QIcon.Normal, QIcon.Off)
+            self.setWindowIcon(icon)
+            return True
+
+        if chartType == "ytdlocations":
+            self.frmGranularity.setVisible(False)
+            years, ytd_counts, full_counts, ytd_recent_items, today = self._build_ytd_locations_data(sightings)
+            if not years:
+                return False
+            self._draw_ytd_chart(years, ytd_counts, full_counts, ytd_recent_items,
+                                 "locations", today)
+            self.mdiParent.SetChildDetailsLabels(self, filter)
+            self.setWindowTitle(
+                filter.buildWindowTitle("YTD Report by Locations", self.mdiParent.db))
+            icon = QIcon()
+            icon.addPixmap(QPixmap(":/icon_bird_white.png"),
+                           QIcon.Normal, QIcon.Off)
+            self.setWindowIcon(icon)
+            return True
+
+        if chartType == "ytdchecklists":
+            self.frmGranularity.setVisible(False)
+            years, ytd_counts, full_counts, ytd_recent_items, today = self._build_ytd_checklists_data(sightings)
+            if not years:
+                return False
+            self._draw_ytd_chart(years, ytd_counts, full_counts, ytd_recent_items,
+                                 "checklists", today)
+            self.mdiParent.SetChildDetailsLabels(self, filter)
+            self.setWindowTitle(
+                filter.buildWindowTitle("YTD Report by Checklists", self.mdiParent.db))
+            icon = QIcon()
+            icon.addPixmap(QPixmap(":/icon_bird_white.png"),
+                           QIcon.Normal, QIcon.Off)
+            self.setWindowIcon(icon)
+            return True
+
+        if chartType == "ytdphotos":
+            self.frmGranularity.setVisible(False)
+            years, ytd_counts, full_counts, ytd_recent_items, today = self._build_ytd_photos_data(sightings)
+            if not years:
+                return False
+            self._draw_ytd_chart(years, ytd_counts, full_counts, ytd_recent_items,
+                                 "photos", today)
+            self.mdiParent.SetChildDetailsLabels(self, filter)
+            self.setWindowTitle(
+                filter.buildWindowTitle("YTD Report by Photographs", self.mdiParent.db))
+            icon = QIcon()
+            icon.addPixmap(QPixmap(":/icon_bird_white.png"),
+                           QIcon.Normal, QIcon.Off)
+            self.setWindowIcon(icon)
+            return True
+
         if chartType == "accumulation":
             self.frmGranularity.setVisible(False)
             labels, new_counts, repeat_counts, new_species = self._build_accumulation_data(sightings)
@@ -2996,10 +3672,10 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
 
         if chartType == "loy":
             self.frmGranularity.setVisible(False)
-            doys, years, dates, species, colors = self._build_loy_data(sightings)
+            doys, years, dates, loc_lists, species, colors = self._build_loy_data(sightings)
             if not doys:
                 return False
-            self._draw_loy_chart(doys, years, dates, species, colors)
+            self._draw_loy_chart(doys, years, dates, loc_lists, species, colors)
             self.mdiParent.SetChildDetailsLabels(self, filter)
             self.setWindowTitle(
                 filter.buildWindowTitle("Last of Year Phenology", self.mdiParent.db))
@@ -3011,10 +3687,10 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
 
         if chartType == "foy":
             self.frmGranularity.setVisible(False)
-            doys, years, dates, species, colors = self._build_foy_data(sightings)
+            doys, years, dates, loc_lists, species, colors = self._build_foy_data(sightings)
             if not doys:
                 return False
-            self._draw_foy_chart(doys, years, dates, species, colors)
+            self._draw_foy_chart(doys, years, dates, loc_lists, species, colors)
             self.mdiParent.SetChildDetailsLabels(self, filter)
             self.setWindowTitle(
                 filter.buildWindowTitle("First of Year Phenology", self.mdiParent.db))
@@ -3026,10 +3702,10 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
 
         if chartType == "strip":
             self.frmGranularity.setVisible(False)
-            doys, years, dates, loc_lists, colors = self._build_strip_data(sightings)
+            doys, years, dates, loc_lists, species_lists, colors = self._build_strip_data(sightings)
             if not doys:
                 return False
-            self._draw_strip_chart(doys, years, dates, loc_lists, colors)
+            self._draw_strip_chart(doys, years, dates, loc_lists, species_lists, colors)
             self.mdiParent.SetChildDetailsLabels(self, filter)
             self.setWindowTitle(
                 filter.buildWindowTitle("Phenology", self.mdiParent.db))
@@ -3158,6 +3834,30 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             self.setWindowIcon(icon)
             return True
 
+        if chartType == "photopie":
+            self.frmGranularity.setVisible(False)
+            families, counts, species_lists, species_tallies = self._build_family_photo_pie_data(sightings)
+            if not families:
+                return False
+            self.frmPieMode.setVisible(True)
+            self.rdoPieFamily.setChecked(True)
+            self.rdoPieFamily.toggled.connect(
+                lambda checked: self._redraw_photo_pie() if checked else None)
+            self.rdoPieOrder.toggled.connect(
+                lambda checked: self._redraw_photo_pie() if checked else None)
+            self._draw_family_pie_chart(families, counts, species_lists,
+                                        label_suffix="photos",
+                                        species_tallies=species_tallies)
+            self.mdiParent.SetChildDetailsLabels(self, filter)
+            self.setWindowTitle(
+                filter.buildWindowTitle("Pie Chart by Photographs – Families",
+                                        self.mdiParent.db))
+            icon = QIcon()
+            icon.addPixmap(QPixmap(":/icon_bird_white.png"),
+                           QIcon.Normal, QIcon.Off)
+            self.setWindowIcon(icon)
+            return True
+
         # ------------------------------------------------------------------
         # Bar graph
         # ------------------------------------------------------------------
@@ -3167,9 +3867,6 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         months_set = set(s["date"][5:7] for s in sightings)
         days_set   = set(s["date"]      for s in sightings)
 
-        month_years_set          = set(s["date"][0:7] for s in sightings)
-        self._month_year_count   = len(month_years_set)
-        self._too_many_month_years = self._month_year_count > _DAY_LIMIT
         self._update_month_year_button_style()
 
         self._day_count     = len(days_set)
@@ -3208,6 +3905,11 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             labels, counts, item_lists, y_label = self._build_location_count_data(sightings, default)
             item_label = "locations"
             title = "Total Locations"
+        elif chartType == "totalphotos":
+            labels, counts, item_lists, sp_tallies, y_label = self._build_photo_count_data(sightings, default)
+            self._bar_species_tallies = sp_tallies
+            item_label = "photos"
+            title = "Total Photographs"
         else:  # "bar"
             if default == "month":
                 labels, counts, item_lists, y_label = self._build_month_data(sightings)

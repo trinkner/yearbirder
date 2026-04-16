@@ -22,7 +22,7 @@ Yearbirder lets you filter, browse, and visualise your personal eBird sightings 
 - **Location window** — complete sighting history for a single location, with species list, yearly and monthly breakdowns, and a map showing the site
 - **Date Totals** — species counts by year, month, and individual date
 - **Location Totals** — species counts by region, country, state, county, and named location
-- **Powerful filter panel** — filter everything simultaneously by region, country, state, county, location, taxonomic order, family, species, date range, and seasonal range
+- **Powerful filter panel** — filter everything simultaneously by region, country, state, county, location, taxonomic order, family, species, date range, and seasonal range; the Date Options picker includes a **Select Year** mode that reveals a second dropdown listing every year in your data, so you can filter to any specific calendar year in one step
 - **Big Report** — comprehensive multi-tab report combining species, dates, locations, and checklists
 - **Compare Lists** — compare any two species lists side by side
 - **Graphs** — fourteen chart types:
@@ -40,6 +40,7 @@ Yearbirder lets you filter, browse, and visualise your personal eBird sightings 
   - *Pie Chart by Species* — species count by taxonomic family or order
   - *Pie Chart by Individual Tallies* — individual bird count by taxonomic family or order
   - *Locations by Checklists* — checklist count by location as a pie chart
+  - *YTD Reports* — horizontal bar charts comparing year-to-date species, locations, checklists, and photographs across all years in your data
 - **Maps** — eight interactive map types:
   - *Locations Map* — all your sighting locations plotted on a zoomable map
   - *Animated Lifer Map* — watch your life list build up chronologically, dot by dot
@@ -49,7 +50,7 @@ Yearbirder lets you filter, browse, and visualise your personal eBird sightings 
   - *Individuals Total Map* — bubble map sized by individual bird count per location
   - *Choropleth by Species* — US states, US counties, Canada, India, Great Britain, and world countries shaded by species count
   - *Choropleth by Checklists* — same regions shaded by checklist count
-- **Photos** — associate your JPEG bird photos with your sightings; browse, filter, and rate them by camera, lens, aperture, shutter speed, focal length, and ISO
+- **Photos** — associate your JPEG bird photos with your sightings; browse, filter, and rate them by camera, lens, aperture, shutter speed, focal length, and ISO; **File → Open Photo Settings File** defaults to the photo settings directory stored in Preferences
   - *Photos by Filter* — thumbnail gallery of every photo matching the current filter, sortable by taxonomy, date, rating, or name
   - *Species Gallery* — one best-rated photo per species, arranged in taxonomic order; click any tile to see all photos of that species
   - *Geolocated Photos* — geotagged photos plotted on a clustered interactive map; hover for a thumbnail preview, click to open the full enlargement
@@ -96,7 +97,7 @@ python3 yearbirder.py
 1. Go to [https://ebird.org/downloadMyData](https://ebird.org/downloadMyData)
 2. Click **Request My Observations**
 3. eBird will email you a link to download a `.csv` file containing your complete sightings history
-4. In Yearbirder, click **File → Open** and select that file
+4. In Yearbirder, click **File → Open** and select that file — if you have set a default eBird data folder in Preferences, the dialog will open there automatically
 
 ---
 

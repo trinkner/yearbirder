@@ -161,8 +161,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
     fontSize = 11
     scaleFactor = 1
     rowHeight = 16  # default; recomputed in ScaleDisplay() and __init__
-    versionNumber = "1.27"
-    versionDate = "April 7, 2026"
+    versionNumber = "1.3"
+    versionDate = "April 16, 2026"
     taxonomyYear = ""
 
     def __init__(self):
@@ -300,6 +300,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionHeatmap.triggered.connect(self.CreateHeatmap)
         self.actionAccumulation.triggered.connect(self.CreateAccumulationChart)
         self.actionTopLocations.triggered.connect(self.CreateTopLocations)
+        self.actionYTDReport.triggered.connect(self.CreateYTDReport)
+        self.actionYTDLocations.triggered.connect(self.CreateYTDLocations)
+        self.actionYTDChecklists.triggered.connect(self.CreateYTDChecklists)
         self.actionScatter.triggered.connect(self.CreateScatterChart)
         self.actionPhenology.triggered.connect(self.CreatePhenologyChart)
         self.actionFOY.triggered.connect(self.CreateFOYChart)
@@ -336,6 +339,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionGeolocatedPhotos.triggered.connect(self.createGeolocatedPhotosMap)
         self.actionAnimatedPhotoSequence.triggered.connect(self.createAnimatedPhotoSequenceMap)
         self.actionSlideshow.triggered.connect(self.createSlideshow)
+        self.actionYTDPhotos.triggered.connect(self.CreateYTDPhotos)
+        self.actionPhotoPie.triggered.connect(self.CreatePhotoPieChart)
+        self.actionPhotoBar.triggered.connect(self.CreatePhotoBarChart)
         self.actionLifeListMap.triggered.connect(self.createLifeListMap)
         self.actionEffortMap.triggered.connect(self.createEffortMap)
         self.actionEffortMapByChecklists.triggered.connect(self.createEffortMapByChecklists)
@@ -347,7 +353,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         for d in range(1,  32):
             self.cboStartSeasonalRangeDate.addItem(str(d))
             self.cboEndSeasonalRangeDate.addItem(str(d))
-        self.cboDateOptions.addItems(["No Date Filter",  "Use Calendars Below",  "This Year",  "Last Year",  "This Month",  "Today",  "Yesterday", "Last Weekend"])            
+        self.cboDateOptions.addItems(["No Date Filter",  "Use Calendars Below",  "This Year",  "Last Year",  "This Month",  "Today",  "Yesterday", "Last Weekend", "Select Year"])
         self.cboSeasonalRangeOptions.addItems([
             "No Seasonal Range",  
             "Use Range Below",  
@@ -381,6 +387,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.cboSpecies.currentIndexChanged.connect(self.ComboSpeciesChanged)
         self.txtCommonNameSearch.textChanged.connect(self.textCommonNameSearchChanged)
         self.cboDateOptions.currentIndexChanged.connect(self.ComboDateOptionsChanged)
+        self.cboYear.currentIndexChanged.connect(self.ComboYearChanged)
         self.cboSeasonalRangeOptions.currentIndexChanged.connect(self.ComboSeasonalRangeOptionsChanged)
         self.calStartDate.dateChanged.connect(self.CalendarClicked)
         self.calEndDate.dateChanged.connect(self.CalendarClicked)
@@ -490,13 +497,13 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
 
     def processPreferences(self):
-        
-        # Read preferences directly on the main thread 
+
+        # Read preferences directly on the main thread
         self.db.readPreferences()
 
         # If a startup folder is defined and valid, open it
         if self.db.startupFolder and os.path.isdir(self.db.startupFolder):
-            self.OpenDataFile(self.db.startupFolder)             
+            self.OpenDataFile(self.db.startupFolder)
 
             # If a photo data file is defined and valid, load it
             if self.db.photoDataFile and os.path.isfile(self.db.photoDataFile):
@@ -523,6 +530,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 self.actionGeolocatedPhotosSeparator.setVisible(True)
                 self.actionAnimatedPhotoSequence.setVisible(True)
                 self.actionSlideshow.setVisible(True)
+                self.actionYTDPhotos.setVisible(True)
+                self.actionPhotoPie.setVisible(True)
+                self.actionPhotoBar.setVisible(True)
                 self.actionEditPhotosByFilter.setVisible(True)
                 self.actionUpdateEXIFDataForAllPhotos.setVisible(True)
 
@@ -648,6 +658,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.calStartDate.setDate(datetime.datetime.now())
         self.calEndDate.setDate(datetime.datetime.now())
         self.cboDateOptions.setCurrentIndex(0)
+        self.cboYear.setCurrentIndex(0)
+        self.cboYear.setVisible(False)
+        self.cboYear.setStyleSheet("")
         self.cboSeasonalRangeOptions.setCurrentIndex(0)
         self.txtCommonNameSearch.setText("")
 
@@ -671,7 +684,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
     def openPhotoSettings(self, photoDataFile = ""):
                     
         # open data file
-        fname = QFileDialog.getOpenFileName(self,"Select Yearbirder Photo Data File", "","Yearbirder Photo Data File (*.csv)")
+        initial_dir = os.path.dirname(MainWindow.db.photoDataFile) if MainWindow.db.photoDataFile else ""
+        fname = QFileDialog.getOpenFileName(self,"Select Yearbirder Photo Data File", initial_dir,"Yearbirder Photo Data File (*.csv)")
         
         # check if user pressed cancel or if we have a file name to open
         if fname[0] == "":
@@ -689,6 +703,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionGeolocatedPhotosSeparator.setVisible(True)
         self.actionAnimatedPhotoSequence.setVisible(True)
         self.actionSlideshow.setVisible(True)
+        self.actionYTDPhotos.setVisible(True)
+        self.actionPhotoPie.setVisible(True)
+        self.actionPhotoBar.setVisible(True)
         self.actionEditPhotosByFilter.setVisible(True)
         self.actionUpdateEXIFDataForAllPhotos.setVisible(True)
 
@@ -708,6 +725,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionGeolocatedPhotosSeparator.setVisible(False)
         self.actionAnimatedPhotoSequence.setVisible(False)
         self.actionSlideshow.setVisible(False)
+        self.actionYTDPhotos.setVisible(False)
+        self.actionPhotoPie.setVisible(False)
+        self.actionPhotoBar.setVisible(False)
         self.actionEditPhotosByFilter.setVisible(False)
         self.actionUpdateEXIFDataForAllPhotos.setVisible(False)
         
@@ -1009,8 +1029,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         
         directory = str(QFileDialog.getExistingDirectory(self, "Select Directory"))
 
-        directory = os.fsencode(directory)
-        
         self.db.attachPhotos(directory)
 
 
@@ -1089,7 +1107,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 
     def CalendarClicked(self):
         if MainWindow.db.eBirdFileOpenFlag is True:
-            self.cboDateOptions.setCurrentIndex(1)
+            if self.cboDateOptions.currentText() != "Select Year":
+                self.cboDateOptions.setCurrentIndex(1)
 
 
     def CreateFind(self):
@@ -1220,7 +1239,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateStatsOnLoad()
 
 
-    def OpenDataFile(self, startupFolder = ""):  
+    def OpenDataFile(self, startupFolder=""):
         # clear and close any data if a file is already open
 
         self.closeDataFile()
@@ -1250,7 +1269,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         else:
             
             #No startup folder was specified, so ask user which ebird file to open.  Take only the first element of the tuple, which is the filename
-            fname = QFileDialog.getOpenFileName(self,"QFileDialog.getOpenFileNames()", "","eBird Data Files (*.csv *.zip)")[0]   
+            fname = QFileDialog.getOpenFileName(self,"QFileDialog.getOpenFileNames()", MainWindow.db.startupFolder,"eBird Data Files (*.csv *.zip)")[0]
                 
         if fname != "":
 
@@ -1879,6 +1898,118 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             sub.close()
 
 
+    def CreateYTDReport(self):
+
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+
+        sub = code_Graphs.Graphs()
+        sub.mdiParent = self
+
+        if sub.FillGraph(self.GetFilter(), "ytdreport") is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+            QTimer.singleShot(0, sub.scaleMe)
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+
+
+    def CreateYTDLocations(self):
+
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+
+        sub = code_Graphs.Graphs()
+        sub.mdiParent = self
+
+        if sub.FillGraph(self.GetFilter(), "ytdlocations") is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+            QTimer.singleShot(0, sub.scaleMe)
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+
+
+    def CreateYTDChecklists(self):
+
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+
+        sub = code_Graphs.Graphs()
+        sub.mdiParent = self
+
+        if sub.FillGraph(self.GetFilter(), "ytdchecklists") is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+            QTimer.singleShot(0, sub.scaleMe)
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+
+
+    def CreateYTDPhotos(self):
+
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+
+        sub = code_Graphs.Graphs()
+        sub.mdiParent = self
+
+        if sub.FillGraph(self.GetFilter(), "ytdphotos") is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+            QTimer.singleShot(0, sub.scaleMe)
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+
+
+    def CreatePhotoPieChart(self):
+
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+
+        sub = code_Graphs.Graphs()
+        sub.mdiParent = self
+
+        if sub.FillGraph(self.GetFilter(), "photopie") is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+            QTimer.singleShot(0, sub.scaleMe)
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+
+    def CreatePhotoBarChart(self):
+
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+
+        sub = code_Graphs.Graphs()
+        sub.mdiParent = self
+
+        if sub.FillGraph(self.GetFilter(), "totalphotos") is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+            QTimer.singleShot(0, sub.scaleMe)
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+
     def CreateScatterChart(self):
 
         if MainWindow.db.eBirdFileOpenFlag is not True:
@@ -2313,6 +2444,11 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             startDate = lastYear + "-01-01"
             endDate = lastYear + "-12-31"
 
+        if self.cboDateOptions.currentText() == "Select Year":
+            year = self.cboYear.currentText()
+            if year:
+                startDate = year + "-01-01"
+                endDate = year + "-12-31"
 
         # Check if This Month radio button is checked
         # if so, create yyyy-mm-01 and yyyy-mm-31 dates
@@ -3016,7 +3152,11 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.cboOrders.clear()
         self.cboOrders.addItem("**All Orders**")
         self.cboOrders.addItems(MainWindow.db.orderList)
-        
+
+        self.cboYear.clear()
+        years = sorted({s["date"][0:4] for s in MainWindow.db.sightingList}, reverse=True)
+        self.cboYear.addItems(years)
+
         self.fillingLocationComboBoxesFlag = False
                 
 
@@ -3246,8 +3386,13 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             
             thisOption = self.cboDateOptions.currentText()
             
+            # Show the year picker only when "Select Year" is selected
+            self.cboYear.setVisible(thisOption == "Select Year")
+            if thisOption != "Select Year":
+                self.unhighlightFilterElement(self.cboYear)
+
             if thisOption == "No Date Filter":
-                self.cboDateOptions.setStyleSheet("");  
+                self.cboDateOptions.setStyleSheet("");
                 self.calStartDate.setStyleSheet("")
                 self.calEndDate.setStyleSheet("")
 
@@ -3255,7 +3400,16 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 self.highlightFilterElement(self.cboDateOptions)
                 self.highlightFilterElement(self.calStartDate)
                 self.highlightFilterElement(self.calEndDate)
-                
+
+            elif thisOption == "Select Year":
+                self.highlightFilterElement(self.cboDateOptions)
+                self.highlightFilterElement(self.cboYear)
+                self.unhighlightFilterElement(self.calStartDate)
+                self.unhighlightFilterElement(self.calEndDate)
+                year = self.cboYear.currentText()
+                if year:
+                    self.setDateFilter(year + "-01-01", year + "-12-31")
+
             else:
                 self.highlightFilterElement(self.cboDateOptions)
                 self.unhighlightFilterElement(self.calStartDate)
@@ -3287,10 +3441,18 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 self.setDateFilter(startDate, endDate)
 
 
-    def ComboFamiliesChanged(self):
-        
+    def ComboYearChanged(self):
         if self.fillingLocationComboBoxesFlag is False:
-            
+            year = self.cboYear.currentText()
+            if year:
+                self.highlightFilterElement(self.cboYear)
+                self.setDateFilter(year + "-01-01", year + "-12-31")
+
+
+    def ComboFamiliesChanged(self):
+
+        if self.fillingLocationComboBoxesFlag is False:
+
             self.fillingLocationComboBoxesFlag = True
             thisFamily = self.cboFamilies.currentText()
             
@@ -3544,9 +3706,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                     self.cboEndRatingRange.setCurrentIndex(startRating)
             
             if thisSighting == "**All**":
-                self.unhighlightFilterElement(self.cboStartRatingRange)                
+                self.unhighlightFilterElement(self.cboStartRatingRange)
             else:
-                self.highlightFilterElement(self.cboStartRatingRange)
+                self.highlightPhotoFilterElement(self.cboStartRatingRange)
 
 
     def ComboEndRatingRangeChanged(self):
@@ -3560,9 +3722,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 self.cboStartRatingRange.setCurrentIndex(endRating)            
             
             if thisSighting == "**All**":
-                self.unhighlightFilterElement(self.cboEndRatingRange)                
+                self.unhighlightFilterElement(self.cboEndRatingRange)
             else:
-                self.highlightFilterElement(self.cboEndRatingRange)
+                self.highlightPhotoFilterElement(self.cboEndRatingRange)
 
 
     def ComboSpeciesHasPhotosChanged(self):
@@ -3570,9 +3732,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             thisSpecies = self.cboSpeciesHasPhoto.currentText()
             
             if thisSpecies == "**All**":
-                self.unhighlightFilterElement(self.cboSpeciesHasPhoto)                
+                self.unhighlightFilterElement(self.cboSpeciesHasPhoto)
             else:
-                self.highlightFilterElement(self.cboSpeciesHasPhoto)
+                self.highlightPhotoFilterElement(self.cboSpeciesHasPhoto)
                 
 
     def ComboCameraChanged(self):
@@ -3580,9 +3742,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             thisCamera = self.cboCamera.currentText()
             
             if thisCamera == "**All Cameras**":
-                self.unhighlightFilterElement(self.cboCamera)                
+                self.unhighlightFilterElement(self.cboCamera)
             else:
-                self.highlightFilterElement(self.cboCamera)
+                self.highlightPhotoFilterElement(self.cboCamera)
 
 
     def ComboLensChanged(self):
@@ -3590,9 +3752,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             thisLens = self.cboLens.currentText()
             
             if thisLens== "**All Lenses**":
-                self.unhighlightFilterElement(self.cboLens)                
+                self.unhighlightFilterElement(self.cboLens)
             else:
-                self.highlightFilterElement(self.cboLens)
+                self.highlightPhotoFilterElement(self.cboLens)
 
 
     def ComboStartShutterSpeedChanged(self):
@@ -3600,9 +3762,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             thisShutterSpeed = self.cboStartShutterSpeedRange.currentText()
             
             if thisShutterSpeed == "**All**":
-                self.unhighlightFilterElement(self.cboStartShutterSpeedRange)                
+                self.unhighlightFilterElement(self.cboStartShutterSpeedRange)
             else:
-                self.highlightFilterElement(self.cboStartShutterSpeedRange)
+                self.highlightPhotoFilterElement(self.cboStartShutterSpeedRange)
                 
 
     def ComboEndShutterSpeedChanged(self):
@@ -3610,9 +3772,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             thisShutterSpeed = self.cboEndShutterSpeedRange.currentText()
             
             if thisShutterSpeed == "**All**":
-                self.unhighlightFilterElement(self.cboEndShutterSpeedRange)                
+                self.unhighlightFilterElement(self.cboEndShutterSpeedRange)
             else:
-                self.highlightFilterElement(self.cboEndShutterSpeedRange)
+                self.highlightPhotoFilterElement(self.cboEndShutterSpeedRange)
 
 
     def ComboStartApertureChanged(self):
@@ -3620,9 +3782,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             thisAperture = self.cboStartApertureRange.currentText()
             
             if thisAperture == "**All**":
-                self.unhighlightFilterElement(self.cboStartApertureRange)                
+                self.unhighlightFilterElement(self.cboStartApertureRange)
             else:
-                self.highlightFilterElement(self.cboStartApertureRange)
+                self.highlightPhotoFilterElement(self.cboStartApertureRange)
                 
 
     def ComboEndApertureChanged(self):
@@ -3630,9 +3792,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             thisAperture = self.cboEndApertureRange.currentText()
             
             if thisAperture == "**All**":
-                self.unhighlightFilterElement(self.cboEndApertureRange)                
+                self.unhighlightFilterElement(self.cboEndApertureRange)
             else:
-                self.highlightFilterElement(self.cboEndApertureRange)
+                self.highlightPhotoFilterElement(self.cboEndApertureRange)
                 
 
     def ComboStartFocalLengthChanged(self):
@@ -3640,9 +3802,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             thisFocalLength = self.cboStartFocalLengthRange.currentText()
             
             if thisFocalLength == "**All**":
-                self.unhighlightFilterElement(self.cboStartFocalLengthRange)                
+                self.unhighlightFilterElement(self.cboStartFocalLengthRange)
             else:
-                self.highlightFilterElement(self.cboStartFocalLengthRange)
+                self.highlightPhotoFilterElement(self.cboStartFocalLengthRange)
                 
 
     def ComboEndFocalLengthChanged(self):
@@ -3650,9 +3812,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             thisFocalLength = self.cboEndFocalLengthRange.currentText()
             
             if thisFocalLength == "**All**":
-                self.unhighlightFilterElement(self.cboEndFocalLengthRange)                
+                self.unhighlightFilterElement(self.cboEndFocalLengthRange)
             else:
-                self.highlightFilterElement(self.cboEndFocalLengthRange)
+                self.highlightPhotoFilterElement(self.cboEndFocalLengthRange)
 
 
     def ComboStartIsoChanged(self):
@@ -3660,9 +3822,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             thisIso = self.cboStartIsoRange.currentText()
             
             if thisIso == "**All**":
-                self.unhighlightFilterElement(self.cboStartIsoRange)                
+                self.unhighlightFilterElement(self.cboStartIsoRange)
             else:
-                self.highlightFilterElement(self.cboStartIsoRange)
+                self.highlightPhotoFilterElement(self.cboStartIsoRange)
                 
 
     def ComboEndIsoChanged(self):
@@ -3670,9 +3832,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             thisIso = self.cboEndIsoRange.currentText()
             
             if thisIso == "**All**":
-                self.unhighlightFilterElement(self.cboEndIsoRange)                
+                self.unhighlightFilterElement(self.cboEndIsoRange)
             else:
-                self.highlightFilterElement(self.cboEndIsoRange)
+                self.highlightPhotoFilterElement(self.cboEndIsoRange)
 
 
     def createChoroplethUSStates(self):
@@ -4086,16 +4248,21 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
 
 
-    def highlightFilterElement(self, widget):
+    def highlightFilterElement(self, widget, color=None):
+        if color is None:
+            color = code_Stylesheet.CHART_PRIMARY
 
         if widget.objectName()[0:3] == "cbo":
-            widget.setStyleSheet("QComboBox { color: #4f8ef7; }")
+            widget.setStyleSheet(f"QComboBox {{ color: {color}; }}")
 
         if widget.objectName()[0:3] == "cal":
             red = str(code_Stylesheet.mdiAreaColor.red())
             blue = str(code_Stylesheet.mdiAreaColor.blue())
             green = str(code_Stylesheet.mdiAreaColor.green())
             widget.setStyleSheet("QDateTimeEdit { background-color: rgb(" + red + "," + green + "," + blue + ")}")
+
+    def highlightPhotoFilterElement(self, widget):
+        self.highlightFilterElement(widget, color=code_Stylesheet.PHOTO_PRIMARY)
 
 
     def unhighlightFilterElement(self, widget):
