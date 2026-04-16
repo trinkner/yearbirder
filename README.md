@@ -68,7 +68,7 @@ Download `Yearbirder.dmg`, open it, and drag Yearbirder to your Applications fol
 
 ## Requirements
 
-- Python 3.10 or later
+- Python 3.10 or later (download from [python.org](https://www.python.org/downloads/))
 - [PySide6](https://pypi.org/project/PySide6/) — Qt 6 bindings (LGPL)
 - [folium](https://pypi.org/project/folium/)
 - [matplotlib](https://pypi.org/project/matplotlib/)
@@ -76,7 +76,7 @@ Download `Yearbirder.dmg`, open it, and drag Yearbirder to your Applications fol
 - [natsort](https://pypi.org/project/natsort/)
 - [piexif](https://pypi.org/project/piexif/)
 
-Install all dependencies with:
+After installing Python, install all other dependencies with:
 
 ```
 pip install pyside6 folium matplotlib numpy natsort piexif
