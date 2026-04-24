@@ -872,7 +872,7 @@ class Ui_MainWindow(object):
         self.menuFile.addAction(self.actionOpenPhotoSettings)
         self.menuFile.addAction(self.actionClosePhotoSettings)
         self.menuFile.addAction(self.actionSavePhotoSettings)
-        self.menuFile.addSeparator()
+        self.menuFileCatalogSeparator = self.menuFile.addSeparator()
         self.menuFile.addAction(self.actionAddPhotos)
         self.menuFile.addAction(self.actionEditPhotosByFilter)
         self.menuFile.addAction(self.actionUpdateEXIFDataForAllPhotos)

@@ -44,8 +44,8 @@ class Preferences(QMdiSubWindow, form_Preferences.Ui_frmPreferences):
         if self.mdiParent.db.getStartupFolder() != "":
             self.chkStartupFolder.setChecked(True)
             
-        self.txtPhotoDataFile.setText(self.mdiParent.db.getPhotoDataFile())
-        if self.mdiParent.db.getPhotoDataFile() != "":
+        self.txtPhotoDataFile.setText(self.mdiParent.db.photoDataFileDefault)
+        if self.mdiParent.db.photoDataFileDefault != "":
             self.chkPhotoDataFile.setChecked(True)
         
             
@@ -96,9 +96,9 @@ class Preferences(QMdiSubWindow, form_Preferences.Ui_frmPreferences):
             self.mdiParent.db.startupFolder = ""
             
         if self.chkPhotoDataFile.isChecked():
-            self.mdiParent.db.photoDataFile = self.txtPhotoDataFile.text()
+            self.mdiParent.db.photoDataFileDefault = self.txtPhotoDataFile.text()
         else:
-            self.mdiParent.db.photoDataFile = ""
+            self.mdiParent.db.photoDataFileDefault = ""
             
         self.mdiParent.db.writePreferences()
         
@@ -117,7 +117,7 @@ class Preferences(QMdiSubWindow, form_Preferences.Ui_frmPreferences):
     
     def selectPhotoDataFile(self):
         
-        fname = QFileDialog.getOpenFileName(self,"Select Photo Data File", self.mdiParent.db.photoDataFile, "Photo Data Files (*.csv)")
+        fname = QFileDialog.getOpenFileName(self,"Select Photo Data File", self.mdiParent.db.photoDataFile, "Photo Data Files (*.jsonl *.csv)")
         
         if fname[0] != "":
         

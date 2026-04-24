@@ -9,13 +9,23 @@
 
 # Yearbirder
 
-**Current release: v1.4** (April 2026)
+**Current release: v1.41** (April 2026)
 
 A desktop application for exploring and analysing your personal [eBird](https://ebird.org) data and your personal photos of birds.
 
 Yearbirder lets you filter, browse, and visualise your personal eBird sightings in ways the eBird website does not — across every location, species, date, and season in your personal history. If you are a bird photographer, Yearbirder also lets you sort, filter and view your photos in the same way.
 
 ---
+
+## What's New in v1.41
+
+- **Photo catalog safeguards** — a series of fixes prevents accidental data loss when opening, switching, or closing photo catalogs; the app now guards against overwriting an existing catalog when a new eBird data file is opened
+- **No catalog, no problem** — adding photos without a catalog open now prompts you to create one before saving; if you cancel, your in-progress work is preserved and you can try again
+- **Unsaved-changes protection** — closing the Manage Photos window or the photo catalog while changes are pending now asks whether to save or discard, rather than silently discarding
+- **Catalog-switching guard** — opening a different photo catalog while Manage Photos is open is blocked to prevent conflicts; switching catalogs with unsaved changes prompts to save first
+- **CSV catalogs must be converted** — legacy CSV photo catalogs must now be converted to the new `.jsonl` format before they can be used; the app guides you through the conversion and will not open a CSV without it
+- **Default catalog tracking fixed** — declining "Set as default catalog?" now correctly preserves the previous default; the Preferences dialog always shows the stored default rather than the currently open catalog
+- **Menu visibility** — the Photos menu, Close eBird Data File, and catalog-related File menu items are now shown and hidden based on what is actually open, reducing clutter
 
 ## What's New in v1.4
 

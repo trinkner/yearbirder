@@ -40,6 +40,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QDialog,
     QProgressBar,
+    QFileDialog,
     )
     
 
@@ -182,6 +183,7 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         self.setAttribute(Qt.WA_DeleteOnClose)
         self.photosAlreadyInDb = True
         self._changesSaved = False
+        self._skipCloseGuard = False
                 
         # dynamic thread pool — sized to CPU count, capped at 8 for disk-bound work
         self.threadCount = min(os.cpu_count() or 4, 8)
@@ -212,6 +214,21 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
 
 
     def closeEvent(self, event):
+        if (not self._skipCloseGuard and
+                not self._changesSaved and
+                not self.photosAlreadyInDb and
+                self.metaDataByRow):
+            reply = QMessageBox.question(
+                self, "Unsaved Photos",
+                "Your photo information has not been saved to a catalog.\n\n"
+                "Close anyway and discard your work?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if reply == QMessageBox.StandardButton.No:
+                event.ignore()
+                return
+
         self._drainTimer.stop()
         while not self.workQueue.empty():
             try:
@@ -1126,7 +1143,64 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
 
 
     def savePhotoSettings(self):
-                
+
+        if not self.photosAlreadyInDb and not self.mdiParent.db.photoDataFileOpenFlag:
+            msg = QMessageBox(self)
+            msg.setWindowTitle("No Photo Catalog Open")
+            msg.setText(
+                "You need to create a photo catalog file for Yearbirder to save "
+                "your photo information.\n\n"
+                "A photo catalog is a file that stores the species, checklist, and "
+                "rating data for each of your bird photos. Without one, your work "
+                "here cannot be saved to disk.\n\n"
+                "Would you like to create a new catalog file now, or go back and "
+                "continue working?"
+            )
+            create_btn  = msg.addButton("Create Catalog…", QMessageBox.ButtonRole.AcceptRole)
+            go_back_btn = msg.addButton("Go Back",             QMessageBox.ButtonRole.RejectRole)
+            discard_btn = msg.addButton("Discard Work",        QMessageBox.ButtonRole.DestructiveRole)
+            msg.setDefaultButton(create_btn)
+            msg.exec()
+
+            clicked = msg.clickedButton()
+            if clicked is discard_btn:
+                self._skipCloseGuard = True
+                self.close()
+                return
+            elif clicked is not create_btn:
+                return  # Go Back — window stays open
+
+            # Create Catalog path
+            initial_dir = self.mdiParent.db.startupFolder or os.path.expanduser("~")
+            fname, _ = QFileDialog.getSaveFileName(
+                self,
+                "Create Photo Catalog File",
+                initial_dir,
+                "Yearbirder Photo Catalog (*.jsonl)",
+            )
+            if not fname:
+                return  # user cancelled the save dialog — stay open
+            if not fname.lower().endswith(".jsonl"):
+                fname += ".jsonl"
+            self.mdiParent.db.photoDataFile = fname
+            self.mdiParent.db.photoDataFileOpenFlag = True
+            reply = QMessageBox.question(
+                self,
+                "Set as Default Catalog?",
+                f"Would you like Yearbirder to open\n\"{os.path.basename(fname)}\"\n"
+                "automatically each time it starts?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            )
+            if reply == QMessageBox.StandardButton.Yes:
+                self.mdiParent.db.photoDataFileDefault = fname
+                self.mdiParent.db.writePreferences()
+            self.mdiParent.menuPhotos.menuAction().setVisible(True)
+            self.mdiParent._showPhotoCatalogMenuItems()
+            self.mdiParent.actionGeolocatedPhotos.setVisible(True)
+            self.mdiParent.actionGeolocatedPhotosSeparator.setVisible(True)
+            self.mdiParent.actionAnimatedPhotoSequence.setVisible(True)
+            self.mdiParent.actionSlideshow.setVisible(True)
+
         # call database function to remove modified photos from db
         for r in range(self.gridPhotos.rowCount()):
             
@@ -1184,7 +1258,7 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
                             self.mdiParent.db.appendPhotoToJsonl(s, self.metaDataByRow[r]["photoData"])
                         except IOError as exc:
                             QMessageBox.warning(self, "Settings File Error",
-                                f"Photo saved in memory but could not be written to the photo settings file:\n{exc}")
+                                f"Photo saved in memory but could not be written to the photo catalog:\n{exc}")
 
             if self.photosAlreadyInDb is False:
             
@@ -1220,7 +1294,7 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
                             self.mdiParent.db.appendPhotoToJsonl(s, self.metaDataByRow[r]["photoData"])
                         except IOError as exc:
                             QMessageBox.warning(self, "Settings File Error",
-                                f"Photo saved in memory but could not be written to the photo settings file:\n{exc}")
+                                f"Photo saved in memory but could not be written to the photo catalog:\n{exc}")
 
         if self.photosAlreadyInDb is False:
             

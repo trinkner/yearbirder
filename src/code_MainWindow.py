@@ -277,7 +277,7 @@ class _OptimizePhotoSettingsDialog(QDialog):
 
         self._statusLabel.setText(
             summary + skipped_note + "\n\n"
-            "These entries will be removed from the photo settings file "
+            "These entries will be removed from the photo catalog "
             "and the file will be compacted. This cannot be undone."
         )
 
@@ -305,8 +305,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
     fontSize = 11
     scaleFactor = 1
     rowHeight = 16  # default; recomputed in ScaleDisplay() and __init__
-    versionNumber = "1.4"
-    versionDate = "April 22, 2026"
+    versionNumber = "1.41"
+    versionDate = "April 24, 2026"
     taxonomyYear = ""
 
     def __init__(self):
@@ -661,12 +661,18 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         if self.db.startupFolder and os.path.isdir(self.db.startupFolder):
             self.OpenDataFile(self.db.startupFolder)
 
-            # If a photo data file is defined and valid, load it
-            if self.db.photoDataFile and os.path.isfile(self.db.photoDataFile):
-                self.db.readPhotoDataFromFile(self.db.photoDataFile)
-                self._warnIfJsonlSkippedLines()
-                self._warnIfCsvSkippedRows()
-                self._promptJsonlMigrationIfNeeded()
+            # Only load the photo catalog if the eBird file loaded successfully.
+            # Use photoDataFileDefault — it survives ClearDatabase and always reflects
+            # the user-chosen default, not merely the last active catalog.
+            if self.db.eBirdFileOpenFlag:
+                default_catalog = self.db.photoDataFileDefault
+                if default_catalog and os.path.isfile(default_catalog):
+                    self.db.readPhotoDataFromFile(default_catalog)
+                    self._warnIfJsonlSkippedLines()
+                    self._warnIfCsvSkippedRows()
+                    self._promptJsonlMigrationIfNeeded()
+                    if self.db.photoDataFile.lower().endswith(".csv"):
+                        self.db.ClearPhotoSettings()
 
         # Now that preferences are processed, continue with UI updates
         self.finishedProcessingPreferences()
@@ -680,11 +686,15 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.fillingLocationComboBoxesFlag = False
             self.showStandardFilter()
             self.CreateSpeciesList()
-            
+            self.actionClose.setVisible(True)
+            self.actionOpenPhotoSettings.setVisible(True)
+
             #show photo filter if an ebird file has been read and a photo file has been opened
             if self.db.photoDataFileOpenFlag == True:
                 self.fillPhotoComboBoxes()
                 self.showPhotoFilter()
+                self.menuPhotos.menuAction().setVisible(True)
+                self._showPhotoCatalogMenuItems()
                 self.actionGeolocatedPhotos.setVisible(True)
                 self.actionGeolocatedPhotosSeparator.setVisible(True)
                 self.actionAnimatedPhotoSequence.setVisible(True)
@@ -853,7 +863,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 f"{n} line{'s' if n != 1 else ''} in the photo catalog could not "
                 f"be read and {'were' if n != 1 else 'was'} skipped.\n\n"
                 "The file may be partially corrupted. Consider running "
-                "File \u2192 Optimize photo settings file\u2026 to compact and repair it.",
+                "File \u2192 Optimize photo catalog\u2026 to compact and repair it.",
                 QMessageBox.StandardButton.Ok,
             )
 
@@ -872,6 +882,34 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
     def openPhotoSettings(self, photoDataFile = ""):
 
+        if not self.db.eBirdFileOpenFlag:
+            QMessageBox.warning(self, "No eBird Data File Open",
+                "Please open an eBird data file first (File → Open), "
+                "then open a photo catalog.")
+            return
+
+        # Block if Manage Photos is open — switching catalogs mid-session would corrupt its state
+        for w in self.mdiArea.subWindowList():
+            if isinstance(w, code_ManagePhotos.ManagePhotos):
+                QMessageBox.warning(self, "Close Manage Photos First",
+                    "Please close the Manage Photos window before opening a different photo catalog.\n\n"
+                    "Having both open at the same time could cause conflicts.")
+                return
+
+        # Snapshot the current default before any changes so we can detect a switch
+        prev_default = self.db.photoDataFile
+
+        # If a catalog is already open, confirm the switch
+        if self.db.photoDataFileOpenFlag:
+            reply = code_Stylesheet.question(self, "Photo Catalog Already Open",
+                "A photo catalog is already open.\n\n"
+                "Do you want to close it and open a different one?")
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+            # Compact any pending changes before switching
+            self.checkIfPhotoDataNeedSaving()
+            self.db.ClearPhotoSettings()
+
         # open data file
         initial_dir = os.path.dirname(MainWindow.db.photoDataFile) if MainWindow.db.photoDataFile else ""
         fname = QFileDialog.getOpenFileName(self,"Select Yearbirder Photo Data File", initial_dir,"Yearbirder Photo Data Files (*.jsonl *.csv)")
@@ -887,10 +925,32 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self._warnIfCsvSkippedRows()
         self._promptJsonlMigrationIfNeeded()
 
+        # If conversion was declined or the save dialog was cancelled, abort the open
+        if self.db.photoDataFile.lower().endswith(".csv"):
+            self.db.ClearPhotoSettings()
+            QMessageBox.warning(self, "Photo Catalog Not Opened",
+                "The photo catalog was not opened. CSV catalogs must be converted to "
+                "Yearbirder's catalog format (.jsonl) before they can be used.\n\n"
+                "Open the file again to convert it.")
+            return
+
+        # Offer to make this the default catalog if it differs from the previous one.
+        # Skip for CSV files — _promptJsonlMigrationIfNeeded already asked.
+        if (not photoDataFile.lower().endswith(".csv") and
+                os.path.realpath(photoDataFile) != os.path.realpath(prev_default or "")):
+            reply = code_Stylesheet.question(self, "Set as Default Catalog?",
+                "Would you like Yearbirder to open this photo catalog automatically "
+                "each time it starts?\n\n" + photoDataFile)
+            if reply == QMessageBox.StandardButton.Yes:
+                self.db.photoDataFileDefault = photoDataFile
+                self.db.writePreferences()
+
         self.fillPhotoComboBoxes()
 
         self.showPhotoFilter()
 
+        self.menuPhotos.menuAction().setVisible(True)
+        self._showPhotoCatalogMenuItems()
         self.actionGeolocatedPhotos.setVisible(True)
         self.actionGeolocatedPhotosSeparator.setVisible(True)
         self.actionAnimatedPhotoSequence.setVisible(True)
@@ -906,7 +966,42 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.CreateStatsOnLoad()
 
 
+    def _showPhotoCatalogMenuItems(self):
+        self.actionOpenPhotoSettings.setVisible(True)
+        self.actionClosePhotoSettings.setVisible(True)
+        self.actionSavePhotoSettings.setVisible(True)
+        self.menuFileCatalogSeparator.setVisible(True)
+        self.actionEditPhotosByFilter.setVisible(True)
+        self.actionUpdateEXIFDataForAllPhotos.setVisible(True)
+        self.actionRenamePhotos.setVisible(True)
+        self.actionOptimizePhotoSettings.setVisible(True)
+
+    def _hidePhotoCatalogMenuItems(self):
+        self.actionClosePhotoSettings.setVisible(False)
+        self.actionSavePhotoSettings.setVisible(False)
+        self.menuFileCatalogSeparator.setVisible(False)
+        self.actionEditPhotosByFilter.setVisible(False)
+        self.actionUpdateEXIFDataForAllPhotos.setVisible(False)
+        self.actionRenamePhotos.setVisible(False)
+        self.actionOptimizePhotoSettings.setVisible(False)
+
     def closePhotoSettings(self):
+
+        if self.db.photosNeedSaving:
+            msg = QMessageBox(self)
+            msg.setWindowTitle("Unsaved Photo Changes")
+            msg.setText("Your photo catalog has changes that have not been saved to disk.\n\n"
+                        "Would you like to save them before closing?")
+            save_btn    = msg.addButton("Save",    QMessageBox.ButtonRole.AcceptRole)
+            discard_btn = msg.addButton("Discard", QMessageBox.ButtonRole.DestructiveRole)
+            cancel_btn  = msg.addButton("Cancel",  QMessageBox.ButtonRole.RejectRole)
+            msg.setDefaultButton(save_btn)
+            msg.exec()
+            clicked = msg.clickedButton()
+            if clicked is cancel_btn:
+                return
+            if clicked is save_btn:
+                self.checkIfPhotoDataNeedSaving()
 
         self.clearPhotoFilter()
         self.hidePhotoFilter()
@@ -915,6 +1010,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         for w in list(self.mdiArea.subWindowList()):
             if w.objectName() == "frmStats":
                 w.close()
+        self.menuPhotos.menuAction().setVisible(False)
+        self._hidePhotoCatalogMenuItems()
         self.actionGeolocatedPhotos.setVisible(False)
         self.actionGeolocatedPhotosSeparator.setVisible(False)
         self.actionAnimatedPhotoSequence.setVisible(False)
@@ -924,10 +1021,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionPhotoBar.setVisible(False)
         self.actionPhotoAccumulation.setVisible(False)
         self.actionCumulativePhotos.setVisible(False)
-        self.actionEditPhotosByFilter.setVisible(False)
-        self.actionUpdateEXIFDataForAllPhotos.setVisible(False)
-        self.actionRenamePhotos.setVisible(False)
-        self.actionOptimizePhotoSettings.setVisible(False)
 
 
     def addPhotos(self):
@@ -993,31 +1086,42 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         if self.db.photoDataFile.lower().endswith(".jsonl"):
             return
         if self.db.photoDataFile == "":
-            text = (
-                "No photo settings file is open.\n\n"
-                "Please choose a name and location for a photo settings file. "
+            # No catalog at all — plain prompt to create one
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Icon.Information)
+            msg.setText(
+                "No photo catalog is open.\n\n"
+                "Please choose a name and location for a photo catalog. "
                 "Yearbirder will save your photo data there going forward."
             )
+            msg.setWindowTitle("Photo Catalog")
+            msg.setStandardButtons(QMessageBox.StandardButton.Ok)
+            msg.exec()
+            self.savePhotoSettings()
         else:
-            text = (
-                "Your photo settings file is in the legacy CSV format.\n\n"
-                "Please choose a name and location for a new photo settings file. "
-                "Yearbirder will use this file going forward."
+            # CSV file — require explicit conversion; offer a clean cancel path
+            msg = QMessageBox(self)
+            msg.setWindowTitle("Convert Photo Catalog")
+            msg.setText(
+                "Your photo catalog is in the legacy CSV format, which is no longer "
+                "supported.\n\n"
+                "Choose a location to save the converted catalog (.jsonl). "
+                "If you cancel, the catalog will not be opened."
             )
-        msg = QMessageBox()
-        msg.setIcon(QMessageBox.Icon.Information)
-        msg.setText(text)
-        msg.setWindowTitle("Photo Catalog")
-        msg.setStandardButtons(QMessageBox.StandardButton.Ok)
-        msg.exec()
-        self.savePhotoSettings()
+            convert_btn = msg.addButton("Convert…", QMessageBox.ButtonRole.AcceptRole)
+            msg.addButton("Don't Open",             QMessageBox.ButtonRole.RejectRole)
+            msg.exec()
+            if msg.clickedButton() is not convert_btn:
+                return   # caller must check db.photoDataFile to detect this
+            self.savePhotoSettings()
 
         if self.db.photoDataFile.lower().endswith(".jsonl"):
             if code_Stylesheet.question(
                 self, "Set as Default?",
-                "Would you like to set this as your default photo settings file?\n\n"
+                "Would you like to set this as your default photo catalog?\n\n"
                 + self.db.photoDataFile,
             ) == QMessageBox.StandardButton.Yes:
+                self.db.photoDataFileDefault = self.db.photoDataFile
                 self.db.writePreferences()
 
 
@@ -1028,7 +1132,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         if photoFileInUse.lower().endswith(".csv"):
             photoFileInUse = photoFileInUse[:-4] + ".jsonl"
 
-        fname = QFileDialog.getSaveFileName(self, "Save Photo Settings File", photoFileInUse, "Yearbirder Photo Settings File (*.jsonl)")
+        fname = QFileDialog.getSaveFileName(self, "Save Photo Catalog", photoFileInUse, "Yearbirder Photo Catalog (*.jsonl)")
 
         if fname[0] == "":
             return
@@ -1399,8 +1503,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         if not MainWindow.db.photoDataFileOpenFlag:
             QMessageBox.warning(
                 self,
-                "No Photo Settings File",
-                "Please open a photo settings file first.",
+                "No Photo Catalog",
+                "Please open a photo catalog first.",
                 QMessageBox.StandardButton.Ok,
             )
             return
@@ -1426,10 +1530,10 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
         n = len(missing)
         if n == 0:
-            msg = "The photo settings file has been compacted."
+            msg = "The photo catalog has been compacted."
         else:
             msg = (f"Removed {n} missing photo {'entries' if n != 1 else 'entry'} "
-                   "and compacted the photo settings file.")
+                   "and compacted the photo catalog.")
         QMessageBox.information(
             self,
             "Optimize Complete",
@@ -1598,6 +1702,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 
     def openDataFileClicked(self):
 
+        self.checkIfPhotoDataNeedSaving()
         self.ResetMainWindow()
         self.db.ClearDatabase()
         self.clearStandardFilter()
@@ -1609,6 +1714,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.dckFilter.setVisible(True)
             self.CreateSpeciesList()
             self.CreateStatsOnLoad()
+            self.actionClose.setVisible(True)
+            self.actionOpenPhotoSettings.setVisible(True)
 
             # Offer to make the opened file's folder the default startup folder,
             # but only if it differs from the folder already set in Preferences.
@@ -3335,6 +3442,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.clearPhotoFilter()
         self.dckFilter.setVisible(False)
         self.dckPhotoFilter.setVisible(False)
+        self.actionClose.setVisible(False)
+        self.menuPhotos.menuAction().setVisible(False)
+        self._hidePhotoCatalogMenuItems()
         
 
     def ShowMainWindowOptions(self):
@@ -3586,11 +3696,14 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
 
     def ResetMainWindow(self):
-        
+
         self.CloseAllWindows()
         self.clearAllFilters()
         self.hideStandardFilter()
         self.hidePhotoFilter()
+        self.actionClose.setVisible(False)
+        self.menuPhotos.menuAction().setVisible(False)
+        self._hidePhotoCatalogMenuItems()
         self.db.ClearDatabase()
         
 

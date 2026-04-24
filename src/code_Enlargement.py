@@ -401,7 +401,7 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
             db.appendPhotoToJsonl(self.photoList[self.currentIndex][1], self.photoList[self.currentIndex][0])
         except IOError as exc:
             QMessageBox.warning(self, "Settings File Error",
-                f"Rating saved in memory but could not be written to the photo settings file:\n{exc}")
+                f"Rating saved in memory but could not be written to the photo catalog:\n{exc}")
         self.viewEnlargement.setFocus()
                                                 
 
@@ -567,7 +567,7 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
                 self.mdiParent.mdiParent.db.appendPhotoDeletionToJsonl(currentPhoto)
             except IOError as exc:
                 QMessageBox.warning(self, "Settings File Error",
-                    f"Photo removed from memory but could not be recorded in the photo settings file:\n{exc}")
+                    f"Photo removed from memory but could not be recorded in the photo catalog:\n{exc}")
 
             # remove photo from current window's photo list
             self.photoList.remove(self.photoList[self.currentIndex])
@@ -608,7 +608,7 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
             self.mdiParent.mdiParent.db.appendPhotoDeletionToJsonl(currentPhoto)
         except IOError as exc:
             QMessageBox.warning(self, "Settings File Error",
-                f"Photo removed from memory but could not be recorded in the photo settings file:\n{exc}")
+                f"Photo removed from memory but could not be recorded in the photo catalog:\n{exc}")
 
         self.mdiParent.mdiParent.db.photosNeedSaving = True
 

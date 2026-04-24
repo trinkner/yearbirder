@@ -124,6 +124,7 @@ class DataBase():
         self._regionCache = {}
         self._seenLocations = set()
         self.photoDataFile = ""
+        self.photoDataFileDefault = ""
         self.jsonlSkippedLines = 0
         self.csvSkippedRows = 0
         self.startupFolder = ""
@@ -2560,6 +2561,7 @@ class DataBase():
         self.eBirdFileOpenFlag = False
         self.eBirdFilePath = ""
         self.photoDataFileOpenFlag = False
+        self.photoDataFile = ""
         self.countryStateCodeFileFound = False
         self.allSpeciesList = []
         self.familyList = []
@@ -3261,6 +3263,7 @@ class DataBase():
                 elif line.startswith("photoDataFile="):
                     value = line[len("photoDataFile="):].strip()
                     self.photoDataFile = value
+                    self.photoDataFileDefault = value
                 
     
     def writePreferences(self):
@@ -3276,6 +3279,6 @@ class DataBase():
 
         with open(prefs_path, "w") as f:
             f.write("startupFolder=" + self.startupFolder + "\n")
-            f.write("photoDataFile=" + self.photoDataFile + "\n")
+            f.write("photoDataFile=" + self.photoDataFileDefault + "\n")
         
             

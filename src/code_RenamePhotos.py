@@ -824,7 +824,7 @@ class RenamePhotos(QMdiSubWindow, form_RenamePhotos.Ui_frmRenamePhotos):
             self.mdiParent._promptJsonlMigrationIfNeeded()
             if not db.photoDataFile or not db.photoDataFile.lower().endswith(".jsonl"):
                 QMessageBox.warning(
-                    self, "No Photo Settings File",
+                    self, "No Photo Catalog",
                     "A photo settings (.jsonl) file must be open before renaming.\n\n"
                     "Please open or create one and try again.",
                     QMessageBox.StandardButton.Ok,
