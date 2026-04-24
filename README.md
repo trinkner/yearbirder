@@ -11,7 +11,7 @@
 
 **Current release: v1.41** (April 2026)
 
-A desktop application for exploring and analysing your personal [eBird](https://ebird.org) data and your personal photos of birds.
+A desktop application for exploring and analysing your personal [eBird](https://ebird.org) data and bird photos.
 
 Yearbirder lets you filter, browse, and visualise your personal eBird sightings in ways the eBird website does not — across every location, species, date, and season in your personal history. If you are a bird photographer, Yearbirder also lets you sort, filter and view your photos in the same way.
 
