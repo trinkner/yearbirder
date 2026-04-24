@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QVBoxLayout,
     QApplication,
+    QMessageBox,
 )
 
 import form_SpeciesGallery
@@ -95,6 +96,9 @@ class SpeciesGallery(QMdiSubWindow, form_SpeciesGallery.Ui_frmSpeciesGallery):
         self._drainTimer = QTimer(self)
         self._drainTimer.timeout.connect(self._drainResultQueue)
 
+        self.buttonSlideshow.clicked.connect(self.launchSlideshow)
+        self.buttonShowAll.clicked.connect(self.showAllPhotos)
+
     # ------------------------------------------------------------------
     # Qt event overrides
     # ------------------------------------------------------------------
@@ -116,7 +120,10 @@ class SpeciesGallery(QMdiSubWindow, form_SpeciesGallery.Ui_frmSpeciesGallery):
         super().closeEvent(event)
 
     def resizeEvent(self, event):
-        self.scrollArea.setGeometry(5, 27, self.width() - 10, self.height() - 35)
+        header_h = max(self.headerFrame.sizeHint().height(), 50) + 10
+        self.headerFrame.setGeometry(5, 27, self.width() - 10, header_h)
+        self.scrollArea.setGeometry(5, 27 + header_h, self.width() - 10,
+                                    self.height() - 35 - header_h)
         # Defer reflow until the next event-loop iteration so Qt has finished
         # the layout pass and the viewport reports its final size.
         QTimer.singleShot(0, self._onResize)
@@ -199,7 +206,6 @@ class SpeciesGallery(QMdiSubWindow, form_SpeciesGallery.Ui_frmSpeciesGallery):
 
         # Resize the subwindow to fit 4 columns with room to breathe
         self.resize(860, 700)
-        self.scrollArea.setGeometry(5, 27, 850, 665)
         QApplication.processEvents()
 
         self._numCols = self._calcCols()
@@ -329,3 +335,35 @@ class SpeciesGallery(QMdiSubWindow, form_SpeciesGallery.Ui_frmSpeciesGallery):
         sub.show()
         if sub.FillPhotos(species_filter) is False:
             sub.close()
+
+    # ------------------------------------------------------------------
+    # Slideshow
+    # ------------------------------------------------------------------
+
+    def showAllPhotos(self):
+        import code_Photos
+        sub = code_Photos.Photos()
+        sub.mdiParent = self.mdiParent
+        self.mdiParent.mdiArea.addSubWindow(sub)
+        self.mdiParent.PositionChildWindow(sub, self)
+        sub.show()
+        if sub.FillPhotos(self.filter) is False:
+            self.mdiParent.CreateMessageNoResults()
+            sub.close()
+
+    def launchSlideshow(self):
+        import code_Slideshow
+        dlg = code_Slideshow.SlideshowDialog(self.mdiParent)
+        if dlg.exec() != code_Slideshow.QDialog.DialogCode.Accepted:
+            return
+        photoList = code_Slideshow.buildPhotoList(
+            self.mdiParent.db, self.filter, dlg.sortOrder()
+        )
+        if not photoList:
+            QMessageBox.information(self.mdiParent, "No Results",
+                                    "No photos found for the current filter.")
+            return
+        self.mdiParent._slideshow = code_Slideshow.SlideshowWindow(
+            photoList, dlg.secondsPerPhoto(), dlg.showTitleBar()
+        )
+        self.mdiParent._slideshow.show()

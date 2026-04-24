@@ -36,9 +36,69 @@ from PySide6.QtWidgets import (
     QWidget,
     QLabel,
     QComboBox,
-    QVBoxLayout
+    QVBoxLayout,
+    QMessageBox,
+    QDialog,
+    QProgressBar,
     )
     
+
+class _ManagePhotosProgressDialog(QDialog):
+    """Frameless progress dialog shown while Edit Photos loads thumbnails."""
+
+    def __init__(self, total, parent=None):
+        super().__init__(parent)
+        self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
+        self.setModal(True)
+        self.setFixedWidth(380)
+
+        self.setStyleSheet("""
+            QDialog {
+                background: #1e1f26;
+                border: 2px solid #4f8ef7;
+                border-radius: 10px;
+            }
+            QLabel {
+                color: #e2e4ec;
+                font-size: 13px;
+                background: transparent;
+            }
+            QProgressBar {
+                background: #252730;
+                border: 1px solid #3a3d4e;
+                border-radius: 5px;
+                min-height: 20px;
+                text-align: center;
+                color: #e2e4ec;
+                font-size: 11px;
+            }
+            QProgressBar::chunk {
+                background: #4f8ef7;
+                border-radius: 4px;
+            }
+        """)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(28, 24, 28, 24)
+        layout.setSpacing(16)
+
+        self._label = QLabel(f"Loading photos\u2026  0 of {total:,}")
+        self._label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self._label)
+
+        self._bar = QProgressBar()
+        self._bar.setRange(0, max(total, 1))
+        self._bar.setValue(0)
+        layout.addWidget(self._bar)
+
+    def setValue(self, loaded):
+        self._bar.setValue(loaded)
+        self._label.setText(
+            f"Loading photos\u2026  {loaded:,} of {self._bar.maximum():,}")
+
+    def closeEvent(self, event):
+        event.ignore()
+
 
 class threadGetPhotoData(QThread):
 
@@ -121,6 +181,7 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         self.metaDataByRow = {}
         self.setAttribute(Qt.WA_DeleteOnClose)
         self.photosAlreadyInDb = True
+        self._changesSaved = False
                 
         # dynamic thread pool — sized to CPU count, capped at 8 for disk-bound work
         self.threadCount = min(os.cpu_count() or 4, 8)
@@ -163,6 +224,8 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
                 self.resultQueue.get_nowait()
             except queue.Empty:
                 break
+        if self._changesSaved:
+            self.mdiParent.refreshOpenStats()
         super(self.__class__, self).closeEvent(event)
 
     def resizeEvent(self, event):
@@ -409,7 +472,6 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
 
         # save meta data for future use when user clicks cbo boxes
         thisPhotoMetaData = {}
-        thisPhotoMetaData["photoFileName"] = photoData["fileName"]
         thisPhotoMetaData["location"] = photoLocation
         thisPhotoMetaData["date"] = photoDate
         thisPhotoMetaData["time"] = cboTime.currentText()
@@ -450,18 +512,21 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
             return False
         
         row = 0
-        
-        # count photos for message display
-        photoCount = 0
-        for s in photoSightings:
-            photoCount = photoCount + len(s["photos"])
-        photoCount = str(photoCount)
+
+        photoCount = sum(len(s["photos"]) for s in photoSightings)
+
+        dlg = _ManagePhotosProgressDialog(total=photoCount, parent=self.mdiParent)
+        dlg.adjustSize()
+        mw = self.mdiParent.geometry()
+        dlg.move(
+            mw.center().x() - dlg.width() // 2,
+            mw.center().y() - dlg.height() // 2,
+        )
+        dlg.show()
+        QApplication.processEvents()
 
         for s in photoSightings:
             for p in s["photos"]:
-                
-                self.mdiParent.lblStatusBarMessage.setVisible(True)
-                self.mdiParent.lblStatusBarMessage.setText("Processing photo " + str(row + 1) + " of " + photoCount)
                 
                 # p is a filename. Use it to add the image to the label as a pixmap
                 buttonPhoto = QPushButton()
@@ -556,7 +621,10 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
                     cboCommonName.setCurrentIndex(index)   
 
                 # set combo box to rating value
-                index = int(p["rating"])
+                try:
+                    index = max(0, min(5, int(p["rating"])))
+                except (TypeError, ValueError):
+                    index = 0
                 cboRating.setCurrentIndex(index)
                     
                 # assign names to combo boxes for future access
@@ -581,7 +649,6 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
                                 
                 # save meta data for future use when user clicks cbo boxes
                 thisPhotoMetaData = {}
-                thisPhotoMetaData["photoFileName"] = p["fileName"]
                 thisPhotoMetaData["location"] = s["location"]
                 thisPhotoMetaData["date"] = s["date"]
                 thisPhotoMetaData["time"] = s["time"]
@@ -596,14 +663,11 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
                 # user can change the cbo boxes later, which will also change the "new" data 
                 self.saveNewMetaData(row)      
                 
-                row = row + 1
-                
-                qApp.processEvents()
+                row += 1
+                dlg.setValue(row)
+                QApplication.processEvents()
 
-        self.mdiParent.lblStatusBarMessage.setText("")
-        self.mdiParent.lblStatusBarMessage.setVisible(False)
-                                
-        QApplication.processEvents()
+        dlg.accept()
 
         icon = QIcon()
         icon.addPixmap(QPixmap(":/icon_camera_white.png"), QIcon.Normal, QIcon.Off)
@@ -656,7 +720,10 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         
         pm = QPixmap()
         pm.convertFromImage(qimage)
-            
+
+        if pm.isNull():
+            return pm
+
         if pm.height() > pm.width():
             pm = pm.scaledToHeight(330)
         else:
@@ -773,7 +840,7 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
             self.saveNewMetaData(row)
 
 
-    def cboRatingChanged(self, row):
+    def cboRatingChanged(self, row, _index=None):
 
         if self.fillingCombos is False:
                     
@@ -1087,7 +1154,7 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
                         self.metaDataByRow[r]["date"],
                         self.metaDataByRow[r]["time"],
                         self.metaDataByRow[r]["commonName"],
-                        self.metaDataByRow[r]["photoFileName"])
+                        self.metaDataByRow[r]["photoData"]["fileName"])
                 
                 # check whether we're not removing this photo from db
                 # set flag to True, and then set it to False if non-write conditions exist
@@ -1110,10 +1177,15 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
                     filter.setSpeciesName(self.metaDataByRow[r]["newCommonName"])
                     
                     self.metaDataByRow[r]["photoData"]["rating"] = self.metaDataByRow[r]["newRating"]
-                                                    
-                    self.mdiParent.db.addPhotoToDatabase(filter, self.metaDataByRow[r]["photoData"])
-                    
-        
+
+                    s = self.mdiParent.db.addPhotoToDatabase(filter, self.metaDataByRow[r]["photoData"])
+                    if s:
+                        try:
+                            self.mdiParent.db.appendPhotoToJsonl(s, self.metaDataByRow[r]["photoData"])
+                        except IOError as exc:
+                            QMessageBox.warning(self, "Settings File Error",
+                                f"Photo saved in memory but could not be written to the photo settings file:\n{exc}")
+
             if self.photosAlreadyInDb is False:
             
                 # we're processing photo files that aren't yet in the db, so add them
@@ -1141,9 +1213,14 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
                     filter.setSpeciesName(self.metaDataByRow[r]["newCommonName"])
                     
                     self.metaDataByRow[r]["photoData"]["rating"] = self.metaDataByRow[r]["newRating"]
-                                                                            
-                    self.mdiParent.db.addPhotoToDatabase(filter, self.metaDataByRow[r]["photoData"])
-                    
+
+                    s = self.mdiParent.db.addPhotoToDatabase(filter, self.metaDataByRow[r]["photoData"])
+                    if s:
+                        try:
+                            self.mdiParent.db.appendPhotoToJsonl(s, self.metaDataByRow[r]["photoData"])
+                        except IOError as exc:
+                            QMessageBox.warning(self, "Settings File Error",
+                                f"Photo saved in memory but could not be written to the photo settings file:\n{exc}")
 
         if self.photosAlreadyInDb is False:
             
@@ -1155,21 +1232,35 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         
         # set flag indicating that some photo data isn't yet saved to file
         self.mdiParent.db.photosNeedSaving = True
+        self.mdiParent._promptJsonlMigrationIfNeeded()
         
         self.mdiParent.db.refreshPhotoLists()
 
         self.mdiParent.fillPhotoComboBoxes()
-        self.mdiParent.CreateStatsOnLoad()
+        self._changesSaved = True
 
-        # close the window
+        # close the window (closeEvent will refresh any open Stats windows)
         self.close()
         
         
+    def handlePhotoDeletion(self, filename):
+        row = next((r for r, meta in self.metaDataByRow.items()
+                    if meta["photoData"]["fileName"] == filename), None)
+        if row is None:
+            return
+        for col in (0, 1):
+            item = self.gridPhotos.itemAtPosition(row, col)
+            if item and item.widget():
+                item.widget().setParent(None)
+        self.gridPhotos.setRowMinimumHeight(row, 0)
+        del self.metaDataByRow[row]
+
+
     def closeWindow(self):
-        
+
         self.close()
- 
- 
+
+
     def highlightWidget(self, w):
     
         red = str(code_Stylesheet.mdiAreaColor.red())

@@ -114,7 +114,8 @@ class SlideshowWindow(QWidget):
         self._showTitleBar  = showTitleBar
         self._pixmap        = QPixmap()   # current (incoming) photo
         self._prevPixmap    = QPixmap()   # outgoing photo during blend
-        self._blendAlpha    = 1.0         # 1.0 = no blend in progress
+        self._blendAlpha    = 0.0         # start at 0 so first photo fades in
+        self._firstPhoto    = True        # use 2× duration for the opening fade
         self._trackMouse    = False
         self._lastMousePos  = QPoint()
 
@@ -132,9 +133,10 @@ class SlideshowWindow(QWidget):
         self._timer.timeout.connect(self._advance)
         self._timer.start(secondsPerPhoto * 1000)
 
-        # Crossfade timer — runs only during a transition
+        # Crossfade timer — runs during transitions and the initial fade-in
         self._blendTimer = QTimer(self)
         self._blendTimer.timeout.connect(self._blendStep)
+        self._blendTimer.start(BLEND_INTERVAL)   # fade first photo in from black
 
         # Arm mouse-move exit only after the window has fully settled
         QTimer.singleShot(800, self._enableMouseTracking)
@@ -163,9 +165,11 @@ class SlideshowWindow(QWidget):
         self._blendTimer.start(BLEND_INTERVAL)
 
     def _blendStep(self):
-        self._blendAlpha += BLEND_INTERVAL / BLEND_DURATION
+        duration = BLEND_DURATION * 4 if self._firstPhoto else BLEND_DURATION
+        self._blendAlpha += BLEND_INTERVAL / duration
         if self._blendAlpha >= 1.0:
             self._blendAlpha = 1.0
+            self._firstPhoto = False
             self._blendTimer.stop()
             self._prevPixmap = QPixmap()   # release memory
         self.update()
@@ -245,9 +249,10 @@ class SlideshowWindow(QWidget):
             painter.drawPixmap(x, y, scaled)
 
         # ── Crossfade or plain draw ───────────────────────────────────────────
-        if self._blendAlpha < 1.0 and not self._prevPixmap.isNull():
-            draw_photo(self._prevPixmap, 1.0 - self._blendAlpha)
-            draw_photo(self._pixmap,     self._blendAlpha)
+        if self._blendAlpha < 1.0:
+            if not self._prevPixmap.isNull():          # normal crossfade
+                draw_photo(self._prevPixmap, 1.0 - self._blendAlpha)
+            draw_photo(self._pixmap, self._blendAlpha) # fade-in (from black if no prev)
         else:
             draw_photo(self._pixmap, 1.0)
 

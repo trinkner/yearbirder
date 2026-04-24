@@ -2,6 +2,8 @@ from PySide6.QtCore import QLibraryInfo
 import os
 import sys
 
+from code_Stylesheet import CHART_PRIMARY
+
 # import the GUI forms that we create with Qt Creator
 import form_Web
 
@@ -122,14 +124,16 @@ class PhotosMapBridge(QObject):
 
     Registered on the page's QWebChannel as 'bridge'.  When a marker is
     clicked, JavaScript calls photoClicked(idx) which opens an Enlargement
-    window for that photo.  All photos in the map are passed so the user can
-    navigate with arrow keys inside the Enlargement window.
+    window for that photo.  Only photos sharing the same lat/lon (i.e. the
+    same spider-cluster pin) are passed to Enlargement so arrow-key navigation
+    stays within that co-located group.
     """
 
-    def __init__(self, web_window, photo_entries):
+    def __init__(self, web_window, photo_entries, markers):
         super().__init__()
-        self._web    = web_window
+        self._web     = web_window
         self._entries = photo_entries   # list of [photo_dict, sighting_dict]
+        self._markers = markers         # parallel list of (lat, lon, name, date, location, uri)
 
     @Slot(int)
     def photoClicked(self, idx):
@@ -139,7 +143,17 @@ class PhotosMapBridge(QObject):
             return
 
         main_window = self._web.mdiParent
-        entries     = self._entries
+
+        # Build a subset of entries that share the same lat/lon as the clicked
+        # marker — these are the co-located photos in the same spider cluster.
+        clicked_lat, clicked_lon = self._markers[idx][0], self._markers[idx][1]
+        cluster_entries = []
+        cluster_index   = 0
+        for i, (lat, lon, *_) in enumerate(self._markers):
+            if lat == clicked_lat and lon == clicked_lon:
+                if i == idx:
+                    cluster_index = len(cluster_entries)
+                cluster_entries.append(self._entries[i])
 
         # Enlargement expects mdiParent to be a Photos-like object with:
         #   .mdiParent  → MainWindow
@@ -150,7 +164,7 @@ class PhotosMapBridge(QObject):
         class _Proxy:
             def __init__(self):
                 self.mdiParent = main_window
-                self.photoList = entries
+                self.photoList = cluster_entries
                 self.filter    = None
             def FillPhotos(self, f):
                 pass   # no Photos grid window to refresh from the map
@@ -160,7 +174,7 @@ class PhotosMapBridge(QObject):
         sub              = code_Enlargement.Enlargement()
         sub.mdiParent    = proxy
         sub.photoList    = proxy.photoList
-        sub.currentIndex = idx
+        sub.currentIndex = cluster_index
 
         main_window.mdiArea.addSubWindow(sub)
         main_window.PositionChildWindow(sub, self._web)
@@ -294,53 +308,53 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
         
         self.contentType = "About"
                     
-        html = """<!DOCTYPE html>
+        html = f"""<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
 <title>About Yearbirder</title>
 <style>
-  body {
+  body {{
     background-color: #1e1f26;
     color: #e2e4ec;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     font-size: 14px;
     margin: 32px 40px;
     line-height: 1.6;
-  }
-  h1 {
-    color: #4f8ef7;
+  }}
+  h1 {{
+    color: {CHART_PRIMARY};
     font-size: 2em;
     margin-bottom: 2px;
-  }
-  .subtitle {
+  }}
+  .subtitle {{
     color: #8b8fa8;
     font-size: 0.95em;
     margin-top: 0;
     margin-bottom: 24px;
-  }
-  .description {
+  }}
+  .description {{
     font-size: 1em;
     margin-bottom: 28px;
-  }
-  h2 {
-    color: #4f8ef7;
+  }}
+  h2 {{
+    color: {CHART_PRIMARY};
     font-size: 1.1em;
     border-bottom: 1px solid #3a3d4e;
     padding-bottom: 6px;
     margin-top: 28px;
-  }
-  ul {
+  }}
+  ul {{
     padding-left: 20px;
     margin: 10px 0;
-  }
-  li {
+  }}
+  li {{
     margin-bottom: 8px;
     color: #c8cad8;
-  }
-  li b {
+  }}
+  li b {{
     color: #e2e4ec;
-  }
+  }}
 </style>
 </head>
 <body>
@@ -374,8 +388,10 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
 </body>
 </html>"""
 
+        from PySide6.QtGui import QColor
+        self.webView.page().setBackgroundColor(QColor("#1e1f26"))
         self.webView.setHtml(html)
-                
+
         self.setWindowTitle("About Yearbirder")
 
         return(True)
@@ -462,7 +478,7 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
                 color="#000000",
                 weight=1,
                 fill=True,
-                fill_color="#4f8ef7",
+                fill_color=CHART_PRIMARY,
                 fill_opacity=0.85,
             )
             # Store the exact location name on the layer for click handling
@@ -509,7 +525,7 @@ document.addEventListener("DOMContentLoaded", function() {{
     var tipDiv = document.createElement('div');
     tipDiv.style.cssText = (
         'position:fixed; display:none; pointer-events:none; z-index:9999;' +
-        'background:#252730; color:#e2e4ec; border:1px solid #4f8ef7;' +
+        'background:#252730; color:#e2e4ec; border:1px solid {CHART_PRIMARY};' +
         'border-radius:6px; padding:6px 10px; font-size:12px;' +
         'max-width:300px; line-height:1.5;'
     );
@@ -658,7 +674,7 @@ document.addEventListener("DOMContentLoaded", function() {{
     var tipDiv = document.createElement('div');
     tipDiv.style.cssText = (
         'position:fixed; display:none; pointer-events:none; z-index:9999;' +
-        'background:#252730; color:#e2e4ec; border:1px solid #4f8ef7;' +
+        'background:#252730; color:#e2e4ec; border:1px solid {CHART_PRIMARY};' +
         'border-radius:6px; padding:6px 10px; font-size:12px;' +
         'max-width:320px; line-height:1.5;'
     );
@@ -822,7 +838,7 @@ document.addEventListener("DOMContentLoaded", function() {{
                 'fillOpacity': .8,
                 },
             highlight_function=lambda feature: {
-                'color': '#4f8ef7', 'weight': 2, 'fillOpacity': .95,
+                'color': CHART_PRIMARY, 'weight': 2, 'fillOpacity': .95,
                 },
             ).add_to(state_map)
 
@@ -930,7 +946,7 @@ document.addEventListener("DOMContentLoaded", function() {{
                 'fillOpacity': .8,
                 },
             highlight_function=lambda feature: {
-                'color': '#4f8ef7', 'weight': 2, 'fillOpacity': .95,
+                'color': CHART_PRIMARY, 'weight': 2, 'fillOpacity': .95,
                 },
             ).add_to(prov_map)
 
@@ -1037,7 +1053,7 @@ document.addEventListener("DOMContentLoaded", function() {{
                 'fillOpacity': .8,
                 },
             highlight_function=lambda feature: {
-                'color': '#4f8ef7', 'weight': 2, 'fillOpacity': .95,
+                'color': CHART_PRIMARY, 'weight': 2, 'fillOpacity': .95,
                 },
             ).add_to(state_map)
 
@@ -1147,7 +1163,7 @@ document.addEventListener("DOMContentLoaded", function() {{
                 'fillOpacity': .8,
                 },
             highlight_function=lambda feature: {
-                'color': '#4f8ef7', 'weight': 2, 'fillOpacity': .95,
+                'color': CHART_PRIMARY, 'weight': 2, 'fillOpacity': .95,
                 },
             ).add_to(county_map)
 
@@ -1258,7 +1274,7 @@ document.addEventListener("DOMContentLoaded", function() {{
                 'nan_fill_color': 'white'
                 },
             highlight_function=lambda feature: {
-                'color': '#4f8ef7', 'weight': 2, 'fillOpacity': .95,
+                'color': CHART_PRIMARY, 'weight': 2, 'fillOpacity': .95,
                 },
             ).add_to(county_map)
 
@@ -1372,7 +1388,7 @@ document.addEventListener("DOMContentLoaded", function() {{
                 'nan_fill_color': 'white'
                 },
             highlight_function=lambda feature: {
-                'color': '#4f8ef7', 'weight': 2, 'fillOpacity': .95,
+                'color': CHART_PRIMARY, 'weight': 2, 'fillOpacity': .95,
                 },
             ).add_to(choro_map)
 
@@ -1551,7 +1567,7 @@ document.addEventListener("DOMContentLoaded", function() {{
         }}
         // The newest dot appears in bright red
         if (n <= lifers.length) {{
-            mkrs[n - 1].setStyle({{ fillColor:'#4f8ef7', fillOpacity:0.95, opacity:1 }});
+            mkrs[n - 1].setStyle({{ fillColor:'{CHART_PRIMARY}', fillOpacity:0.95, opacity:1 }});
         }}
         shown = Math.min(n, lifers.length);
         updateUI();
@@ -1629,7 +1645,7 @@ document.addEventListener("DOMContentLoaded", function() {{
         var tipDiv = document.createElement('div');
         tipDiv.style.cssText = (
             'position:fixed; display:none; pointer-events:none; z-index:9999;' +
-            'background:#252730; color:#e2e4ec; border:1px solid #4f8ef7;' +
+            'background:#252730; color:#e2e4ec; border:1px solid {CHART_PRIMARY};' +
             'border-radius:6px; padding:6px 10px; font-size:12px;' +
             'max-width:300px; line-height:1.5;'
         );
@@ -1772,7 +1788,7 @@ document.addEventListener("DOMContentLoaded", function() {{
         html = photo_map.get_root().render()
 
         # --- QWebChannel bridge for click-to-enlarge ---
-        self._photosBridge = PhotosMapBridge(self, photo_entries)
+        self._photosBridge = PhotosMapBridge(self, photo_entries, markers)
         channel = QWebChannel(self.webView.page())
         channel.registerObject("bridge", self._photosBridge)
         self.webView.page().setWebChannel(channel)
@@ -1795,7 +1811,7 @@ document.addEventListener("DOMContentLoaded", function() {{
     var tipDiv = document.createElement('div');
     tipDiv.style.cssText = (
         'position:fixed; display:none; pointer-events:none; z-index:9999;' +
-        'background:#252730; color:#e2e4ec; border:2px solid #4f8ef7;' +
+        'background:#252730; color:#e2e4ec; border:2px solid {CHART_PRIMARY};' +
         'border-radius:8px; padding:10px 12px; font-family:sans-serif;' +
         'box-shadow:0 4px 20px rgba(0,0,0,0.55);'
     );
@@ -2154,7 +2170,7 @@ document.addEventListener("DOMContentLoaded", function() {{
                 '<div style="opacity:0; pointer-events:none; width:160px; display:flex; flex-direction:column;' +
                     'align-items:center; cursor:pointer; transition:opacity 0.2s;">' +
                     '<div style="width:160px; background:#252730;' +
-                        'border:2px solid #4f8ef7; border-radius:6px;' +
+                        'border:2px solid {CHART_PRIMARY}; border-radius:6px;' +
                         'overflow:hidden; box-shadow:0 3px 10px rgba(0,0,0,0.55);' +
                         'font-family:sans-serif; line-height:1.3;">' +
                         '<img src="' + p.img + '" ' +
@@ -2171,7 +2187,7 @@ document.addEventListener("DOMContentLoaded", function() {{
                     '<div style="width:0; height:0;' +
                          'border-left:10px solid transparent;' +
                          'border-right:10px solid transparent;' +
-                         'border-top:12px solid #4f8ef7;' +
+                         'border-top:12px solid {CHART_PRIMARY};' +
                          'margin-top:-1px;"></div>' +
                 '</div>'
             );
@@ -2191,7 +2207,7 @@ document.addEventListener("DOMContentLoaded", function() {{
 
             var dot = L.circleMarker([p.lat, p.lon], {{
                 radius:      5,
-                fillColor:   '#4f8ef7',
+                fillColor:   '{CHART_PRIMARY}',
                 color:       '#ffffff',
                 weight:      1.5,
                 opacity:     0,
@@ -2332,7 +2348,7 @@ document.addEventListener("DOMContentLoaded", function() {{
                 color="#2a5fad",
                 weight=1,
                 fill=True,
-                fill_color="#4f8ef7",
+                fill_color=CHART_PRIMARY,
                 fill_opacity=0.65,
             )
             marker.options["locationName"] = location
@@ -2364,7 +2380,7 @@ document.addEventListener("DOMContentLoaded", function() {{
     var tipDiv = document.createElement('div');
     tipDiv.style.cssText = (
         'position:fixed; display:none; pointer-events:none; z-index:9999;' +
-        'background:#252730; color:#e2e4ec; border:1px solid #4f8ef7;' +
+        'background:#252730; color:#e2e4ec; border:1px solid {CHART_PRIMARY};' +
         'border-radius:6px; padding:6px 10px; font-size:12px;' +
         'max-width:300px; line-height:1.5;'
     );
@@ -2608,7 +2624,7 @@ document.addEventListener("DOMContentLoaded", function() {{
                 color="#2a5fad",
                 weight=1,
                 fill=True,
-                fill_color="#4f8ef7",
+                fill_color=CHART_PRIMARY,
                 fill_opacity=0.65,
             )
             marker.options["locationName"] = location
@@ -2637,7 +2653,7 @@ document.addEventListener("DOMContentLoaded", function() {{
     var tipDiv = document.createElement('div');
     tipDiv.style.cssText = (
         'position:fixed; display:none; pointer-events:none; z-index:9999;' +
-        'background:#252730; color:#e2e4ec; border:1px solid #4f8ef7;' +
+        'background:#252730; color:#e2e4ec; border:1px solid {CHART_PRIMARY};' +
         'border-radius:6px; padding:6px 10px; font-size:12px;' +
         'max-width:300px; line-height:1.5;'
     );

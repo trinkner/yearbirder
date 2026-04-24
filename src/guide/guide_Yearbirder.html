@@ -109,10 +109,11 @@
 
 <div class="toc">
   <ol>
+    <li><a href="#whats-new">What's New in v1.4</a></li>
     <li><a href="#quick-start">Quick Start</a></li>
     <li><a href="#main-window">The Main Window</a></li>
     <li><a href="#loading-data">Loading Your eBird Data</a></li>
-    <li><a href="#standard-filter">The Standard Filter</a></li>
+    <li><a href="#standard-filter">The Sighting Filter</a></li>
     <li><a href="#photo-filter">The Photo Filter</a></li>
     <li><a href="#species-list">Species List</a></li>
     <li><a href="#locations-list">Locations List</a></li>
@@ -129,6 +130,12 @@
     <li><a href="#photos">Viewing Photos</a></li>
     <li><a href="#animated-photo-sequence">Animated Sequence Map</a></li>
     <li><a href="#slideshow">Slideshow</a></li>
+    <li><a href="#ytd-photos">YTD Report by Photographs</a></li>
+    <li><a href="#photo-pie">Families &amp; Orders by Photos</a></li>
+    <li><a href="#photo-bar">Total Photos</a></li>
+    <li><a href="#photo-accumulation">New Species Photographed Each Year</a></li>
+    <li><a href="#cumulative-photos">Photographed Species Growth Over Time</a></li>
+    <li><a href="#rename-photos">Rename Photos</a></li>
     <li><a href="#species-gallery">Species Gallery</a></li>
     <li><a href="#individual-species">Individual Species Window</a></li>
     <li><a href="#printing">Printing and PDF Export</a></li>
@@ -136,6 +143,21 @@
     <li><a href="#preferences">Saving Preferences</a></li>
   </ol>
 </div>
+
+<hr>
+
+<h2 id="whats-new">What's New in v1.4</h2>
+<ul>
+  <li><strong>Add Photos reports new file count</strong> — When selecting photos to add, Yearbirder now reports both how many of the selected files are already tracked in your photo catalog and how many are new and will be added. This makes it easy to confirm you have selected the right files before proceeding.</li>
+  <li><strong>Photo deletion updates all open windows</strong> — Deleting a photo from disk via the right-click context menu in the Enlargement view now instantly removes that photo from every other open Photos, Enlargement, Manage Photos, and Rename Photos window. Previously, stale thumbnails could remain in other windows until they were manually closed and reopened.</li>
+  <li><strong>Statistics window auto-refreshes after photo changes</strong> — The Statistics window now updates automatically when a photo is deleted from disk, and also when the Batch Edit Photos dialog is closed after saving changes.</li>
+  <li><strong>Default eBird folder prompt only when needed</strong> — The offer to set a new default eBird folder now appears only when the file you open is in a different folder from the one already saved in Preferences. Previously it appeared even when opening a file from the same folder.</li>
+  <li><strong>Two new photo charts</strong> — The Photos menu now includes <em>New Species Photographed Each Year</em> (a stacked bar chart showing how many species you added to your photographic life list each year) and <em>Photographed Species Growth Over Time</em> (a line curve tracking your total photographed species count over time, with photo thumbnails in the hover tooltip and a click action that opens a Species Gallery for the selected date). See <a href="#photo-accumulation">New Species Photographed Each Year</a> and <a href="#cumulative-photos">Photographed Species Growth Over Time</a>.</li>
+  <li><strong>Species Gallery gains Slideshow and Show All buttons</strong> — The Species Gallery header now includes a <strong>Slideshow</strong> button (launches a full-screen slideshow of all photos in the current gallery) and a <strong>Show All</strong> button (opens a Photos window showing every photo matching the gallery's filter).</li>
+  <li><strong>Bubble maps renamed</strong> — The two effort bubble maps in the Maps menu have been renamed from "Effort by Time" and "Effort by Checklists" to <em>Bubble by Time</em> and <em>Bubble by Checklists</em> to better reflect that they are bubble maps.</li>
+  <li><strong>eBird Species Code in Rename Photos</strong> — The Species Name Format picker in Rename Photos now offers a third option — <em>eBird Species Code</em> — which uses the short eBird alpha code for the species (for example, <code>rufhum</code> for Rufous Hummingbird) instead of the common or scientific name. This is useful for workflows that keep filenames aligned with eBird identifiers.</li>
+  <li><strong>eBird code matching when adding photos</strong> — When you add photos from disk and Yearbirder tries to guess which species a photo shows from its filename, it now recognises eBird species codes embedded in the filename (for example, <code>rufhum_20240514.jpg</code> → Rufous Hummingbird) as its first matching strategy — before the existing BBL code and word-token checks.</li>
+</ul>
 
 <hr>
 
@@ -155,7 +177,7 @@
 <ul>
   <li>Click <strong>Map</strong> to see all your sighting locations plotted on an interactive map.</li>
   <li>Click <strong>Date Totals</strong> to see which years, months, and individual dates you recorded the most species.</li>
-  <li>Click <strong>Photos</strong> (after setting up a Photo Settings file — see <a href="#photo-settings-file">Section 17</a>) to browse your bird photos alongside their sighting data.</li>
+  <li>Click <strong>Photos</strong> (after setting up a photo catalog — see <a href="#photo-settings-file">Section 17</a>) to browse your bird photos alongside their sighting data.</li>
 </ul>
 <p>You are up and running. Everything else in this guide describes these features in detail.</p>
 <p>Note that if some checklists include exotic species, the totals that Yearbirder calculates may not match the totals reported by eBird. The data file you download from eBird does not specify which sightings are exotics, so Yearbirder cannot exclude them from its totals.</p>
@@ -167,7 +189,7 @@
 <ul>
   <li>A <strong>menu bar</strong> across the top with menus for File, Filter, Lists, Reports, Graphs, Maps, Photos, Windows, and User Guide.</li>
   <li>A <strong>toolbar</strong> just below the menu bar with quick-access buttons for the most common actions.</li>
-  <li>A <strong>Standard Filter</strong> panel docked on the left side.</li>
+  <li>A <strong>Sighting Filter</strong> panel docked on the left side.</li>
   <li>A <strong>Photo Filter</strong> panel docked on the right side.</li>
   <li>A large central area where all open windows (lists, reports, maps, photos) are displayed.</li>
   <li>A <strong>status bar</strong> at the very bottom showing the current data file and record counts.</li>
@@ -206,7 +228,7 @@
 <h3>Opening a data file</h3>
 <p>Choose <strong>File → Open eBird data file…</strong> or click the <strong>Open</strong> toolbar button. Yearbirder accepts the standard eBird download data file (typically named something like <code>MyEBirdData.zip</code>).</p>
 <p>Loading time depends on the size of your dataset. A typical dataset of 10,000–50,000 sightings loads in a few seconds. Once loaded, the status bar shows the total number of sightings and species.</p>
-<p>To avoid having to open your eBird data file manually every time you use Yearbirder, save it as a preference (see <a href="#preferences">Section 23 — Saving Preferences</a>) so that Yearbirder opens it automatically at startup.</p>
+<p>To avoid having to open your eBird data file manually every time you use Yearbirder, save it as a preference (see <a href="#preferences">Section 24 — Saving Preferences</a>) so that Yearbirder opens it automatically at startup.</p>
 
 <h3>Closing a data file</h3>
 <p>Choose <strong>File → Close eBird data file</strong> to unload the current dataset. Any open windows that depend on the data will close automatically.</p>
@@ -225,8 +247,8 @@
 
 <hr>
 
-<h2 id="standard-filter">4. The Standard Filter</h2>
-<p>The <strong>Standard Filter</strong> panel is the primary way to focus every report and list on the data you care about. It is docked on the left side of the main window and always visible. All open windows update immediately whenever you change any filter setting.</p>
+<h2 id="standard-filter">4. The Sighting Filter</h2>
+<p>The <strong>Sighting Filter</strong> panel is the primary way to focus every report and list on the data you care about. It is docked on the left side of the main window and always visible. All open windows update immediately whenever you change any filter setting.</p>
 
 <h3>Location filters</h3>
 <p>The location filters are <strong>hierarchical</strong> — selecting a more specific level automatically constrains the broader levels. You can filter at any one of these levels:</p>
@@ -285,7 +307,7 @@
 <hr>
 
 <h2 id="photo-filter">5. The Photo Filter</h2>
-<p>The <strong>Photo Filter</strong> panel is hidden until you open a Photo Settings file (see <a href="#photo-settings-file">Section 17</a>), at which point it appears automatically on the right side of the main window. It filters photo-related results in addition to the Standard Filter — only photos that match <em>both</em> the Standard Filter and the Photo Filter are shown.</p>
+<p>The <strong>Photo Filter</strong> panel is hidden until you open a photo catalog (see <a href="#photo-settings-file">Section 17</a>), at which point it appears automatically on the right side of the main window. It filters photo-related results in addition to the Sighting Filter — only photos that match <em>both</em> the Sighting Filter and the Photo Filter are shown.</p>
 <table>
   <thead><tr><th>Filter</th><th>Description</th></tr></thead>
   <tbody>
@@ -321,7 +343,7 @@
 <p>The window title shows the total count — for example, <em>"Species: New York (42 Species)"</em>.</p>
 
 <h3>Clicking a species</h3>
-<p>Click any species name to open an <strong>Individual Species</strong> window (see <a href="#individual-species">Section 20</a>) showing the full history of your sightings of that species.</p>
+<p>Click any species name to open an <strong>Individual Species</strong> window (see <a href="#individual-species">Section 21</a>) showing the full history of your sightings of that species.</p>
 
 <h3>Right-click menu</h3>
 <p>Right-clicking a row in the species table offers options to set the species as the active filter, open associated web pages, or open the individual species window.</p>
@@ -433,16 +455,18 @@
 </ul>
 <p>To compare lists:</p>
 <ol>
-  <li>Use the main window's filter and the Species button on the toolbar to create at least two list windows. </li>
+  <li>Use the main window's filter and the Species button on the toolbar to create at least two list windows.</li>
   <li>Click the <strong>Compare Lists</strong> button on the toolbar to open the Compare Lists window.</li>
-  <li>Select one list in the left-hand dropdown box and select another list in the right-hand dropdown list.</li>
-  <li>click the <strong>Compare</strong> button in the middle to see side-by-side results.</li>
+  <li>A card is shown for each open species list. Click one card to select it as <strong>List A</strong> (highlighted in blue). Click a second card to select it as <strong>List B</strong> (highlighted in orange) — the comparison runs immediately.</li>
 </ol>
+<p>To change a selection, click the highlighted card again to deselect it, then click a different card. Clicking an unselected card when both slots are already filled automatically replaces List B.</p>
+<p>Results are displayed in three columns: species unique to List A on the left, species on both lists in the centre, and species unique to List B on the right. Double-click any species name to open its Individual Species window.</p>
 
 <hr>
 
 <h2 id="graphs">14. Graphs</h2>
-<p>Open graphs from the <strong>Graphs</strong> menu. Eleven chart types are available, each responding to the current Standard Filter. All graphs display a hover tooltip when you move the cursor over a data point or bar — the tooltip shows relevant details such as date, species count, or location. Clicking on most data points opens a <strong>Species List</strong> window filtered to that point's context.</p>
+<p>Open graphs from the <strong>Graphs</strong> menu. A variety of chart types are available, each responding to the current Sighting Filter. All graphs display a hover tooltip when you move the cursor over a data point or bar — the tooltip shows relevant details such as date, species count, or location. Clicking on most data points opens a <strong>Species List</strong> window filtered to that point's context.</p>
+<p>Yearbirder uses a consistent colour scheme across all graphs: charts based on <strong>sighting data</strong> use a <strong>blue</strong> theme, while charts based on <strong>photograph data</strong> (opened from the Photos menu, or any graph produced when the Photo Filter is active) use a <strong>yellow</strong> theme.</p>
 
 <h3>Bar Graph</h3>
 <p>Open with <strong>Graphs → Bar Graph</strong>.</p>
@@ -450,8 +474,8 @@
 <ul>
   <li><strong>By Year</strong> — one bar per year; the default when your data spans multiple years.</li>
   <li><strong>By Month</strong> — one bar per calendar month, aggregated across all years. Shows which months are most productive regardless of year.</li>
-  <li><strong>By Month-Year</strong> — one bar per calendar month within each year (e.g., Jan-2022, Feb-2022, …). Useful for fine-grained temporal analysis. Disabled if there are more than 100 month-year combinations in the filtered data.</li>
-  <li><strong>By Day</strong> — one bar per individual date. Useful when the filter covers a narrow date range. Disabled if there are more than 100 days in the filtered data.</li>
+  <li><strong>By Month-Year</strong> — one bar per calendar month within each year (e.g., Jan-2022, Feb-2022, …). Useful for fine-grained temporal analysis. When there are more than 50 bars, x-axis labels are shown for every <em>n</em>th bar only to prevent crowding; hover tooltips remain available for all bars.</li>
+  <li><strong>By Day</strong> — one bar per individual date. Useful when the filter covers a narrow date range. Disabled if there are more than 1,000 days in the filtered data. When there are more than 50 bars, x-axis labels are thinned automatically; hover tooltips remain available for all bars.</li>
 </ul>
 <p>Click any bar to open a Species List for that time period.</p>
 
@@ -510,18 +534,28 @@
   <li>Unusually early or late individual records</li>
 </ul>
 <p>If no species, family, or order filter is set, Yearbirder will warn you before generating the chart, since plotting all species together produces a very cluttered result.</p>
-<p>Hover over a dot to see the exact date and the location or locations seen that day. Click a dot to open a Species List for that date.</p>
+<p>Hover over a dot to see the exact date, the location or locations seen that day, and the species recorded at that location on that date. Click a dot to open a Species List for that date.</p>
 
 <h3>First of Year Chart</h3>
 <p>Open with <strong>Graphs → First of Year Chart</strong>.</p>
 <p>A dot chart plotting the <em>first sighting of each species in each year</em>. The x-axis shows day of year (January through December) and the y-axis shows year. Each dot represents one or more species whose first record of the year fell on the same date; hovering reveals the species list for that dot. Dots are coloured by season using the same palette as the Checklist Scatter.</p>
 <p>This chart is ideal for tracking arrival timing — when do your warblers return each spring? Has arrival crept earlier over the years? Apply a Family or species filter before opening the chart for the most focused view.</p>
-<p>Hover over a dot to see the date and the species recorded for the first time that year. Click a dot to open a Species List for that date.</p>
+<p>Hover over a dot to see the date, the location of the first sighting, and the species recorded for the first time that year. Click a dot to open a Species List for that date.</p>
 
 <h3>Last of Year Chart</h3>
 <p>Open with <strong>Graphs → Last of Year Chart</strong>.</p>
 <p>The mirror image of the First of Year Chart: plots the <em>last sighting of each species in each year</em>, using the same axes and colour scheme. Useful for tracking departure timing and lingering late records.</p>
-<p>Hover over a dot to see the date and the species recorded for the last time that year. Click a dot to open a Species List for that date.</p>
+<p>Hover over a dot to see the date, the location of the last sighting, and the species recorded for the last time that year. Click a dot to open a Species List for that date.</p>
+
+<h3 id="ytd-charts">YTD Bar Charts</h3>
+<p>Open from <strong>Graphs → Bar Charts</strong>. Four year-to-date charts compare your progress through the current calendar date against your full-year totals for every year in your data.</p>
+<p>Each chart displays a horizontal bar for each year. The <strong>blue segment</strong> shows the year-to-date total (up to today's month and day) and the <strong>muted blue extension</strong> shows how much more was recorded after the same date in that year. The current year's bar is highlighted. All charts respond to the Sighting Filter.</p>
+<p>Hover over a bar to see the year, YTD total, full-year total, and a list of the most recently added items. Click a bar to open a filtered window showing the records for that year through today's date.</p>
+<ul>
+  <li><strong>YTD Report by Species</strong> — counts distinct species. Tooltip shows the species most recently added to your YTD list.</li>
+  <li><strong>YTD Report by Locations</strong> — counts distinct locations visited. Tooltip shows the locations most recently added.</li>
+  <li><strong>YTD Report by Checklists</strong> — counts checklists submitted. Tooltip shows the most recent checklists (date and location).</li>
+</ul>
 
 <h3>Pie Charts</h3>
 <p>Open with <strong>Graphs → Pie Charts</strong>. Two pie chart variants are available, selectable via radio buttons at the top of the window:</p>
@@ -535,7 +569,7 @@
 <hr>
 
 <h2 id="maps">15. Maps</h2>
-<p>Yearbirder's <strong>Maps</strong> menu offers a range of interactive map types. All maps are pan-and-zoom capable using your mouse or trackpad, respond to the Standard Filter, and open just like any other report. Hovering over a marker or bubble shows a tooltip; clicking most markers opens the <strong>Location</strong> window for that site.</p>
+<p>Yearbirder's <strong>Maps</strong> menu offers a range of interactive map types. All maps are pan-and-zoom capable using your mouse or trackpad, respond to the Sighting Filter, and open just like any other report. Hovering over a marker or bubble shows a tooltip; clicking most markers opens the <strong>Location</strong> window for that site.</p>
 
 <h3>Location Map</h3>
 <p>Open with the <strong>Map</strong> toolbar button or <strong>Map → Map</strong>.</p>
@@ -554,13 +588,13 @@
 </ul>
 <p>Hover over any dot to see its species name, lifer number, date, and location. Click a dot to open a popup with the same information.</p>
 
-<h3>Effort Map by Time</h3>
-<p>Open with <strong>Maps → Effort Map by Time</strong>.</p>
+<h3>Bubble by Time</h3>
+<p>Open with <strong>Maps → Bubble by Time</strong>.</p>
 <p>A bubble map where each bubble represents a checklist location. Bubble <strong>area is proportional to the total cumulative time</strong> you have spent birding at that location (in minutes, summed across all matching checklists). Locations where you have invested the most time appear as the largest bubbles.</p>
 <p>Hover over a bubble to see the location name, total time, and checklist count. If some checklists at a location have no recorded duration, the tooltip notes how many are untimed. Click a bubble to open the Location window for that site.</p>
 
-<h3>Effort Map by Checklists</h3>
-<p>Open with <strong>Maps → Effort Map by Checklists</strong>.</p>
+<h3>Bubble by Checklists</h3>
+<p>Open with <strong>Maps → Bubble by Checklists</strong>.</p>
 <p>The same bubble map concept, but bubble area is proportional to the <strong>number of checklists</strong> submitted at each location rather than total time. Useful for seeing where you bird most frequently regardless of duration.</p>
 <p>Hover over a bubble to see the location name, checklist count, and total time. Click a bubble to open the Location window for that site.</p>
 
@@ -580,7 +614,7 @@
 
 <h2 id="choropleth-maps">16. Choropleth Maps</h2>
 <p>Choropleth maps are accessed via <strong>Maps → Choropleths</strong>. Six geographic regions are available, each with two modes selectable from the <strong>By Species</strong> and <strong>By Checklists</strong> submenus.</p>
-<p>All choropleth maps respond to the Standard Filter — for example, set a Family filter to see which states you have recorded warblers in. Clicking a shaded region opens a Species List (By Species mode) or a Checklists List (By Checklists mode) filtered to that region.</p>
+<p>All choropleth maps respond to the Sighting Filter — for example, set a Family filter to see which states you have recorded warblers in. Clicking a shaded region opens a Species List (By Species mode) or a Checklists List (By Checklists mode) filtered to that region.</p>
 
 <h3>By Species mode</h3>
 <p>Each region is shaded according to the number of distinct species you have recorded there under the current filter. Darker shading = more species. Hover over a region to see its name, species count, and a list of the most recently recorded species.</p>
@@ -604,9 +638,9 @@
 <hr>
 
 <h2 id="photo-settings-file">17. Adding Photos to Yearbirder</h2>
-<p>Yearbirder uses a Photo Settings file to associate photos on your hard drive with your ebird sightings. Associating photos with your ebird sightings lets you view photos that match the main window's filter.  For example, Yearbirder can show you all the photos you've taken of a species, or the photos from a certain day or from a location. Yearbirder stores the photo file names, dates, times, species names, and camera information in a separate data file. Think of this file as your photo library within Yearbirder.</p>
+<p>Yearbirder uses a <strong>photo catalog</strong> to associate photos on your hard drive with your eBird sightings. Once photos are associated, Yearbirder can show you all the photos you have taken of a species, or the photos from a particular day or location. The catalog stores file paths, dates, species names, ratings, and camera information. Think of it as a photo library that sits alongside your eBird data.</p>
 
-<h3>Adding Photos To Yearbirder</h3>
+<h3>Adding photos to Yearbirder</h3>
 <ol>
   <li>Choose <strong>Photos → Add Photos</strong>.</li>
   <li>A file dialog opens. Navigate to the folder containing your bird photos and select one or more JPEG files. You can select multiple photos at once — there is no need to add them one at a time:
@@ -615,34 +649,34 @@
       <li><strong>Windows:</strong> hold <strong>Ctrl</strong> and click to select individual photos, or hold <strong>Shift</strong> and click to select a contiguous range.</li>
     </ul>
   </li>
-  <li>For each photo, Yearbirder asks you to identify the associated bird species and sighting date. To make this easier, Yearbirder uses each photo's filename and the date and time the photo was taken to suggest the most likely species and checklist — so in many cases you only need to confirm the suggestion rather than search from scratch. If the correct sighting location and date does not appear as an option, make sure that you have logged that sighting in eBird itself; you cannot add a photo to Yearbirder unless that sighting is also in your eBird data.</li>
-  <li>Once you have associated photos, choose <strong>Photos → Save Photo Settings</strong> to save your Photo Settings file. Remember where youy save this file, as you will want to open it in the future to view your photos with Yearbirder.</li>
+  <li>For each photo, Yearbirder asks you to confirm the associated bird species and checklist. To make this easier, it uses each photo's filename and EXIF date/time to suggest the most likely species — so in many cases you only need to confirm the suggestion. Yearbirder recognises eBird species codes in filenames (e.g. <code>rufhum_20240514.jpg</code>), BBL four-letter codes, and common-name words. If the correct sighting does not appear as an option, make sure that sighting is logged in eBird; you cannot associate a photo with a sighting that is not in your data.</li>
+  <li>Once you have associated photos, choose <strong>Photos → Save Photo Catalog</strong> to save your catalog file. Remember where you save it — you will open it again the next time you use Yearbirder.</li>
 </ol>
 
-<h3>Opening an existing Photo Settings file</h3>
-<p>Choose <strong>Photos → Open Photo Settings File</strong> and navigate to your saved <code>.csv</code> file. Yearbirder loads all photo associations and EXIF data. The Photo Filter panel becomes active.</p>
-<p>To avoid having to open your Photo Settings file manually every time you use Yearbirder, save it as a preference (see <a href="#preferences">Section 23 — Saving Preferences</a>) so that Yearbirder opens it automatically at startup.</p>
+<h3>Opening an existing photo catalog</h3>
+<p>Choose <strong>Photos → Open Photo Catalog</strong> and navigate to your saved catalog file. Yearbirder loads all photo associations and EXIF data. The Photo Filter panel becomes active.</p>
+<p>To avoid opening your photo catalog manually every time, save its path as a preference (see <a href="#preferences">Section 24 — Saving Preferences</a>) so that Yearbirder opens it automatically at startup.</p>
 
 <h3>Saving changes</h3>
-<p>After adding, editing, or removing photo associations, choose <strong>Photos → Save Photo Settings</strong> to write changes back to the file. Yearbirder will warn you if you try to close the file with unsaved changes.</p>
+<p>After adding, editing, or removing photo associations, choose <strong>Photos → Save Photo Catalog</strong> to write changes back to the file. Yearbirder will warn you if you try to close with unsaved changes.</p>
 
-<h3>Closing the Photo Settings file</h3>
-<p>Choose <strong>Photos → Close Photo Settings File</strong>. This unloads all photo data from memory. The Photo Filter panel becomes inactive.</p>
+<h3>Closing the photo catalog</h3>
+<p>Choose <strong>Photos → Close Photo Catalog</strong>. This unloads all photo data from memory. The Photo Filter panel becomes inactive.</p>
 
 <h3>Adding more photos</h3>
-<p>With a Photo Settings file already loaded, choose <strong>Photos → Add Photos</strong> to import additional photos. The new associations are merged into the existing file; save afterwards.</p>
+<p>With a photo catalog already loaded, choose <strong>Photos → Add Photos</strong> to import additional photos. The new associations are merged into the existing catalog; save afterwards. After you select files, Yearbirder reports how many are already tracked and how many are new — so you can confirm you have selected the right files before any associations are created.</p>
 
-<h3>Editing photos by filter</h3>
-<p>Choose <strong>Photos → Edit Photos by Filter</strong> to make batch changes — for example, to update the rating of all photos from a particular outing, or to reassign a group of photos to a different species.</p>
+<h3>Batch editing photos</h3>
+<p>Choose <strong>Photos → Batch Edit Photos…</strong> to make bulk changes — for example, to update the rating of all photos from a particular outing, or to reassign a group of photos to a different species.</p>
 
 <h3>Updating EXIF data</h3>
-<p>If you have moved or re-exported your photo files, choose <strong>Photos → Update EXIF Data for All Photos</strong>. Yearbirder re-reads the EXIF metadata from every file referenced in the Photo Settings and updates its records. This is also useful if you use photo editing software that writes new EXIF tags.</p>
+<p>If you have moved or re-exported your photo files, choose <strong>Photos → Update EXIF Data for All Photos</strong>. Yearbirder re-reads the EXIF metadata from every file referenced in the catalog and updates its records. This is also useful after photo editing software writes new EXIF tags.</p>
 
 <h3>Cleaning up missing references</h3>
 <p>If photos have been moved or deleted from your hard drive, Yearbirder may show broken references. Use <strong>Photos → Remove Missing Photo References</strong> to scan for and remove any associations pointing to files that no longer exist.</p>
 
-<h3>What the Photo Settings file contains</h3>
-<p>The data file stores one row per photo reference, with columns for:</p>
+<h3>What the photo catalog contains</h3>
+<p>The catalog stores one record per photo, including:</p>
 <ul>
   <li>File path to the JPEG</li>
   <li>Associated species common name</li>
@@ -655,7 +689,7 @@
   <li>Focal length (from EXIF)</li>
   <li>ISO (from EXIF)</li>
 </ul>
-<p>You can open the data file in a spreadsheet application to inspect or bulk-edit values, but be careful to preserve the column order and formatting.</p>
+<p>You can open the catalog file in a text editor or spreadsheet to inspect values, but be careful to preserve its structure.</p>
 
 <hr>
 
@@ -665,13 +699,14 @@
 <h3>Overview of the photo system</h3>
 <ul>
   <li>Your photos remain in their original folders on your computer. Yearbirder stores <strong>references</strong> to them, not copies.</li>
-  <li>Photo associations and metadata are stored in a <strong>Photo Settings file</strong> (a data file you create and save using Yearbirder). See <a href="#photo-settings-file">Section 17</a>.</li>
+  <li>Photo associations and metadata are stored in a <strong>photo catalog</strong> (a file you create and save using Yearbirder). See <a href="#photo-settings-file">Section 17</a>.</li>
   <li>Yearbirder reads <strong>EXIF data</strong> from each JPEG file automatically: camera model, lens, shutter speed, aperture, focal length, and ISO.</li>
 </ul>
 
-<h3>Photos by Filter</h3>
-<p>Open with <strong>Photos → Photos by Filter</strong>, the <strong>Photos</strong> toolbar button, or <strong>Lists → Photos</strong>. Shows thumbnails of every photo matching the current Standard Filter and Photo Filter.</p>
+<h3>Browse Photos</h3>
+<p>Open with <strong>Photos → Browse Photos</strong>, the <strong>Photos</strong> toolbar button, or <strong>Lists → Photos</strong>. Shows thumbnails of every photo matching the current Sighting Filter and Photo Filter.</p>
 <p>Each thumbnail shows the photo, species name, date, and your rating. Click any thumbnail to open the <strong>Enlargement</strong> view.</p>
+<p>A <strong>Slideshow</strong> button appears in the top-right corner of the Photos window. Click it to launch a full-screen slideshow of the photos currently shown — the same configuration dialog appears first, letting you choose sort order, speed, and title-bar options. See <a href="#slideshow">Slideshow</a> for details.</p>
 
 <h3>Sorting photos</h3>
 <p>Use the radio buttons at the top of the Photos window to sort by:</p>
@@ -688,19 +723,19 @@
 <h3>Enlargement view</h3>
 <p>Click any thumbnail in the Photos window to open the Enlargement view, which shows the photo at full size with pan and zoom. From the Enlargement view you can:</p>
 <ul>
-  <li><strong>Navigate</strong> between photos using the previous/next arrows.</li>
+  <li><strong>Navigate</strong> between photos using the previous/next arrows. Pressing <strong>F10</strong> or using the right-click context menu enters full-screen mode; the left and right arrow keys navigate between photos with a smooth crossfade transition.</li>
   <li><strong>Set or change the rating</strong> for the photo.</li>
   <li><strong>View EXIF data</strong> — camera, lens, shutter speed, aperture, focal length, ISO.</li>
   <li><strong>Detach a photo</strong> from its sighting (removes the association without deleting the file).</li>
-  <li><strong>Delete a photo reference</strong> entirely from the Photo Settings.</li>
+  <li><strong>Delete a photo from disk</strong> — permanently removes the file from your drive and its entry from the photo catalog. All other open Photos, Enlargement, Manage Photos, and Rename Photos windows update immediately to reflect the deletion.</li>
 </ul>
 
 <h3>Geolocated Photos</h3>
-<p>Open with <strong>Photos → Geolocated Photos</strong>. Available only when a Photo Settings file is loaded.</p>
+<p>Open with <strong>Photos → Geolocated Photos</strong>. Available only when a photo catalog is loaded.</p>
 <p>Plots your geotagged photos on an interactive clustered marker map. Markers group together at lower zoom levels and spread apart as you zoom in. Hovering over a marker shows a thumbnail preview of the photo along with the species name, date, and location. Click a marker to open the <strong>Enlargement</strong> view for that photo. Multiple photos taken at exactly the same GPS coordinates are automatically fanned into a spiral so each remains individually clickable.</p>
 
 <h3 id="animated-photo-sequence">Animated Sequence Map</h3>
-<p>Open with <strong>Photos → Animated Sequence Map</strong>. Available only when a Photo Settings file is loaded.</p>
+<p>Open with <strong>Photos → Animated Sequence Map</strong>. Available only when a photo catalog is loaded.</p>
 <p>Animates your geotagged photos in chronological order on an interactive map, showing where and when each photo was taken. Each photo appears as a callout bubble whose triangular tail points to the exact GPS location, so the underlying map detail remains visible. The bubble displays the photo thumbnail, species name, date, and location.</p>
 <p>As the animation progresses, a small blue dot is permanently placed at each visited location, building up a breadcrumb trail of your photographic journey.</p>
 <p>Playback is controlled by the bar at the bottom of the map:</p>
@@ -713,7 +748,7 @@
 <p>The caption bar below the controls shows the species name, location, and date of the currently displayed photo. Click the photo bubble at any time to open the <strong>Enlargement</strong> view for that photo.</p>
 
 <h3 id="slideshow">Slideshow</h3>
-<p>Open with <strong>Photos → Slideshow</strong>. Available only when a Photo Settings file is loaded.</p>
+<p>Open with <strong>Photos → Slideshow</strong>. Available only when a photo catalog is loaded.</p>
 <p>Displays your photos as a full-screen slideshow with smooth crossfade transitions between images. Before the slideshow begins, a dialog lets you configure it:</p>
 <ul>
   <li><strong>Sort Order</strong> — choose how photos are sequenced:
@@ -732,10 +767,105 @@
 </ul>
 <p>Press any key or move the mouse to exit the slideshow at any time. The cursor is hidden automatically while the slideshow is running.</p>
 
+<h3 id="ytd-photos">YTD Report by Photographs</h3>
+<p>Open with <strong>Photos → YTD Report by Photographs</strong>. Available only when a photo catalog is loaded.</p>
+<p>A horizontal bar chart comparing your year-to-date photo count against your full-year photo totals for every year in your data. The <strong>yellow segment</strong> shows photos taken up to today's date in each year; the <strong>muted amber extension</strong> shows photos taken after the same date. The current year's bar is highlighted.</p>
+<p>Hover over a bar to see the year, YTD photo count, full-year total, and the species you most recently photographed. Click a bar to open a <strong>Photos</strong> window showing all photos from that year through today's date.</p>
+
+<h3 id="photo-pie">Families &amp; Orders by Photos</h3>
+<p>Open with <strong>Photos → Families &amp; Orders by Photos</strong>. Available only when a photo catalog is loaded.</p>
+<p>A pie chart where each wedge represents a bird family (or order), sized by the <strong>total number of photos</strong> you have of species in that group under the current filter — not the number of species or individuals, but the literal photo count. Wedges are rendered in a <strong>yellow</strong> colour palette to distinguish this chart from the sighting-data pie charts.</p>
+<p>Toggle between <strong>Families</strong> and <strong>Orders</strong> using the radio buttons. Hover over a wedge to see the group name, photo count, percentage of total, and the species you have photographed most within that group (ranked by photo count). Click a wedge to open a <strong>Photos</strong> window filtered to that family or order.</p>
+
+<h3 id="photo-bar">Total Photos</h3>
+<p>Open with <strong>Photos → Total Photos</strong>. Available only when a photo catalog is loaded.</p>
+<p>A <strong>yellow</strong>-themed bar chart showing your <strong>total photo count</strong> per time period. Use the four radio buttons at the top to switch between <strong>By Year</strong>, <strong>By Month</strong>, <strong>By Month-Year</strong>, and <strong>By Day</strong> views — the same granularity controls as the Total Species bar chart.</p>
+<p>Hover over a bar to see the period label, total photo count, and the species you photographed most during that period (listed in descending photo-count order, with the count per species shown in parentheses). Click a bar to open a <strong>Photos</strong> window showing all photos from that time period.</p>
+
+<h3 id="photo-accumulation">New Species Photographed Each Year</h3>
+<p>Open with <strong>Photos → New Species Photographed Each Year</strong>. Available only when a photo catalog is loaded.</p>
+<p>A <strong>yellow</strong>-themed stacked bar chart showing how many species you added to your photographic collection each year. Each bar is split into two segments:</p>
+<ul>
+  <li><strong>Bright amber</strong> — species photographed for the <em>first time ever</em> under the current filter in that year (new to your photo life list).</li>
+  <li><strong>Muted amber</strong> — species you had already photographed in a previous year (repeat species).</li>
+</ul>
+<p>This chart answers questions such as: "How many new species did I photograph for the first time in 2023?" or "Has my rate of adding new species to my photo list been slowing down?"</p>
+<p>Hover over a bar segment to see the year, the total species count, and a list of the new species first photographed in that year. Click a bar to open a <strong>Species Gallery</strong> for that year.</p>
+
+<h3 id="cumulative-photos">Photographed Species Growth Over Time</h3>
+<p>Open with <strong>Photos → Photographed Species Growth Over Time</strong>. Available only when a photo catalog is loaded.</p>
+<p>A <strong>yellow</strong>-themed line curve showing how your total number of <em>photographed</em> species has grown over time. The x-axis is date (using the date each species was first photographed) and the y-axis is the running cumulative total of species you have ever photographed under the current filter.</p>
+<p>This is the photographic equivalent of the Cumulative Species Curve — the final point tells you the total number of distinct species you have photographed.</p>
+<p>Hover over the curve to see the date, cumulative total, and a tooltip that shows a photo thumbnail for each new species first photographed on that date (up to six thumbnails, stacked vertically; the thumbnail is the highest-rated photo of that species taken on that day). Click a point to open a <strong>Species Gallery</strong> showing only the species first photographed on that date, filtered to photos taken on that day.</p>
+
 <hr>
 
-<h2 id="species-gallery">19. Species Gallery</h2>
-<p>Open with <strong>Photos → Species Gallery</strong>. Available once a Photo Settings file is loaded.</p>
+<h2 id="rename-photos">19. Rename Photos</h2>
+<p>Open with <strong>Photos → Rename Photos</strong>. Available once a photo catalog is loaded.</p>
+<p>Rename Photos lets you batch-rename your photo files on disk using a structured name you compose from up to four information slots. The new names are built from the data Yearbirder already knows about each photo — its species, date, time, and location — so the resulting filenames are descriptive and consistently formatted. After renaming, Yearbirder automatically updates all references in your photo catalog.</p>
+<p><strong>Renaming is permanent and cannot be undone.</strong> Back up your photos before proceeding.</p>
+
+<h3>Name Format</h3>
+<p>The top section of the window lets you build the filename template. Choose up to four <strong>slots</strong>, each of which contributes one piece of information to the name. Slots are joined by underscores. Any slot can be set to <strong>(omit)</strong> to leave it out.</p>
+<table>
+  <thead><tr><th>Slot option</th><th>What it produces</th></tr></thead>
+  <tbody>
+    <tr><td>Species Name</td><td>The species common or scientific name (your choice)</td></tr>
+    <tr><td>Date</td><td>The date the photo was taken, in your chosen format</td></tr>
+    <tr><td>Time</td><td>The time the photo was taken, in your chosen format</td></tr>
+    <tr><td>Location</td><td>The eBird location name associated with the sighting</td></tr>
+    <tr><td>(omit)</td><td>This slot is skipped</td></tr>
+  </tbody>
+</table>
+<p>The default order is <strong>Date → Time → Species Name → Location</strong>, which produces filenames like <code>2024-05-14_07-23-45_Black-throatedBlueWarbler_CentralPark.jpg</code>.</p>
+<p>Additional format controls appear below the slots:</p>
+<ul>
+  <li><strong>Date Format</strong> — <em>YYYY-MM-DD</em>, <em>YYYYMMDD</em>, or <em>(omit)</em>.</li>
+  <li><strong>Time Format</strong> — <em>HH-MM-SS</em>, <em>HHMMSS</em>, <em>HH-MM-SSt</em> (with tenths digit), <em>HHMMSSt</em>, or <em>(omit)</em>. Time is read from the photo's EXIF data.</li>
+  <li><strong>Species Name Format</strong> — <em>Common Name</em>, <em>Scientific Name</em>, or <em>eBird Species Code</em>. The eBird Species Code option uses the short eBird alpha code (for example, <code>rufhum</code> for Rufous Hummingbird, <code>amecro</code> for American Crow), which is useful for workflows that keep filenames aligned with eBird identifiers. Requires an eBird taxonomy file to be loaded at startup.</li>
+</ul>
+<p>A <strong>Sample</strong> line below the format controls shows a live preview of what the first photo's new name would look like as you adjust your settings.</p>
+
+<h3>Options</h3>
+<ul>
+  <li><strong>Remove spaces</strong> — strips spaces from species and location name components so the filename contains no whitespace (on by default).</li>
+  <li><strong>Use checklist time for photos without a time</strong> — when a photo has no EXIF time, falls back to the eBird checklist start time (on by default).</li>
+  <li><strong>Shorten location name to the first punctuation mark</strong> — trims long location names at the first comma, dash, colon, @, or parenthesis. For example, <em>"Central Park, Manhattan, NY"</em> becomes <em>"Central Park"</em>.</li>
+  <li><strong>If photos have the same HH-MM-SS, add tenths (if available)</strong> — when two or more photos share an identical second-level timestamp, appends the tenths digit from the EXIF subsecond field to differentiate them.</li>
+</ul>
+
+<h3>The photo table</h3>
+<p>The table shows one row per photo matching the current filter. Each row has:</p>
+<table>
+  <thead><tr><th>Column</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td>(checkbox)</td><td>Check to include this photo in the rename; uncheck to skip it</td></tr>
+    <tr><td>Current Filename</td><td>The file's existing name on disk</td></tr>
+    <tr><td>Proposed Filename</td><td>The name Yearbirder will assign based on your format settings</td></tr>
+    <tr><td>Status</td><td>Readiness indicator (see below)</td></tr>
+  </tbody>
+</table>
+<p>Hover over any row to see a thumbnail preview of that photo.</p>
+
+<h3>Status column values</h3>
+<table>
+  <thead><tr><th>Status</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td>Ready</td><td>The proposed name is valid and the rename will proceed</td></tr>
+    <tr><td>No Change</td><td>The proposed name is identical to the current name; nothing will happen</td></tr>
+    <tr><td>Duplicate: Append _N</td><td>Multiple photos would share the same proposed name; Yearbirder will append a numeric suffix (<em>_1</em>, <em>_2</em>, etc.) to each</td></tr>
+    <tr><td>Name in use</td><td>A different file already exists at the proposed path; this file will be skipped</td></tr>
+    <tr><td>No Name</td><td>All slots are set to (omit), so no name can be generated</td></tr>
+  </tbody>
+</table>
+
+<h3>Selecting and renaming</h3>
+<p>Use <strong>Select All</strong> and <strong>Select None</strong> to quickly check or uncheck every row. The count label shows how many photos are currently selected. When you are satisfied with the proposed names, click <strong>Rename</strong>. A confirmation dialog shows how many files will be renamed before any changes are made. After renaming, the Status column updates to <em>Done</em> for each successful file, or shows an error message (such as <em>Permission denied</em> or <em>Name already in use</em>) for any file that could not be renamed.</p>
+
+<hr>
+
+<h2 id="species-gallery">20. Species Gallery</h2>
+<p>Open with <strong>Photos → Species Gallery</strong>. Available once a photo catalog is loaded.</p>
 <p>The Species Gallery displays one representative photo for each species in your collection — the highest-rated photo you have for that species. Photos are arranged in a responsive grid and sorted in <strong>taxonomic order</strong>, making it a visual life list of every species you have photographed.</p>
 <p>The number of columns adjusts automatically as you resize or maximise the window, so the grid always makes full use of the available space.</p>
 <p>Each tile shows:</p>
@@ -744,11 +874,17 @@
   <li>The species common name below the thumbnail.</li>
 </ul>
 <p>Hovering over a tile highlights it. <strong>Click a tile</strong> to open a Photos window showing all of your photos of that species (subject to the current filter).</p>
-<p>The window title and subtitle show how many species have at least one photo under the current filter. Like all Yearbirder windows, the Species Gallery responds to the Standard Filter — for example, set a location filter to see a gallery of every species you have photographed at a particular site.</p>
+<p>The window title and subtitle show how many species have at least one photo under the current filter. Like all Yearbirder windows, the Species Gallery responds to the Sighting Filter — for example, set a location filter to see a gallery of every species you have photographed at a particular site.</p>
+<h3>Slideshow and Show All buttons</h3>
+<p>Two buttons appear in the top-right corner of the Species Gallery header:</p>
+<ul>
+  <li><strong>Slideshow</strong> — opens the Slideshow options dialog and then launches a full-screen slideshow of all photos matching the gallery's current filter. See <a href="#slideshow">Slideshow</a> for details on the options dialog.</li>
+  <li><strong>Show All</strong> — opens a Photos window showing every individual photo (not just one per species) that matches the gallery's current filter.</li>
+</ul>
 
 <hr>
 
-<h2 id="individual-species">20. Individual Species Window</h2>
+<h2 id="individual-species">21. Individual Species Window</h2>
 <p>The Individual Species window opens when you click a species name in the Species List, or from the right-click menu in most list windows.</p>
 <p>It shows a comprehensive view of your sightings of one particular species:</p>
 <ul>
@@ -757,14 +893,14 @@
   <li><strong>Yearly summary</strong> — how many times you recorded the species in each year.</li>
   <li><strong>Monthly summary</strong> — which months you most often record this species (useful for understanding migration timing).</li>
   <li><strong>Links</strong> — direct links to the species' page on Wikipedia and AllAboutBirds.org.</li>
-  <li><strong>Photos</strong> — if you have photos of this species in your Photo Settings, thumbnails are shown. Click a thumbnail to open the Enlargement view.</li>
+  <li><strong>Photos</strong> — if you have photos of this species in your photo catalog, thumbnails are shown. Click a thumbnail to open the Enlargement view.</li>
 </ul>
 <h3>Photo thumbnail in the header</h3>
-<p>If you have photos of the species in your Photo Settings file, the <strong>highest-rated photo</strong> appears as a thumbnail in the window header, between the species data panes and the action buttons. The thumbnail scales to fit the available space without distortion. Click the thumbnail to open a Photos window showing all of your photos of that species.</p>
+<p>If you have photos of the species in your photo catalog, the <strong>highest-rated photo</strong> appears as a thumbnail in the window header, between the species data panes and the action buttons. The thumbnail scales to fit the available space without distortion. Click the thumbnail to open a Photos window showing all of your photos of that species.</p>
 
 <hr>
 
-<h2 id="printing">21. Printing and PDF Export</h2>
+<h2 id="printing">22. Printing and PDF Export</h2>
 
 <h3>Printing</h3>
 <p>Click <strong>Print</strong> on the toolbar or choose <strong>File → Print</strong>. The currently active window is sent to the printer. Most list and report windows print sensibly; map and photo windows print a screenshot of the current view.</p>
@@ -774,7 +910,7 @@
 
 <hr>
 
-<h2 id="tips">22. Tips and Tricks</h2>
+<h2 id="tips">23. Tips and Tricks</h2>
 
 <h3>Keep multiple windows open for comparison</h3>
 <p>Yearbirder allows many windows to be open at the same time. For example, open a Species List filtered to one location, then open a second Species List filtered to a different location, and use <strong>Windows → Tile Windows</strong> to view them side by side.</p>
@@ -802,18 +938,18 @@
 <h3>Photo workflow tips</h3>
 <ul>
   <li><strong>Rate your photos immediately</strong> after a field outing while the session is fresh. Use the Enlargement view to assign ratings of 1–5.</li>
-  <li><strong>Back up your Photo Settings data file</strong> alongside your eBird data file. It is the only record of your photo associations.</li>
+  <li><strong>Back up your photo catalog file</strong> alongside your eBird data file. It is the only record of your photo associations.</li>
   <li><strong>Use the Photo Filter to find your best shots</strong>: set Rating Range to 4–5 and open the Photos gallery to see only your highest-rated photos.</li>
   <li><strong>Update EXIF data</strong> after any significant photo editing session or file reorganisation to keep the metadata in sync.</li>
 </ul>
 
 <hr>
 
-<h2 id="preferences">23. Saving Preferences</h2>
+<h2 id="preferences">24. Saving Preferences</h2>
 
 <p> You can tell Yearbirder which folder you use to download ebird files. Yearbirder will load the most recent ebird file from that folder whenever Yearbirder starts.</p>
 
-<p>You can also tell Yearbirder which Photo Settings file to use automatically when it starts.</p>
+<p>You can also tell Yearbirder which photo catalog to open automatically when it starts.</p>
 
 <p>Click <strong>Yearbirder → Preferences</strong> on the menu bar to set your preferences.</p>
 

@@ -42,7 +42,11 @@ Yearbirder_Screenshot.jpg
 
 # User data files
 photoData.csv
+photoData.jsonl
 MyEBirdData.csv
+
+# Photoshop source files
+src/yearbirder_splashscreen
 
 # Temp/test files
 src/testpdf.pdf

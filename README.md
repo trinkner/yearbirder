@@ -9,9 +9,21 @@
 
 # Yearbirder
 
+**Current release: v1.4** (April 2026)
+
 A desktop application for exploring and analysing your personal [eBird](https://ebird.org) data and your personal photos of birds.
 
-Yearbirder lets you filter, browse, and visualise your personal eBird sightings in ways the eBird website does not — across every location, species, date, and season in your personal history. If you are a bird photogrpaher, Yearbirder also lets you sort, filter and view your photos in the same way.
+Yearbirder lets you filter, browse, and visualise your personal eBird sightings in ways the eBird website does not — across every location, species, date, and season in your personal history. If you are a bird photographer, Yearbirder also lets you sort, filter and view your photos in the same way.
+
+---
+
+## What's New in v1.4
+
+- **eBird species code in Rename Photos** — the Species Name Format picker now includes *eBird Species Code* (e.g. `gretit1`) alongside Common Name and Scientific Name
+- **Smarter photo-to-species matching** — when adding photos to the catalog, filename matching now checks eBird codes, BBL banding codes, common names, and scientific names as substrings, handling arbitrary filename patterns from any camera or workflow; previously only whole-word token matching was used
+- **Duration-aware checklist matching** — photo EXIF timestamps are now matched to the checklist whose *window* (start time + duration) is closest, so a photo taken mid-checklist correctly matches that checklist rather than the next one to start
+- **Sighting Filter** — the filter panel is now labelled *Sighting Filter* to distinguish it from the Photo Filter
+- **Chart names updated** — photo-related charts are now named *Families & Orders by Photos*, *Total Photos*, *New Species Photographed Each Year*, and *Photographed Species Growth Over Time*
 
 ---
 
@@ -50,10 +62,13 @@ Yearbirder lets you filter, browse, and visualise your personal eBird sightings 
   - *Individuals Total Map* — bubble map sized by individual bird count per location
   - *Choropleth by Species* — US states, US counties, Canada, India, Great Britain, and world countries shaded by species count
   - *Choropleth by Checklists* — same regions shaded by checklist count
-- **Photos** — associate your JPEG bird photos with your sightings; browse, filter, and rate them by camera, lens, aperture, shutter speed, focal length, and ISO; **File → Open Photo Settings File** defaults to the photo settings directory stored in Preferences
-  - *Photos by Filter* — thumbnail gallery of every photo matching the current filter, sortable by taxonomy, date, rating, or name
+- **Photos** — associate your JPEG bird photos with your sightings; browse, filter, and rate them by camera, lens, aperture, shutter speed, focal length, and ISO; **File → Open Photo Catalog** defaults to the photo catalog directory stored in Preferences
+  - *Browse Photos* — thumbnail gallery of every photo matching the current filter, sortable by taxonomy, date, rating, or name
   - *Species Gallery* — one best-rated photo per species, arranged in taxonomic order; click any tile to see all photos of that species
   - *Geolocated Photos* — geotagged photos plotted on a clustered interactive map; hover for a thumbnail preview, click to open the full enlargement
+  - *Batch Edit Photos* — edit species, date, time, location, or rating for multiple photos at once
+  - **Adding photos** — when adding photos to the catalog, Yearbirder automatically suggests the species by matching the filename against the closest checklist using the EXIF timestamp; matching checks eBird species codes (e.g. `gretit1`), BBL banding codes, common names, and scientific names as substrings, handling arbitrary filename patterns from any camera or workflow
+  - **Rename Photos** — batch-rename photo files using configurable components including date, time, species name, and location; the species name component supports **Common Name**, **Scientific Name**, or **eBird Species Code** format
 - **Print and PDF export** — export any window to the printer or a PDF file
 
 ---

@@ -35,6 +35,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QMdiSubWindow,
     QLabel,
+    QMessageBox,
     QProgressBar,
     QVBoxLayout,
     QApplication,
@@ -172,6 +173,7 @@ class Photos(QMdiSubWindow, form_Photos.Ui_frmPhotos):
         self.filter = ()
         self.photoList = []
         self.pixmapCache = {}
+        self._missingPhotoSpecies = set()
         self.gridPhotos.setContentsMargins(2,2,2,2)
         self.gridPhotos.setSpacing(2)
         self.verticalLayout_3.addStretch(1)
@@ -182,6 +184,7 @@ class Photos(QMdiSubWindow, form_Photos.Ui_frmPhotos):
         self.rdoSortDate.toggled.connect(lambda checked: self.SortAndDisplayPhotos() if checked else None)
         self.rdoSortRating.toggled.connect(lambda checked: self.SortAndDisplayPhotos() if checked else None)
         self.rdoSortTaxonomy.toggled.connect(lambda checked: self.SortAndDisplayPhotos() if checked else None)
+        self.buttonSlideshow.clicked.connect(self.launchSlideshow)
 
         # dynamic thread pool sized to CPU count, capped at 8 for disk-bound work
         self.threadCount = min(os.cpu_count() or 4, 8)
@@ -224,6 +227,7 @@ class Photos(QMdiSubWindow, form_Photos.Ui_frmPhotos):
                 self.resultQueue.get_nowait()
             except queue.Empty:
                 break
+        self.mdiParent.db.compactJsonlFile()
         super(self.__class__, self).closeEvent(event)
 
 
@@ -235,9 +239,12 @@ class Photos(QMdiSubWindow, form_Photos.Ui_frmPhotos):
 
     def resizeMe(self):
 
-        windowWidth = self.width()-10
+        windowWidth  = self.width() - 10
         windowHeight = self.height()
-        self.scrollArea.setGeometry(5, 27, windowWidth-5, windowHeight-35)
+        headerHeight = max(self.headerFrame.sizeHint().height(), 60) + 16
+        self.headerFrame.setGeometry(5, 27, windowWidth - 5, headerHeight)
+        self.scrollArea.setGeometry(5, 27 + headerHeight, windowWidth - 5,
+                                    windowHeight - 35 - headerHeight)
 
 
     def scaleMe(self):
@@ -261,15 +268,11 @@ class Photos(QMdiSubWindow, form_Photos.Ui_frmPhotos):
 
         self.lblLocation.setFont(QFont("Helvetica", floor(fontSize * 1.4 )))
         self.lblLocation.setStyleSheet("QLabel { font: bold }");
-        self.lblLocation.setMaximumHeight(itemTextHeight)
         self.lblDateRange.setFont(QFont("Helvetica", floor(fontSize * 1.2 )))
         self.lblDateRange.setStyleSheet("QLabel { font: bold }");
-        self.lblDateRange.setMaximumHeight(itemTextHeight)
         self.lblDetails.setFont(QFont("Helvetica", floor(fontSize * 1.2 )))
         self.lblDetails.setStyleSheet("QLabel { font: bold }");
-        self.lblDetails.setMaximumHeight(itemTextHeight)
         self.lblSpecies.setFont(QFont("Helvetica", fontSize))
-        self.lblSpecies.setMaximumHeight(itemTextHeight)
         self.lblSortBy.setFont(QFont("Helvetica", fontSize))
         self.rdoSortSpecies.setFont(QFont("Helvetica", fontSize))
         self.rdoSortDate.setFont(QFont("Helvetica", fontSize))
@@ -320,6 +323,10 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
             else:
                 pixmap = QPixmap(p["fileName"])
 
+            if pixmap.isNull():
+                self._missingPhotoSpecies.add(s["commonName"])
+                continue
+
             pixmap = pixmap.scaled(540, 400, Qt.KeepAspectRatio, Qt.SmoothTransformation)
 
             byte_array = QByteArray()
@@ -365,6 +372,7 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
 
         self.scaleMe()
         self.resizeMe()
+        self._missingPhotoSpecies = set()
 
         # save the filter settings passed to this routine to the form for future use
         self.filter = filter
@@ -486,13 +494,14 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
             photoWeekday = photoWeekday.strftime("%A")
 
             labelCaption = QLabel()
+            labelCaption.setTextFormat(Qt.RichText)
             labelCaption.setText(
-                s["commonName"] + "\n" +
-                s["scientificName"] + "\n\n" +
-                s["location"] + "\n" +
-                photoWeekday + ", " + s["date"] + " " + s["time"] + "\n\n" +
+                s["commonName"] + "<br>"
+                "<i>" + s["scientificName"] + "</i><br><br>" +
+                s["location"] + "<br>" +
+                photoWeekday + ", " + s["date"] + " " + s["time"] + "<br><br>" +
                 "Rating: " + p["rating"]
-                )
+            )
             labelCaption.setStyleSheet("QLabel { background-color: #343333; color: silver; padding: 3px; }")
 
             self.gridPhotos.addWidget(buttonPhoto, row, 0)
@@ -515,7 +524,8 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
                 btn = self._photoButtons.get(row)
                 if btn and btn.height() > 0:
                     pm = self.pixmapCache[p["fileName"]]
-                    btn.setPixmap(pm.scaled(btn.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                    if not pm.isNull():
+                        btn.setPixmap(pm.scaled(btn.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
 
         self.scrollArea.verticalScrollBar().setValue(0)
 
@@ -546,6 +556,8 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
         """Starts worker threads and the drain timer.  Called via singleShot(0)
         so it runs on the first event-loop iteration after the click handler
         that triggered loading has fully returned."""
+        if self._abort:
+            return
         for i in range(self._threadsToStart):
             self.threads[i].start()
         self._drainTimer.start(50)
@@ -570,11 +582,23 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
                 continue
 
             pm = QPixmap.fromImage(qimage)
-            self.pixmapCache[photoFile] = pm
-
-            btn = self._photoButtons.get(row)
-            if btn and btn.height() > 0:
-                btn.setPixmap(pm.scaled(btn.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            if pm.isNull():
+                try:
+                    self._missingPhotoSpecies.add(self.photoList[row][1]["commonName"])
+                except (IndexError, KeyError):
+                    pass
+                btn = self._photoButtons.get(row)
+                if btn:
+                    btn.setText(
+                        f"File not found:\n{os.path.basename(photoFile)}")
+                    btn.setStyleSheet(
+                        "QPushButton { background-color: #343333; border: 0px; "
+                        "color: #e2e4ec; font-size: 10pt; }")
+            else:
+                self.pixmapCache[photoFile] = pm
+                btn = self._photoButtons.get(row)
+                if btn and btn.height() > 0:
+                    btn.setPixmap(pm.scaled(btn.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
 
             self._loadedCount += 1
 
@@ -604,6 +628,22 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
         self.scrollArea.verticalScrollBar().setValue(0)
         self._sorting = False
 
+        if self._missingPhotoSpecies:
+            n = len(self._missingPhotoSpecies)
+            if n <= 5:
+                species_list = "\n".join(
+                    f"  \u2022 {name}" for name in sorted(self._missingPhotoSpecies))
+                detail = f"Photos could not be found for:\n\n{species_list}"
+            else:
+                detail = "Photos could not be found for more than 5 species."
+            QMessageBox.warning(
+                self.mdiParent,
+                "Missing Photos",
+                f"{detail}\n\n"
+                "These files may have been moved or deleted outside of Yearbirder.",
+                QMessageBox.StandardButton.Ok,
+            )
+
 
     def GetPixmapForThumbnail(self, photoFile):
         """Synchronous fallback — returns a pixmap from cache or reads from disk.
@@ -619,13 +659,43 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
             imgSize.scale(QSize(500, 330), Qt.KeepAspectRatio)
             reader.setScaledSize(imgSize)
         pm = QPixmap.fromImage(reader.read())
-
-        self.pixmapCache[photoFile] = pm
+        if not pm.isNull():
+            self.pixmapCache[photoFile] = pm
         return pm
 
 
     def _photoClicked(self, row, event):
         self.showEnlargement(row)
+
+
+    def handlePhotoDeletion(self, filename):
+        self.pixmapCache.pop(filename, None)
+
+        idx = next((i for i, (p, s) in enumerate(self.photoList) if p["fileName"] == filename), None)
+        if idx is None:
+            return
+
+        for col in (0, 1):
+            item = self.gridPhotos.itemAtPosition(idx, col)
+            if item and item.widget():
+                item.widget().setParent(None)
+        self.gridPhotos.setRowMinimumHeight(idx, 0)
+
+        self.photoList.pop(idx)
+
+        if not self.photoList:
+            self.close()
+            return
+
+        new_buttons = {}
+        for old_row, btn in self._photoButtons.items():
+            if old_row == idx:
+                continue
+            new_row = old_row if old_row < idx else old_row - 1
+            if new_row != old_row:
+                btn.mousePressEvent = partial(self._photoClicked, new_row)
+            new_buttons[new_row] = btn
+        self._photoButtons = new_buttons
 
 
     def showEnlargement(self, row):
@@ -634,7 +704,7 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
 
         # save the MDI window as the parent for future use in the child
         sub.mdiParent = self
-        sub.photoList = self.photoList
+        sub.photoList = list(self.photoList)
         sub.currentIndex = row
 
         # add and position the child to our MDI area
@@ -644,3 +714,21 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
 
         # call the child's routine to fill it with data
         sub.fillEnlargement()
+
+
+    def launchSlideshow(self):
+        import code_Slideshow
+        dlg = code_Slideshow.SlideshowDialog(self.mdiParent)
+        if dlg.exec() != code_Slideshow.QDialog.DialogCode.Accepted:
+            return
+        photoList = code_Slideshow.buildPhotoList(
+            self.mdiParent.db, self.filter, dlg.sortOrder()
+        )
+        if not photoList:
+            QMessageBox.information(self.mdiParent, "No Results",
+                                    "No photos found for the current filter.")
+            return
+        self.mdiParent._slideshow = code_Slideshow.SlideshowWindow(
+            photoList, dlg.secondsPerPhoto(), dlg.showTitleBar()
+        )
+        self.mdiParent._slideshow.show()

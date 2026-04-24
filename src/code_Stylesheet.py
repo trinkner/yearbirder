@@ -1,6 +1,8 @@
 import sys
-from PySide6.QtGui import QColor, QPainter
-from PySide6.QtWidgets import QProxyStyle, QStyle, QMenu
+import os
+import tempfile
+from PySide6.QtGui import QColor, QPainter, QPixmap
+from PySide6.QtWidgets import QProxyStyle, QStyle, QMenu, QMessageBox
 from PySide6.QtCore import Qt, QRect, QEvent
 
 
@@ -130,6 +132,12 @@ class AppStyle(QProxyStyle):
             painter.restore()
 
 
+# Chart colour palette — single source of truth for code_Graphs.py and code_Web.py
+CHART_PRIMARY   = "#4f8ef7"   # thematic blue — standard-filter charts
+CHART_SECONDARY = "#28384c"   # dark muted blue — repeat / extension bars
+PHOTO_PRIMARY   = "#f7d94f"   # bright golden yellow — photo-filter charts
+PHOTO_SECONDARY = "#594d26"   # dark muted amber — repeat / extension bars
+
 baseColor = "#1e1f26"
 tableColor = "#252730"
 mdiAreaColor = QColor(18, 19, 24)
@@ -210,6 +218,7 @@ stylesheetBase = """
         padding: 5px;
         border: none;
         border-bottom: 1px solid #3a3d4e;
+        border-right: 1px solid #3a3d4e;
         font-weight: bold;
     }
 
@@ -319,3 +328,59 @@ stylesheetBase = """
         selection-background-color: #4f8ef7;
     }
 """
+
+# Write a tiny SVG checkmark to the temp directory so the QSS image: property
+# can reference it by path.  The stroke colour comes from CHART_PRIMARY so
+# there is a single source of truth — no hardcoded hex value here.
+_checkmark_svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 14 14">
+  <polyline points="2,7 5.5,10.5 12,3.5"
+            stroke="{CHART_PRIMARY}" stroke-width="2.2"
+            fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>"""
+
+_checkmark_path = os.path.join(tempfile.gettempdir(),
+                               "yearbirder_checkmark.svg").replace("\\", "/")
+with open(_checkmark_path, "w", encoding="utf-8") as _f:
+    _f.write(_checkmark_svg)
+
+stylesheetBase += f"""
+    QCheckBox::indicator {{
+        border: 2px solid #8b8fa8;
+        border-radius: 3px;
+        width: 12px;
+        height: 12px;
+        background: transparent;
+    }}
+    QCheckBox::indicator:checked {{
+        border-color: {CHART_PRIMARY};
+        image: url({_checkmark_path});
+    }}
+"""
+
+
+def question(parent, title, text,
+             buttons=QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+             default=QMessageBox.StandardButton.No):
+    """QMessageBox.question replacement with a blue question-mark icon."""
+    px = QPixmap(48, 48)
+    px.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(px)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(QColor(CHART_PRIMARY))
+    painter.drawEllipse(0, 0, 48, 48)
+    font = painter.font()
+    font.setPixelSize(30)
+    font.setBold(True)
+    painter.setFont(font)
+    painter.setPen(QColor("#ffffff"))
+    painter.drawText(px.rect(), Qt.AlignmentFlag.AlignCenter, "?")
+    painter.end()
+
+    msg = QMessageBox(parent)
+    msg.setWindowTitle(title)
+    msg.setText(text)
+    msg.setIconPixmap(px)
+    msg.setStandardButtons(buttons)
+    msg.setDefaultButton(default)
+    return msg.exec()

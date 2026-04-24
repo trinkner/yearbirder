@@ -75,6 +75,10 @@ class Stats(QMdiSubWindow, form_Stats.Ui_frmStats):
         return True
 
 
+    def handlePhotoDeletion(self, filename):
+        self.FillStats(self.filter)
+
+
     # ------------------------------------------------------------------
     # Statistics computation
     # ------------------------------------------------------------------

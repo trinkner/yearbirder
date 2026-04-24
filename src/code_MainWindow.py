@@ -16,6 +16,7 @@ import code_Graphs
 import code_Photos
 import code_SpeciesGallery
 import code_ManagePhotos
+import code_RenamePhotos
 import code_Preferences
 import code_Stylesheet
 
@@ -42,6 +43,7 @@ from PySide6.QtGui import (
     QFont,
     QFontMetrics,
     QIcon,
+    QPainter,
     QPixmap,
     QTextDocument,
     QColor
@@ -59,6 +61,9 @@ from PySide6.QtCore import (
 from PySide6.QtWidgets import (
     QApplication,
     QDialog,
+    QDialogButtonBox,
+    QHBoxLayout,
+    QListWidget,
     QMdiArea,
     QMessageBox,
     QMainWindow,
@@ -66,6 +71,7 @@ from PySide6.QtWidgets import (
     QSlider,
     QLabel,
     QProgressBar,
+    QPushButton,
     QVBoxLayout,
     QProxyStyle,
     QStyle,
@@ -154,6 +160,144 @@ class _WhiteIconToolbarStyle(QProxyStyle):
         super().drawControl(element, option, painter, widget)
 
 
+class _OptimizePhotoSettingsDialog(QDialog):
+    """Scans photo settings for missing files and offers to remove them."""
+
+    def __init__(self, parent, db):
+        super().__init__(parent)
+        self.db = db
+        self.missing = []
+
+        self.setWindowTitle("Compact Photo Catalog")
+        self.setMinimumWidth(520)
+        self.setModal(True)
+
+        # Blue circle "?" icon — matches code_Stylesheet.question()
+        px = QPixmap(48, 48)
+        px.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(px)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(code_Stylesheet.CHART_PRIMARY))
+        painter.drawEllipse(0, 0, 48, 48)
+        font = painter.font()
+        font.setPixelSize(30)
+        font.setBold(True)
+        painter.setFont(font)
+        painter.setPen(QColor("#ffffff"))
+        painter.drawText(px.rect(), Qt.AlignmentFlag.AlignCenter, "?")
+        painter.end()
+        _icon = QLabel()
+        _icon.setPixmap(px)
+        _icon.setFixedWidth(64)
+
+        # Content area — _showResults() appends to this
+        self._layout = QVBoxLayout()
+        self._layout.setSpacing(12)
+
+        self._statusLabel = QLabel("Checking photo files…")
+        self._statusLabel.setWordWrap(True)
+        self._layout.addWidget(self._statusLabel)
+
+        self._progress = QProgressBar()
+        self._progress.setRange(0, 0)
+        self._layout.addWidget(self._progress)
+
+        self._listWidget = QListWidget()
+        self._listWidget.setMaximumHeight(200)
+        self._listWidget.setVisible(False)
+        self._layout.addWidget(self._listWidget)
+
+        self._buttonBox = QDialogButtonBox()
+        self._buttonBox.setVisible(False)
+        self._layout.addWidget(self._buttonBox)
+
+        body = QHBoxLayout()
+        body.setSpacing(16)
+        body.addWidget(_icon, alignment=Qt.AlignmentFlag.AlignTop)
+        body.addLayout(self._layout)
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(12, 12, 12, 12)
+        outer.addLayout(body)
+
+        QTimer.singleShot(50, self._scan)
+
+    def _scan(self):
+        missing = []
+        for i, sighting in enumerate(self.db.sightingList):
+            if i % 200 == 0:
+                QApplication.processEvents()
+            for j, photo in enumerate(sighting.get("photos", [])):
+                path = photo.get("fileName", "")
+                if path and not os.path.isfile(path):
+                    missing.append({
+                        "sighting_idx": i,
+                        "photo_idx": j,
+                        "path": path,
+                        "species": sighting.get("commonName", "Unknown"),
+                    })
+        self.missing = missing
+        self._showResults()
+
+    def _showResults(self):
+        self._progress.setVisible(False)
+
+        skipped = self.db.jsonlSkippedLines
+        skipped_note = (
+            f"\n\n{skipped} line{'s' if skipped != 1 else ''} in the photo "
+            f"catalog could not be read and will be dropped on compaction."
+        ) if skipped > 0 else ""
+
+        if not self.missing:
+            self._statusLabel.setText(
+                "Good news! Files exist on disk for all photos in the database."
+                + skipped_note
+                + "\n\nCompact the photo catalog?\n"
+            )
+            btn_box = QDialogButtonBox()
+            btn_box.addButton("Compact", QDialogButtonBox.ButtonRole.AcceptRole)
+            btn_box.addButton(QDialogButtonBox.StandardButton.Cancel)
+            btn_box.accepted.connect(self.accept)
+            btn_box.rejected.connect(self.reject)
+            self._layout.addWidget(btn_box)
+            return
+
+        n = len(self.missing)
+        species_set = {m["species"] for m in self.missing}
+        s_count = len(species_set)
+
+        if n == 1:
+            summary = "1 photo file could not be found on disk (1 species)."
+        else:
+            summary = (
+                f"{n} photo files could not be found on disk "
+                f"({s_count} {'species' if s_count != 1 else 'species'})."
+            )
+
+        self._statusLabel.setText(
+            summary + skipped_note + "\n\n"
+            "These entries will be removed from the photo settings file "
+            "and the file will be compacted. This cannot be undone."
+        )
+
+        for m in self.missing:
+            self._listWidget.addItem(
+                f"{os.path.basename(m['path'])}  —  {m['species']}"
+            )
+        self._listWidget.setVisible(True)
+
+        self._buttonBox.addButton(
+            "Optimize", QDialogButtonBox.ButtonRole.AcceptRole
+        )
+        self._buttonBox.addButton(QDialogButtonBox.StandardButton.Cancel)
+        self._buttonBox.accepted.connect(self.accept)
+        self._buttonBox.rejected.connect(self.reject)
+        self._buttonBox.setVisible(True)
+
+        self.adjustSize()
+
+
 class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
     # initialize main database that will be used throughout program
@@ -161,8 +305,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
     fontSize = 11
     scaleFactor = 1
     rowHeight = 16  # default; recomputed in ScaleDisplay() and __init__
-    versionNumber = "1.3"
-    versionDate = "April 16, 2026"
+    versionNumber = "1.4"
+    versionDate = "April 22, 2026"
     taxonomyYear = ""
 
     def __init__(self):
@@ -323,6 +467,10 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionEditPhotosByFilter.setVisible(False)
         self.actionUpdateEXIFDataForAllPhotos.triggered.connect(self.updateEXIFDataForAllPhotos)
         self.actionUpdateEXIFDataForAllPhotos.setVisible(False)
+        self.actionRenamePhotos.triggered.connect(self.createRenamePhotos)
+        self.actionRenamePhotos.setVisible(False)
+        self.actionOptimizePhotoSettings.triggered.connect(self.optimizePhotoSettings)
+        self.actionOptimizePhotoSettings.setVisible(False)
         
         self.actionUS_States.triggered.connect(self.createChoroplethUSStates)
         self.actionUS_Counties.triggered.connect(self.createChoroplethUSCounties)
@@ -342,6 +490,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionYTDPhotos.triggered.connect(self.CreateYTDPhotos)
         self.actionPhotoPie.triggered.connect(self.CreatePhotoPieChart)
         self.actionPhotoBar.triggered.connect(self.CreatePhotoBarChart)
+        self.actionPhotoAccumulation.triggered.connect(self.CreatePhotoAccumulationChart)
+        self.actionCumulativePhotos.triggered.connect(self.CreateCumulativePhotosChart)
         self.actionLifeListMap.triggered.connect(self.createLifeListMap)
         self.actionEffortMap.triggered.connect(self.createEffortMap)
         self.actionEffortMapByChecklists.triggered.connect(self.createEffortMapByChecklists)
@@ -399,11 +549,17 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.calStartDate.setDate(datetime.datetime.now())
         self.calEndDate.setDate(datetime.datetime.now())
 
-        self.cboStartRatingRange.addItems(["**All**", "0", "1", "2", "3", "4", "5"])
-        self.cboEndRatingRange.addItems(["**All**", "0", "1", "2", "3", "4", "5"])                    
+        self.cboStartRatingRange.addItem("All")
+        self.cboStartRatingRange.insertSeparator(1)
+        self.cboStartRatingRange.addItems(["0", "1", "2", "3", "4", "5"])
+        self.cboEndRatingRange.addItem("All")
+        self.cboEndRatingRange.insertSeparator(1)
+        self.cboEndRatingRange.addItems(["0", "1", "2", "3", "4", "5"])
         self.cboStartRatingRange.currentIndexChanged.connect(self.ComboStartRatingRangeChanged)
         self.cboEndRatingRange.currentIndexChanged.connect(self.ComboEndRatingRangeChanged)
-        self.cboSpeciesHasPhoto.addItems(["**All**", "Photographed", "Not photographed"])                    
+        self.cboSpeciesHasPhoto.addItem("All")
+        self.cboSpeciesHasPhoto.insertSeparator(1)
+        self.cboSpeciesHasPhoto.addItems(["Photographed", "Not photographed"])                    
         self.cboSpeciesHasPhoto.currentIndexChanged.connect(self.ComboSpeciesHasPhotosChanged)
         self.cboCamera.currentIndexChanged.connect(self.ComboCameraChanged)        
         self.cboLens.currentIndexChanged.connect(self.ComboLensChanged)
@@ -508,6 +664,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             # If a photo data file is defined and valid, load it
             if self.db.photoDataFile and os.path.isfile(self.db.photoDataFile):
                 self.db.readPhotoDataFromFile(self.db.photoDataFile)
+                self._warnIfJsonlSkippedLines()
+                self._warnIfCsvSkippedRows()
+                self._promptJsonlMigrationIfNeeded()
 
         # Now that preferences are processed, continue with UI updates
         self.finishedProcessingPreferences()
@@ -533,8 +692,12 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 self.actionYTDPhotos.setVisible(True)
                 self.actionPhotoPie.setVisible(True)
                 self.actionPhotoBar.setVisible(True)
+                self.actionPhotoAccumulation.setVisible(True)
+                self.actionCumulativePhotos.setVisible(True)
                 self.actionEditPhotosByFilter.setVisible(True)
                 self.actionUpdateEXIFDataForAllPhotos.setVisible(True)
+                self.actionRenamePhotos.setVisible(True)
+                self.actionOptimizePhotoSettings.setVisible(True)
 
             self.showFileDataMessage()
             
@@ -681,19 +844,48 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.cboEndIsoRange.setCurrentIndex(0)
 
 
+    def _warnIfJsonlSkippedLines(self):
+        n = self.db.jsonlSkippedLines
+        if n > 0:
+            QMessageBox.warning(
+                self,
+                "Photo Catalog Warning",
+                f"{n} line{'s' if n != 1 else ''} in the photo catalog could not "
+                f"be read and {'were' if n != 1 else 'was'} skipped.\n\n"
+                "The file may be partially corrupted. Consider running "
+                "File \u2192 Optimize photo settings file\u2026 to compact and repair it.",
+                QMessageBox.StandardButton.Ok,
+            )
+
+    def _warnIfCsvSkippedRows(self):
+        n = self.db.csvSkippedRows
+        if n > 0:
+            QMessageBox.warning(
+                self,
+                "Photo Catalog Warning",
+                f"{n} row{'s' if n != 1 else ''} in the photo catalog could "
+                f"not be read due to missing columns and {'were' if n != 1 else 'was'} "
+                f"skipped.\n\n"
+                "This may indicate an older or incompatible CSV format.",
+                QMessageBox.StandardButton.Ok,
+            )
+
     def openPhotoSettings(self, photoDataFile = ""):
-                    
+
         # open data file
         initial_dir = os.path.dirname(MainWindow.db.photoDataFile) if MainWindow.db.photoDataFile else ""
-        fname = QFileDialog.getOpenFileName(self,"Select Yearbirder Photo Data File", initial_dir,"Yearbirder Photo Data File (*.csv)")
-        
+        fname = QFileDialog.getOpenFileName(self,"Select Yearbirder Photo Data File", initial_dir,"Yearbirder Photo Data Files (*.jsonl *.csv)")
+
         # check if user pressed cancel or if we have a file name to open
         if fname[0] == "":
             return
-    
+
         photoDataFile = fname[0]
-                            
+
         self.db.readPhotoDataFromFile(photoDataFile)
+        self._warnIfJsonlSkippedLines()
+        self._warnIfCsvSkippedRows()
+        self._promptJsonlMigrationIfNeeded()
 
         self.fillPhotoComboBoxes()
 
@@ -708,6 +900,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionPhotoBar.setVisible(True)
         self.actionEditPhotosByFilter.setVisible(True)
         self.actionUpdateEXIFDataForAllPhotos.setVisible(True)
+        self.actionRenamePhotos.setVisible(True)
+        self.actionOptimizePhotoSettings.setVisible(True)
 
         self.CreateStatsOnLoad()
 
@@ -728,10 +922,14 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionYTDPhotos.setVisible(False)
         self.actionPhotoPie.setVisible(False)
         self.actionPhotoBar.setVisible(False)
+        self.actionPhotoAccumulation.setVisible(False)
+        self.actionCumulativePhotos.setVisible(False)
         self.actionEditPhotosByFilter.setVisible(False)
         self.actionUpdateEXIFDataForAllPhotos.setVisible(False)
-        
-        
+        self.actionRenamePhotos.setVisible(False)
+        self.actionOptimizePhotoSettings.setVisible(False)
+
+
     def addPhotos(self):
         # Abort if no data file is open
         if not MainWindow.db.eBirdFileOpenFlag:
@@ -744,16 +942,27 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             return
 
         filter_obj = code_Filter.Filter()
-        photos_already_in_db = set(self.db.GetPhotos(filter_obj))  # Use set for fast lookup
+        # realpath normalises both sides so symlinked paths (e.g. ~/Dropbox →
+        # ~/Library/CloudStorage/Dropbox on macOS) compare equal regardless of
+        # which file-dialog variant produced them.
+        photos_already_in_db = {os.path.realpath(p) for p in self.db.GetPhotos(filter_obj)}
 
-        unmatched_photos = [p for p in photo_paths if p not in photos_already_in_db]
+        unmatched_photos = [p for p in photo_paths if os.path.realpath(p) not in photos_already_in_db]
         count_photos_not_processed = len(photo_paths) - len(unmatched_photos)
 
         if count_photos_not_processed > 0:
+            new_count = len(unmatched_photos)
+            if new_count == 1:
+                new_str = "\n\n1 file needs to be added."
+            elif new_count > 1:
+                new_str = f"\n\n{new_count} files need to be added."
+            else:
+                new_str = ""
             QMessageBox.information(
                 self,
                 "Photos",
-                f"{count_photos_not_processed} files were already attached to sightings and are not displayed here.\n\n"
+                f"{count_photos_not_processed} files were already attached to sightings and are not displayed here."
+                f"{new_str}\n\n"
                 "To edit their attachments, use Manage Photos By Filter.",
                 QMessageBox.StandardButton.Ok
             )
@@ -780,21 +989,53 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             )
            
     
+    def _promptJsonlMigrationIfNeeded(self):
+        if self.db.photoDataFile.lower().endswith(".jsonl"):
+            return
+        if self.db.photoDataFile == "":
+            text = (
+                "No photo settings file is open.\n\n"
+                "Please choose a name and location for a photo settings file. "
+                "Yearbirder will save your photo data there going forward."
+            )
+        else:
+            text = (
+                "Your photo settings file is in the legacy CSV format.\n\n"
+                "Please choose a name and location for a new photo settings file. "
+                "Yearbirder will use this file going forward."
+            )
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Icon.Information)
+        msg.setText(text)
+        msg.setWindowTitle("Photo Catalog")
+        msg.setStandardButtons(QMessageBox.StandardButton.Ok)
+        msg.exec()
+        self.savePhotoSettings()
+
+        if self.db.photoDataFile.lower().endswith(".jsonl"):
+            if code_Stylesheet.question(
+                self, "Set as Default?",
+                "Would you like to set this as your default photo settings file?\n\n"
+                + self.db.photoDataFile,
+            ) == QMessageBox.StandardButton.Yes:
+                self.db.writePreferences()
+
+
     def savePhotoSettings(self):
-        
+
         photoFileInUse = self.db.photoDataFile
-        
-        # open save dialog box to get name of photo settings file
-        fname = QFileDialog.getSaveFileName(self, "Save Photo Settings File", photoFileInUse, "Yearbirder Photo Settings File (*.csv)")
-        
-        # check if user pressed cancel or if we have a file name for saving
+        # suggest .jsonl path even if user currently has a .csv path
+        if photoFileInUse.lower().endswith(".csv"):
+            photoFileInUse = photoFileInUse[:-4] + ".jsonl"
+
+        fname = QFileDialog.getSaveFileName(self, "Save Photo Settings File", photoFileInUse, "Yearbirder Photo Settings File (*.jsonl)")
+
         if fname[0] == "":
             return
-        
-        # call database function to write entire db's photo settings to CSV vile
-        self.db.writePhotoDataToFile(fname[0])   
-        
-        self.db.photosNeedSaving = False     
+
+        self.db.writePhotoDataToFile(fname[0])
+        self.db.photoDataFile = fname[0]
+        self.db.photosNeedSaving = False
 
 
     def fillPhotoComboBoxes(self):
@@ -814,43 +1055,53 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             w.clear()
             
             if w == self.cboCamera:
-                w.addItem("**All Cameras**")
+                w.addItem("All Cameras")
+                w.insertSeparator(1)
                 w.addItems(self.db.cameraList)
 
             if w == self.cboLens:
-                w.addItem("**All Lenses**")
+                w.addItem("All Lenses")
+                w.insertSeparator(1)
                 w.addItems(self.db.lensList)
 
             if w == self.cboStartShutterSpeedRange:
-                w.addItem("**All**")
+                w.addItem("All")
+                w.insertSeparator(1)
                 w.addItems(self.db.shutterSpeedList)
 
             if w == self.cboEndShutterSpeedRange:
-                w.addItem("**All**")
+                w.addItem("All")
+                w.insertSeparator(1)
                 w.addItems(self.db.shutterSpeedList)
-                
+
             if w == self.cboStartApertureRange:
-                w.addItem("**All**")
+                w.addItem("All")
+                w.insertSeparator(1)
                 w.addItems(self.db.apertureList)
 
             if w == self.cboEndApertureRange:
-                w.addItem("**All**")
+                w.addItem("All")
+                w.insertSeparator(1)
                 w.addItems(self.db.apertureList)
 
             if w == self.cboStartIsoRange:
-                w.addItem("**All**")
+                w.addItem("All")
+                w.insertSeparator(1)
                 w.addItems(self.db.isoList)
 
             if w == self.cboEndIsoRange:
-                w.addItem("**All**")
+                w.addItem("All")
+                w.insertSeparator(1)
                 w.addItems(self.db.isoList)
 
             if w == self.cboStartFocalLengthRange:
-                w.addItem("**All**")
+                w.addItem("All")
+                w.insertSeparator(1)
                 w.addItems(self.db.focalLengthList)
 
             if w == self.cboEndFocalLengthRange:
-                w.addItem("**All**")
+                w.addItem("All")
+                w.insertSeparator(1)
                 w.addItems(self.db.focalLengthList)
                 
             w.setCurrentIndex(0)
@@ -900,6 +1151,18 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         msg.exec()        
         
 
+    def notifyPhotoDeletion(self, filename):
+        for w in self.mdiArea.subWindowList():
+            if hasattr(w, 'handlePhotoDeletion'):
+                w.handlePhotoDeletion(filename)
+
+
+    def refreshOpenStats(self):
+        for w in self.mdiArea.subWindowList():
+            if isinstance(w, code_Stats.Stats):
+                w.FillStats(w.filter)
+
+
     def createPreferences(self):
         
 
@@ -919,29 +1182,42 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
 
     def createPhotosReport(self):
-        # if no data file is currently open, abort        
+        # if no data file is currently open, abort
         if MainWindow.db.eBirdFileOpenFlag is not True:
-            self.CreateMessageNoFile()   
+            self.CreateMessageNoFile()
             return
-        
-        
-        filter = self.GetFilter()
-        # create new Location Totals child window        
-        sub = code_Photos.Photos()
 
-        # save the MDI window as the parent for future use in the child        
-        sub.mdiParent = self        
-        
-        # add and position the child to our MDI area
+        filter = self.GetFilter()
+
+        # Pre-check before touching the MDI area — PositionChildWindow restores
+        # any maximized sibling, so adding then immediately removing a window
+        # causes a visible jerk. Bail out here instead.
+        if not MainWindow.db.GetSightingsWithPhotos(filter):
+            QMessageBox.information(
+                self,
+                "No Photos",
+                "No photos match the current filter.",
+                QMessageBox.StandardButton.Ok,
+            )
+            return
+
+        sub = code_Photos.Photos()
+        sub.mdiParent = self
+
         self.mdiArea.addSubWindow(sub)
         self.PositionChildWindow(sub,  self)
         sub.show()
 
         if sub.FillPhotos(filter) is False:
 
-            # abort if filter found no photos
+            # Fallback: filter passed sightings but no individual photos matched
             sub.close()
-            self.CreateMessageNoResults()
+            QMessageBox.information(
+                self,
+                "No Photos",
+                "No photos match the current filter.",
+                QMessageBox.StandardButton.Ok,
+            )
 
 
     def createSpeciesGallery(self):
@@ -1033,14 +1309,24 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
 
     def createEditPhotosByFilter(self):
-        
-        # if no data file is currently open, abort        
-        if MainWindow.db.eBirdFileOpenFlag is not True:
-            self.CreateMessageNoFile()   
-            return
-        
 
-        # create new Date Totals child window        
+        # if no data file is currently open, abort
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+
+        for w in self.mdiArea.subWindowList():
+            if isinstance(w, code_RenamePhotos.RenamePhotos):
+                QMessageBox.warning(
+                    self,
+                    "Close Rename Photos First",
+                    "Please close the Rename Photos window before editing photos.\n\n"
+                    "Having both windows open at the same time could cause conflicts.",
+                    QMessageBox.StandardButton.Ok,
+                )
+                return
+
+        # create new Date Totals child window
         sub = code_ManagePhotos.ManagePhotos()
 
         # save the MDI window as the parent for future use in the child        
@@ -1055,10 +1341,101 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             sub.show()            
         
         else:
-                    
+
             # abort since filter found no sightings for child
             self.CreateMessageNoResults()
             sub.close()
+
+
+    def createRenamePhotos(self):
+
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+
+        for w in self.mdiArea.subWindowList():
+            if isinstance(w, code_ManagePhotos.ManagePhotos):
+                QMessageBox.warning(
+                    self,
+                    "Close Manage Photos First",
+                    "Please close the Manage Photos window before renaming photos.\n\n"
+                    "Having both windows open at the same time could cause conflicts.",
+                    QMessageBox.StandardButton.Ok,
+                )
+                return
+
+        if MainWindow.db.photosNeedSaving:
+            reply = code_Stylesheet.question(
+                self,
+                "Unsaved Photo Changes",
+                "Your photo settings have unsaved changes.\n\n"
+                "Save them now before opening Rename Photos?",
+            )
+            if reply == QMessageBox.StandardButton.Yes:
+                self.checkIfPhotoDataNeedSaving()
+            else:
+                return
+
+        sightings = MainWindow.db.GetSightingsWithPhotos(self.GetFilter())
+
+        if not sightings:
+            self.CreateMessageNoResults()
+            return
+
+        sub = code_RenamePhotos.RenamePhotos()
+        sub.mdiParent = self
+
+        self.mdiArea.addSubWindow(sub)
+        self.PositionChildWindow(sub, self)
+        sub.show()
+        sub.scaleMe()
+        sub.resizeMe()
+
+        sub.FillRenamePhotos(sightings)
+
+
+    def optimizePhotoSettings(self):
+
+        if not MainWindow.db.photoDataFileOpenFlag:
+            QMessageBox.warning(
+                self,
+                "No Photo Settings File",
+                "Please open a photo settings file first.",
+                QMessageBox.StandardButton.Ok,
+            )
+            return
+
+        dlg = _OptimizePhotoSettingsDialog(self, MainWindow.db)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        missing = dlg.missing
+        from collections import defaultdict
+        by_sighting = defaultdict(list)
+        for m in missing:
+            by_sighting[m["sighting_idx"]].append(m["photo_idx"])
+
+        for sighting_idx, photo_indices in by_sighting.items():
+            sighting = MainWindow.db.sightingList[sighting_idx]
+            for idx in sorted(photo_indices, reverse=True):
+                sighting["photos"].pop(idx)
+            if not sighting["photos"]:
+                del sighting["photos"]
+
+        MainWindow.db.compactJsonlFile()
+
+        n = len(missing)
+        if n == 0:
+            msg = "The photo settings file has been compacted."
+        else:
+            msg = (f"Removed {n} missing photo {'entries' if n != 1 else 'entry'} "
+                   "and compacted the photo settings file.")
+        QMessageBox.information(
+            self,
+            "Optimize Complete",
+            msg,
+            QMessageBox.StandardButton.Ok,
+        )
 
 
 
@@ -1205,22 +1582,17 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
 
     def checkIfPhotoDataNeedSaving(self):
-        
-        # check to see if unsaved photo settings exist
+
         if self.db.photosNeedSaving is True:
-            
-            # ask if user wants to save photo settings
-            msg = QMessageBox()
-            msg.setIcon(QMessageBox.Icon.Information)
-            msg.setText("Some photo attachment settings have not been saved\n\nDo you want to save them?")
-            msg.setWindowTitle("Save Photo Settings?")
-            msg.setStandardButtons(QMessageBox.StandardButton.No | QMessageBox.StandardButton.Save)
-            buttonClicked = msg.exec()
-            
-            if buttonClicked == QMessageBox.StandardButton.Save:
-                
-                self.savePhotoSettings()
-                
+
+            if self.db.photoDataFile and self.db.photoDataFile.lower().endswith(".jsonl"):
+                # JSONL file already set — compact silently, no dialog needed
+                self.db.compactJsonlFile()
+
+            else:
+                # No JSONL file yet (first save or legacy CSV) — use the standard migration prompt
+                self._promptJsonlMigrationIfNeeded()
+
         return(True)
                 
                 
@@ -1237,6 +1609,20 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.dckFilter.setVisible(True)
             self.CreateSpeciesList()
             self.CreateStatsOnLoad()
+
+            # Offer to make the opened file's folder the default startup folder,
+            # but only if it differs from the folder already set in Preferences.
+            opened_dir = os.path.dirname(MainWindow.db.eBirdFilePath)
+            if opened_dir and os.path.realpath(opened_dir) != os.path.realpath(MainWindow.db.startupFolder):
+                reply = code_Stylesheet.question(
+                    self,
+                    "Set Default Folder",
+                    "Set this as your default eBird folder?\n\n"
+                    "On startup, Yearbirder will open the most recent eBird file it finds here.",
+                )
+                if reply == QMessageBox.StandardButton.Yes:
+                    MainWindow.db.setStartupFolder(opened_dir)
+                    MainWindow.db.writePreferences()
 
 
     def OpenDataFile(self, startupFolder=""):
@@ -1370,14 +1756,12 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             d0 = datetime.datetime.strptime(startDate, "%Y-%m-%d")
             d1 = datetime.datetime.strptime(endDate, "%Y-%m-%d")
             if (d1 - d0).days > 365:
-                reply = QMessageBox.question(
+                reply = code_Stylesheet.question(
                     self,
                     "Large Date Range",
                     f"The selected date range spans more than one year "
                     f"({startDate} to {endDate}).\n\n"
                     "Generating this report may take a long time. Proceed anyway?",
-                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                    QMessageBox.StandardButton.No
                 )
                 if reply != QMessageBox.StandardButton.Yes:
                     return
@@ -2010,6 +2394,42 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoResults()
             sub.close()
 
+    def CreatePhotoAccumulationChart(self):
+
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+
+        sub = code_Graphs.Graphs()
+        sub.mdiParent = self
+
+        if sub.FillGraph(self.GetFilter(), "photoaccumulation") is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+            QTimer.singleShot(0, sub.scaleMe)
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+
+    def CreateCumulativePhotosChart(self):
+
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+
+        sub = code_Graphs.Graphs()
+        sub.mdiParent = self
+
+        if sub.FillGraph(self.GetFilter(), "cumulativephotos") is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+            QTimer.singleShot(0, sub.scaleMe)
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+
     def CreateScatterChart(self):
 
         if MainWindow.db.eBirdFileOpenFlag is not True:
@@ -2039,8 +2459,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         f = self.GetFilter()
         if (f.getSpeciesName() == "" and f.getCommonNameSearch() == ""
                 and f.getFamily() == "" and f.getOrder() == ""):
-            from PySide6.QtWidgets import QMessageBox
-            reply = QMessageBox.question(
+            reply = code_Stylesheet.question(
                 self,
                 "No Species Filter",
                 "No species, family, or order filter is set.\n\n"
@@ -2048,9 +2467,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 "Generating it for your entire dataset may be too cluttered "
                 "to read clearly.\n\n"
                 "Generate it anyway?",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No)
-            if reply == QMessageBox.No:
+            )
+            if reply == QMessageBox.StandardButton.No:
                 return
 
 
@@ -2662,7 +3080,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
         if self.cboRegions.currentText() != None:
             
-            if self.cboRegions.currentText() != "**All Regions**":
+            if self.cboRegions.currentText() != "All Regions":
                 
                 # for region name, get the short code,which the db uses for searches
                 locationName = MainWindow.db.GetRegionCode(self.cboRegions.currentText())
@@ -2670,7 +3088,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 
         if self.cboCountries.currentText() != None:
             
-            if self.cboCountries.currentText() != "**All Countries**":
+            if self.cboCountries.currentText() != "All Countries":
                 
                 # for country name, get the short code,which the db uses for searches
                 locationName = MainWindow.db.GetCountryCode(self.cboCountries.currentText())
@@ -2678,7 +3096,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
        
         if self.cboStates.currentText() != None:
             
-            if self.cboStates.currentText() != "**All States**":
+            if self.cboStates.currentText() != "All States":
                 
                 # for state name, get the short code, which the db uses for searches
                 locationName = MainWindow.db.GetStateCode(self.cboStates.currentText())
@@ -2686,14 +3104,14 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
       
         if self.cboCounties.currentText() != None:
             
-            if self.cboCounties.currentText() != "**All Counties**":
+            if self.cboCounties.currentText() != "All Counties":
                 
                 locationName = self.cboCounties.currentText()
                 locationType = "County"
         
         if self.cboLocations.currentText() != None:
             
-            if self.cboLocations.currentText() != "**All Locations**":
+            if self.cboLocations.currentText() != "All Locations":
                 
                 locationName = self.cboLocations.currentText()
                 locationType = "Location"
@@ -2701,21 +3119,21 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         # check species combobox to learn species name
         if self.cboSpecies.currentText() != None:
             
-            if self.cboSpecies.currentText() != "**All Species**":
+            if self.cboSpecies.currentText() != "All Species":
                 
                 speciesName = self.cboSpecies.currentText()
 
         # check order combobox
         if self.cboOrders.currentText() != None:
             
-            if self.cboOrders.currentText() != "**All Orders**":
+            if self.cboOrders.currentText() != "All Orders":
                 
                 order = self.cboOrders.currentText()
 
         # check family combobox
         if self.cboFamilies.currentText() != None:
             
-            if self.cboFamilies.currentText() != "**All Families**":
+            if self.cboFamilies.currentText() != "All Families":
                 
                 family = self.cboFamilies.currentText()
 
@@ -2727,95 +3145,56 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
 
         # check sighting combobox
-        if self.cboStartRatingRange.currentText() != None:
-            
-            if "**" not in self.cboStartRatingRange.currentText():
-                
-                startRating = self.cboStartRatingRange.currentText()
-                
-        # check sighting combobox
-        if self.cboEndRatingRange.currentText() != None:
-            
-            if "**" not in self.cboEndRatingRange.currentText():
-                
-                endRating = self.cboEndRatingRange.currentText()                
+        if self.cboStartRatingRange.currentIndex() != 0:
+            startRating = self.cboStartRatingRange.currentText()
 
         # check sighting combobox
-        if self.cboSpeciesHasPhoto.currentText() != None:
-            
-            if "**" not in self.cboSpeciesHasPhoto.currentText():
-                
-                speciesHasPhoto = self.cboSpeciesHasPhoto.currentText()
+        if self.cboEndRatingRange.currentIndex() != 0:
+            endRating = self.cboEndRatingRange.currentText()
+
+        # check sighting combobox
+        if self.cboSpeciesHasPhoto.currentIndex() != 0:
+            speciesHasPhoto = self.cboSpeciesHasPhoto.currentText()
 
         # check camera combobox
-        if self.cboCamera.currentText() != None:
-            
-            if "**" not in self.cboCamera.currentText():
-                
-                camera = self.cboCamera.currentText()
+        if self.cboCamera.currentIndex() != 0:
+            camera = self.cboCamera.currentText()
 
         # check lens combobox
-        if self.cboLens.currentText() != None:
-            
-            if "**" not in self.cboLens.currentText():
-                
-                lens = self.cboLens.currentText()
+        if self.cboLens.currentIndex() != 0:
+            lens = self.cboLens.currentText()
 
         # check start shutter speed combobox
-        if self.cboStartShutterSpeedRange.currentText() != None:
-            
-            if "**" not in self.cboStartShutterSpeedRange.currentText():
-                
-                startShutterSpeed = self.cboStartShutterSpeedRange.currentText()
-                
+        if self.cboStartShutterSpeedRange.currentIndex() != 0:
+            startShutterSpeed = self.cboStartShutterSpeedRange.currentText()
+
         # check end shutter speed combobox
-        if self.cboEndShutterSpeedRange.currentText() != None:
-            
-            if "**" not in self.cboEndShutterSpeedRange.currentText():
-                
-                endShutterSpeed = self.cboEndShutterSpeedRange.currentText()
+        if self.cboEndShutterSpeedRange.currentIndex() != 0:
+            endShutterSpeed = self.cboEndShutterSpeedRange.currentText()
 
         # check end aperture combobox
-        if self.cboEndApertureRange.currentText() != None:
-            
-            if "**" not in self.cboEndApertureRange.currentText():
-                
-                endAperture = self.cboEndApertureRange.currentText()
+        if self.cboEndApertureRange.currentIndex() != 0:
+            endAperture = self.cboEndApertureRange.currentText()
 
         # check start aperture combobox
-        if self.cboStartApertureRange.currentText() != None:
-            
-            if "**" not in self.cboStartApertureRange.currentText():
-                
-                startAperture = self.cboStartApertureRange.currentText()
+        if self.cboStartApertureRange.currentIndex() != 0:
+            startAperture = self.cboStartApertureRange.currentText()
 
         # check end Iso combobox
-        if self.cboEndIsoRange.currentText() != None:
-            
-            if "**" not in self.cboEndIsoRange.currentText():
-                
-                endIso = self.cboEndIsoRange.currentText()
+        if self.cboEndIsoRange.currentIndex() != 0:
+            endIso = self.cboEndIsoRange.currentText()
 
         # check start Iso combobox
-        if self.cboStartIsoRange.currentText() != None:
-            
-            if "**" not in self.cboStartIsoRange.currentText():
-                
-                startIso = self.cboStartIsoRange.currentText()
-                
+        if self.cboStartIsoRange.currentIndex() != 0:
+            startIso = self.cboStartIsoRange.currentText()
+
         # check end FocalLength combobox
-        if self.cboEndFocalLengthRange.currentText() != None:
-            
-            if "**" not in self.cboEndFocalLengthRange.currentText():
-                
-                endFocalLength = self.cboEndFocalLengthRange.currentText()
+        if self.cboEndFocalLengthRange.currentIndex() != 0:
+            endFocalLength = self.cboEndFocalLengthRange.currentText()
 
         # check start FocalLength combobox
-        if self.cboStartFocalLengthRange.currentText() != None:
-            
-            if "**" not in self.cboStartFocalLengthRange.currentText():
-                
-                startFocalLength = self.cboStartFocalLengthRange.currentText()                
+        if self.cboStartFocalLengthRange.currentIndex() != 0:
+            startFocalLength = self.cboStartFocalLengthRange.currentText()                
 
 
                                 
@@ -2895,18 +3274,18 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 pCount += 1
         
         # clear and repopulate photo filter cbo boxes with updated data
-        self.fillPhotoComboBoxes()                 
+        self.fillPhotoComboBoxes()
 
-        msgText = "Yearbirder updated EXIF data for all attached photos.\n\nRemember to save your photo data file to make these updates permanent."
-        msg = QMessageBox()
-        msg.setIcon(QMessageBox.Icon.Information)
-        msg.setText(msgText)
-        msg.setWindowTitle("Updated EXIF Data")
-        msg.setStandardButtons(QMessageBox.StandardButton.Ok)
-        msg.exec()         
-        
-        # set flag indicating that some photo data isn't yet saved to file
+        # Persist to JSONL: compact rewrites all in-memory photo data.
+        # If no JSONL file is open, checkIfPhotoDataNeedSaving prompts the user to create one.
         self.db.photosNeedSaving = True
+        self.checkIfPhotoDataNeedSaving()
+
+        QMessageBox.information(
+            self, "Updated EXIF Data",
+            "EXIF data updated for all attached photos.",
+            QMessageBox.StandardButton.Ok,
+        )
         
         
     def SeasonalRangeClicked(self):
@@ -3116,41 +3495,46 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
     def FillMainComboBoxes(self):
         
         # use the master lists in db to populate the 4 location comboboxes
-        # for each, first add the "**All...**" item. 
-        # It's starred to appear at the top of the sorted comboboxes
         self.fillingLocationComboBoxesFlag = True
 
         self.cboRegions.clear()
-        self.cboRegions.addItem("**All Regions**")
-        self.cboRegions.addItems(MainWindow.db.regionList)        
-                
+        self.cboRegions.addItem("All Regions")
+        self.cboRegions.insertSeparator(1)
+        self.cboRegions.addItems(MainWindow.db.regionList)
+
         self.cboCountries.clear()
-        self.cboCountries.addItem("**All Countries**")
-        self.cboCountries.addItems(MainWindow.db.countryList)        
-        
+        self.cboCountries.addItem("All Countries")
+        self.cboCountries.insertSeparator(1)
+        self.cboCountries.addItems(MainWindow.db.countryList)
+
         self.cboStates.clear()
-        self.cboStates.addItem("**All States**")
-        self.cboStates.addItems(MainWindow.db.stateList)        
-        
+        self.cboStates.addItem("All States")
+        self.cboStates.insertSeparator(1)
+        self.cboStates.addItems(MainWindow.db.stateList)
+
         self.cboCounties.clear()
-        self.cboCounties.addItem("**All Counties**")
+        self.cboCounties.addItem("All Counties")
+        self.cboCounties.insertSeparator(1)
         self.cboCounties.addItems(MainWindow.db.countyList)
-        
+
         self.cboLocations.clear()
-        self.cboLocations.addItem("**All Locations**")
+        self.cboLocations.addItem("All Locations")
+        self.cboLocations.insertSeparator(1)
         self.cboLocations.addItems(MainWindow.db.locationList)
-        
+
         self.cboSpecies.clear()
-        self.cboSpecies.addItem("**All Species**")
-        self.cboSpecies.addItems(MainWindow.db.speciesDict.keys())  
-        self.cboSpecies.model().sort(0)
-        
+        self.cboSpecies.addItem("All Species")
+        self.cboSpecies.insertSeparator(1)
+        self.cboSpecies.addItems(sorted(MainWindow.db.speciesDict.keys()))
+
         self.cboFamilies.clear()
-        self.cboFamilies.addItem("**All Families**")
+        self.cboFamilies.addItem("All Families")
+        self.cboFamilies.insertSeparator(1)
         self.cboFamilies.addItems(MainWindow.db.familyList)
 
         self.cboOrders.clear()
-        self.cboOrders.addItem("**All Orders**")
+        self.cboOrders.addItem("All Orders")
+        self.cboOrders.insertSeparator(1)
         self.cboOrders.addItems(MainWindow.db.orderList)
 
         self.cboYear.clear()
@@ -3237,12 +3621,16 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             
             # if "all regions" is chosen, fill subsidiary cbos with all locations
             # e.g., remove the country filter, if one had existed for the cbos
-            if thisRegionName == "**All Regions**":
-                self.cboRegions.setStyleSheet("");                
-                self.cboCountries.addItem("**All Countries**")
-                self.cboStates.addItem("**All States**")
-                self.cboCounties.addItem("**All Counties**")
-                self.cboLocations.addItem("**All Locations**")
+            if thisRegionName == "All Regions":
+                self.cboRegions.setStyleSheet("");
+                self.cboCountries.addItem("All Countries")
+                self.cboCountries.insertSeparator(1)
+                self.cboStates.addItem("All States")
+                self.cboStates.insertSeparator(1)
+                self.cboCounties.addItem("All Counties")
+                self.cboCounties.insertSeparator(1)
+                self.cboLocations.addItem("All Locations")
+                self.cboLocations.insertSeparator(1)
                 self.cboCountries.addItems(MainWindow.db.countryList)
                 self.cboStates.addItems(MainWindow.db.stateList)
                 self.cboCounties.addItems(MainWindow.db.countyList)
@@ -3287,13 +3675,17 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 thisRegionLocations.sort()
                 
                 # add filtered locations to comboboxes
-                self.cboCountries.addItem("**All Countries**")
+                self.cboCountries.addItem("All Countries")
+                self.cboCountries.insertSeparator(1)
                 self.cboCountries.addItems(thisRegionCountries)
-                self.cboStates.addItem("**All States**")
+                self.cboStates.addItem("All States")
+                self.cboStates.insertSeparator(1)
                 self.cboStates.addItems(thisRegionStates)
-                self.cboCounties.addItem("**All Counties**")
+                self.cboCounties.addItem("All Counties")
+                self.cboCounties.insertSeparator(1)
                 self.cboCounties.addItems(thisRegionCounties)
-                self.cboLocations.addItem("**All Locations**")
+                self.cboLocations.addItem("All Locations")
+                self.cboLocations.insertSeparator(1)
                 self.cboLocations.addItems(thisRegionLocations)
             
             # we're done, so reset flag to false to allow future triggers
@@ -3327,11 +3719,14 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             
             # if "all countries" is chosen, fill subsidiary cbos with all locations
             # e.g., remove the country filter, if one had existed for the cbos
-            if thisCountry == "**All Countries**":
-                self.cboCountries.setStyleSheet("");                
-                self.cboStates.addItem("**All States**")
-                self.cboCounties.addItem("**All Counties**")
-                self.cboLocations.addItem("**All Locations**")
+            if thisCountry == "All Countries":
+                self.cboCountries.setStyleSheet("");
+                self.cboStates.addItem("All States")
+                self.cboStates.insertSeparator(1)
+                self.cboCounties.addItem("All Counties")
+                self.cboCounties.insertSeparator(1)
+                self.cboLocations.addItem("All Locations")
+                self.cboLocations.insertSeparator(1)
                 self.cboStates.addItems(MainWindow.db.stateList)
                 self.cboCounties.addItems(MainWindow.db.countyList)
                 self.cboLocations.addItems(MainWindow.db.locationList)
@@ -3369,11 +3764,14 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 thisCountryLocations.sort()
                 
                 # add filtered locations to comboboxes
-                self.cboStates.addItem("**All States**")
+                self.cboStates.addItem("All States")
+                self.cboStates.insertSeparator(1)
                 self.cboStates.addItems(thisCountryStates)
-                self.cboCounties.addItem("**All Counties**")
+                self.cboCounties.addItem("All Counties")
+                self.cboCounties.insertSeparator(1)
                 self.cboCounties.addItems(thisCountryCounties)
-                self.cboLocations.addItem("**All Locations**")
+                self.cboLocations.addItem("All Locations")
+                self.cboLocations.insertSeparator(1)
                 self.cboLocations.addItems(thisCountryLocations)
             
             # we're done, so reset flag to false to allow future triggers
@@ -3460,20 +3858,21 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.cboSpecies.setStyleSheet("")
             self.cboSpecies.clear()
             
-            if thisFamily == "**All Families**":
-                self.cboFamilies.setStyleSheet("");                
-                self.cboSpecies.addItem("**All Species**")
-                if self.cboOrders.currentText() == "**All Orders**":
-                    speciesList = MainWindow.db.speciesDict.keys()
-                    speciesList = list(speciesList)
+            if thisFamily == "All Families":
+                self.cboFamilies.setStyleSheet("");
+                self.cboSpecies.addItem("All Species")
+                self.cboSpecies.insertSeparator(1)
+                if self.cboOrders.currentText() == "All Orders":
+                    speciesList = list(MainWindow.db.speciesDict.keys())
                 else:
                     speciesList = MainWindow.db.orderSpeciesDict[self.cboOrders.currentText()]
-                speciesList.sort()                
+                speciesList.sort()
                 self.cboSpecies.addItems(speciesList)
-                
+
             else:
                 self.highlightFilterElement(self.cboFamilies)
-                self.cboSpecies.addItem("**All Species**")
+                self.cboSpecies.addItem("All Species")
+                self.cboSpecies.insertSeparator(1)
                 self.cboSpecies.addItems(MainWindow.db.familySpeciesDict[thisFamily])                
             
             self.fillingLocationComboBoxesFlag = False
@@ -3485,7 +3884,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             
             thisLocation = self.cboLocations.currentText()
             
-            if thisLocation == "**All Locations**":
+            if thisLocation == "All Locations":
                 self.unhighlightFilterElement(self.cboLocations)                
             else:
                 self.highlightFilterElement(self.cboLocations)
@@ -3506,16 +3905,16 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.cboFamilies.clear()
             self.cboSpecies.clear()
             
-            if thisOrder == "**All Orders**":
-                self.cboOrders.setStyleSheet("");                
-                self.cboFamilies.addItem("**All Families**")
+            if thisOrder == "All Orders":
+                self.cboOrders.setStyleSheet("");
+                self.cboFamilies.addItem("All Families")
+                self.cboFamilies.insertSeparator(1)
                 self.cboFamilies.addItems(MainWindow.db.familyList)
-                self.cboSpecies.addItem("**All Species**")
-                speciesList = MainWindow.db.speciesDict.keys()
-                speciesList = list(speciesList)
-                speciesList.sort()
+                self.cboSpecies.addItem("All Species")
+                self.cboSpecies.insertSeparator(1)
+                speciesList = sorted(MainWindow.db.speciesDict.keys())
                 self.cboSpecies.addItems(speciesList)
-                
+
             else:
                 thisFamilies = []
                 self.highlightFilterElement(self.cboOrders)
@@ -3523,9 +3922,11 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                     if l[1] == thisOrder:
                         if l[0] not in thisFamilies:
                             thisFamilies.append(l[0])
-                self.cboFamilies.addItem("**All Families**")
+                self.cboFamilies.addItem("All Families")
+                self.cboFamilies.insertSeparator(1)
                 self.cboFamilies.addItems(thisFamilies)
-                self.cboSpecies.addItem("**All Species**")
+                self.cboSpecies.addItem("All Species")
+                self.cboSpecies.insertSeparator(1)
                 self.cboSpecies.addItems(MainWindow.db.orderSpeciesDict[thisOrder]) 
                                
             self.fillingLocationComboBoxesFlag = False
@@ -3621,7 +4022,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             
             thisSpecies = self.cboSpecies.currentText()
             
-            if thisSpecies == "**All Species**":
+            if thisSpecies == "All Species":
                 self.unhighlightFilterElement(self.cboSpecies)                
             else:
                 self.highlightFilterElement(self.cboSpecies)
@@ -3638,30 +4039,31 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             thisState = MainWindow.db.GetStateCode(self.cboStates.currentText())
             self.cboCounties.clear()
             self.cboLocations.clear()
-            if thisState == "**All States**":
+            if thisState == "All States":
                 self.unhighlightFilterElement(self.cboStates)
-                self.cboCounties.addItem("**All Counties**")
-                self.cboLocations.addItem("**All Locations**")
+                self.cboCounties.addItem("All Counties")
+                self.cboCounties.insertSeparator(1)
+                self.cboLocations.addItem("All Locations")
+                self.cboLocations.insertSeparator(1)
                 self.cboCounties.addItems(MainWindow.db.countyList)
                 self.cboLocations.addItems(MainWindow.db.locationList)
             else:
-                self.highlightFilterElement(self.cboStates)                
+                self.highlightFilterElement(self.cboStates)
                 thisStateCounties = set()
                 thisStateLocations = set()
                 for l in MainWindow.db.masterLocationList:
                     if l["stateCode"] == thisState:
                         if l["county"] != "": thisStateCounties.add(l["county"])
                         if l["location"] != "": thisStateLocations.add(l["location"])
-                
-                thisStateCounties = list(thisStateCounties)
-                thisStateLocations = list(thisStateLocations)
-                
-                thisStateCounties.sort()
-                thisStateLocations.sort()
-                
-                self.cboCounties.addItem("**All Counties**")
+
+                thisStateCounties = sorted(thisStateCounties)
+                thisStateLocations = sorted(thisStateLocations)
+
+                self.cboCounties.addItem("All Counties")
+                self.cboCounties.insertSeparator(1)
                 self.cboCounties.addItems(thisStateCounties)
-                self.cboLocations.addItem("**All Locations**")
+                self.cboLocations.addItem("All Locations")
+                self.cboLocations.insertSeparator(1)
                 self.cboLocations.addItems(thisStateLocations)  
             self.fillingLocationComboBoxesFlag = False
            
@@ -3675,9 +4077,10 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.cboLocations.setStyleSheet("");          
             
             self.cboLocations.clear()
-            if thisCounty == "**All Counties**":
-                self.unhighlightFilterElement(self.cboCounties)     
-                self.cboLocations.addItem("**All Locations**")
+            if thisCounty == "All Counties":
+                self.unhighlightFilterElement(self.cboCounties)
+                self.cboLocations.addItem("All Locations")
+                self.cboLocations.insertSeparator(1)
                 self.cboLocations.addItems(MainWindow.db.locationList)
             else:
                 self.highlightFilterElement(self.cboCounties)
@@ -3685,9 +4088,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 for l in MainWindow.db.masterLocationList:
                     if l["county"] == thisCounty:
                         if l["location"] != "": thisCountyLocations.add(l["location"])
-                thisCountyLocations = list(thisCountyLocations)
-                thisCountyLocations.sort()
-                self.cboLocations.addItem("**All Locations**")
+                thisCountyLocations = sorted(thisCountyLocations)
+                self.cboLocations.addItem("All Locations")
+                self.cboLocations.insertSeparator(1)
                 self.cboLocations.addItems(thisCountyLocations)
             self.fillingLocationComboBoxesFlag = False
 
@@ -3701,11 +4104,11 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             
             if startRating > endRating:
                 if endRating == 0:
-                    self.cboEndRatingRange.setCurrentIndex(6)
+                    self.cboEndRatingRange.setCurrentIndex(7)
                 else:
                     self.cboEndRatingRange.setCurrentIndex(startRating)
             
-            if thisSighting == "**All**":
+            if thisSighting == "All":
                 self.unhighlightFilterElement(self.cboStartRatingRange)
             else:
                 self.highlightPhotoFilterElement(self.cboStartRatingRange)
@@ -3721,7 +4124,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             if startRating > endRating:
                 self.cboStartRatingRange.setCurrentIndex(endRating)            
             
-            if thisSighting == "**All**":
+            if thisSighting == "All":
                 self.unhighlightFilterElement(self.cboEndRatingRange)
             else:
                 self.highlightPhotoFilterElement(self.cboEndRatingRange)
@@ -3731,7 +4134,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             
             thisSpecies = self.cboSpeciesHasPhoto.currentText()
             
-            if thisSpecies == "**All**":
+            if thisSpecies == "All":
                 self.unhighlightFilterElement(self.cboSpeciesHasPhoto)
             else:
                 self.highlightPhotoFilterElement(self.cboSpeciesHasPhoto)
@@ -3741,7 +4144,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             
             thisCamera = self.cboCamera.currentText()
             
-            if thisCamera == "**All Cameras**":
+            if thisCamera == "All Cameras":
                 self.unhighlightFilterElement(self.cboCamera)
             else:
                 self.highlightPhotoFilterElement(self.cboCamera)
@@ -3751,7 +4154,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             
             thisLens = self.cboLens.currentText()
             
-            if thisLens== "**All Lenses**":
+            if thisLens== "All Lenses":
                 self.unhighlightFilterElement(self.cboLens)
             else:
                 self.highlightPhotoFilterElement(self.cboLens)
@@ -3761,7 +4164,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             
             thisShutterSpeed = self.cboStartShutterSpeedRange.currentText()
             
-            if thisShutterSpeed == "**All**":
+            if thisShutterSpeed == "All":
                 self.unhighlightFilterElement(self.cboStartShutterSpeedRange)
             else:
                 self.highlightPhotoFilterElement(self.cboStartShutterSpeedRange)
@@ -3771,7 +4174,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             
             thisShutterSpeed = self.cboEndShutterSpeedRange.currentText()
             
-            if thisShutterSpeed == "**All**":
+            if thisShutterSpeed == "All":
                 self.unhighlightFilterElement(self.cboEndShutterSpeedRange)
             else:
                 self.highlightPhotoFilterElement(self.cboEndShutterSpeedRange)
@@ -3781,7 +4184,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             
             thisAperture = self.cboStartApertureRange.currentText()
             
-            if thisAperture == "**All**":
+            if thisAperture == "All":
                 self.unhighlightFilterElement(self.cboStartApertureRange)
             else:
                 self.highlightPhotoFilterElement(self.cboStartApertureRange)
@@ -3791,7 +4194,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             
             thisAperture = self.cboEndApertureRange.currentText()
             
-            if thisAperture == "**All**":
+            if thisAperture == "All":
                 self.unhighlightFilterElement(self.cboEndApertureRange)
             else:
                 self.highlightPhotoFilterElement(self.cboEndApertureRange)
@@ -3801,7 +4204,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             
             thisFocalLength = self.cboStartFocalLengthRange.currentText()
             
-            if thisFocalLength == "**All**":
+            if thisFocalLength == "All":
                 self.unhighlightFilterElement(self.cboStartFocalLengthRange)
             else:
                 self.highlightPhotoFilterElement(self.cboStartFocalLengthRange)
@@ -3811,7 +4214,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             
             thisFocalLength = self.cboEndFocalLengthRange.currentText()
             
-            if thisFocalLength == "**All**":
+            if thisFocalLength == "All":
                 self.unhighlightFilterElement(self.cboEndFocalLengthRange)
             else:
                 self.highlightPhotoFilterElement(self.cboEndFocalLengthRange)
@@ -3821,7 +4224,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             
             thisIso = self.cboStartIsoRange.currentText()
             
-            if thisIso == "**All**":
+            if thisIso == "All":
                 self.unhighlightFilterElement(self.cboStartIsoRange)
             else:
                 self.highlightPhotoFilterElement(self.cboStartIsoRange)
@@ -3831,7 +4234,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             
             thisIso = self.cboEndIsoRange.currentText()
             
-            if thisIso == "**All**":
+            if thisIso == "All":
                 self.unhighlightFilterElement(self.cboEndIsoRange)
             else:
                 self.highlightPhotoFilterElement(self.cboEndIsoRange)

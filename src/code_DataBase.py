@@ -24,8 +24,42 @@ from PySide6.QtWidgets import (
 _MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                 "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
-# Translation table used by matchPhoto (Pass 3 substring match) — built once at module load
-_PHOTO_TRANSLATION_TABLE = dict.fromkeys(map(ord, "0123456789-' "), None)
+def _checklist_distance(c, photo_minutes):
+    """Return minutes between photo_minutes and the nearest edge of checklist c.
+
+    Returns 0 if the photo was taken during the checklist (i.e. within the
+    window [start, start+duration]).  c is a GetChecklists() row where
+    c[5] = start time "HH:MM" and c[7] = duration (str, int, or empty/None).
+    """
+    start = 60 * int(c[5][0:2]) + int(c[5][3:5])
+    dur   = int(c[7]) if c[7] else 0
+    end   = start + dur
+    if start <= photo_minutes <= end:
+        return 0
+    return min(abs(photo_minutes - start), abs(photo_minutes - end))
+
+
+def _longest_substr_in(needle, haystack, min_len=4):
+    """Return the length of the longest substring of needle found in haystack.
+
+    For each start position i, tries the longest possible remaining substring
+    first and breaks as soon as a match is found — O(n²) in the worst case but
+    fast in practice because species names are short and early exits are common.
+    Returns 0 when no substring of length >= min_len exists in haystack.
+    """
+    n = len(needle)
+    best = 0
+    for i in range(n):
+        if n - i <= best:       # remaining tail can't beat current best
+            break
+        for j in range(n, i + min_len - 1, -1):
+            length = j - i
+            if length <= best:  # this slice can't improve score; move to next i
+                break
+            if needle[i:j] in haystack:
+                best = length
+                break           # found longest match starting at i
+    return best
 
 
 #routine to open helper files (json, csv, etc.) in fashion compatible with PyInstaller for when code is bundled into an app.
@@ -33,6 +67,15 @@ def resource_path(filename):
     if hasattr(sys, "_MEIPASS"):
         return os.path.join(sys._MEIPASS, filename)
     return filename
+
+
+def _safe_rating(val, default=0):
+    """Return val as an int in 0-5, or default if val is missing/invalid."""
+    try:
+        r = int(val)
+        return r if 0 <= r <= 5 else default
+    except (TypeError, ValueError):
+        return default
 
     
 class DataBase():
@@ -59,6 +102,7 @@ class DataBase():
         self.isoList = []
         self.sightingList = []
         self.eBirdFileOpenFlag = False
+        self.eBirdFilePath = ""
         self.photoDataFileOpenFlag = False
         self.photosNeedSaving = False
         self.countryStateCodeFileFound = False
@@ -76,9 +120,12 @@ class DataBase():
         self.familySpeciesDict = {}
         self.orderSpeciesDict = {}
         self.bblCodeDict = {}
+        self.eBirdCodeDict = {}  # sciName -> eBird species code, populated by ReadTaxonomyDataFile
         self._regionCache = {}
         self._seenLocations = set()
         self.photoDataFile = ""
+        self.jsonlSkippedLines = 0
+        self.csvSkippedRows = 0
         self.startupFolder = ""
         self._countryLookup = {}   # shortCode -> longName, built by ReadCountryStateCodeFile
         self._stateLookup = {}     # shortCode -> longName, built by ReadCountryStateCodeFile
@@ -157,11 +204,11 @@ class DataBase():
         gbCountiesJsonFile = resource_path("gb-counties.json")
         
         # load us-states json shape file for later use with choropleths
-        with open(stateJsonFile) as f:
+        with open(stateJsonFile, encoding='utf-8') as f:
             self.state_geo = json.loads(f.read())
 
         # load us-counties-lower48 json shape file for later use with choropleths
-        with open(countyJsonFile) as f:
+        with open(countyJsonFile, encoding='utf-8') as f:
             self.county_geo = json.loads(f.read())
         
         # save county code data for easy lookup when processing eBird data file
@@ -183,19 +230,19 @@ class DataBase():
             self._countyFipsLookup[(name, state_abbr)] = fips
         
         # load world-countries json shape file for later use with choropleths
-        with open(countryJsonFile) as f:
+        with open(countryJsonFile, encoding='utf-8') as f:
             self.country_geo = json.loads(f.read())
 
         # load ca-provinces json shape file for later use with choropleths
-        with open(caProvJsonFile) as f:
+        with open(caProvJsonFile, encoding='utf-8') as f:
             self.ca_province_geo = json.loads(f.read())
 
         # load in-states json shape file for later use with choropleths
-        with open(inStatesJsonFile) as f:
+        with open(inStatesJsonFile, encoding='utf-8') as f:
             self.in_state_geo = json.loads(f.read())
 
         # load gb-counties json shape file for later use with choropleths
-        with open(gbCountiesJsonFile) as f:
+        with open(gbCountiesJsonFile, encoding='utf-8') as f:
             self.gb_county_geo = json.loads(f.read())
         
 
@@ -266,48 +313,31 @@ class DataBase():
 
             if len(locations) == 1:
                 photoLocation = locations[0]
-                possibleStartTimes = self.GetStartTimes(filter)
-                if len(possibleStartTimes) > 0:
-                    if photoTime != "":
-                        # pick the start time closest to the photo's EXIF time
+                if photoTime != "":
+                    # Pick the checklist whose window [start, start+duration] is closest
+                    # to the photo time; distance = 0 when the photo falls inside the window.
+                    checklists = self.GetChecklists(filter)
+                    if checklists:
                         photoMinutes = 60 * int(photoTime[0:2]) + int(photoTime[3:5])
-                        photoTime = min(possibleStartTimes, key=lambda t: abs(60 * int(t[0:2]) + int(t[3:5]) - photoMinutes))
-                    else:
+                        photoTime = min(checklists,
+                                        key=lambda c: _checklist_distance(c, photoMinutes))[5]
+                else:
+                    possibleStartTimes = self.GetStartTimes(filter)
+                    if possibleStartTimes:
                         photoTime = possibleStartTimes[0]
             
-            # if more than one location was found, find which was visited closest to the photo time 
-            elif len(locations) > 1 and photoTime != "":                
+            # if more than one location was found, find which was visited closest to the photo time
+            elif len(locations) > 1 and photoTime != "":
                 filter = code_Filter.Filter()
                 filter.setStartDate(photoDate)
                 filter.setEndDate(photoDate)
                 checklists = self.GetChecklists(filter)
-                # create list to store location and checklist time for closest one to our photo's datetime
-                # third list entry starts with total minutes in a day (most gap possible)
-                checklistTimeDifference = ["", "", 24 * 60]
-                photoMinutesSinceMidnight = 60 * int(photoTime[0:2]) + int(photoTime[3:5])
-                
-                for c in checklists:
-                    
-                    checklistTime = c[5]
-                    
-                    checklistDuration = c[7]
-                    if checklistDuration == "":
-                        checklistDuration = "0"
-                    
-                    checklistStartMinSinceMidnight = 60 * int(checklistTime[0:2]) + int(checklistTime[3:5])
-                    checklistEndMinSinceMidnight = checklistStartMinSinceMidnight + int(checklistDuration)
-                    
-                    # check if this checklist's time is closer to our photo's time than any other checklist looped through so far
-                    # If so, save its data into checklistTimeDifference
-                    if abs(photoMinutesSinceMidnight - checklistStartMinSinceMidnight) < checklistTimeDifference[2]:
-                        checklistTimeDifference = [c[3], c[5], abs(photoMinutesSinceMidnight - checklistStartMinSinceMidnight)]
-                    
-                    if abs(photoMinutesSinceMidnight - checklistEndMinSinceMidnight) < checklistTimeDifference[2]:
-                        checklistTimeDifference = [c[3], c[5], abs(photoMinutesSinceMidnight - checklistEndMinSinceMidnight)]                    
-                        
-                if checklistTimeDifference[0] != "":
-                    photoLocation = checklistTimeDifference[0]
-                    photoTime = checklistTimeDifference[1]
+                if checklists:
+                    photoMinutesSinceMidnight = 60 * int(photoTime[0:2]) + int(photoTime[3:5])
+                    best = min(checklists,
+                               key=lambda c: _checklist_distance(c, photoMinutesSinceMidnight))
+                    photoLocation = best[3]
+                    photoTime     = best[5]
                     
                         
         # try to use file name to match commonName using date, time, and location found already
@@ -321,74 +351,48 @@ class DataBase():
             possibleCommonNames = self.GetSpecies(filter)
 
             fileNameLower = os.path.splitext(str(fileName))[0].lower()
+            # Alpha-only string for common/scientific name substring matching.
+            filename_alpha = re.sub(r'[^a-z]', '', fileNameLower)
+            # Alphanumeric string for eBird/BBL code matching (codes can contain digits).
+            filename_alnum = re.sub(r'[^a-z0-9]', '', fileNameLower)
 
-            # Split filename into a set of alpha tokens (min 2 chars) for whole-word matching.
-            # e.g. "great_blue_heron_20230501.jpg" -> {"great", "blue", "heron"}
-            fileNameTokens = set(t for t in re.split(r'[^a-z]+', fileNameLower) if len(t) >= 2)
-
+            # Score each candidate species against the filename.  For each species
+            # we check four name forms and keep the longest match found across all:
+            #   • eBird species code  (e.g. "gretit1") — exact substring in alnum filename
+            #   • BBL banding code    (e.g. "grti")    — exact substring in alnum filename
+            #   • Common name (alpha) (e.g. "greattit") — longest substr in alpha filename
+            #   • Scientific name (alpha)               — longest substr in alpha filename
+            # The species with the highest score (longest match, min 4 chars) wins.
             photoCommonName = ""
+            best_score = 0
 
-            # --- Pass 1: BBL 4-letter alpha code ---
-            # e.g. "yrwa.jpg" -> token "yrwa" matches Yellow-rumped Warbler's BBL code.
-            # A code match is treated as definitive; the first match found wins.
             for pcn in possibleCommonNames:
-                bblCode = self.GetBBLCode(pcn).lower()
-                if bblCode and bblCode in fileNameTokens:
+                score = 0
+
+                ebird = self.GeteBirdCode(pcn).lower()
+                if ebird and ebird in filename_alnum:
+                    score = max(score, len(ebird))
+
+                bbl = self.GetBBLCode(pcn).lower()
+                if bbl and bbl in filename_alnum:
+                    score = max(score, len(bbl))
+
+                common_clean = re.sub(r'[^a-z]', '', pcn.lower())
+                if common_clean:
+                    score = max(score, _longest_substr_in(common_clean, filename_alpha))
+
+                sci = self.GetScientificName(pcn)
+                if sci:
+                    sci_clean = re.sub(r'[^a-z]', '', sci.lower())
+                    if sci_clean:
+                        score = max(score, _longest_substr_in(sci_clean, filename_alpha))
+
+                if score > best_score:
+                    best_score = score
                     photoCommonName = pcn
-                    break
 
-            # --- Pass 2: word-token intersection ---
-            if not photoCommonName:
-                bestRatio = 0.0
-                bestMatchCount = 0
-                for pcn in possibleCommonNames:
-                    speciesTokens = [t for t in re.split(r'[^a-z]+', pcn.lower()) if len(t) >= 2]
-                    if not speciesTokens:
-                        continue
-                    matchedCount = sum(1 for t in speciesTokens if t in fileNameTokens)
-                    ratio = matchedCount / len(speciesTokens)
-                    # prefer higher ratio; break ties by absolute number of matched tokens
-                    if ratio > bestRatio or (ratio == bestRatio and matchedCount > bestMatchCount):
-                        bestRatio = ratio
-                        bestMatchCount = matchedCount
-                        photoCommonName = pcn
-                if bestRatio == 0.0:
-                    photoCommonName = ""
-
-            # --- Pass 3: proportional substring match (used when passes 1 and 2 both fail) ---
-            # Score = longest_match_length / species_name_length; minimum match length = 4.
-            # If a substring starting at position i isn't found, no longer substring from
-            # that position can be either, so the inner loop breaks early.
-            if not photoCommonName:
-                fileNameClean = fileNameLower.translate(_PHOTO_TRANSLATION_TABLE)
-                bestSubstringRatio = 0.0
+            if best_score < 4:
                 photoCommonName = ""
-
-                for pcn in possibleCommonNames:
-                    lowerCasePcn = pcn.lower().translate(_PHOTO_TRANSLATION_TABLE)
-                    pcnLength = len(lowerCasePcn)
-                    if pcnLength == 0:
-                        continue
-                    bestMatchLen = 0
-                    fullMatchFound = False
-                    for i in range(pcnLength):
-                        if fullMatchFound:
-                            break
-                        for ii in range(i + 1, pcnLength + 1):
-                            substring = lowerCasePcn[i:ii]
-                            if substring in fileNameClean:
-                                if len(substring) > bestMatchLen:
-                                    bestMatchLen = len(substring)
-                                if bestMatchLen == pcnLength:
-                                    fullMatchFound = True
-                                    break
-                            else:
-                                # a longer substring starting at i also won't be found
-                                break
-                    ratio = bestMatchLen / pcnLength if bestMatchLen >= 4 else 0.0
-                    if ratio > bestSubstringRatio:
-                        bestSubstringRatio = ratio
-                        photoCommonName = pcn
 
         else:
             photoCommonName = ""
@@ -442,7 +446,7 @@ class DataBase():
         for s in sightings:
             if "photos" in s:
                 for p in s["photos"]:
-                    if p["fileName"] == photoFileName:
+                    if os.path.normcase(p["fileName"]) == os.path.normcase(photoFileName):
                         s["photos"].remove(p)
 
             # if we've removed all the photos for this sighting, we need to remove the "photos" entry in the dict
@@ -564,78 +568,126 @@ class DataBase():
         }
 
 
-    def addPhotoToDatabase(self, filter, photoData):
-        
-        # check that file still exists before proceeding
-        if os.path.isfile(photoData["fileName"]):    
-            
-            # get sightings that match the filter. Should only be a single sighting.
+    def addPhotoToDatabase(self, filter, photoData, skip_file_check=False):
+
+        if not skip_file_check and not os.path.isfile(photoData["fileName"]):
+            return None
+
+        # Fast path: if filter has checklistID + speciesName, scan directly
+        # instead of running the full GetSightings filter machinery.
+        checklistID = filter.getChecklistID()
+        speciesName = filter.getSpeciesName()
+        if checklistID and speciesName and checklistID in self.checklistDict:
+            candidates = self.checklistDict[checklistID]
+            s = next((c for c in candidates
+                      if c["commonName"] == speciesName
+                      or c.get("subspeciesName") == speciesName), None)
+        else:
             sightings = self.GetSightings(filter)
-            
-            if len(sightings) > 0:
-                
-                s = sightings[0]    
-                
-                if "photos" not in s:
-                    s["photos"] = [photoData]
-                
-                else:    
-                    if photoData not in s["photos"]:
-                        s["photos"].append(photoData)
-                        
-                # add photoData to db lists
-                self.addPhotoDataToDb(photoData)
-                        
-                    
+            s = sightings[0] if sightings else None
+
+        if s is not None:
+            if "photos" not in s:
+                s["photos"] = [photoData]
+            elif photoData not in s["photos"]:
+                s["photos"].append(photoData)
+            self.addPhotoDataToDb(photoData)
+            return s
+
+        return None
+
     def writePhotoDataToFile(self, fileName):
-        
-        # get all sightings with photos
+
         filter = code_Filter.Filter()
         sightings = self.GetSightingsWithPhotos(filter)
-        
-        # set up writing CSV to fileName
-        with open(fileName, mode='w') as photoDataFile:
-            photoDataWriter = csv.writer(photoDataFile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-            photoDataWriter.writerow(["ChecklistID", "CommonName", "FileName", "Camera", "Lens", "ShutterSpeed", "Aperture", "ISO", "FocalLength", "Rating"])
 
-            for s in sightings:
-                for p in s["photos"]:
-                    try:
-                        photoDataWriter.writerow([
-                                                 s["checklistID"], 
-                                                 s["commonName"], 
-                                                 p["fileName"],
-                                                 p["camera"],
-                                                 p["lens"],
-                                                 p["shutterSpeed"],
-                                                 p["aperture"],
-                                                 p["iso"],
-                                                 p["focalLength"],
-                                                 p["rating"]
-                                                 ])
-                    except IOError as err:
-                        msg = QMessageBox()
-                        msg.setIcon(QMessageBox.Icon.Warning)
-                        msg.setText("Error occurred while saving the photo data to disk.\n" + s["commonName"] + " " + s["checklistID"] + "\n"+  str(err))
-                        msg.setWindowTitle("Save Error")
-                        msg.setStandardButtons(QMessageBox.StandardButton.Ok)
-                        msg.exec()                        
+        try:
+            with open(fileName, mode='w', encoding='utf-8') as f:
+                for s in sightings:
+                    for p in s["photos"]:
+                        record = {
+                            "ChecklistID": s["checklistID"],
+                            "CommonName":  s["commonName"],
+                            "FileName":    p["fileName"],
+                            "Camera":      p["camera"],
+                            "Lens":        p["lens"],
+                            "ShutterSpeed": p["shutterSpeed"],
+                            "Aperture":    p["aperture"],
+                            "ISO":         p["iso"],
+                            "FocalLength": p["focalLength"],
+                            "Rating":      p["rating"],
+                        }
+                        f.write(json.dumps(record) + '\n')
+        except IOError as err:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Icon.Warning)
+            msg.setText("Error occurred while saving the photo data to disk.\n" + str(err))
+            msg.setWindowTitle("Save Error")
+            msg.setStandardButtons(QMessageBox.StandardButton.Ok)
+            msg.exec()
+
+
+    def appendPhotoToJsonl(self, sighting, photoData):
+        if not self.photoDataFile or not self.photoDataFile.lower().endswith(".jsonl"):
+            return
+        record = {
+            "ChecklistID": sighting["checklistID"],
+            "CommonName":  sighting["commonName"],
+            "FileName":    photoData["fileName"],
+            "Camera":      photoData["camera"],
+            "Lens":        photoData["lens"],
+            "ShutterSpeed": photoData["shutterSpeed"],
+            "Aperture":    photoData["aperture"],
+            "ISO":         photoData["iso"],
+            "FocalLength": photoData["focalLength"],
+            "Rating":      photoData["rating"],
+        }
+        with open(self.photoDataFile, mode='a', encoding='utf-8') as f:
+            f.write(json.dumps(record) + '\n')
+
+
+    def appendPhotoDeletionToJsonl(self, fileName):
+        if not self.photoDataFile or not self.photoDataFile.lower().endswith(".jsonl"):
+            return
+        with open(self.photoDataFile, mode='a', encoding='utf-8') as f:
+            f.write(json.dumps({"FileName": fileName, "deleted": True}) + '\n')
+
+
+    def compactJsonlFile(self):
+        if self.photoDataFile and self.photoDataFile.lower().endswith(".jsonl"):
+            self.writePhotoDataToFile(self.photoDataFile)
+            self.photosNeedSaving = False
 
 
     def readPhotoDataFromFile(self, fileName):
-        
-        with open(fileName, mode='r') as photoDataFile:
-            csv_reader = csv.DictReader(photoDataFile)
-            
-            try:
-                
+
+        self.photoDataFile = fileName
+
+        if fileName.lower().endswith(".csv"):
+            self._readPhotoDataFromCsv(fileName)
+        else:
+            self._readPhotoDataFromJsonl(fileName)
+
+        self.refreshPhotoLists()
+        self.photoDataFileOpenFlag = True
+
+
+    _CSV_REQUIRED_FIELDS = ("ChecklistID", "CommonName", "FileName", "Camera",
+                             "Lens", "ShutterSpeed", "Aperture", "ISO", "FocalLength")
+
+    def _readPhotoDataFromCsv(self, fileName):
+        self.csvSkippedRows = 0
+        try:
+            with open(fileName, mode='r', encoding='utf-8') as photoDataFile:
+                csv_reader = csv.DictReader(photoDataFile)
                 for row in csv_reader:
-                
+                    if any(f not in row for f in self._CSV_REQUIRED_FIELDS):
+                        self.csvSkippedRows += 1
+                        continue
                     photoData = {}
                     filter = code_Filter.Filter()
                     filter.setChecklistID(row["ChecklistID"])
                     filter.setSpeciesName(row["CommonName"])
-                    
                     photoData["fileName"] = row["FileName"]
                     photoData["camera"] = row["Camera"]
                     photoData["lens"] = row["Lens"]
@@ -643,23 +695,51 @@ class DataBase():
                     photoData["aperture"] = row["Aperture"]
                     photoData["iso"] = row["ISO"]
                     photoData["focalLength"] = row["FocalLength"]
-                    
-                    if "Rating" in row:
-                        if row["Rating"] in ["0", "1", "2", "3", "4", "5"]:
-                            photoData["rating"] = row["Rating"]
-                        else:
-                            photoData["rating"] = "0"
-                    else:
-                        photoData["rating"] = "0"
-                                        
-                    self.addPhotoToDatabase(filter, photoData)
+                    rating = row.get("Rating", "0")
+                    photoData["rating"] = rating if rating in ["0","1","2","3","4","5"] else "0"
+                    self.addPhotoToDatabase(filter, photoData, skip_file_check=True)
+        except Exception:
+            pass
 
-            except:
-                pass
 
-        # Sort all photo-attribute lists once now that loading is complete
-        self.refreshPhotoLists()
-        self.photoDataFileOpenFlag = True
+    def _readPhotoDataFromJsonl(self, fileName):
+        try:
+            self.jsonlSkippedLines = 0
+            state = {}
+            with open(fileName, encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        record = json.loads(line)
+                    except json.JSONDecodeError:
+                        self.jsonlSkippedLines += 1
+                        continue
+                    fn = record.get("FileName", "")
+                    if not fn:
+                        continue
+                    state[fn] = None if record.get("deleted") else record
+
+            for fn, row in state.items():
+                if row is None:
+                    continue
+                photoData = {}
+                filter = code_Filter.Filter()
+                filter.setChecklistID(row.get("ChecklistID", ""))
+                filter.setSpeciesName(row.get("CommonName", ""))
+                photoData["fileName"] = row.get("FileName", "")
+                photoData["camera"] = row.get("Camera", "")
+                photoData["lens"] = row.get("Lens", "")
+                photoData["shutterSpeed"] = row.get("ShutterSpeed", "")
+                photoData["aperture"] = row.get("Aperture", "")
+                photoData["iso"] = row.get("ISO", "")
+                photoData["focalLength"] = row.get("FocalLength", "")
+                rating = row.get("Rating", "0")
+                photoData["rating"] = rating if rating in ["0","1","2","3","4","5"] else "0"
+                self.addPhotoToDatabase(filter, photoData, skip_file_check=True)
+        except:
+            pass
 
 
     def refreshPhotoLists(self):
@@ -1094,7 +1174,7 @@ class DataBase():
         # use csv reader to process csv file if user has selected a csv file
 
         if os.path.splitext(DataFile)[1] == ".csv":
-            csvfile = open(DataFile, 'r')
+            csvfile = open(DataFile, 'r', encoding='utf-8')
 
         # Count total data rows so the caller can show a determinate progress bar.
         # A single pass over the raw text is fast even for large files.
@@ -1336,9 +1416,10 @@ class DataBase():
             
         self.countyList = list(self.countyDict.keys())
         self.countyList.sort()
-        
+
         # set flat indicating that a data file is now open
         self.eBirdFileOpenFlag = True
+        self.eBirdFilePath = DataFile
 
 
     def ReadTaxonomyDataFile(self, taxonomyDataFile):
@@ -1374,6 +1455,7 @@ class DataBase():
                     thisOrder = taxEntry[orderCol]
                     thisFamily = taxEntry["FAMILY"]
                     thisQuickEntryCode = taxEntry["SPECIES_CODE"]
+                    self.eBirdCodeDict[thisSciName] = thisQuickEntryCode
 
                     try:
                         taxon_order = float(taxEntry.get("TAXON_ORDER", 0))
@@ -1873,29 +1955,29 @@ class DataBase():
                 return(False)
 
         if filterStartRating != "" and filterEndRating != "":
-            filterStartRating = int(filterStartRating)
-            filterEndRating = int(filterEndRating)
+            filterStartRating = _safe_rating(filterStartRating)
+            filterEndRating = _safe_rating(filterEndRating)
             filterStartRating, filterEndRating = min(filterStartRating, filterEndRating), max(filterStartRating, filterEndRating)
             if photoRating != "" and photoRating is not None:
-                rating = int(photoRating)
+                rating = _safe_rating(photoRating)
                 if rating < filterStartRating or rating > filterEndRating:
                     return(False)
             else:
                 return(False)
 
         if filterStartRating != "" and filterEndRating == "":
-            filterStartRating = int(filterStartRating)
+            filterStartRating = _safe_rating(filterStartRating)
             if photoRating != "":
-                rating = int(photoRating)
+                rating = _safe_rating(photoRating)
                 if rating < filterStartRating:
                     return(False)
             else:
                 return(False)
 
         if filterStartRating == "" and filterEndRating != "":
-            filterEndRating = int(filterEndRating)
+            filterEndRating = _safe_rating(filterEndRating)
             if photoRating != "":
-                rating = int(photoRating)
+                rating = _safe_rating(photoRating)
                 if rating > filterEndRating:
                     return(False)
             else:
@@ -2377,13 +2459,13 @@ class DataBase():
 
         if startRating != "" and endRating == "":
             ratingOK = False
-            filterStartRating = int(startRating)
+            filterStartRating = _safe_rating(startRating)
             # check each photo and set flag to true if at least one photo passes test
             # reject if all photos fail this test
             for p in sighting["photos"]:
                 rating = p["rating"]
                 if rating != "":
-                    rating = int(rating)
+                    rating = _safe_rating(rating)
                     if rating >= filterStartRating:
                         ratingOK= True
             if ratingOK is False:
@@ -2391,13 +2473,13 @@ class DataBase():
 
         if startRating == "" and endRating != "":
             ratingOK = False
-            filterEndRating = int(endRating)
+            filterEndRating = _safe_rating(endRating)
             # check each photo and set flag to true if at least one photo passes test
             # reject if all photos fail this test
             for p in sighting["photos"]:
                 rating = p["rating"]
                 if rating != "":
-                    rating = int(rating)
+                    rating = _safe_rating(rating)
                     if rating >= filterEndRating:
                         ratingOK= True
             if ratingOK is False:
@@ -2405,14 +2487,13 @@ class DataBase():
 
         if endRating != "" and startRating != "":
             ratingOK= False
-            filterStartRating = int(startRating)
-            filterEndRating = int(endRating)
+            filterStartRating = _safe_rating(startRating)
+            filterEndRating = _safe_rating(endRating)
             filterStartRating, filterEndRating = min(filterStartRating, filterEndRating), max(filterStartRating, filterEndRating)
             for p in sighting["photos"]:
-                # convert the string to an integer
                 rating = p["rating"]
                 if rating != "":
-                    rating = int(rating)
+                    rating = _safe_rating(rating)
                     if rating >= filterStartRating and rating <= filterEndRating:
                         ratingOK = True
             if ratingOK is False:
@@ -2477,6 +2558,7 @@ class DataBase():
     def ClearDatabase(self):
 
         self.eBirdFileOpenFlag = False
+        self.eBirdFilePath = ""
         self.photoDataFileOpenFlag = False
         self.countryStateCodeFileFound = False
         self.allSpeciesList = []
@@ -2503,7 +2585,9 @@ class DataBase():
         self._regionCache = {}
 
     def ClearPhotoSettings(self):
-        
+
+        self.jsonlSkippedLines = 0
+        self.csvSkippedRows = 0
         self.cameraList = []
         self.lensList = []
         self.shutterSpeedList = []
@@ -2982,15 +3066,22 @@ class DataBase():
     
         
     def GetBBLCode(self, species):
-        
+
         thisScientificName = self.GetScientificName(species)
 
         if thisScientificName in self.bblCodeDict:
             bblCode = self.bblCodeDict[thisScientificName]
         else:
             bblCode = ""
-        
+
         return(bblCode)
+
+
+    def GeteBirdCode(self, species):
+
+        thisScientificName = self.GetScientificName(species)
+
+        return self.eBirdCodeDict.get(thisScientificName, "")
     
 
     def GetFamilyName(self, species):
@@ -3022,8 +3113,8 @@ class DataBase():
 
     def GetRegionCode(self, longName):
         
-        if longName == "**All Regions**":
-            return("**All Regions**")
+        if longName == "All Regions":
+            return("All Regions")
         
         else:
             return(self.regionCodeDict[longName])
@@ -3036,8 +3127,8 @@ class DataBase():
 
     def GetCountryCode(self, longName):
         
-        if longName == "**All Countries**":
-            return("**All Countries**")
+        if longName == "All Countries":
+            return("All Countries")
         
         if self.countryStateCodeFileFound is True:
             for l in self.masterLocationList:
@@ -3050,8 +3141,8 @@ class DataBase():
                 
     def GetStateCode(self, longName):
         
-        if longName == "**All States**":
-            return("**All States**")
+        if longName == "All States":
+            return("All States")
             
         if self.countryStateCodeFileFound is True:
             for l in self.masterLocationList:
@@ -3064,8 +3155,8 @@ class DataBase():
 
     def GetCountryName(self, shortCode):
 
-        if shortCode == "**All Countries**":
-            return("**All Countries**")
+        if shortCode == "All Countries":
+            return("All Countries")
 
         if self.countryStateCodeFileFound is True:
             return self._countryLookup.get(shortCode, shortCode)
@@ -3081,8 +3172,8 @@ class DataBase():
         
     def GetStateName(self, shortCode):
 
-        if shortCode == "**All States**":
-            return("**All States**")
+        if shortCode == "All States":
+            return("All States")
 
         if self.countryStateCodeFileFound is True:
             return self._stateLookup.get(shortCode, shortCode)
@@ -3149,7 +3240,12 @@ class DataBase():
 
     def readPreferences(self):
 
-        prefs_dir = os.path.expanduser("~/Library/Application Support/Yearbirder")
+        if sys.platform == "darwin":
+            prefs_dir = os.path.expanduser("~/Library/Application Support/Yearbirder")
+        elif sys.platform == "win32":
+            prefs_dir = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "Yearbirder")
+        else:
+            prefs_dir = os.path.expanduser("~/.yearbirder")
         prefs_path = os.path.join(prefs_dir, "yearbirderPreferences.txt")
 
         if not os.path.isfile(prefs_path):
@@ -3168,7 +3264,12 @@ class DataBase():
                 
     
     def writePreferences(self):
-        prefs_dir = os.path.expanduser("~/Library/Application Support/Yearbirder")
+        if sys.platform == "darwin":
+            prefs_dir = os.path.expanduser("~/Library/Application Support/Yearbirder")
+        elif sys.platform == "win32":
+            prefs_dir = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "Yearbirder")
+        else:
+            prefs_dir = os.path.expanduser("~/.yearbirder")
         os.makedirs(prefs_dir, exist_ok=True)
 
         prefs_path = os.path.join(prefs_dir, "yearbirderPreferences.txt")

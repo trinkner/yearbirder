@@ -1,7 +1,10 @@
 import form_Enlargement
 import code_Filter
+import code_Stylesheet
 import datetime
 import ntpath
+
+from shiboken6 import isValid
 
 import os
 from math import floor
@@ -35,8 +38,12 @@ from PySide6.QtWidgets import (
     QBoxLayout,
     QFrame,
     QVBoxLayout,
-    QPushButton
+    QPushButton,
+    QWidget
     )
+
+BLEND_DURATION = 300   # crossfade duration in ms
+BLEND_INTERVAL = 16    # timer tick in ms (~60 fps)
    
 
 class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
@@ -45,6 +52,27 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
     # we respond to this signal with the form's resizeMe method below
     resized = Signal() 
     
+    class _CrossfadeOverlay(QWidget):
+        """Snapshot of the outgoing photo that fades to transparent, revealing the
+        incoming photo in the QGraphicsView underneath."""
+
+        def __init__(self, parent):
+            super().__init__(parent)
+            self._pixmap = QPixmap()
+            self._alpha  = 0.0
+            self.setAttribute(Qt.WA_TransparentForMouseEvents)
+            self.hide()
+
+        def paintEvent(self, event):
+            if self._pixmap.isNull() or self._alpha <= 0.0:
+                return
+            p = QPainter(self)
+            p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+            p.setOpacity(self._alpha)
+            p.drawPixmap(self.rect(), self._pixmap)
+            p.end()
+
+
     class MyGraphicsView(QGraphicsView):
         
         def __init__(self):
@@ -137,10 +165,12 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
                 actionToggleFullScreen = menu.addAction("Full screen (F10)")
                 
             menu.addSeparator()
+            actionSlideshow = menu.addAction("Slideshow")
+            menu.addSeparator()
             actionDetachFile = menu.addAction("Detach photo from Yearbirder")
             menu.addSeparator()
             actionDeleteFile = menu.addAction("Delete photo from file system")
-            
+
             action = menu.exec(self.mapToGlobal(event.pos()))
 
             if self.mdiParent.isMaximized() is True:
@@ -162,9 +192,12 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
             if action == actionToggleFullScreen:
                 QTimer.singleShot(0, self.parent().toggleFullScreen)
             
+            if action == actionSlideshow:
+                self.parent().launchSlideshow()
+
             if action == actionDeleteFile:
                 self.parent().deleteFile()
-            
+
             if action == actionDetachFile:
                 self.parent().detachFile()
                                                  
@@ -179,6 +212,9 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
         self.currentIndex = 0
         
         self.pixmapEnlargement = QPixmap()
+        self._crossfadeOverlay = None
+        self._blendTimer = QTimer(self)
+        self._blendTimer.timeout.connect(self._blendStep)
 
         self.layout().setDirection(QBoxLayout.Direction.RightToLeft)
         self.layout().setContentsMargins(0, 0, 0, 0)
@@ -359,65 +395,118 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
             
         self.setCameraDetails()
         self.detailsPane.setVisible(True)
-        self.mdiParent.mdiParent.db.photosNeedSaving = True
+        db = self.mdiParent.mdiParent.db
+        db.photosNeedSaving = True
+        try:
+            db.appendPhotoToJsonl(self.photoList[self.currentIndex][1], self.photoList[self.currentIndex][0])
+        except IOError as exc:
+            QMessageBox.warning(self, "Settings File Error",
+                f"Rating saved in memory but could not be written to the photo settings file:\n{exc}")
         self.viewEnlargement.setFocus()
                                                 
 
     def showPreviousPhoto(self):
-            
-        if self.currentIndex > 0:
-            self.currentIndex = self.currentIndex - 1            
-        
-        if self.currentIndex >= 0:                
-            self.changeEnlargement()   
-    
-    
+        for i in range(self.currentIndex - 1, -1, -1):
+            if os.path.isfile(self.photoList[i][0].get("fileName", "")):
+                self.currentIndex = i
+                self.changeEnlargement()
+                return
+
     def showNextPhoto(self):
-                
-        if self.currentIndex < len(self.photoList) - 1:            
-            self.currentIndex += 1            
-            self.changeEnlargement()
+        n = len(self.photoList)
+        for i in range(self.currentIndex + 1, n):
+            if os.path.isfile(self.photoList[i][0].get("fileName", "")):
+                self.currentIndex = i
+                self.changeEnlargement()
+                return
             
                                   
-    def fillEnlargement(self): 
-        
-        # routine uses self.currentIndex to fill the right photo
-        self.pixmapEnlargement = QPixmap(self.photoList[self.currentIndex][0]["fileName"])                 
-            
+    def fillEnlargement(self):
+
+        # Skip forward (wrapping) to the first photo file that exists on disk.
+        n = len(self.photoList)
+        for i in range(n):
+            idx = (self.currentIndex + i) % n
+            if os.path.isfile(self.photoList[idx][0].get("fileName", "")):
+                self.currentIndex = idx
+                break
+        else:
+            QMessageBox.warning(
+                self,
+                "Photos Not Found",
+                "None of the photos in this view could be found on disk.\n\n"
+                "They may have been moved or deleted outside of Yearbirder.",
+                QMessageBox.StandardButton.Ok,
+            )
+            QTimer.singleShot(0, self.close)
+            return
+
+        self.pixmapEnlargement = QPixmap(self.photoList[self.currentIndex][0]["fileName"])
+
         self.sceneEnlargement= QGraphicsScene()
-        # save the item ID of the pixmap so we can replace the pixmap photo easily later
-        self.itemPixmap = self.sceneEnlargement.addPixmap(self.pixmapEnlargement)
+        if self.pixmapEnlargement.isNull():
+            self.itemPixmap = self.sceneEnlargement.addPixmap(QPixmap())
+        else:
+            self.itemPixmap = self.sceneEnlargement.addPixmap(self.pixmapEnlargement)
 
         self.viewEnlargement = self.MyGraphicsView() 
         self.viewEnlargement.mdiParent = self               
         self.viewEnlargement.setScene(self.sceneEnlargement)
         self.viewEnlargement.setStyleSheet("QWidget{ background-color: #343333;}")
         
-        # add viewEnlargementto the default layout of the form
+        # add viewEnlargement to the default layout of the form
         self.layout().addWidget(self.viewEnlargement)
-        
-        self.setCameraDetails()               
-                       
-        self.setPhotoTitle()  
-                   
-        QTimer.singleShot(10, self.fitEnlargement) 
+
+        # overlay widget for crossfade transitions (child of view, on top)
+        self._crossfadeOverlay = self._CrossfadeOverlay(self.viewEnlargement)
+
+        self.setCameraDetails()
+
+        self.setPhotoTitle()
+
+        QTimer.singleShot(10, self.fitEnlargement)
         
 
     def changeEnlargement(self):
-        
-        self.pixmapEnlargement = QPixmap(self.photoList[self.currentIndex][0]["fileName"])                 
 
-        self.itemPixmap.setPixmap(self.pixmapEnlargement)
-        
+        # Capture the outgoing frame as a snapshot for the crossfade overlay
+        if self._crossfadeOverlay is not None and not self.pixmapEnlargement.isNull():
+            overlay = self._crossfadeOverlay
+            overlay.setGeometry(0, 0, self.viewEnlargement.width(), self.viewEnlargement.height())
+            overlay._pixmap = self.viewEnlargement.grab()
+            overlay._alpha  = 1.0
+            overlay.show()
+            overlay.raise_()
+            self._blendTimer.start(BLEND_INTERVAL)
+
+        self.pixmapEnlargement = QPixmap(self.photoList[self.currentIndex][0]["fileName"])
+
+        if self.pixmapEnlargement.isNull():
+            self.sceneEnlargement.clear()
+            self.itemPixmap = self.sceneEnlargement.addPixmap(QPixmap())
+        else:
+            self.itemPixmap.setPixmap(self.pixmapEnlargement)
+
         self.setCameraDetails()
-        
+
         self.setPhotoTitle()
-        
-        QTimer.singleShot(20, self.fitEnlargement)   
+
+        QTimer.singleShot(20, self.fitEnlargement)
+
+
+    def _blendStep(self):
+        self._crossfadeOverlay._alpha -= BLEND_INTERVAL / BLEND_DURATION
+        if self._crossfadeOverlay._alpha <= 0.0:
+            self._crossfadeOverlay._alpha = 0.0
+            self._blendTimer.stop()
+            self._crossfadeOverlay.hide()
+        self._crossfadeOverlay.update()
                 
 
     def fitEnlargement(self):
-        
+
+        if self.pixmapEnlargement.isNull():
+            return
         # scale the view to fit the photo, edge to edge
         self.viewEnlargement.setSceneRect(0, 0, self.pixmapEnlargement.width(), self.pixmapEnlargement.height())
         self.viewEnlargement.fitInView(self.viewEnlargement.sceneRect(), Qt.KeepAspectRatio)
@@ -464,12 +553,8 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
         msgText = "Detach \n\n" + self.photoList[self.currentIndex][0]["fileName"] + "\n\n from Yearbirder?"
         msgText = msgText + "\n\n(File will NOT be deleted from file system)"
         
-        msg = QMessageBox()
-        msg.setText(msgText)
-        msg.setWindowTitle("Detach photo?")
-        msg.setStandardButtons(QMessageBox.StandardButton.No | QMessageBox.StandardButton.Yes)
-        buttonClicked = msg.exec()
-        
+        buttonClicked = code_Stylesheet.question(self, "Detach photo?", msgText)
+
         if buttonClicked == QMessageBox.StandardButton.Yes:
                 
             # remove photo from database
@@ -477,14 +562,20 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
             photoCommonName = self.photoList[self.currentIndex][1]["commonName"]
             photoLocation = self.photoList[self.currentIndex][1]["location"] 
             
-            self.mdiParent.mdiParent.db.removePhotoFromDatabase(photoLocation, "", "", photoCommonName, currentPhoto)             
-            
+            self.mdiParent.mdiParent.db.removePhotoFromDatabase(photoLocation, "", "", photoCommonName, currentPhoto)
+            try:
+                self.mdiParent.mdiParent.db.appendPhotoDeletionToJsonl(currentPhoto)
+            except IOError as exc:
+                QMessageBox.warning(self, "Settings File Error",
+                    f"Photo removed from memory but could not be recorded in the photo settings file:\n{exc}")
+
             # remove photo from current window's photo list
             self.photoList.remove(self.photoList[self.currentIndex])
 
             # refresh display of parent photo list
-            self.mdiParent.FillPhotos(self.mdiParent.filter)
-            
+            if isValid(self.mdiParent):
+                self.mdiParent.FillPhotos(self.mdiParent.filter)
+
             # advance display to next photo
             if len(self.photoList) == 0:
                 self.close()
@@ -502,53 +593,49 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
 
 
     def deleteFile(self):
-        
-        # remove photo from database, but don't delete it from file system
-        msgText = "Permanently delete \n\n" + self.photoList[self.currentIndex][0]["fileName"] + "\n\n from Yearbirder and the file system?"
-        
-        msg = QMessageBox()
-        msg.setText(msgText)
-        msg.setWindowTitle("Permanently delete photo?")
-        msg.setStandardButtons(QMessageBox.StandardButton.No | QMessageBox.StandardButton.Yes)
-        buttonClicked = msg.exec()
-        
-        if buttonClicked == QMessageBox.StandardButton.Yes:
-                
-            # remove photo from database
-            currentPhoto = self.photoList[self.currentIndex][0]["fileName"]
-            photoCommonName = self.photoList[self.currentIndex][1]["commonName"]
-            photoLocation = self.photoList[self.currentIndex][1]["location"] 
-            
-            self.mdiParent.mdiParent.db.removePhotoFromDatabase(photoLocation, "", "", photoCommonName, currentPhoto)             
-            
-            # remove photo from current window's photo list
-            self.photoList.remove(self.photoList[self.currentIndex])
 
-            # advance display to next photo
-            if len(self.photoList) == 0:
+        msgText = "Permanently delete \n\n" + self.photoList[self.currentIndex][0]["fileName"] + "\n\n from Yearbirder and the file system?"
+
+        if code_Stylesheet.question(self, "Permanently delete photo?", msgText) != QMessageBox.StandardButton.Yes:
+            return
+
+        currentPhoto = self.photoList[self.currentIndex][0]["fileName"]
+        photoCommonName = self.photoList[self.currentIndex][1]["commonName"]
+        photoLocation = self.photoList[self.currentIndex][1]["location"]
+
+        self.mdiParent.mdiParent.db.removePhotoFromDatabase(photoLocation, "", "", photoCommonName, currentPhoto)
+        try:
+            self.mdiParent.mdiParent.db.appendPhotoDeletionToJsonl(currentPhoto)
+        except IOError as exc:
+            QMessageBox.warning(self, "Settings File Error",
+                f"Photo removed from memory but could not be recorded in the photo settings file:\n{exc}")
+
+        self.mdiParent.mdiParent.db.photosNeedSaving = True
+
+        if os.path.isfile(currentPhoto):
+            try:
+                os.remove(currentPhoto)
+            except:
+                pass
+
+        self.mdiParent.mdiParent.notifyPhotoDeletion(currentPhoto)
+
+
+    def handlePhotoDeletion(self, filename):
+        idx = next((i for i, (p, s) in enumerate(self.photoList) if p["fileName"] == filename), None)
+        if idx is None:
+            return
+        self.photoList.pop(idx)
+        if idx == self.currentIndex:
+            if not self.photoList:
                 self.close()
                 return
-
-            if self.currentIndex < len(self.photoList):
-                self.changeEnlargement()
-
-            else:
+            if self.currentIndex >= len(self.photoList):
                 self.currentIndex -= 1
-                self.changeEnlargement()
+            self.changeEnlargement()
+        elif idx < self.currentIndex:
+            self.currentIndex -= 1
 
-            # set flag for requiring photo file save
-            self.mdiParent.mdiParent.db.photosNeedSaving = True
-
-            # delete file from file system
-            if os.path.isfile(currentPhoto):
-                try:
-                    os.remove(currentPhoto)
-                except:
-                    pass
-
-            # refresh display of parent photo list
-            self.mdiParent.FillPhotos(self.mdiParent.filter)
-                          
             
     def toggleFullScreen(self):
         # Called via QTimer.singleShot(0, ...) from all key/menu handlers so that
@@ -589,6 +676,55 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
         QTimer.singleShot(0, self.fitEnlargement)
                     
             
+    def launchSlideshow(self):
+        import code_Slideshow
+        import random
+
+        if not self.photoList:
+            return
+
+        main_window = self.mdiParent.mdiParent
+        dlg = code_Slideshow.SlideshowDialog(main_window)
+        if dlg.exec() != code_Slideshow.QDialog.DialogCode.Accepted:
+            return
+
+        pairs = list(self.photoList)   # shallow copy — don't mutate the window's list
+        sort_order = dlg.sortOrder()
+
+        if sort_order == "alphabetic":
+            pairs.sort(key=lambda x: (x[1].get("commonName", "").lower(),
+                                      x[1].get("date", "")))
+        elif sort_order == "rating":
+            def _rating(pair):
+                try:
+                    return -int(pair[0].get("rating", "0") or "0")
+                except ValueError:
+                    return 0
+            pairs.sort(key=lambda x: (_rating(x),
+                                      float(x[1].get("taxonomicOrder", 0))))
+        elif sort_order == "chronological":
+            pairs.sort(key=lambda x: (x[1].get("date", ""), x[1].get("time", "")))
+        elif sort_order == "location":
+            pairs.sort(key=lambda x: (x[1].get("location", "").lower(),
+                                      x[1].get("date", "")))
+        elif sort_order == "random":
+            random.shuffle(pairs)
+        elif sort_order == "seasonal":
+            def _mmdd(pair):
+                d = pair[1].get("date", "")
+                return d[5:] if len(d) >= 7 else ""
+            pairs.sort(key=lambda x: (_mmdd(x), x[1].get("date", "")))
+        else:  # taxonomic
+            pairs.sort(key=lambda x: (float(x[1].get("taxonomicOrder", 0)),
+                                      x[1].get("date", ""),
+                                      x[1].get("time", "")))
+
+        main_window._slideshow = code_Slideshow.SlideshowWindow(
+            pairs, dlg.secondsPerPhoto(), dlg.showTitleBar()
+        )
+        main_window._slideshow.show()
+
+
     def setCameraDetails(self):
         
         currentPhoto = self.photoList[self.currentIndex][0]["fileName"]

@@ -157,7 +157,7 @@ class Ui_frmFind(object):
 
     def retranslateUi(self, frmFind):
         _translate = QtCore.QCoreApplication.translate
-        frmFind.setWindowTitle(_translate("frmFind", "Species Report"))
+        frmFind.setWindowTitle(_translate("frmFind", "Find"))
         self.lblFind.setText(_translate("frmFind", "Find:"))
         self.lblWhatToSearch.setText(_translate("frmFind", "What to search:"))
         self.chkCommonName.setText(_translate("frmFind", "Species Common Name"))
