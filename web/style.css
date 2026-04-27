@@ -134,43 +134,72 @@ nav {
 /* ── Hero ────────────────────────────────────────────────────────── */
 .hero {
   background: linear-gradient(160deg, var(--forest) 0%, var(--grove) 100%);
-  padding: 80px 0 0;
   overflow: hidden;
 }
 
-.hero-text {
-  text-align: center;
-  color: var(--white);
-  max-width: 720px;
+.hero-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-height: 580px;
+  max-width: 1400px;
   margin: 0 auto;
-  padding-bottom: 56px;
+}
+
+.hero-left {
+  padding: 72px 56px 72px 40px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  color: var(--white);
+}
+
+.hero-right {
+  position: relative;
+  overflow: hidden;
+}
+
+.hero-bird {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 25%;
+  display: block;
+}
+
+.hero-photo-credit {
+  position: absolute;
+  bottom: 10px;
+  right: 14px;
+  font-size: 11px;
+  color: rgba(255,255,255,.65);
+  font-style: italic;
+  text-shadow: 0 1px 3px rgba(0,0,0,.5);
 }
 
 .hero-icon {
   width: 84px;
   height: 84px;
   border-radius: 20px;
-  margin: 0 auto 28px;
+  margin-bottom: 28px;
   box-shadow: 0 8px 24px rgba(0,0,0,.3);
 }
 
 .hero h1 {
-  font-size: clamp(2.2rem, 5vw, 3.4rem);
+  font-size: clamp(2rem, 3.5vw, 3rem);
   color: var(--white);
   margin-bottom: 20px;
 }
 
 .hero-tagline {
-  font-size: 1.15rem;
+  font-size: 1.1rem;
   color: rgba(255,255,255,.85);
-  max-width: 580px;
-  margin: 0 auto 36px;
+  margin-bottom: 36px;
+  max-width: 480px;
 }
 
 .hero-buttons {
   display: flex;
   gap: 14px;
-  justify-content: center;
   flex-wrap: wrap;
 }
 
@@ -185,18 +214,6 @@ nav {
   color: var(--white);
 }
 .hero-buttons .btn-secondary:hover { background: rgba(255,255,255,.12); border-color: var(--white); }
-
-.hero-screenshot-wrap {
-  display: flex;
-  justify-content: center;
-}
-
-.hero-screenshot-wrap img {
-  width: 90%;
-  max-width: 1000px;
-  border-radius: var(--radius) var(--radius) 0 0;
-  box-shadow: var(--shadow-lg);
-}
 
 /* ── Audience cards ──────────────────────────────────────────────── */
 .audiences {
@@ -589,6 +606,10 @@ code, .step-content code {
 @media (max-width: 860px) {
   .audience-grid { grid-template-columns: 1fr; }
 
+  .hero-split { grid-template-columns: 1fr; min-height: auto; }
+  .hero-right { height: 300px; order: -1; }
+  .hero-left { padding: 52px 32px 56px; }
+
   .feature-inner {
     grid-template-columns: 1fr;
     gap: 36px;
@@ -608,8 +629,8 @@ code, .step-content code {
 @media (max-width: 600px) {
   .container { padding: 0 20px; }
   .nav-inner { height: 54px; }
-  .hero { padding: 56px 0 0; }
-  .hero-text { padding-bottom: 40px; }
+  .hero-right { height: 220px; }
+  .hero-left { padding: 40px 20px 48px; }
   .hero-icon { width: 66px; height: 66px; border-radius: 16px; }
   .feature { padding: 64px 0; }
   .stats-grid { grid-template-columns: 1fr; }
