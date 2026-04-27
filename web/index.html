@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Yearbirder — View, Analyze, and Explore Your eBird Sightings</title>
+  <meta name="description" content="Yearbirder is a free desktop app for birders. View, analyze, and explore your personal eBird sightings with powerful filters, charts, maps, and photo tools.">
+  <link rel="icon" type="image/png" href="images/icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ── Navigation ─────────────────────────────────────────────────── -->
+<nav>
+  <div class="container nav-inner">
+    <a href="index.html" class="nav-brand">
+      <img src="images/icon.png" alt="Yearbirder icon">
+      Yearbirder
+    </a>
+    <ul class="nav-links">
+      <li><a href="index.html" class="active">Overview</a></li>
+      <li><a href="download.html" class="nav-download">Download</a></li>
+      <li><a href="https://github.com/trinkner/yearbirder" target="_blank" rel="noopener">GitHub</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- ── Hero ───────────────────────────────────────────────────────── -->
+<section class="hero">
+  <div class="container">
+    <div class="hero-text">
+      <img src="images/icon.png" alt="Yearbirder" class="hero-icon">
+      <h1>View, analyze, and explore<br>your eBird sightings.</h1>
+      <p class="hero-tagline">
+        Yearbirder is a free desktop app that lets you explore your personal eBird sightings through sortable lists, charts, graphs, and interactive maps — all filtered any way you choose. If you're a photographer, it also organizes your bird photos alongside your sightings, so you can browse, rate, and map them the way a birder thinks.
+      </p>
+      <div class="hero-buttons">
+        <a href="download.html" class="btn btn-primary btn-lg">Download</a>
+        <a href="https://github.com/trinkner/yearbirder" class="btn btn-secondary btn-lg" target="_blank" rel="noopener">View on GitHub</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Who it's for ────────────────────────────────────────────────── -->
+<section class="audiences">
+  <div class="container">
+    <h2>More from your eBird data. More from your photos.</h2>
+    <div class="audience-grid">
+      <div class="audience-card">
+        <h3>For the dedicated lister</h3>
+        <p>
+          eBird is built for collecting and sharing sightings across the global birding community. Yearbirder is built for exploring your own personal history in depth. Filter across every year simultaneously, compare two lists side by side, spot patterns in monthly phenology charts, and generate Big Reports that pull together your species, dates, locations, and checklists in a single view.
+        </p>
+      </div>
+      <div class="audience-card">
+        <h3>For the bird photographer</h3>
+        <p>
+          Yearbirder is also a photo management tool built the way birders think. Link your JPEG photos to your eBird sightings, filter them by camera, lens, aperture, or rating, and browse a Species Gallery showing your best shot of each species in taxonomic order. Geotagged photos appear as clickable pins on an interactive map. Batch-rename files by species name, date, and location in seconds.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Feature: Reports ────────────────────────────────────────────── -->
+<section class="feature">
+  <div class="container">
+    <div class="feature-inner">
+      <div class="feature-text">
+        <h2>Explore your sightings easily</h2>
+        <p>
+          Every checklist you've ever submitted becomes data you can sort, filter, and drill into. You can generate any variety of lists: county lists, state lists, date lists, lists of checklists, lists of locations — all filterable however you see fit. You can generate custom lists, like every sparrow you've seen on an April day in San Francisco County between 2008 and 2017. Or create a list of every location where you've seen a Western Kingbird. Date Totals shows your species counts by year, month, and individual date. Location Totals breaks down your counts by region, country, state, county, and named location. The Big Report pulls it all together in a tabbed view — species, dates, locations, and checklists at once.
+        </p>
+        <ul class="feature-list">
+          <li>Filter simultaneously by region, family, species, date range, and season</li>
+          <li>Compare any two species lists side by side</li>
+          <li>Sort any table by any column instantly</li>
+          <li>Individual species window with full sighting history and monthly patterns</li>
+          <li>Location window with complete history, yearly breakdown, and a map</li>
+        </ul>
+      </div>
+      <div class="feature-screenshot">
+        <img src="images/demo_Reports1.png" alt="Yearbirder reports: Date Totals, Location Totals, and Big Report">
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Feature: Graphs ─────────────────────────────────────────────── -->
+<section class="feature">
+  <div class="container">
+    <div class="feature-inner flip">
+      <div class="feature-text">
+        <h2>Fourteen charts that reveal the big picture</h2>
+        <p>
+          Numbers alone don't tell the story. Yearbirder turns your data into charts that make patterns visible at a glance — from how fast you found new species each year to which locations dominate your checklist count.
+        </p>
+        <ul class="feature-list">
+          <li>Species bar graph, accumulation curves, and heatmaps</li>
+          <li>Top 20 locations by species count</li>
+          <li>Checklist scatter plot by duration and season</li>
+          <li>Phenology chart — sighting dates plotted by day of year</li>
+          <li>First and last sighting of each species per year</li>
+          <li>YTD bar charts comparing every year side by side</li>
+          <li>Pie charts by family, order, or location</li>
+        </ul>
+      </div>
+      <div class="feature-screenshot">
+        <img src="images/demo_Graphs1.png" alt="Yearbirder graphs: species bar chart, pie chart, scatter plot, and YTD comparison">
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Feature: Maps ──────────────────────────────────────────────── -->
+<section class="feature">
+  <div class="container">
+    <div class="feature-inner">
+      <div class="feature-text">
+        <h2>Eight interactive maps of your birding world</h2>
+        <p>
+          See where you've been, how long you've spent there, and what you've found. Every map is zoomable and pannable, generated from your own eBird data.
+        </p>
+        <ul class="feature-list">
+          <li>All sighting locations plotted on a global zoomable map</li>
+          <li>Animated lifer map — watch your life list build dot by dot</li>
+          <li>Bubble maps sized by time, checklists, species count, or individual tallies</li>
+          <li>Choropleth maps shading US states, US counties, Canada, India, Great Britain, and world countries by species or checklist count</li>
+          <li>Geotagged photos plotted as pins with thumbnail hover previews</li>
+        </ul>
+      </div>
+      <div class="feature-screenshot">
+        <img src="images/demo_Maps1.png" alt="Yearbirder maps: life list map, animated lifer map, choropleth, and bubble map">
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Feature: Photos ─────────────────────────────────────────────── -->
+<section class="feature">
+  <div class="container">
+    <div class="feature-inner flip">
+      <div class="feature-text">
+        <h2>A photo library built for birders</h2>
+        <p>
+          Yearbirder reads your photo EXIF data and links each image to the closest eBird checklist automatically. Browse and filter by every dimension that matters to a bird photographer.
+        </p>
+        <ul class="feature-list">
+          <li>Browse your photos by any filter, such as sparrows photographed in Boulder County last year</li>
+          <li>Full-screen viewing and easy zooming to the pixel level</li>
+          <li>Rate your photos for easy sorting and filtering</li>
+          <li>Species Gallery: best-rated photo per species in taxonomic order</li>
+<li>Filter by camera body, lens, aperture, shutter speed, focal length, and ISO</li>
+          <li>Geotagged photos on an interactive map — hover to preview, click to enlarge</li>
+          <li>Batch-rename files using species name, date, time, and location components</li>
+          <li>Batch-edit species, date, location, or rating for multiple photos at once</li>
+          <li>Easily create slideshows using any filter of your sightings</li>
+        </ul>
+      </div>
+      <div class="feature-screenshot">
+        <img src="images/demo_Photos1.png" alt="Yearbirder Photos: species gallery, geolocated photos map, and enlargement">
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Stats strip ────────────────────────────────────────────────── -->
+<div class="stats-strip">
+  <div class="container">
+    <div class="stats-grid">
+      <div class="stat-item">
+        <strong>14</strong>
+        <span>chart types</span>
+      </div>
+      <div class="stat-item">
+        <strong>8</strong>
+        <span>interactive map types</span>
+      </div>
+      <div class="stat-item">
+        <strong>10+</strong>
+        <span>filter dimensions</span>
+      </div>
+      <div class="stat-item">
+        <strong>Free</strong>
+        <span>open-source, always</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── CTA ─────────────────────────────────────────────────────────── -->
+<section class="cta-banner">
+  <div class="container">
+    <h2>Ready to explore your sightings?</h2>
+    <p>Download your eBird data from ebird.org and open it in Yearbirder.</p>
+    <div class="btn-group">
+      <a href="download.html" class="btn btn-primary btn-lg">Download</a>
+      <a href="https://github.com/trinkner/yearbirder" class="btn btn-secondary btn-lg" target="_blank" rel="noopener">View on GitHub</a>
+    </div>
+  </div>
+</section>
+
+<!-- ── Footer ──────────────────────────────────────────────────────── -->
+<footer>
+  <div class="container footer-inner">
+    <p>© 2026 Richard Trinkner &nbsp;·&nbsp; Free software under the <a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" rel="noopener">GNU GPL v3</a></p>
+    <ul class="footer-links">
+      <li><a href="index.html">Overview</a></li>
+      <li><a href="download.html">Download</a></li>
+      <li><a href="https://github.com/trinkner/yearbirder" target="_blank" rel="noopener">GitHub</a></li>
+      <li><a href="https://ebird.org" target="_blank" rel="noopener">eBird</a></li>
+    </ul>
+  </div>
+</footer>
+
+</body>
+</html>

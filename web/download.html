@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Download — Yearbirder</title>
+  <meta name="description" content="Download Yearbirder for macOS, or run it from source on Windows and Linux. Free and open-source.">
+  <link rel="icon" type="image/png" href="images/icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ── Navigation ─────────────────────────────────────────────────── -->
+<nav>
+  <div class="container nav-inner">
+    <a href="index.html" class="nav-brand">
+      <img src="images/icon.png" alt="Yearbirder icon">
+      Yearbirder
+    </a>
+    <ul class="nav-links">
+      <li><a href="index.html">Overview</a></li>
+      <li><a href="download.html" class="active nav-download">Download</a></li>
+      <li><a href="https://github.com/trinkner/yearbirder" target="_blank" rel="noopener">GitHub</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- ── Hero ───────────────────────────────────────────────────────── -->
+<section class="download-hero">
+  <div class="container">
+    <div class="version-badge">Current release: v1.41 &nbsp;·&nbsp; April 2026</div>
+    <h1>Download Yearbirder</h1>
+    <p>Free and open-source. Available as a one-click install on macOS,<br>or run from source on Windows and Linux.</p>
+  </div>
+</section>
+
+<!-- ── Platform tabs ──────────────────────────────────────────────── -->
+<section class="platforms">
+  <div class="container">
+
+    <div class="platform-tabs" role="tablist">
+      <button class="tab-btn active" role="tab" aria-selected="true"  data-tab="macos">
+        <span class="tab-icon"><img src="images/icon_MacOS.png" alt="macOS"></span> macOS
+      </button>
+      <button class="tab-btn"        role="tab" aria-selected="false" data-tab="windows">
+        <span class="tab-icon"><img src="images/icon_Windows.png" alt="Windows"></span> Windows
+      </button>
+      <button class="tab-btn"        role="tab" aria-selected="false" data-tab="linux">
+        <span class="tab-icon"><img src="images/icon_Linux.png" alt="Linux"></span> Linux
+      </button>
+    </div>
+
+    <!-- ── macOS ─────────────────────────────────────────────────── -->
+    <div class="platform-panel active" id="tab-macos">
+
+      <div class="platform-intro">
+        <div class="platform-cta">
+          <a href="https://github.com/trinkner/yearbirder/releases/download/v1.41/Yearbirder_v1.41.dmg" class="btn btn-primary btn-lg">
+            Download for macOS
+          </a>
+          <p class="release-note">Signed &amp; notarized &nbsp;·&nbsp; macOS 12+</p>
+        </div>
+        <div class="platform-intro-text">
+          <h3>One file, drag-and-drop install</h3>
+          <p>The macOS app is signed and notarized by Apple. No Python installation or terminal commands required.</p>
+        </div>
+      </div>
+
+      <h3 class="steps-heading">Installation steps</h3>
+      <div class="steps">
+        <div class="step">
+          <div class="step-number">1</div>
+          <div class="step-content">
+            <h4>Download Yearbirder</h4>
+            <p>Click the <strong>Download for macOS</strong> button above. Your browser will download <code>Yearbirder_v1.41.dmg</code>.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-number">2</div>
+          <div class="step-content">
+            <h4>Open the disk image</h4>
+            <p>Double-click the downloaded <code>.dmg</code> file. A window will appear showing the Yearbirder app and your Applications folder.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-number">3</div>
+          <div class="step-content">
+            <h4>Drag to Applications</h4>
+            <p>Drag the Yearbirder icon into the Applications folder. That's the installation complete.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-number">4</div>
+          <div class="step-content">
+            <h4>Open Yearbirder</h4>
+            <p>Launch Yearbirder from your Applications folder or from Launchpad. The first time you open it, macOS may ask you to confirm — click <strong>Open</strong>.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-number">5</div>
+          <div class="step-content">
+            <h4>Open your eBird data</h4>
+            <p>Go to <a href="https://ebird.org/downloadMyData" target="_blank" rel="noopener">ebird.org/downloadMyData</a>, click <strong>Request My Observations</strong>, and wait for the email with your download link. Once you have the <code>.zip</code> file, use <strong>File → Open</strong> in Yearbirder to load it.</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ── Windows ────────────────────────────────────────────────── -->
+    <div class="platform-panel" id="tab-windows">
+
+      <div class="platform-intro">
+        <div class="platform-cta">
+          <a href="https://github.com/trinkner/yearbirder/archive/refs/tags/v1.41.zip" class="btn btn-secondary btn-lg">
+            Download Yearbirder
+          </a>
+          <p class="release-note">Requires Python 3.10+</p>
+        </div>
+        <div class="platform-intro-text">
+          <h3>Running from Python source</h3>
+          <p>On Windows, Yearbirder runs from its Python source code. This takes about ten minutes to set up and only needs to be done once. The steps below are written for non-technical users — just follow them in order and you'll be up and running.</p>
+        </div>
+      </div>
+
+      <h3 class="steps-heading">Setup instructions (one time only)</h3>
+      <div class="steps">
+
+        <div class="step">
+          <div class="step-number">1</div>
+          <div class="step-content">
+            <h4>Install Python</h4>
+            <p>Go to <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">python.org/downloads</a> and download the latest Python installer for Windows. Run it.</p>
+            <div class="callout">
+              <strong>Important:</strong> On the first screen of the installer, check the box that says <strong>"Add Python to PATH"</strong> before clicking Install. If you miss this, Python won't work from the command line.
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-number">2</div>
+          <div class="step-content">
+            <h4>Open Command Prompt</h4>
+            <p>Press the <strong>Windows key</strong>, type <code>cmd</code>, and press <strong>Enter</strong>. A black window will appear — this is the Command Prompt.</p>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-number">3</div>
+          <div class="step-content">
+            <h4>Install required packages</h4>
+            <p>In the Command Prompt window, copy and paste the line below, then press <strong>Enter</strong>. This downloads the libraries Yearbirder needs. It may take a few minutes.</p>
+            <div class="code-block">pip install pyside6 folium matplotlib numpy natsort piexif</div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-number">4</div>
+          <div class="step-content">
+            <h4>Download Yearbirder</h4>
+            <p>Click the <strong>Download Yearbirder</strong> button above. Your browser will download a zip file. Once it has finished, open the zip and move the <code>yearbirder-1.41</code> folder to a convenient location, such as your Documents folder.</p>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-number">5</div>
+          <div class="step-content">
+            <h4>Navigate to the Yearbirder folder</h4>
+            <p>Back in Command Prompt, type <code>cd</code> followed by a space and the path to the folder you unzipped. For example:</p>
+            <div class="code-block">cd C:\Users\YourName\Documents\yearbirder-1.41</div>
+            <p style="margin-top:8px;">Tip: you can drag the folder from File Explorer into the Command Prompt window to paste its path automatically.</p>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-number">6</div>
+          <div class="step-content">
+            <h4>Run Yearbirder</h4>
+            <p>Type the following and press <strong>Enter</strong>:</p>
+            <div class="code-block">python yearbirder.py</div>
+            <p style="margin-top:8px;">Yearbirder will open. In future, repeat steps 5 and 6 to launch the app.</p>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-number">7</div>
+          <div class="step-content">
+            <h4>Open your eBird data</h4>
+            <p>Go to <a href="https://ebird.org/downloadMyData" target="_blank" rel="noopener">ebird.org/downloadMyData</a>, click <strong>Request My Observations</strong>, and wait for the email with your download link. Once you have the <code>.zip</code> file, use <strong>File → Open</strong> in Yearbirder to load it.</p>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="req-section">
+        <h3>Python package requirements</h3>
+        <p style="color:var(--slate); margin-bottom:20px; font-size:.95rem;">
+          These are installed in step 3 above. Listed here for reference.
+        </p>
+        <div class="req-grid">
+          <div class="req-item"><strong>PySide6</strong><span>Qt 6 GUI framework (LGPL)</span></div>
+          <div class="req-item"><strong>folium</strong><span>Interactive map rendering</span></div>
+          <div class="req-item"><strong>matplotlib</strong><span>Charts and graphs</span></div>
+          <div class="req-item"><strong>numpy</strong><span>Numerical data processing</span></div>
+          <div class="req-item"><strong>natsort</strong><span>Natural-order sorting</span></div>
+          <div class="req-item"><strong>piexif</strong><span>Photo EXIF data reading</span></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ── Linux ──────────────────────────────────────────────────── -->
+    <div class="platform-panel" id="tab-linux">
+
+      <div class="platform-intro">
+        <div class="platform-cta">
+          <a href="https://github.com/trinkner/yearbirder/archive/refs/tags/v1.41.zip" class="btn btn-secondary btn-lg">
+            Download Yearbirder
+          </a>
+          <p class="release-note">Requires Python 3.10+</p>
+        </div>
+        <div class="platform-intro-text">
+          <h3>Running from Python source</h3>
+          <p>Yearbirder runs from Python source on Linux. Python 3.10 or later is required. Most modern Linux distributions include a suitable Python; check with <code>python3 --version</code>.</p>
+        </div>
+      </div>
+
+      <h3 class="steps-heading">Setup instructions</h3>
+      <div class="steps">
+
+        <div class="step">
+          <div class="step-number">1</div>
+          <div class="step-content">
+            <h4>Confirm Python version</h4>
+            <p>Open a terminal and run:</p>
+            <div class="code-block">python3 --version</div>
+            <p style="margin-top:8px;">You need 3.10 or higher. If not, install it via your distribution's package manager (e.g. <code>sudo apt install python3</code> on Debian/Ubuntu).</p>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-number">2</div>
+          <div class="step-content">
+            <h4>Install pip if needed</h4>
+            <p>Many distros package pip separately. If <code>pip3 --version</code> fails, install it:</p>
+            <div class="code-block">sudo apt install python3-pip    # Debian / Ubuntu
+sudo dnf install python3-pip    # Fedora</div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-number">3</div>
+          <div class="step-content">
+            <h4>Install required packages</h4>
+            <div class="code-block">pip3 install pyside6 folium matplotlib numpy natsort piexif</div>
+            <div class="callout">
+              <strong>Note:</strong> PySide6 on Linux requires certain system libraries. If the app fails to start with an error about <code>libxcb</code>, install the Qt platform dependencies for your distro. On Debian/Ubuntu: <code>sudo apt install libxcb-cursor0</code>
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-number">4</div>
+          <div class="step-content">
+            <h4>Download Yearbirder</h4>
+            <p>Click the <strong>Download Yearbirder</strong> button above and unzip the downloaded file. Or, if you prefer to use git:</p>
+            <div class="code-block">git clone https://github.com/trinkner/yearbirder.git</div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-number">5</div>
+          <div class="step-content">
+            <h4>Run Yearbirder</h4>
+            <div class="code-block">cd yearbirder
+python3 yearbirder.py</div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-number">6</div>
+          <div class="step-content">
+            <h4>Open your eBird data</h4>
+            <p>Go to <a href="https://ebird.org/downloadMyData" target="_blank" rel="noopener">ebird.org/downloadMyData</a>, click <strong>Request My Observations</strong>, and wait for the email with your download link. Once you have the <code>.zip</code> file, use <strong>File → Open</strong> in Yearbirder to load it.</p>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="req-section">
+        <h3>Python package requirements</h3>
+        <p style="color:var(--slate); margin-bottom:20px; font-size:.95rem;">
+          These are installed in step 3 above. Listed here for reference.
+        </p>
+        <div class="req-grid">
+          <div class="req-item"><strong>PySide6</strong><span>Qt 6 GUI framework (LGPL)</span></div>
+          <div class="req-item"><strong>folium</strong><span>Interactive map rendering</span></div>
+          <div class="req-item"><strong>matplotlib</strong><span>Charts and graphs</span></div>
+          <div class="req-item"><strong>numpy</strong><span>Numerical data processing</span></div>
+          <div class="req-item"><strong>natsort</strong><span>Natural-order sorting</span></div>
+          <div class="req-item"><strong>piexif</strong><span>Photo EXIF data reading</span></div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+</section>
+
+<!-- ── CTA ─────────────────────────────────────────────────────────── -->
+<section class="cta-banner">
+  <div class="container">
+    <h2>Questions or problems?</h2>
+    <p>The Yearbirder project is hosted on GitHub, where you can report a bug or browse the source code. To report a bug, click <a href="https://github.com/trinkner/yearbirder/issues" target="_blank" rel="noopener">here</a>.</p>
+    <div class="btn-group">
+      <a href="index.html" class="btn btn-primary btn-lg">Back to Overview</a>
+      <a href="https://github.com/trinkner/yearbirder" class="btn btn-secondary btn-lg" target="_blank" rel="noopener">GitHub</a>
+    </div>
+  </div>
+</section>
+
+<!-- ── Footer ──────────────────────────────────────────────────────── -->
+<footer>
+  <div class="container footer-inner">
+    <p>© 2026 Richard Trinkner &nbsp;·&nbsp; Free software under the <a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" rel="noopener">GNU GPL v3</a></p>
+    <ul class="footer-links">
+      <li><a href="index.html">Overview</a></li>
+      <li><a href="download.html">Download</a></li>
+      <li><a href="https://github.com/trinkner/yearbirder" target="_blank" rel="noopener">GitHub</a></li>
+      <li><a href="https://ebird.org" target="_blank" rel="noopener">eBird</a></li>
+    </ul>
+  </div>
+</footer>
+
+<script>
+  // Platform tab switcher
+  const tabs = document.querySelectorAll('.tab-btn');
+  const panels = document.querySelectorAll('.platform-panel');
+
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      tabs.forEach(t => { t.classList.remove('active'); t.setAttribute('aria-selected', 'false'); });
+      panels.forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      tab.setAttribute('aria-selected', 'true');
+      document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+    });
+  });
+</script>
+
+</body>
+</html>
