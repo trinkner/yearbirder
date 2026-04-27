@@ -186,6 +186,7 @@ class Stats(QMdiSubWindow, form_Stats.Ui_frmStats):
             lens_count         = {}   # lens -> count
             species_photo_count= {}   # commonName -> count
             species_last_date  = {}   # commonName -> most recent photo date (YYYY-MM-DD)
+            species_first_date = {}   # commonName -> earliest photo date (YYYY-MM-DD)
 
             for s in sightings:
                 photos = s.get("photos") or []
@@ -205,6 +206,9 @@ class Stats(QMdiSubWindow, form_Stats.Ui_frmStats):
                             prev = species_last_date.get(name)
                             if prev is None or date > prev:
                                 species_last_date[name] = date
+                            prev_first = species_first_date.get(name)
+                            if prev_first is None or date < prev_first:
+                                species_first_date[name] = date
                     photo_location_set.add(s["location"])
                     if s.get("family"):
                         photo_family_set.add(s["family"])
@@ -232,15 +236,21 @@ class Stats(QMdiSubWindow, form_Stats.Ui_frmStats):
 
             # Most recently photographed: species with the latest last-photo date
             # Longest since photographed: species with the earliest last-photo date
+            # Most recent new species: species whose first-ever photo date is latest
             most_recent_species = ""
             most_recent_date    = ""
             longest_since_species = ""
             longest_since_date    = ""
+            most_recent_new_species = ""
+            most_recent_new_date    = ""
             if species_last_date:
                 mr = max(species_last_date.items(), key=lambda x: x[1])
                 most_recent_species, most_recent_date = mr[0], mr[1]
                 ls = min(species_last_date.items(), key=lambda x: x[1])
                 longest_since_species, longest_since_date = ls[0], ls[1]
+            if species_first_date:
+                mn = max(species_first_date.items(), key=lambda x: x[1])
+                most_recent_new_species, most_recent_new_date = mn[0], mn[1]
 
             photo_stats = {
                 "photo_count":              photo_count,
@@ -253,10 +263,12 @@ class Stats(QMdiSubWindow, form_Stats.Ui_frmStats):
                 "photo_rated_count":        len(ratings),
                 "photo_unrated_count":      photo_count - len(ratings),
                 "photo_top_species":        top_species[:3],
-                "photo_most_recent_species": most_recent_species,
-                "photo_most_recent_date":    most_recent_date,
-                "photo_longest_since_species": longest_since_species,
-                "photo_longest_since_date":    longest_since_date,
+                "photo_most_recent_species":     most_recent_species,
+                "photo_most_recent_date":        most_recent_date,
+                "photo_longest_since_species":   longest_since_species,
+                "photo_longest_since_date":      longest_since_date,
+                "photo_most_recent_new_species": most_recent_new_species,
+                "photo_most_recent_new_date":    most_recent_new_date,
                 "photo_top_camera":            top_camera[0],
                 "photo_top_camera_count":      top_camera[1],
                 "photo_top_lens":              top_lens[0],
@@ -415,17 +427,24 @@ class Stats(QMdiSubWindow, form_Stats.Ui_frmStats):
             mr_date = st.get("photo_most_recent_date", "")
             ls_name = st.get("photo_longest_since_species", "")
             ls_date = st.get("photo_longest_since_date", "")
+            mn_name = st.get("photo_most_recent_new_species", "")
+            mn_date = st.get("photo_most_recent_new_date", "")
 
             recency_rows = []
+            if mn_name:
+                recency_rows += [
+                    ("Most Recent New Species", ""),
+                    (f"\u00a0\u00a0- {_sp(mn_name)}", fdate(mn_date)),
+                ]
             if mr_name:
                 recency_rows += [
                     ("Most Recently Photographed", ""),
-                    (f"\u00a0\u00a0- {_sp(mr_name)}", mr_date),
+                    (f"\u00a0\u00a0- {_sp(mr_name)}", fdate(mr_date)),
                 ]
             if ls_name:
                 recency_rows += [
                     ("Longest Since Photographed", ""),
-                    (f"\u00a0\u00a0- {_sp(ls_name)}", ls_date),
+                    (f"\u00a0\u00a0- {_sp(ls_name)}", fdate(ls_date)),
                 ]
 
             def _trunc(s, n=28):

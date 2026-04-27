@@ -2518,16 +2518,9 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         item_list  = self._ytd_recent_items[idx] if self._ytd_recent_items else []
         item_label = getattr(self, "_ytd_item_label", "species")
 
-        # Compute limit using the actual space available from the cursor position.
-        ax_bbox      = self._ax.get_window_extent()
-        ax_center_px = (ax_bbox.y0 + ax_bbox.y1) / 2
-        if event.y > ax_center_px:
-            available_px = event.y - ax_bbox.y0
-        else:
-            available_px = ax_bbox.y1 - event.y
         # _tooltip_species_limit budgets for 2 overhead lines (header + "more").
-        # YTD has 4: header, blank line, heading row, and "more".
-        limit = max(3, self._tooltip_species_limit(available_px) - 2)
+        # YTD has 4: header, blank line, heading row, and "more" — subtract 2 more.
+        limit = max(3, self._tooltip_species_limit(anchor_data_xy=(ytd_count, idx)) - 2)
 
         if item_label == "checklists":
             recent_label = "Most recent:"
@@ -3333,15 +3326,23 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         if available_px is None:
             if anchor_data_xy is not None and self._ax is not None:
                 ylim  = self._ax.get_ylim()
-                y_range = ylim[1] - ylim[0]
                 anchor_y_data = float(anchor_data_xy[1])
                 ax_h  = self._ax.get_window_extent().height or 400
-                if y_range == 0:
+                y_lo, y_hi = min(ylim), max(ylim)
+                y_span = y_hi - y_lo
+                y_inverted = ylim[0] > ylim[1]
+                # Visual top half: large y for normal axis, small y for inverted axis.
+                visual_top = (anchor_y_data >= (ylim[0] + ylim[1]) / 2) != y_inverted
+                if y_span == 0:
                     frac = 0.5
-                elif anchor_y_data >= (ylim[0] + ylim[1]) / 2:
-                    frac = (anchor_y_data - ylim[0]) / y_range   # top-half: extends down
+                elif visual_top:
+                    # Tooltip extends toward visual bottom — measure space below the bar.
+                    y_visual_bottom = y_hi if y_inverted else y_lo
+                    frac = abs(anchor_y_data - y_visual_bottom) / y_span
                 else:
-                    frac = (ylim[1] - anchor_y_data) / y_range   # bottom-half: extends up
+                    # Tooltip extends toward visual top — measure space above the bar.
+                    y_visual_top = y_lo if y_inverted else y_hi
+                    frac = abs(anchor_y_data - y_visual_top) / y_span
                 available_px = frac * ax_h
             elif self._ax is not None:
                 available_px = (self._ax.get_window_extent().height or 400) * self._TIP_MAX_FRAC
@@ -3422,8 +3423,10 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             xlim = self._ax.get_xlim()
             ylim = self._ax.get_ylim()
             ax, ay = float(anchor_data_xy[0]), float(anchor_data_xy[1])
-            left_half = ax < (xlim[0] + xlim[1]) / 2
-            top_half  = ay >= (ylim[0] + ylim[1]) / 2
+            # XOR with axis-inverted flag so quadrant detection works for both
+            # normal axes and inverted axes (e.g. YTD chart uses invert_yaxis()).
+            left_half = (ax < (xlim[0] + xlim[1]) / 2) != (xlim[0] > xlim[1])
+            top_half  = (ay >= (ylim[0] + ylim[1]) / 2) != (ylim[0] > ylim[1])
 
             gap_pts = self._TIP_GAP_PX * (72 / self._fig.dpi)
 

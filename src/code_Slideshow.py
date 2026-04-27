@@ -214,12 +214,15 @@ class SlideshowWindow(QWidget):
             location = sight.get("location", "")
             counter  = f"{self.currentIndex + 1} / {len(self.photoList)}"
 
-            half = BAR_H // 2
+            top_pad   = 10
+            name_h    = 28
+            detail_y  = top_pad + name_h - 7   # pull detail 7px closer to name
+            detail_h  = BAR_H - detail_y
 
             f1 = QFont("Helvetica", 20, QFont.Weight.Bold)
             painter.setFont(f1)
             painter.setPen(QColor("white"))
-            painter.drawText(QRect(0, photo_area_h, w, half),
+            painter.drawText(QRect(0, photo_area_h + top_pad, w, name_h),
                              Qt.AlignmentFlag.AlignCenter, species)
 
             f2 = QFont("Helvetica", 13)
@@ -227,7 +230,7 @@ class SlideshowWindow(QWidget):
             painter.setPen(QColor(190, 190, 190))
             parts  = [p for p in (date, location, counter) if p]
             detail = "  ·  ".join(parts)
-            painter.drawText(QRect(0, photo_area_h + half, w, half),
+            painter.drawText(QRect(0, photo_area_h + detail_y, w, detail_h),
                              Qt.AlignmentFlag.AlignCenter, detail)
         else:
             photo_area_h = h

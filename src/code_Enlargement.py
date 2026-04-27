@@ -165,6 +165,12 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
                 actionToggleFullScreen = menu.addAction("Full screen (F10)")
                 
             menu.addSeparator()
+            actionRate1 = menu.addAction("Rate 1 star (1)")
+            actionRate2 = menu.addAction("Rate 2 stars (2)")
+            actionRate3 = menu.addAction("Rate 3 stars (3)")
+            actionRate4 = menu.addAction("Rate 4 stars (4)")
+            actionRate5 = menu.addAction("Rate 5 stars (5)")
+            menu.addSeparator()
             actionSlideshow = menu.addAction("Slideshow")
             menu.addSeparator()
             actionDetachFile = menu.addAction("Detach photo from Yearbirder")
@@ -176,22 +182,33 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
             if self.mdiParent.isMaximized() is True:
                 if action == actionToggleHideCursor:
                     self.parent().toggleHideCursor()
-                    
+
             if action == actionFitToWindow:
                 self.parent().fitEnlargement()
 
             if action == actionShowNextPhoto:
                 self.parent().showNextPhoto()
-        
+
             if action == actionShowPreviousPhoto:
                 self.parent().showPreviousPhoto()
-            
+
             if action == actionToggleCameraDetails:
                 self.parent().toggleCameraDetails()
-            
+
             if action == actionToggleFullScreen:
                 QTimer.singleShot(0, self.parent().toggleFullScreen)
-            
+
+            if action == actionRate1:
+                self.parent().ratePhoto(Qt.Key_1)
+            if action == actionRate2:
+                self.parent().ratePhoto(Qt.Key_2)
+            if action == actionRate3:
+                self.parent().ratePhoto(Qt.Key_3)
+            if action == actionRate4:
+                self.parent().ratePhoto(Qt.Key_4)
+            if action == actionRate5:
+                self.parent().ratePhoto(Qt.Key_5)
+
             if action == actionSlideshow:
                 self.parent().launchSlideshow()
 

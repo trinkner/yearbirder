@@ -305,8 +305,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
     fontSize = 11
     scaleFactor = 1
     rowHeight = 16  # default; recomputed in ScaleDisplay() and __init__
-    versionNumber = "1.41"
-    versionDate = "April 24, 2026"
+    versionNumber = "1.42"
+    versionDate = "April 27, 2026"
     taxonomyYear = ""
 
     def __init__(self):
@@ -967,6 +967,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
 
     def _showPhotoCatalogMenuItems(self):
+        self.actionPhotos.setVisible(True)
         self.actionOpenPhotoSettings.setVisible(True)
         self.actionClosePhotoSettings.setVisible(True)
         self.actionSavePhotoSettings.setVisible(True)
@@ -977,6 +978,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionOptimizePhotoSettings.setVisible(True)
 
     def _hidePhotoCatalogMenuItems(self):
+        self.actionPhotos.setVisible(False)
         self.actionClosePhotoSettings.setVisible(False)
         self.actionSavePhotoSettings.setVisible(False)
         self.menuFileCatalogSeparator.setVisible(False)

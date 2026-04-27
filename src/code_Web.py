@@ -119,6 +119,44 @@ class ChoroplethBridge(QObject):
             sub.scaleMe()
 
 
+class AnimatedPhotosBridge(QObject):
+    """JS→Python bridge for the Animated Sequence Map.
+
+    When the user clicks a photo card, opens a Photos window filtered
+    to that dot's location within the current map filter.
+    """
+
+    def __init__(self, web_window, locations):
+        super().__init__()
+        self._web       = web_window
+        self._locations = locations   # one location name per photo, parallel to photos list
+
+    @Slot(int)
+    def photoClicked(self, idx):
+        from copy import deepcopy
+        import code_Photos
+
+        if idx < 0 or idx >= len(self._locations):
+            return
+
+        new_filter = deepcopy(self._web.filter)
+        new_filter.setLocationType("Location")
+        new_filter.setLocationName(self._locations[idx])
+
+        main = self._web.mdiParent
+        if not main.db.GetSightingsWithPhotos(new_filter):
+            return
+
+        sub = code_Photos.Photos()
+        sub.mdiParent = main
+        main.mdiArea.addSubWindow(sub)
+        main.PositionChildWindow(sub, self._web)
+        sub.show()
+
+        if sub.FillPhotos(new_filter) is False:
+            sub.close()
+
+
 class PhotosMapBridge(QObject):
     """JS→Python bridge for the Geolocated Photos map.
 
@@ -1980,8 +2018,10 @@ document.addEventListener("DOMContentLoaded", function() {{
 
         html = photo_map.get_root().render()
 
-        # ── QWebChannel bridge (click → Enlargement) ─────────────────────
-        self._photosBridge = PhotosMapBridge(self, entries)
+        # ── QWebChannel bridge (click → Photos window for that location) ──
+        self._photosBridge = AnimatedPhotosBridge(
+            self, [p["location"] for p in photos]
+        )
         channel = QWebChannel(self.webView.page())
         channel.registerObject("bridge", self._photosBridge)
         self.webView.page().setWebChannel(channel)
@@ -2043,7 +2083,7 @@ document.addEventListener("DOMContentLoaded", function() {{
     var timer   = null;
     var DELAYS  = [5000, 3500, 2500, 1800, 1300, 950, 700, 500, 375, 300, 250];
 
-    // Set up the Qt bridge for click-to-enlarge.
+    // Set up the Qt bridge for click → Photos window.
     new QWebChannel(qt.webChannelTransport, function(ch) {{
         window.photoBridge = ch.objects.bridge;
     }});
@@ -2082,6 +2122,8 @@ document.addEventListener("DOMContentLoaded", function() {{
         if (current >= 0 && current < photos.length) {{
             setThumbVisible(current, true);
             dots[current].setStyle({{opacity: 1, fillOpacity: 0.9}});
+            var dotEl = dots[current].getElement();
+            if (dotEl) {{ dotEl.style.pointerEvents = 'auto'; dotEl.style.cursor = 'pointer'; }}
             shown = current + 1;
         }} else {{
             shown = 0;
@@ -2095,6 +2137,8 @@ document.addEventListener("DOMContentLoaded", function() {{
         shown = 0;
         for (var i = 0; i < dots.length; i++) {{
             dots[i].setStyle({{opacity: 0, fillOpacity: 0}});
+            var dotEl = dots[i].getElement();
+            if (dotEl) dotEl.style.pointerEvents = 'none';
         }}
         updateUI();
     }}
@@ -2199,21 +2243,27 @@ document.addEventListener("DOMContentLoaded", function() {{
                     className:  ''
                 }})
             }});
-            m.on('click', function() {{
-                if (window.photoBridge) window.photoBridge.photoClicked(p.idx);
-            }});
             m.addTo(map);
+            // Disable pointer-events on the thumbnail card — clicks go to the dot instead.
+            var mEl = m.getElement();
+            if (mEl) mEl.style.pointerEvents = 'none';
             mkrs.push(m);
 
             var dot = L.circleMarker([p.lat, p.lon], {{
-                radius:      5,
+                radius:      6,
                 fillColor:   '{CHART_PRIMARY}',
                 color:       '#ffffff',
                 weight:      1.5,
                 opacity:     0,
                 fillOpacity: 0,
             }});
+            dot.on('click', function() {{
+                if (window.photoBridge) window.photoBridge.photoClicked(p.idx);
+            }});
             dot.addTo(map);
+            // Start non-interactive; showAt() enables pointer-events when the dot becomes visible.
+            var dotEl = dot.getElement();
+            if (dotEl) dotEl.style.pointerEvents = 'none';
             dots.push(dot);
         }});
 

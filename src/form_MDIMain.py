@@ -1163,7 +1163,7 @@ class Ui_MainWindow(object):
         self.actionPhotos.setText(_translate("MainWindow", "Photos"))
         self.actionPhotosByFilter.setText(_translate("MainWindow", "Browse Photos"))
         self.actionSpeciesGallery.setText(_translate("MainWindow", "Species Gallery"))
-        self.actionEditPhotosByFilter.setText(_translate("MainWindow", "Batch Edit Photos..."))
+        self.actionEditPhotosByFilter.setText(_translate("MainWindow", "Manage Photos..."))
         self.actionOpenPhotoSettings.setText(_translate("MainWindow", "Open photo catalog..."))
         self.actionAddPhotos.setText(_translate("MainWindow", "Add photos..."))
         self.actionSavePhotoSettings.setText(_translate("MainWindow", "Save photo catalog..."))
