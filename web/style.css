@@ -98,6 +98,9 @@ nav {
   align-items: center;
   justify-content: space-between;
   height: 60px;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 40px;
 }
 
 .nav-brand {
@@ -140,13 +143,13 @@ nav {
 .hero-split {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  min-height: 580px;
+  min-height: 420px;
   max-width: 1400px;
   margin: 0 auto;
 }
 
 .hero-left {
-  padding: 72px 56px 72px 40px;
+  padding: 52px 56px 52px 40px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -217,7 +220,7 @@ nav {
 
 /* ── Audience cards ──────────────────────────────────────────────── */
 .audiences {
-  padding: 80px 0;
+  padding: 80px 0 60px;
   background: var(--mist);
 }
 
@@ -260,7 +263,7 @@ nav {
 
 /* ── Feature sections ────────────────────────────────────────────── */
 .feature {
-  padding: 96px 0;
+  padding: 64px 0;
 }
 
 .feature:nth-child(even) { background: var(--mist); }
