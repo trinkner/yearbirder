@@ -4,7 +4,7 @@
 # Prerequisites:
 #   - Developer ID certificate in Keychain
 #   - notarytool credentials stored: xcrun notarytool store-credentials "yearbirder"
-#   - PySide6 and PyInstaller installed under /opt/homebrew/bin/python3 (NOT the project venv)
+#   - PySide6 and PyInstaller installed in the project venv (python.org Python 3.14)
 #
 # Usage:  ./build_release.sh
 
@@ -36,7 +36,7 @@ WORK_RW_DMG="/tmp/${DMG_NAME}_rw.dmg"
 DMG_STAGING="/tmp/${DMG_NAME}_dmg_staging"
 
 echo "=== Step 1: PyInstaller build ==="
-/opt/homebrew/bin/python3 -m PyInstaller Yearbirder.spec --noconfirm
+venv/bin/python3 -m PyInstaller Yearbirder.spec --noconfirm
 echo "Build complete."
 
 echo ""
@@ -86,7 +86,7 @@ echo "  3b: PySide6 plain executables signed"
 # 3c. Python.framework: binary first, then the framework bundle
 codesign --force --options runtime --timestamp \
     --entitlements "$ENTS" --sign "$SIGN_ID" \
-    "$WORK_APP/Contents/Frameworks/Python.framework/Versions/3.12/Python"
+    "$WORK_APP/Contents/Frameworks/Python.framework/Versions/3.14/Python"
 codesign --force --options runtime --timestamp \
     --entitlements "$ENTS" --sign "$SIGN_ID" \
     "$WORK_APP/Contents/Frameworks/Python.framework"

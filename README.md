@@ -9,7 +9,7 @@
 
 # Yearbirder
 
-**Current release: v1.41** (April 2026)
+**Current release: v1.43** (April 2026)
 
 A desktop application for exploring and analysing your personal [eBird](https://ebird.org) data and bird photos.
 
