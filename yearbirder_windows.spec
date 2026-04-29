@@ -49,8 +49,9 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
-    [],
-    exclude_binaries=True,
+    a.binaries,
+    a.datas,
+    exclude_binaries=False,
     name="Yearbirder",
     debug=False,
     bootloader_ignore_signals=False,
@@ -58,13 +59,4 @@ exe = EXE(
     upx=False,
     console=False,
     icon="icons/Yearbirder.ico",
-)
-
-coll = COLLECT(
-    exe,
-    a.binaries,
-    a.datas,
-    strip=False,
-    upx=False,
-    name="Yearbirder",
 )

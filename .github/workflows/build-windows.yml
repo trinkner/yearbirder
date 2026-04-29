@@ -38,5 +38,5 @@ jobs:
         uses: actions/upload-artifact@v4.6.2
         with:
           name: Yearbirder-Windows
-          path: dist/Yearbirder/
+          path: dist/Yearbirder.exe
           retention-days: 30
