@@ -591,6 +591,13 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         
         self.dckPhotoFilter.setMinimumWidth(235)
         self.dckFilter.setMinimumWidth(215)
+
+        self.dckFilter.visibilityChanged.connect(
+            lambda v: (self.actionShowStandardFilter.setVisible(not v),
+                       self.actionHideStandardFilter.setVisible(v)))
+        self.dckPhotoFilter.visibilityChanged.connect(
+            lambda v: (self.actionShowPhotoFilter.setVisible(not v),
+                       self.actionHidePhotoFilter.setVisible(v)))
         
         self.setWindowTitle("Yearbirder v. " + self.versionNumber)
 
