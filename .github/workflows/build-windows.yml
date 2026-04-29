@@ -52,3 +52,16 @@ jobs:
           name: Yearbirder-Windows-Setup
           path: dist/Yearbirder_Setup.exe
           retention-days: 30
+
+      - name: Attach installer to GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "v${{ steps.version.outputs.version }}"
+          $exists = gh release view $tag 2>&1
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag dist/Yearbirder_Setup.exe --clobber
+            Write-Host "Uploaded Yearbirder_Setup.exe to release $tag"
+          } else {
+            Write-Host "No release found for $tag — skipping upload"
+          }
