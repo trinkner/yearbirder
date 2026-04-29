@@ -579,6 +579,16 @@ code, .step-content code {
 
 .callout strong { color: #3d3500; }
 
+.callout-warning {
+  background: #f0f4ff;
+  border-left-color: #4a6fa5;
+  color: #1e2d4a;
+  margin-top: 0;
+  margin-bottom: 32px;
+}
+.callout-warning strong { color: #1a2540; }
+.callout-warning a { color: #4a6fa5; }
+
 /* Requirements table */
 .req-section {
   margin-top: 64px;

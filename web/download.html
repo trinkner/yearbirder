@@ -117,99 +117,57 @@
 
       <div class="platform-intro">
         <div class="platform-cta">
-          <a href="https://github.com/trinkner/yearbirder/archive/refs/tags/v1.43.zip" class="btn btn-secondary btn-lg">
-            Download Yearbirder
+          <a href="https://github.com/trinkner/yearbirder/releases/latest" class="btn btn-primary btn-lg">
+            Download for Windows
           </a>
-          <p class="release-note">Requires Python 3.10+</p>
+          <p class="release-note">Windows 10 or 11 &nbsp;·&nbsp; 64-bit</p>
         </div>
         <div class="platform-intro-text">
-          <h3>Running from Python source</h3>
-          <p>On Windows, Yearbirder runs from its Python source code. This takes about ten minutes to set up and only needs to be done once. The steps below are written for non-technical users — just follow them in order and you'll be up and running.</p>
+          <h3>One-click installer</h3>
+          <p>Download <code>Yearbirder_Setup.exe</code> and run it. Yearbirder installs to Program Files and adds a Start Menu entry. No Python installation required.</p>
         </div>
       </div>
 
-      <h3 class="steps-heading">Setup instructions (one time only)</h3>
+      <div class="callout callout-warning">
+        <strong>Windows SmartScreen warning</strong> — When you run the installer, Windows may show a blue screen saying <em>"Windows protected your PC."</em> This happens because Yearbirder is a free, independent app that is not commercially code-signed. It is safe: the source code is publicly available on <a href="https://github.com/trinkner/yearbirder" target="_blank" rel="noopener">GitHub</a>.<br><br>
+        To proceed: click <strong>More info</strong>, then click <strong>Run anyway</strong>.
+      </div>
+
+      <h3 class="steps-heading">Installation steps</h3>
       <div class="steps">
 
         <div class="step">
           <div class="step-number">1</div>
           <div class="step-content">
-            <h4>Install Python</h4>
-            <p>Go to <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">python.org/downloads</a> and download the latest Python installer for Windows. Run it.</p>
-            <div class="callout">
-              <strong>Important:</strong> On the first screen of the installer, check the box that says <strong>"Add Python to PATH"</strong> before clicking Install. If you miss this, Python won't work from the command line.
-            </div>
+            <h4>Download the installer</h4>
+            <p>Click <strong>Download for Windows</strong> above. Your browser will download <code>Yearbirder_Setup.exe</code>.</p>
           </div>
         </div>
 
         <div class="step">
           <div class="step-number">2</div>
           <div class="step-content">
-            <h4>Open Command Prompt</h4>
-            <p>Press the <strong>Windows key</strong>, type <code>cmd</code>, and press <strong>Enter</strong>. A black window will appear — this is the Command Prompt.</p>
+            <h4>Run the installer</h4>
+            <p>Double-click <code>Yearbirder_Setup.exe</code>. If Windows shows a SmartScreen warning, click <strong>More info</strong> and then <strong>Run anyway</strong>. Follow the installer prompts — the defaults are fine.</p>
           </div>
         </div>
 
         <div class="step">
           <div class="step-number">3</div>
           <div class="step-content">
-            <h4>Install required packages</h4>
-            <p>In the Command Prompt window, copy and paste the line below, then press <strong>Enter</strong>. This downloads the libraries Yearbirder needs. It may take a few minutes.</p>
-            <div class="code-block">pip install pyside6 folium matplotlib numpy natsort piexif</div>
+            <h4>Launch Yearbirder</h4>
+            <p>Open Yearbirder from the Start Menu. You can also optionally create a desktop shortcut during installation.</p>
           </div>
         </div>
 
         <div class="step">
           <div class="step-number">4</div>
           <div class="step-content">
-            <h4>Download Yearbirder</h4>
-            <p>Click the <strong>Download Yearbirder</strong> button above. Your browser will download a zip file. Once it has finished, open the zip and move the <code>yearbirder-1.43</code> folder to a convenient location, such as your Documents folder.</p>
-          </div>
-        </div>
-
-        <div class="step">
-          <div class="step-number">5</div>
-          <div class="step-content">
-            <h4>Navigate to the Yearbirder folder</h4>
-            <p>Back in Command Prompt, type <code>cd</code> followed by a space and the path to the folder you unzipped. For example:</p>
-            <div class="code-block">cd C:\Users\YourName\Documents\yearbirder-1.43</div>
-            <p style="margin-top:8px;">Tip: you can drag the folder from File Explorer into the Command Prompt window to paste its path automatically.</p>
-          </div>
-        </div>
-
-        <div class="step">
-          <div class="step-number">6</div>
-          <div class="step-content">
-            <h4>Run Yearbirder</h4>
-            <p>Type the following and press <strong>Enter</strong>:</p>
-            <div class="code-block">python yearbirder.py</div>
-            <p style="margin-top:8px;">Yearbirder will open. In future, repeat steps 5 and 6 to launch the app.</p>
-          </div>
-        </div>
-
-        <div class="step">
-          <div class="step-number">7</div>
-          <div class="step-content">
             <h4>Open your eBird data</h4>
             <p>Go to <a href="https://ebird.org/downloadMyData" target="_blank" rel="noopener">ebird.org/downloadMyData</a>, click <strong>Request My Observations</strong>, and wait for the email with your download link. Once you have the <code>.zip</code> file, use <strong>File → Open</strong> in Yearbirder to load it.</p>
           </div>
         </div>
 
-      </div>
-
-      <div class="req-section">
-        <h3>Python package requirements</h3>
-        <p style="color:var(--slate); margin-bottom:20px; font-size:.95rem;">
-          These are installed in step 3 above. Listed here for reference.
-        </p>
-        <div class="req-grid">
-          <div class="req-item"><strong>PySide6</strong><span>Qt 6 GUI framework (LGPL)</span></div>
-          <div class="req-item"><strong>folium</strong><span>Interactive map rendering</span></div>
-          <div class="req-item"><strong>matplotlib</strong><span>Charts and graphs</span></div>
-          <div class="req-item"><strong>numpy</strong><span>Numerical data processing</span></div>
-          <div class="req-item"><strong>natsort</strong><span>Natural-order sorting</span></div>
-          <div class="req-item"><strong>piexif</strong><span>Photo EXIF data reading</span></div>
-        </div>
       </div>
 
     </div>
