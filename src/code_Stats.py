@@ -350,7 +350,8 @@ class Stats(QMdiSubWindow, form_Stats.Ui_frmStats):
             # Format YYYY-MM-DD as "Mon D, YYYY" (e.g. "Apr 4, 2025")
             try:
                 import datetime
-                return datetime.datetime.strptime(d, "%Y-%m-%d").strftime("%b %-d, %Y")
+                dt = datetime.datetime.strptime(d, "%Y-%m-%d")
+                return f"{dt.strftime('%b')} {dt.day}, {dt.strftime('%Y')}"
             except Exception:
                 return d
 

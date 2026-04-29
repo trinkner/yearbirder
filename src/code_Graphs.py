@@ -1896,7 +1896,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
 
         n = len(years)
         current_year = str(today.year)
-        today_label = today.strftime("%-d %b")  # e.g. "10 Apr"
+        today_label = f"{today.day} {today.strftime('%b')}"  # e.g. "10 Apr"
 
         y_pos = list(range(n))
         max_val = max(full_counts) if full_counts else 1
