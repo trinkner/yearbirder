@@ -1,4 +1,4 @@
-name: Build Windows EXE
+name: Build Windows Installer
 
 on:
   push:
@@ -34,9 +34,21 @@ jobs:
       - name: Build with PyInstaller
         run: pyinstaller yearbirder_windows.spec
 
-      - name: Upload build artifact
+      - name: Extract version
+        id: version
+        run: |
+          $version = python -c "import re; content = open('src/code_MainWindow.py').read(); print(re.search(r'versionNumber = \`"(.+?)\`"', content).group(1))"
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Build installer
+        run: iscc /DMyAppVersion="${{ steps.version.outputs.version }}" yearbirder.iss
+
+      - name: Upload installer artifact
         uses: actions/upload-artifact@v4.6.2
         with:
-          name: Yearbirder-Windows
-          path: dist/Yearbirder.exe
+          name: Yearbirder-Windows-Setup
+          path: dist/Yearbirder_Setup.exe
           retention-days: 30
