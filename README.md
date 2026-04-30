@@ -9,13 +9,19 @@
 
 # Yearbirder
 
-**Current release: v1.43** (April 2026)
+**Current release: v1.44** (April 2026)
 
 A desktop application for exploring and analysing your personal [eBird](https://ebird.org) data and bird photos.
 
 Yearbirder lets you filter, browse, and visualise your personal eBird sightings in ways the eBird website does not — across every location, species, date, and season in your personal history. If you are a bird photographer, Yearbirder also lets you sort, filter and view your photos in the same way.
 
 ---
+
+## What's New in v1.44
+
+- **Animated First Sightings Map** — a new animated map that plays back the first sighting of each species under the current filter; unlike the Animated Lifer Map (which always shows life lifers), this map respects your active filter, so you can watch your county firsts, year firsts, or any filtered species list accumulate chronologically
+- **Animated map tooltips** — during playback of either animated map, a tooltip tracks each newly plotted species, showing its name, rank, date, and location
+- **Fix** — crash in Animated Sequence Map with large photo collections
 
 ## What's New in v1.41
 
@@ -63,9 +69,10 @@ Yearbirder lets you filter, browse, and visualise your personal eBird sightings 
   - *Pie Chart by Individual Tallies* — individual bird count by taxonomic family or order
   - *Locations by Checklists* — checklist count by location as a pie chart
   - *YTD Reports* — horizontal bar charts comparing year-to-date species, locations, checklists, and photographs across all years in your data
-- **Maps** — eight interactive map types:
+- **Maps** — nine interactive map types:
   - *Locations Map* — all your sighting locations plotted on a zoomable map
   - *Animated Lifer Map* — watch your life list build up chronologically, dot by dot
+  - *Animated First Sightings Map* — like the Lifer Map but filter-aware; animate county firsts, year firsts, or any filtered species list
   - *Effort Map by Time* — bubble map sized by cumulative birding time per location
   - *Effort Map by Checklists* — bubble map sized by checklist count per location
   - *Species Total Map* — bubble map sized by species total per location

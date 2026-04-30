@@ -161,16 +161,55 @@ echo "dist/${APP_NAME}.app is ready."
 
 echo ""
 echo "=== Step 9: Create DMG ==="
-# Build a staging folder with the app and an Applications symlink.
-# Use ditto (not cp -r) so the app's internal symlinks are preserved.
+# Build a staging folder: app, Applications symlink, and hidden background image folder.
 rm -rf "$DMG_STAGING" && mkdir "$DMG_STAGING"
 ditto "$WORK_APP" "$DMG_STAGING/${APP_NAME}.app"
 ln -s /Applications "$DMG_STAGING/Applications"
+mkdir "$DMG_STAGING/.background"
+cp src/dmg_background.png "$DMG_STAGING/.background/dmg_background.png"
 
 rm -f "$WORK_DMG" "$WORK_RW_DMG"
 hdiutil create -volname "${DMG_NAME}" -srcfolder "$DMG_STAGING" -ov -format UDRW "$WORK_RW_DMG"
+
+# Mount and configure Finder window (background, icon positions, window size)
+MOUNT_POINT="/Volumes/${DMG_NAME}"
+hdiutil attach "$WORK_RW_DMG" -mountpoint "$MOUNT_POINT"
+sleep 2
+# Hide .background on the mounted APFS volume (chflags on staging is not preserved)
+chflags hidden "${MOUNT_POINT}/.background"
+rm -f "${MOUNT_POINT}/.DS_Store"
+osascript << APPLESCRIPT
+tell application "Finder"
+  tell disk "${DMG_NAME}"
+    open
+    set current view of container window to icon view
+    set toolbar visible of container window to false
+    set statusbar visible of container window to false
+    set the bounds of container window to {100, 100, 640, 528}
+    set viewOptions to icon view options of container window
+    set arrangement of viewOptions to not arranged
+    set icon size of viewOptions to 100
+    set background picture of viewOptions to file ".background:dmg_background.png"
+    delay 3
+    set position of item "${APP_NAME}.app" of container window to {135, 195}
+    set position of item "Applications" of container window to {405, 195}
+    try
+      set position of item ".background" of container window to {900, 900}
+    end try
+    update without registering applications
+    delay 3
+    close
+  end tell
+end tell
+APPLESCRIPT
+# Remove .fseventsd created by macOS when mounting the APFS volume
+rm -rf "${MOUNT_POINT}/.fseventsd"
+sync
+hdiutil detach "$MOUNT_POINT"
+rm -rf "$DMG_STAGING"
+
 hdiutil convert "$WORK_RW_DMG" -format UDZO -imagekey zlib-level=9 -o "$WORK_DMG"
-rm "$WORK_RW_DMG" && rm -rf "$DMG_STAGING"
+rm "$WORK_RW_DMG"
 echo "DMG created."
 
 echo ""

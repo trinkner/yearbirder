@@ -1574,6 +1574,8 @@ document.addEventListener("DOMContentLoaded", function() {{
     var shown   = 0;
     var playing = false;
     var timer   = null;
+    var tipDiv  = null;
+    var map     = null;
     var DELAYS  = [1350, 900, 600, 380, 240, 150, 95, 60, 35, 20, 10];
 
     function delayMs() {{
@@ -1593,6 +1595,26 @@ document.addEventListener("DOMContentLoaded", function() {{
         }}
     }}
 
+    function showAutoTip(lifer) {{
+        if (!tipDiv || !map) return;
+        tipDiv.innerHTML = '<b>' + lifer.species + '</b> (#' + lifer.num + ')' +
+            '<br>' + lifer.date + ' &nbsp;·&nbsp; ' + lifer.location;
+        tipDiv.style.display = 'block';
+        var mapCont = map.getContainer();
+        var mapRect = mapCont.getBoundingClientRect();
+        var pt  = map.latLngToContainerPoint([lifer.lat, lifer.lon]);
+        var GAP = 12;
+        var tipW = tipDiv.offsetWidth;
+        var tipH = tipDiv.offsetHeight;
+        var absX = pt.x > mapRect.width / 2
+            ? mapRect.left + pt.x - tipW - GAP
+            : mapRect.left + pt.x + GAP;
+        var absY = mapRect.top + pt.y - tipH / 2;
+        absY = Math.max(GAP, Math.min(absY, window.innerHeight - tipH - GAP));
+        tipDiv.style.left = absX + 'px';
+        tipDiv.style.top  = absY + 'px';
+    }}
+
     function showUpTo(n) {{
         if (n <= shown) return;
         // Revert the previous "newest" dot from red back to its orange
@@ -1609,11 +1631,13 @@ document.addEventListener("DOMContentLoaded", function() {{
         }}
         shown = Math.min(n, lifers.length);
         updateUI();
+        if (shown > 0) showAutoTip(lifers[shown - 1]);
     }}
 
     function resetMarkers() {{
         mkrs.forEach(function(m) {{ m.setStyle({{ fillOpacity:0, opacity:0 }}); }});
         shown = 0;
+        if (tipDiv) tipDiv.style.display = 'none';
         updateUI();
     }}
 
@@ -1676,11 +1700,11 @@ document.addEventListener("DOMContentLoaded", function() {{
     }}
 
     function init() {{
-        var map = findMap();
+        map = findMap();
         if (!map) {{ setTimeout(init, 150); return; }}
 
         // Custom tooltip div — edge-aware, dark-themed
-        var tipDiv = document.createElement('div');
+        tipDiv = document.createElement('div');
         tipDiv.style.cssText = (
             'position:fixed; display:none; pointer-events:none; z-index:9999;' +
             'background:#252730; color:#e2e4ec; border:1px solid {CHART_PRIMARY};' +
@@ -1743,6 +1767,307 @@ document.addEventListener("DOMContentLoaded", function() {{
 
         self.webView.setUrl(QUrl.fromLocalFile(tmp_path))
         self._buildFilterTitle(filter, "Life List Map", count=total, countUnit="Lifers")
+
+        return True
+
+
+    def loadFirstSightingsMap(self, filter):
+        """Animate first sightings of each species under the current filter.
+
+        Identical in structure to loadLifeListMap but respects the full filter,
+        so it can show county firsts, year firsts, etc. rather than life lifers.
+        """
+        from copy import deepcopy
+        import folium
+        import json
+        import tempfile
+
+        self.title = "Animated First Sightings"
+        self.filter = deepcopy(filter)
+
+        minimal = self.mdiParent.db.GetMinimalFilteredSightingsList(filter)
+        cf = self.mdiParent.db.CompileFilter(filter)
+        minimal_sorted = sorted(minimal, key=lambda s: (s.get("date", ""), s.get("time", "")))
+
+        seen     = set()
+        species  = []
+        for s in minimal_sorted:
+            if not self.mdiParent.db.TestSightingCompiled(s, cf):
+                continue
+            name = s.get("commonName", "")
+            if "/" in name or "sp." in name or " x " in name:
+                continue
+            if name in seen:
+                continue
+            try:
+                lat = float(s["latitude"])
+                lon = float(s["longitude"])
+            except (ValueError, TypeError, KeyError):
+                continue
+            if lat == 0.0 and lon == 0.0:
+                continue
+            seen.add(name)
+            species.append({
+                "species":  name,
+                "date":     s.get("date", ""),
+                "location": s.get("location", ""),
+                "lat":      lat,
+                "lon":      lon,
+            })
+
+        if not species:
+            return False
+
+        species.sort(key=lambda x: x["date"])
+        total = len(species)
+
+        for i, sp in enumerate(species):
+            sp["color"] = self._lerp_orange(i + 1, total)
+            sp["num"]   = i + 1
+
+        lats = [sp["lat"] for sp in species]
+        lons = [sp["lon"] for sp in species]
+
+        fsm_map = folium.Map(
+            location=[sum(lats) / total, sum(lons) / total],
+            zoom_start=4,
+            tiles="CartoDB Voyager",
+        )
+        fsm_map.fit_bounds([[min(lats), min(lons)], [max(lats), max(lons)]])
+
+        species_js = json.dumps(species, ensure_ascii=False)
+        html = fsm_map.get_root().render()
+
+        animation = f"""
+<style>
+#fsm-bar {{
+    position:absolute; bottom:28px; left:50%; transform:translateX(-50%);
+    z-index:1000;
+    background:rgba(255,255,255,0.93);
+    border-radius:10px;
+    box-shadow:0 2px 10px rgba(0,0,0,0.25);
+    padding:7px 14px 8px;
+    display:flex; flex-direction:column; align-items:stretch; gap:5px;
+    font-family:sans-serif; font-size:13px;
+    white-space:nowrap; user-select:none;
+}}
+#fsm-controls {{
+    display:flex; align-items:center; gap:10px;
+}}
+#fsm-bar button {{
+    background:none; border:none; cursor:pointer;
+    font-size:17px; padding:0 2px; line-height:1;
+}}
+#fsm-slider {{ width:200px; cursor:pointer; }}
+#fsm-speed  {{ width:65px;  cursor:pointer; vertical-align:middle; }}
+#fsm-info   {{ min-width:120px; color:#333; }}
+#fsm-caption {{
+    text-align:center; font-size:12px; color:#444;
+    min-height:15px; letter-spacing:0.01em;
+}}
+</style>
+<div id="fsm-bar">
+  <div id="fsm-controls">
+    <button id="fsm-restart" title="Restart">&#9198;</button>
+    <button id="fsm-play"    title="Play / Pause">&#9654;</button>
+    <input  id="fsm-slider"  type="range" min="0" max="{total}" value="0">
+    <span   id="fsm-info">0 / {total} species</span>
+    <label  title="Animation speed" style="display:flex;align-items:center;gap:4px">
+        &#x1F422;<input id="fsm-speed" type="range" min="0" max="10" value="1">&#x1F407;
+    </label>
+  </div>
+  <div id="fsm-caption"></div>
+</div>
+<script>
+(function() {{
+    var species = {species_js};
+    var mkrs    = [];
+    var shown   = 0;
+    var playing = false;
+    var timer   = null;
+    var tipDiv  = null;
+    var map     = null;
+    var DELAYS  = [1350, 900, 600, 380, 240, 150, 95, 60, 35, 20, 10];
+
+    function delayMs() {{
+        return DELAYS[parseInt(document.getElementById('fsm-speed').value)] || 150;
+    }}
+
+    function updateUI() {{
+        var idx = Math.max(0, shown - 1);
+        document.getElementById('fsm-info').textContent = shown + ' / ' + species.length + ' species';
+        document.getElementById('fsm-slider').value = shown;
+        var capEl = document.getElementById('fsm-caption');
+        if (shown > 0) {{
+            var s = species[idx];
+            capEl.innerHTML = '<b>' + s.species + '</b> &nbsp;·&nbsp; ' + s.location + ' &nbsp;·&nbsp; ' + s.date;
+        }} else {{
+            capEl.textContent = '';
+        }}
+    }}
+
+    function showAutoTip(sp) {{
+        if (!tipDiv || !map) return;
+        tipDiv.innerHTML = '<b>' + sp.species + '</b> (#' + sp.num + ')' +
+            '<br>' + sp.date + ' &nbsp;·&nbsp; ' + sp.location;
+        tipDiv.style.display = 'block';
+        var mapCont = map.getContainer();
+        var mapRect = mapCont.getBoundingClientRect();
+        var pt  = map.latLngToContainerPoint([sp.lat, sp.lon]);
+        var GAP = 12;
+        var tipW = tipDiv.offsetWidth;
+        var tipH = tipDiv.offsetHeight;
+        var absX = pt.x > mapRect.width / 2
+            ? mapRect.left + pt.x - tipW - GAP
+            : mapRect.left + pt.x + GAP;
+        var absY = mapRect.top + pt.y - tipH / 2;
+        absY = Math.max(GAP, Math.min(absY, window.innerHeight - tipH - GAP));
+        tipDiv.style.left = absX + 'px';
+        tipDiv.style.top  = absY + 'px';
+    }}
+
+    function showUpTo(n) {{
+        if (n <= shown) return;
+        if (shown > 0) {{
+            mkrs[shown - 1].setStyle({{ fillColor: species[shown - 1].color }});
+        }}
+        for (var i = shown; i < n - 1 && i < species.length; i++) {{
+            mkrs[i].setStyle({{ fillColor: species[i].color, fillOpacity:0.85, opacity:1 }});
+        }}
+        if (n <= species.length) {{
+            mkrs[n - 1].setStyle({{ fillColor:'{CHART_PRIMARY}', fillOpacity:0.95, opacity:1 }});
+        }}
+        shown = Math.min(n, species.length);
+        updateUI();
+        if (shown > 0) showAutoTip(species[shown - 1]);
+    }}
+
+    function resetMarkers() {{
+        mkrs.forEach(function(m) {{ m.setStyle({{ fillOpacity:0, opacity:0 }}); }});
+        shown = 0;
+        if (tipDiv) tipDiv.style.display = 'none';
+        updateUI();
+    }}
+
+    function scheduleStep() {{
+        timer = setTimeout(function() {{
+            if (!playing) return;
+            if (shown < species.length) {{ showUpTo(shown + 1); scheduleStep(); }}
+            else pause();
+        }}, delayMs());
+    }}
+
+    function play() {{
+        if (shown >= species.length) resetMarkers();
+        playing = true;
+        document.getElementById('fsm-play').innerHTML = '&#9646;&#9646;';
+        scheduleStep();
+    }}
+
+    function pause() {{
+        playing = false;
+        clearTimeout(timer);
+        document.getElementById('fsm-play').innerHTML = '&#9654;';
+    }}
+
+    document.getElementById('fsm-play').onclick    = function() {{ if (playing) pause(); else play(); }};
+    document.getElementById('fsm-restart').onclick = function() {{ pause(); resetMarkers(); }};
+    document.getElementById('fsm-slider').oninput  = function() {{ var target = parseInt(this.value); pause(); resetMarkers(); showUpTo(target); }};
+
+    function fixBarWidth() {{
+        var bar = document.getElementById('fsm-bar');
+        var capEl = document.getElementById('fsm-caption');
+        var best = species.reduce(function(b, s) {{
+            var len = s.species.length + s.location.length + s.date.length;
+            return len > b.len ? {{len: len, sp: s}} : b;
+        }}, {{len: 0, sp: null}});
+        if (best.sp) {{
+            var s = best.sp;
+            capEl.innerHTML = '<b>' + s.species + '</b> &nbsp;·&nbsp; ' + s.location + ' &nbsp;·&nbsp; ' + s.date;
+            bar.style.minWidth = bar.offsetWidth + 'px';
+            capEl.textContent = '';
+        }}
+    }}
+    fixBarWidth();
+
+    function findMap() {{
+        var keys = Object.keys(window);
+        for (var i = 0; i < keys.length; i++) {{
+            try {{
+                var obj = window[keys[i]];
+                if (obj && obj instanceof L.Map) return obj;
+            }} catch(e) {{}}
+        }}
+        return null;
+    }}
+
+    function init() {{
+        map = findMap();
+        if (!map) {{ setTimeout(init, 150); return; }}
+
+        tipDiv = document.createElement('div');
+        tipDiv.style.cssText = (
+            'position:fixed; display:none; pointer-events:none; z-index:9999;' +
+            'background:#252730; color:#e2e4ec; border:1px solid {CHART_PRIMARY};' +
+            'border-radius:6px; padding:6px 10px; font-size:12px;' +
+            'max-width:300px; line-height:1.5;'
+        );
+        document.body.appendChild(tipDiv);
+
+        species.forEach(function(sp) {{
+            var m = L.circleMarker([sp.lat, sp.lon], {{
+                radius:7, fillColor:sp.color, color:'#555',
+                weight:0.8, fillOpacity:0, opacity:0
+            }});
+            m.on('mouseover', function(e) {{
+                tipDiv.innerHTML = '<b>' + sp.species + '</b> (#' + sp.num + ')' +
+                    '<br>' + sp.date + ' &nbsp;·&nbsp; ' + sp.location;
+                tipDiv.style.display = 'block';
+                var mapCont = map.getContainer();
+                var mapRect = mapCont.getBoundingClientRect();
+                var pt = map.latLngToContainerPoint(e.target.getLatLng());
+                var GAP = 12;
+                var tipW = tipDiv.offsetWidth;
+                var tipH = tipDiv.offsetHeight;
+                var absX = pt.x > mapRect.width / 2
+                    ? mapRect.left + pt.x - tipW - GAP
+                    : mapRect.left + pt.x + GAP;
+                var absY = mapRect.top + pt.y - tipH / 2;
+                absY = Math.max(GAP, Math.min(absY, window.innerHeight - tipH - GAP));
+                tipDiv.style.left = absX + 'px';
+                tipDiv.style.top  = absY + 'px';
+            }});
+            m.on('mouseout', function() {{
+                tipDiv.style.display = 'none';
+            }});
+            m.bindPopup(
+                '<div style="font-family:sans-serif">' +
+                '<b>' + sp.species + '</b><br>' +
+                'First sighting #' + sp.num + ' &middot; ' + sp.date + '<br>' +
+                sp.location + '</div>'
+            );
+            m.addTo(map);
+            mkrs.push(m);
+        }});
+
+        setTimeout(play, 300);
+    }}
+
+    init();
+}})();
+</script>
+"""
+        html = html.replace("</body>", animation + "\n</body>")
+
+        settings = QWebEngineProfile.defaultProfile().settings()
+        settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as f:
+            f.write(html)
+            tmp_path = f.name
+
+        self.webView.setUrl(QUrl.fromLocalFile(tmp_path))
+        self._buildFilterTitle(filter, "Animated First Sightings", count=total, countUnit="Species")
 
         return True
 
@@ -2074,14 +2399,15 @@ document.addEventListener("DOMContentLoaded", function() {{
 <script>
 {qwc_js}
 (function() {{
-    var photos     = {photos_js};
+    var photos      = {photos_js};
     var thumbMarker = null;
-    var dots    = [];
-    var shown   = 0;
-    var current = -1;
-    var playing = false;
-    var timer   = null;
-    var DELAYS  = [5000, 3500, 2500, 1800, 1300, 950, 700, 500, 375, 300, 250];
+    var map         = null;
+    var dots        = [];
+    var shown       = 0;
+    var current     = -1;
+    var playing     = false;
+    var timer       = null;
+    var DELAYS      = [5000, 3500, 2500, 1800, 1300, 950, 700, 500, 375, 300, 250];
 
     // Set up the Qt bridge for click → Photos window.
     new QWebChannel(qt.webChannelTransport, function(ch) {{
@@ -2202,8 +2528,23 @@ document.addEventListener("DOMContentLoaded", function() {{
     document.getElementById('aps-slider').oninput  = function() {{
         var target = parseInt(this.value);
         pause();
-        if (target === 0) resetMarkers();
-        else showAt(target - 1);
+        if (target === 0) {{
+            resetMarkers();
+        }} else {{
+            // Reveal dots that playback skipped over (forward scrub)
+            for (var i = shown; i < target - 1; i++) {{
+                dots[i].setStyle({{opacity: 1, fillOpacity: 0.9}});
+                var el = dots[i].getElement();
+                if (el) {{ el.style.pointerEvents = 'auto'; el.style.cursor = 'pointer'; }}
+            }}
+            // Hide dots beyond the new position (backward scrub)
+            for (var i = target; i < shown; i++) {{
+                dots[i].setStyle({{opacity: 0, fillOpacity: 0}});
+                var el = dots[i].getElement();
+                if (el) el.style.pointerEvents = 'none';
+            }}
+            showAt(target - 1);
+        }}
     }};
 
     // Lock the control bar width to its maximum before animation starts.
@@ -2235,7 +2576,7 @@ document.addEventListener("DOMContentLoaded", function() {{
     }}
 
     function init() {{
-        var map = findMap();
+        map = findMap();
         if (!map) {{ setTimeout(init, 150); return; }}
 
         photos.forEach(function(p) {{

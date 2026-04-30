@@ -305,8 +305,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
     fontSize = 11
     scaleFactor = 1
     rowHeight = 16  # default; recomputed in ScaleDisplay() and __init__
-    versionNumber = "1.43"
-    versionDate = "April 29, 2026"
+    versionNumber = "1.44"
+    versionDate = "April 30, 2026"
     taxonomyYear = ""
 
     def __init__(self):
@@ -493,6 +493,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionPhotoAccumulation.triggered.connect(self.CreatePhotoAccumulationChart)
         self.actionCumulativePhotos.triggered.connect(self.CreateCumulativePhotosChart)
         self.actionLifeListMap.triggered.connect(self.createLifeListMap)
+        self.actionFirstSightingsMap.triggered.connect(self.createFirstSightingsMap)
         self.actionEffortMap.triggered.connect(self.createEffortMap)
         self.actionEffortMapByChecklists.triggered.connect(self.createEffortMapByChecklists)
         self.actionSpeciesTotalMap.triggered.connect(self.createSpeciesTotalMap)
@@ -4673,6 +4674,22 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         sub = code_Web.Web()
         sub.mdiParent = self
         if sub.loadLifeListMap(filter) is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+
+
+    def createFirstSightingsMap(self):
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+        filter = self.GetFilter()
+        sub = code_Web.Web()
+        sub.mdiParent = self
+        if sub.loadFirstSightingsMap(filter) is True:
             self.mdiArea.addSubWindow(sub)
             self.PositionChildWindow(sub, self)
             sub.show()
