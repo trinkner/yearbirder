@@ -2074,8 +2074,8 @@ document.addEventListener("DOMContentLoaded", function() {{
 <script>
 {qwc_js}
 (function() {{
-    var photos  = {photos_js};
-    var mkrs    = [];
+    var photos     = {photos_js};
+    var thumbMarker = null;
     var dots    = [];
     var shown   = 0;
     var current = -1;
@@ -2105,22 +2105,52 @@ document.addEventListener("DOMContentLoaded", function() {{
         }}
     }}
 
-    // Show/hide each thumbnail.  pointer-events is also toggled so that hidden
-    // markers (opacity:0) cannot intercept clicks intended for the visible one.
-    function setThumbVisible(i, visible) {{
-        var m = mkrs[i];
-        if (!m || !m._icon) return;
-        m._icon.style.pointerEvents = visible ? '' : 'none';
-        var container = m._icon.firstChild;
-        if (!container) return;
-        container.style.opacity = visible ? '1' : '0';
+    function buildThumbHtml(p) {{
+        return (
+            '<div style="opacity:1; width:160px; display:flex; flex-direction:column;' +
+                'align-items:center; cursor:pointer; transition:opacity 0.2s;">' +
+                '<div style="width:160px; background:#252730;' +
+                    'border:2px solid {CHART_PRIMARY}; border-radius:6px;' +
+                    'overflow:hidden; box-shadow:0 3px 10px rgba(0,0,0,0.55);' +
+                    'font-family:sans-serif; line-height:1.3;">' +
+                    '<img src="' + p.img + '" ' +
+                         'style="width:160px; height:110px; object-fit:cover; display:block;">' +
+                    '<div style="padding:4px 6px 5px;">' +
+                        '<div style="font-size:11px; font-weight:bold; color:#e2e4ec;' +
+                             'white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + p.species + '</div>' +
+                        '<div style="font-size:10px; color:#8b8fa8;' +
+                             'white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + p.date + '</div>' +
+                        '<div style="font-size:10px; color:#8b8fa8;' +
+                             'white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + p.location + '</div>' +
+                    '</div>' +
+                '</div>' +
+                '<div style="width:0; height:0;' +
+                     'border-left:10px solid transparent;' +
+                     'border-right:10px solid transparent;' +
+                     'border-top:12px solid {CHART_PRIMARY};' +
+                     'margin-top:-1px;"></div>' +
+            '</div>'
+        );
     }}
 
     function showAt(idx) {{
-        if (current >= 0) setThumbVisible(current, false);
         current = idx;
         if (current >= 0 && current < photos.length) {{
-            setThumbVisible(current, true);
+            var p = photos[current];
+            var icon = L.divIcon({{
+                html: buildThumbHtml(p),
+                iconSize:   [160, 176],
+                iconAnchor: [80, 176],
+                className:  ''
+            }});
+            if (thumbMarker === null) {{
+                thumbMarker = L.marker([p.lat, p.lon], {{icon: icon}}).addTo(map);
+                var mEl = thumbMarker.getElement();
+                if (mEl) mEl.style.pointerEvents = 'none';
+            }} else {{
+                thumbMarker.setLatLng([p.lat, p.lon]);
+                thumbMarker.setIcon(icon);
+            }}
             dots[current].setStyle({{opacity: 1, fillOpacity: 0.9}});
             var dotEl = dots[current].getElement();
             if (dotEl) {{ dotEl.style.pointerEvents = 'auto'; dotEl.style.cursor = 'pointer'; }}
@@ -2132,7 +2162,10 @@ document.addEventListener("DOMContentLoaded", function() {{
     }}
 
     function resetMarkers() {{
-        if (current >= 0) setThumbVisible(current, false);
+        if (thumbMarker !== null) {{
+            thumbMarker.remove();
+            thumbMarker = null;
+        }}
         current = -1;
         shown = 0;
         for (var i = 0; i < dots.length; i++) {{
@@ -2206,49 +2239,6 @@ document.addEventListener("DOMContentLoaded", function() {{
         if (!map) {{ setTimeout(init, 150); return; }}
 
         photos.forEach(function(p) {{
-            // Outer wrapper: a flex-column that holds the card + triangle tail.
-            // opacity, cursor and transition live here so setThumbVisible works.
-            // iconAnchor is set to the tip of the triangle so the location point
-            // is marked precisely while the card floats above it.
-            var iconHtml = (
-                '<div style="opacity:0; pointer-events:none; width:160px; display:flex; flex-direction:column;' +
-                    'align-items:center; cursor:pointer; transition:opacity 0.2s;">' +
-                    '<div style="width:160px; background:#252730;' +
-                        'border:2px solid {CHART_PRIMARY}; border-radius:6px;' +
-                        'overflow:hidden; box-shadow:0 3px 10px rgba(0,0,0,0.55);' +
-                        'font-family:sans-serif; line-height:1.3;">' +
-                        '<img src="' + p.img + '" ' +
-                             'style="width:160px; height:110px; object-fit:cover; display:block;">' +
-                        '<div style="padding:4px 6px 5px;">' +
-                            '<div style="font-size:11px; font-weight:bold; color:#e2e4ec;' +
-                                 'white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + p.species + '</div>' +
-                            '<div style="font-size:10px; color:#8b8fa8;' +
-                                 'white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + p.date + '</div>' +
-                            '<div style="font-size:10px; color:#8b8fa8;' +
-                                 'white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + p.location + '</div>' +
-                        '</div>' +
-                    '</div>' +
-                    '<div style="width:0; height:0;' +
-                         'border-left:10px solid transparent;' +
-                         'border-right:10px solid transparent;' +
-                         'border-top:12px solid {CHART_PRIMARY};' +
-                         'margin-top:-1px;"></div>' +
-                '</div>'
-            );
-            var m = L.marker([p.lat, p.lon], {{
-                icon: L.divIcon({{
-                    html: iconHtml,
-                    iconSize:   [160, 176],
-                    iconAnchor: [80, 176],
-                    className:  ''
-                }})
-            }});
-            m.addTo(map);
-            // Disable pointer-events on the thumbnail card — clicks go to the dot instead.
-            var mEl = m.getElement();
-            if (mEl) mEl.style.pointerEvents = 'none';
-            mkrs.push(m);
-
             var dot = L.circleMarker([p.lat, p.lon], {{
                 radius:      6,
                 fillColor:   '{CHART_PRIMARY}',
