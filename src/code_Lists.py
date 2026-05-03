@@ -11,8 +11,10 @@ from copy import deepcopy
 from math import floor
 
 from PySide6.QtGui import (
+    QColor,
     QCursor,
     QIcon,
+    QPalette,
     QPixmap,
     QFont,
     QFontMetrics
@@ -28,8 +30,103 @@ from PySide6.QtWidgets import (
     QTableWidgetItem,
     QHeaderView,
     QMdiSubWindow,
-    QItemDelegate
+    QItemDelegate,
+    QStyle,
+    QStyleOptionViewItem,
+    QStyledItemDelegate
     )
+
+
+def _find_snippet(text, search_term):
+    """Return up to five words centered on the word containing search_term.
+    Adds leading/trailing ellipsis when surrounding words are omitted."""
+    words = text.split()
+    if not words:
+        return text
+
+    search_lower = search_term.lower()
+
+    # Find the first word that contains the search term
+    match_idx = next((i for i, w in enumerate(words) if search_lower in w.lower()), None)
+
+    # If the term spans a word boundary, locate it by character position instead
+    if match_idx is None:
+        pos = text.lower().find(search_lower)
+        if pos >= 0:
+            match_idx = max(0, len(text[:pos].split()) - 1)
+
+    if match_idx is None:
+        match_idx = 0
+
+    start = max(0, match_idx - 2)
+    end   = min(len(words), match_idx + 3)
+
+    snippet = " ".join(words[start:end])
+    if start > 0:
+        snippet = "…" + snippet
+    if end < len(words):
+        snippet = snippet + "…"
+
+    return snippet
+
+
+class _FoundHighlightDelegate(QStyledItemDelegate):
+    """Paints the Found column with the matched substring in red."""
+
+    MATCH_COLOR = QColor(code_Stylesheet.CHART_PRIMARY)
+
+    def __init__(self, search_term, parent=None):
+        super().__init__(parent)
+        self._search = search_term
+
+    def paint(self, painter, option, index):
+        opt = QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
+
+        style = opt.widget.style() if opt.widget else QApplication.style()
+
+        # Draw background (selection, hover, etc.) without any text
+        opt.text = ""
+        style.drawControl(QStyle.ControlElement.CE_ItemViewItem, opt, painter, opt.widget)
+
+        text = index.data(Qt.ItemDataRole.DisplayRole) or ""
+        if not text:
+            return
+
+        text_rect = style.subElementRect(
+            QStyle.SubElement.SE_ItemViewItemText, opt, opt.widget)
+
+        search_lower = self._search.lower()
+        pos = text.lower().find(search_lower) if self._search else -1
+
+        painter.save()
+        painter.setFont(opt.font)
+
+        is_selected = bool(opt.state & QStyle.StateFlag.State_Selected)
+        color_group = QPalette.ColorGroup.Active if is_selected else QPalette.ColorGroup.Normal
+        color_role  = QPalette.ColorRole.HighlightedText if is_selected else QPalette.ColorRole.Text
+        normal_color = opt.palette.color(color_group, color_role)
+
+        if pos < 0:
+            painter.setPen(normal_color)
+            painter.drawText(text_rect, Qt.AlignmentFlag.AlignVCenter, text)
+        else:
+            fm = QFontMetrics(opt.font)
+            x = text_rect.x()
+            segments = [
+                (text[:pos],                          normal_color),
+                (text[pos:pos + len(self._search)],   self.MATCH_COLOR),
+                (text[pos + len(self._search):],      normal_color),
+            ]
+            for segment, color in segments:
+                if segment:
+                    painter.setPen(color)
+                    w = fm.horizontalAdvance(segment)
+                    painter.drawText(x, text_rect.y(), w, text_rect.height(),
+                                     Qt.AlignmentFlag.AlignVCenter, segment)
+                    x += w
+
+        painter.restore()
 
 
 class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
@@ -810,7 +907,7 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         return(True)
 
 
-    def FillFindChecklists(self,  foundList):
+    def FillFindChecklists(self, foundList, searchString=""):
         
         self.filter = filter
         self.listType = "Find Results"        
@@ -826,7 +923,11 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         self.tblList.setShowGrid(False)
         self.tblList.setWordWrap(True)
 
-        # add checklists and fount term to table row by row        
+        if searchString:
+            self.tblList.setItemDelegateForColumn(3, _FoundHighlightDelegate(searchString, self.tblList))
+
+        # add checklists and found term to table row by row
+
         R = 0
         for c in foundList:  
             typeItem = QTableWidgetItem()
@@ -840,7 +941,9 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
             dateItem.setText(c[3])
 
             foundTextItem = QTableWidgetItem()
-            foundTextItem.setText(c[4])
+            foundText = _find_snippet(c[4], searchString) if searchString else c[4]
+            foundTextItem.setText(foundText)
+            foundTextItem.setToolTip(c[4])
 
             self.tblList.setItem(R, 0, typeItem)                
             self.tblList.setItem(R, 1, locationItem)

@@ -127,6 +127,7 @@ class DataBase():
         self.photoDataFileDefault = ""
         self.jsonlSkippedLines = 0
         self.csvSkippedRows = 0
+        self.photoRecordsInCatalog = 0
         self.startupFolder = ""
         self._countryLookup = {}   # shortCode -> longName, built by ReadCountryStateCodeFile
         self._stateLookup = {}     # shortCode -> longName, built by ReadCountryStateCodeFile
@@ -721,6 +722,8 @@ class DataBase():
                     if not fn:
                         continue
                     state[fn] = None if record.get("deleted") else record
+
+            self.photoRecordsInCatalog = sum(1 for v in state.values() if v is not None)
 
             for fn, row in state.items():
                 if row is None:
@@ -2562,6 +2565,7 @@ class DataBase():
         self.eBirdFilePath = ""
         self.photoDataFileOpenFlag = False
         self.photoDataFile = ""
+        self.photoRecordsInCatalog = 0
         self.countryStateCodeFileFound = False
         self.allSpeciesList = []
         self.familyList = []
@@ -2590,6 +2594,7 @@ class DataBase():
 
         self.jsonlSkippedLines = 0
         self.csvSkippedRows = 0
+        self.photoRecordsInCatalog = 0
         self.cameraList = []
         self.lensList = []
         self.shutterSpeedList = []

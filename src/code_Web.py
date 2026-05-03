@@ -1462,39 +1462,60 @@ document.addEventListener("DOMContentLoaded", function() {{
         import folium
         import json
         import tempfile
+        from pathlib import Path
 
         self.title = "Life List Map"
         self.filter = deepcopy(filter)
 
-        # ── Collect lifers: first qualifying sighting of each species ──────
+        # ── Collect lifers ───────────────────────────────────────────────
+        # Step 1: species that appear in the filtered sightings
         minimal = self.mdiParent.db.GetMinimalFilteredSightingsList(filter)
         cf = self.mdiParent.db.CompileFilter(filter)
-        minimal_sorted = sorted(minimal, key=lambda s: (s.get("date", ""), s.get("time", "")))
 
-        seen   = set()
-        lifers = []
-        for s in minimal_sorted:
+        filtered_species = set()
+        for s in minimal:
             if not self.mdiParent.db.TestSightingCompiled(s, cf):
                 continue
             name = s.get("commonName", "")
             if "/" in name or "sp." in name or " x " in name:
                 continue
-            if name in seen:
+            filtered_species.add(name)
+
+        # Step 2 & 3: for each species find the first-ever sighting in the entire
+        # database, then keep it only if that life sighting passes the full filter
+        # (date range AND location).  This ensures life birds that happened outside
+        # the filtered location or period are excluded.
+        species_dict = self.mdiParent.db.speciesDict
+
+        lifers = []
+        for name in filtered_species:
+            if name not in species_dict:
+                continue
+            first = min(species_dict[name], key=lambda s: (s.get("date", ""), s.get("time", "")))
+            if not self.mdiParent.db.TestSightingCompiled(first, cf):
                 continue
             try:
-                lat = float(s["latitude"])
-                lon = float(s["longitude"])
+                lat = float(first["latitude"])
+                lon = float(first["longitude"])
             except (ValueError, TypeError, KeyError):
                 continue
             if lat == 0.0 and lon == 0.0:
                 continue
-            seen.add(name)
+            best_img = ""
+            if self.mdiParent.db.photoDataFileOpenFlag:
+                photos = first.get("photos", [])
+                if photos:
+                    best = max(photos, key=lambda p: int(p.get("rating", "0") or "0"))
+                    fn = best.get("fileName", "")
+                    if fn:
+                        best_img = Path(fn).as_uri()
             lifers.append({
                 "species":  name,
-                "date":     s.get("date", ""),
-                "location": s.get("location", ""),
+                "date":     first.get("date", ""),
+                "location": first.get("location", ""),
                 "lat":      lat,
                 "lon":      lon,
+                "img":      best_img,
             })
 
         if not lifers:
@@ -1595,10 +1616,42 @@ document.addEventListener("DOMContentLoaded", function() {{
         }}
     }}
 
+    function buildTipHtml(lifer) {{
+        if (lifer.img) {{
+            return (
+                '<div style="width:160px; background:#252730;' +
+                'border:1px solid {CHART_PRIMARY}; border-radius:6px;' +
+                'overflow:hidden; font-family:sans-serif; line-height:1.3;' +
+                'box-shadow:0 3px 10px rgba(0,0,0,0.55);">' +
+                '<img src="' + lifer.img + '" ' +
+                'style="width:160px; height:110px; object-fit:cover; display:block;">' +
+                '<div style="padding:4px 6px 5px;">' +
+                '<div style="font-size:11px; font-weight:bold; color:#e2e4ec;' +
+                'white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' +
+                lifer.species + ' (#' + lifer.num + ')</div>' +
+                '<div style="font-size:10px; color:#8b8fa8;' +
+                'white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' +
+                lifer.date + '</div>' +
+                '<div style="font-size:10px; color:#8b8fa8;' +
+                'white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' +
+                lifer.location + '</div>' +
+                '</div></div>'
+            );
+        }}
+        return (
+            '<div style="background:#252730; color:#e2e4ec;' +
+            'border:1px solid {CHART_PRIMARY}; border-radius:6px;' +
+            'padding:6px 10px; font-size:12px; max-width:300px;' +
+            'line-height:1.5; font-family:sans-serif;">' +
+            '<b>' + lifer.species + '</b> (#' + lifer.num + ')' +
+            '<br>' + lifer.date + ' · ' + lifer.location +
+            '</div>'
+        );
+    }}
+
     function showAutoTip(lifer) {{
         if (!tipDiv || !map) return;
-        tipDiv.innerHTML = '<b>' + lifer.species + '</b> (#' + lifer.num + ')' +
-            '<br>' + lifer.date + ' &nbsp;·&nbsp; ' + lifer.location;
+        tipDiv.innerHTML = buildTipHtml(lifer);
         tipDiv.style.display = 'block';
         var mapCont = map.getContainer();
         var mapRect = mapCont.getBoundingClientRect();
@@ -1703,14 +1756,8 @@ document.addEventListener("DOMContentLoaded", function() {{
         map = findMap();
         if (!map) {{ setTimeout(init, 150); return; }}
 
-        // Custom tooltip div — edge-aware, dark-themed
         tipDiv = document.createElement('div');
-        tipDiv.style.cssText = (
-            'position:fixed; display:none; pointer-events:none; z-index:9999;' +
-            'background:#252730; color:#e2e4ec; border:1px solid {CHART_PRIMARY};' +
-            'border-radius:6px; padding:6px 10px; font-size:12px;' +
-            'max-width:300px; line-height:1.5;'
-        );
+        tipDiv.style.cssText = 'position:fixed; display:none; pointer-events:none; z-index:9999;';
         document.body.appendChild(tipDiv);
 
         lifers.forEach(function(lifer) {{
@@ -1719,8 +1766,7 @@ document.addEventListener("DOMContentLoaded", function() {{
                 weight:0.8, fillOpacity:0, opacity:0
             }});
             m.on('mouseover', function(e) {{
-                tipDiv.innerHTML = '<b>' + lifer.species + '</b> (#' + lifer.num + ')' +
-                    '<br>' + lifer.date + ' &nbsp;\u00b7&nbsp; ' + lifer.location;
+                tipDiv.innerHTML = buildTipHtml(lifer);
                 tipDiv.style.display = 'block';
                 var mapCont = map.getContainer();
                 var mapRect = mapCont.getBoundingClientRect();
@@ -1740,10 +1786,17 @@ document.addEventListener("DOMContentLoaded", function() {{
                 tipDiv.style.display = 'none';
             }});
             m.bindPopup(
-                '<div style="font-family:sans-serif">' +
-                '<b>' + lifer.species + '</b><br>' +
-                'Lifer #' + lifer.num + ' \u00b7 ' + lifer.date + '<br>' +
-                lifer.location + '</div>'
+                lifer.img
+                    ? '<div style="font-family:sans-serif">' +
+                      '<img src="' + lifer.img + '" style="width:200px;height:140px;' +
+                      'object-fit:cover;display:block;border-radius:4px;margin-bottom:6px;">' +
+                      '<b>' + lifer.species + '</b><br>' +
+                      'Lifer #' + lifer.num + ' \u00b7 ' + lifer.date + '<br>' +
+                      lifer.location + '</div>'
+                    : '<div style="font-family:sans-serif">' +
+                      '<b>' + lifer.species + '</b><br>' +
+                      'Lifer #' + lifer.num + ' \u00b7 ' + lifer.date + '<br>' +
+                      lifer.location + '</div>'
             );
             m.addTo(map);
             mkrs.push(m);
@@ -1778,6 +1831,7 @@ document.addEventListener("DOMContentLoaded", function() {{
         so it can show county firsts, year firsts, etc. rather than life lifers.
         """
         from copy import deepcopy
+        from pathlib import Path
         import folium
         import json
         import tempfile
@@ -1807,12 +1861,21 @@ document.addEventListener("DOMContentLoaded", function() {{
             if lat == 0.0 and lon == 0.0:
                 continue
             seen.add(name)
+            best_img = ""
+            if self.mdiParent.db.photoDataFileOpenFlag:
+                photos = s.get("photos", [])
+                if photos:
+                    best = max(photos, key=lambda p: int(p.get("rating", "0") or "0"))
+                    fn = best.get("fileName", "")
+                    if fn:
+                        best_img = Path(fn).as_uri()
             species.append({
                 "species":  name,
                 "date":     s.get("date", ""),
                 "location": s.get("location", ""),
                 "lat":      lat,
                 "lon":      lon,
+                "img":      best_img,
             })
 
         if not species:
@@ -1906,10 +1969,42 @@ document.addEventListener("DOMContentLoaded", function() {{
         }}
     }}
 
+    function buildTipHtml(sp) {{
+        if (sp.img) {{
+            return (
+                '<div style="width:160px; background:#252730;' +
+                'border:1px solid {CHART_PRIMARY}; border-radius:6px;' +
+                'overflow:hidden; font-family:sans-serif; line-height:1.3;' +
+                'box-shadow:0 3px 10px rgba(0,0,0,0.55);">' +
+                '<img src="' + sp.img + '" ' +
+                'style="width:160px; height:110px; object-fit:cover; display:block;">' +
+                '<div style="padding:4px 6px 5px;">' +
+                '<div style="font-size:11px; font-weight:bold; color:#e2e4ec;' +
+                'white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' +
+                sp.species + ' (#' + sp.num + ')</div>' +
+                '<div style="font-size:10px; color:#8b8fa8;' +
+                'white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' +
+                sp.date + '</div>' +
+                '<div style="font-size:10px; color:#8b8fa8;' +
+                'white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' +
+                sp.location + '</div>' +
+                '</div></div>'
+            );
+        }}
+        return (
+            '<div style="background:#252730; color:#e2e4ec;' +
+            'border:1px solid {CHART_PRIMARY}; border-radius:6px;' +
+            'padding:6px 10px; font-size:12px; max-width:300px;' +
+            'line-height:1.5; font-family:sans-serif;">' +
+            '<b>' + sp.species + '</b> (#' + sp.num + ')' +
+            '<br>' + sp.date + ' · ' + sp.location +
+            '</div>'
+        );
+    }}
+
     function showAutoTip(sp) {{
         if (!tipDiv || !map) return;
-        tipDiv.innerHTML = '<b>' + sp.species + '</b> (#' + sp.num + ')' +
-            '<br>' + sp.date + ' &nbsp;·&nbsp; ' + sp.location;
+        tipDiv.innerHTML = buildTipHtml(sp);
         tipDiv.style.display = 'block';
         var mapCont = map.getContainer();
         var mapRect = mapCont.getBoundingClientRect();
@@ -2006,12 +2101,7 @@ document.addEventListener("DOMContentLoaded", function() {{
         if (!map) {{ setTimeout(init, 150); return; }}
 
         tipDiv = document.createElement('div');
-        tipDiv.style.cssText = (
-            'position:fixed; display:none; pointer-events:none; z-index:9999;' +
-            'background:#252730; color:#e2e4ec; border:1px solid {CHART_PRIMARY};' +
-            'border-radius:6px; padding:6px 10px; font-size:12px;' +
-            'max-width:300px; line-height:1.5;'
-        );
+        tipDiv.style.cssText = 'position:fixed; display:none; pointer-events:none; z-index:9999;';
         document.body.appendChild(tipDiv);
 
         species.forEach(function(sp) {{
@@ -2020,8 +2110,7 @@ document.addEventListener("DOMContentLoaded", function() {{
                 weight:0.8, fillOpacity:0, opacity:0
             }});
             m.on('mouseover', function(e) {{
-                tipDiv.innerHTML = '<b>' + sp.species + '</b> (#' + sp.num + ')' +
-                    '<br>' + sp.date + ' &nbsp;·&nbsp; ' + sp.location;
+                tipDiv.innerHTML = buildTipHtml(sp);
                 tipDiv.style.display = 'block';
                 var mapCont = map.getContainer();
                 var mapRect = mapCont.getBoundingClientRect();
@@ -2041,10 +2130,17 @@ document.addEventListener("DOMContentLoaded", function() {{
                 tipDiv.style.display = 'none';
             }});
             m.bindPopup(
-                '<div style="font-family:sans-serif">' +
-                '<b>' + sp.species + '</b><br>' +
-                'First sighting #' + sp.num + ' &middot; ' + sp.date + '<br>' +
-                sp.location + '</div>'
+                sp.img
+                    ? '<div style="font-family:sans-serif">' +
+                      '<img src="' + sp.img + '" style="width:200px;height:140px;' +
+                      'object-fit:cover;display:block;border-radius:4px;margin-bottom:6px;">' +
+                      '<b>' + sp.species + '</b><br>' +
+                      'First sighting #' + sp.num + ' · ' + sp.date + '<br>' +
+                      sp.location + '</div>'
+                    : '<div style="font-family:sans-serif">' +
+                      '<b>' + sp.species + '</b><br>' +
+                      'First sighting #' + sp.num + ' · ' + sp.date + '<br>' +
+                      sp.location + '</div>'
             );
             m.addTo(map);
             mkrs.push(m);

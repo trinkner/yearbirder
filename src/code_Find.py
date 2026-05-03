@@ -65,7 +65,7 @@ class Find(QMdiSubWindow, form_Find.Ui_frmFind):
         sub.mdiParent = self.mdiParent
         
         # call the child's fill routine, passing the filter settings list
-        sub.FillFindChecklists(found)
+        sub.FillFindChecklists(found, searchString)
         
         self.parent().parent().addSubWindow(sub)
         self.mdiParent.PositionChildWindow(sub, self)

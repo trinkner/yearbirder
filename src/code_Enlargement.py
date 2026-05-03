@@ -144,8 +144,8 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
             
             actionFitToWindow = menu.addAction("Fit to window (F)")
             menu.addSeparator()
-            actionShowNextPhoto = menu.addAction("Next photo (Right arrow)")
-            actionShowPreviousPhoto = menu.addAction("Previous photo (Left arrow)")
+            actionShowNextPhoto = menu.addAction("Next photo (→)")
+            actionShowPreviousPhoto = menu.addAction("Previous photo (←)")
             menu.addSeparator()
             
             if self.mdiParent.isMaximized() is True:

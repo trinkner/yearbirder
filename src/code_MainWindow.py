@@ -305,8 +305,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
     fontSize = 11
     scaleFactor = 1
     rowHeight = 16  # default; recomputed in ScaleDisplay() and __init__
-    versionNumber = "1.44"
-    versionDate = "April 30, 2026"
+    versionNumber = "1.45"
+    versionDate = "May 2, 2026"
     taxonomyYear = ""
 
     def __init__(self):
@@ -546,9 +546,47 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.cboStartSeasonalRangeDate.currentIndexChanged.connect(self.SeasonalRangeClicked)
         self.cboEndSeasonalRangeMonth.currentIndexChanged.connect(self.SeasonalRangeClicked)
         self.cboEndSeasonalRangeDate.currentIndexChanged.connect(self.SeasonalRangeClicked)
-        self.fillingLocationComboBoxesFlag = False  
+        self.fillingLocationComboBoxesFlag = False
         self.calStartDate.setDate(datetime.datetime.now())
         self.calEndDate.setDate(datetime.datetime.now())
+
+        # ── Standard Filter tooltips ──────────────────────────────────────────
+        self.cboRegions.setToolTip(
+            "Filter by broad geographic region (e.g., ABA Area, Europe).\n"
+            "Narrows the Country, State, County, and Location lists below.")
+        self.cboCountries.setToolTip(
+            "Filter by country.\n"
+            "Narrows the State, County, and Location lists below.")
+        self.cboStates.setToolTip(
+            "Filter by state or province.\n"
+            "Narrows the County and Location lists below.")
+        self.cboCounties.setToolTip(
+            "Filter by county or equivalent administrative area.\n"
+            "Narrows the Location list below.")
+        self.cboLocations.setToolTip("Filter by a specific named eBird location.")
+        self.cboOrders.setToolTip(
+            "Filter by taxonomic order.\n"
+            "Narrows the Family and Species lists below.")
+        self.cboFamilies.setToolTip(
+            "Filter by taxonomic family.\n"
+            "Narrows the Species list below.")
+        self.cboSpecies.setToolTip("Filter by species.")
+        self.txtCommonNameSearch.setToolTip(
+            "Filter by a word or phrase in the common name or subspecies name.\n"
+            "Use s: prefix to search scientific names instead (e.g., s:Buteo).")
+        self.cboDateOptions.setToolTip(
+            "Choose how to filter by date: use the calendars below, select a\n"
+            "preset (Today, This Year, etc.), or apply no date filter.")
+        self.cboYear.setToolTip("Filter to a single year.")
+        self.calStartDate.setToolTip("Start of the date range.")
+        self.calEndDate.setToolTip("End of the date range.")
+        self.cboSeasonalRangeOptions.setToolTip(
+            "Filter by season or a recurring month-and-day range, regardless\n"
+            "of year. Use this to find all your April sightings, for example.")
+        self.cboStartSeasonalRangeMonth.setToolTip("Start month of the seasonal range.")
+        self.cboStartSeasonalRangeDate.setToolTip("Start day of the seasonal range.")
+        self.cboEndSeasonalRangeMonth.setToolTip("End month of the seasonal range.")
+        self.cboEndSeasonalRangeDate.setToolTip("End day of the seasonal range.")
 
         self.cboStartRatingRange.addItem("All")
         self.cboStartRatingRange.insertSeparator(1)
@@ -669,18 +707,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         if self.db.startupFolder and os.path.isdir(self.db.startupFolder):
             self.OpenDataFile(self.db.startupFolder)
 
-            # Only load the photo catalog if the eBird file loaded successfully.
-            # Use photoDataFileDefault — it survives ClearDatabase and always reflects
-            # the user-chosen default, not merely the last active catalog.
             if self.db.eBirdFileOpenFlag:
-                default_catalog = self.db.photoDataFileDefault
-                if default_catalog and os.path.isfile(default_catalog):
-                    self.db.readPhotoDataFromFile(default_catalog)
-                    self._warnIfJsonlSkippedLines()
-                    self._warnIfCsvSkippedRows()
-                    self._promptJsonlMigrationIfNeeded()
-                    if self.db.photoDataFile.lower().endswith(".csv"):
-                        self.db.ClearPhotoSettings()
+                self._autoOpenDefaultCatalog()
 
         # Now that preferences are processed, continue with UI updates
         self.finishedProcessingPreferences()
@@ -904,8 +932,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                     "Having both open at the same time could cause conflicts.")
                 return
 
-        # Snapshot the current default before any changes so we can detect a switch
-        prev_default = self.db.photoDataFile
+        # Snapshot the configured default so we can skip the prompt when re-opening it
+        prev_default = self.db.photoDataFileDefault
 
         # If a catalog is already open, confirm the switch
         if self.db.photoDataFileOpenFlag:
@@ -972,6 +1000,33 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionOptimizePhotoSettings.setVisible(True)
 
         self.CreateStatsOnLoad()
+
+
+    def _autoOpenDefaultCatalog(self):
+        default_catalog = self.db.photoDataFileDefault
+        if not default_catalog or not os.path.isfile(default_catalog):
+            return
+
+        self.db.readPhotoDataFromFile(default_catalog)
+        self._warnIfJsonlSkippedLines()
+        self._warnIfCsvSkippedRows()
+        self._promptJsonlMigrationIfNeeded()
+
+        if self.db.photoDataFile.lower().endswith(".csv"):
+            self.db.ClearPhotoSettings()
+            return
+
+        filter = code_Filter.Filter()
+        if (self.db.photoRecordsInCatalog > 0
+                and not self.db.GetSightingsWithPhotos(filter)):
+            QMessageBox.warning(
+                self,
+                "Photo Catalog Mismatch",
+                "The photos in the catalog don't match the open eBird data file. "
+                "The catalog will be closed.\n\n"
+                + default_catalog,
+            )
+            self.db.ClearPhotoSettings()
 
 
     def _showPhotoCatalogMenuItems(self):
@@ -1055,18 +1110,12 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
         if count_photos_not_processed > 0:
             new_count = len(unmatched_photos)
-            if new_count == 1:
-                new_str = "\n\n1 file needs to be added."
-            elif new_count > 1:
-                new_str = f"\n\n{new_count} files need to be added."
-            else:
-                new_str = ""
+            new_str = "1 photo will be added." if new_count == 1 else f"{new_count} photos will be added."
             QMessageBox.information(
                 self,
                 "Photos",
-                f"{count_photos_not_processed} files were already attached to sightings and are not displayed here."
-                f"{new_str}\n\n"
-                "To edit their attachments, use Manage Photos By Filter.",
+                f"{count_photos_not_processed} of the selected photos are already in the catalog.\n\n"
+                f"{new_str}",
                 QMessageBox.StandardButton.Ok
             )
 
@@ -1394,25 +1443,30 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
              
 
     def setDateFilter(self, startDate, endDate = ""):
-        
+
         # if only one date is specified, use that date for both start and end dates
         if endDate == "":
             endDate = startDate
-            
+
         startYear = int(startDate[0:4])
         startMonth = int(startDate[5:7])
         startDay = int(startDate[8:])
         myStartDate = QDate()
         myStartDate.setDate(startYear, startMonth, startDay)
-        
+
         endYear = int(endDate[0:4])
         endMonth = int(endDate[5:7])
         endDay = int(endDate[8:])
         myEndDate = QDate()
-        myEndDate.setDate(endYear, endMonth, endDay)        
-        
+        myEndDate.setDate(endYear, endMonth, endDay)
+
+        # Block calendar signals so CalendarClicked doesn't override the combo selection
+        self.calStartDate.blockSignals(True)
+        self.calEndDate.blockSignals(True)
         self.calStartDate.setDate(myStartDate)
         self.calEndDate.setDate(myEndDate)
+        self.calStartDate.blockSignals(False)
+        self.calEndDate.blockSignals(False)
 
 
     def setPhotoFolder(self):
@@ -1610,17 +1664,17 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             return
         
         sub = code_Find.Find()
-        
-        # save the MDI window as the parent for future use in the child            
+
+        # save the MDI window as the parent for future use in the child
         sub.mdiParent = self
-        
-        # add and position the child to our MDI area        
+
         self.mdiArea.addSubWindow(sub)
-        #sub.setGeometry(self.dckFilter.width() * 2, self.dckFilter.height() * .25, sub.width(), sub.height())
-        
-        #sub.scaleMe()
-        #sub.resizeMe()
-        
+
+        # center in the MDI area
+        x = (self.mdiArea.width()  - sub.width())  // 2
+        y = (self.mdiArea.height() - sub.height()) // 2
+        sub.move(max(0, x), max(0, y))
+
         sub.show()
         
         
@@ -1723,9 +1777,31 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.FillMainComboBoxes()
             self.dckFilter.setVisible(True)
             self.CreateSpeciesList()
-            self.CreateStatsOnLoad()
             self.actionClose.setVisible(True)
             self.actionOpenPhotoSettings.setVisible(True)
+
+            self._autoOpenDefaultCatalog()
+
+            if self.db.photoDataFileOpenFlag:
+                self.fillPhotoComboBoxes()
+                self.showPhotoFilter()
+                self.menuPhotos.menuAction().setVisible(True)
+                self._showPhotoCatalogMenuItems()
+                self.actionGeolocatedPhotos.setVisible(True)
+                self.actionGeolocatedPhotosSeparator.setVisible(True)
+                self.actionAnimatedPhotoSequence.setVisible(True)
+                self.actionSlideshow.setVisible(True)
+                self.actionYTDPhotos.setVisible(True)
+                self.actionPhotoPie.setVisible(True)
+                self.actionPhotoBar.setVisible(True)
+                self.actionPhotoAccumulation.setVisible(True)
+                self.actionCumulativePhotos.setVisible(True)
+                self.actionEditPhotosByFilter.setVisible(True)
+                self.actionUpdateEXIFDataForAllPhotos.setVisible(True)
+                self.actionRenamePhotos.setVisible(True)
+                self.actionOptimizePhotoSettings.setVisible(True)
+
+            self.CreateStatsOnLoad()
 
             # Offer to make the opened file's folder the default startup folder,
             # but only if it differs from the folder already set in Preferences.
@@ -3717,24 +3793,73 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.db.ClearDatabase()
         
 
+    def _refillTaxonomyCombosForFilter(self, f):
+        """Repopulate Order/Family/Species combos with only options present in location+date
+        filtered sightings. Must be called while fillingLocationComboBoxesFlag is True."""
+        f.setOrder("")
+        f.setFamily("")
+        f.setSpeciesName("")
+        f.setSpeciesList([])
+
+        sightings = MainWindow.db.GetSightings(f)
+
+        seen_species = set()
+        seen_families = set()
+        seen_orders = set()
+        for s in sightings:
+            seen_species.add(s["commonName"])
+            if s["family"]: seen_families.add(s["family"])
+            if s["order"]:  seen_orders.add(s["order"])
+
+        filtered_orders   = [o for o in MainWindow.db.orderList  if o in seen_orders]
+        filtered_families = [fam for fam in MainWindow.db.familyList if fam in seen_families]
+        filtered_species  = sorted(sp for sp in MainWindow.db.speciesDict.keys() if sp in seen_species)
+
+        self.cboOrders.setStyleSheet("")
+        self.cboOrders.clearFocus()
+        self.cboFamilies.setStyleSheet("")
+        self.cboFamilies.clearFocus()
+        self.cboSpecies.setStyleSheet("")
+        self.cboSpecies.clearFocus()
+        self.cboOrders.clear()
+        self.cboFamilies.clear()
+        self.cboSpecies.clear()
+
+        self.cboOrders.addItem("All Orders")
+        self.cboOrders.insertSeparator(1)
+        self.cboOrders.addItems(filtered_orders)
+
+        self.cboFamilies.addItem("All Families")
+        self.cboFamilies.insertSeparator(1)
+        self.cboFamilies.addItems(filtered_families)
+
+        self.cboSpecies.addItem("All Species")
+        self.cboSpecies.insertSeparator(1)
+        self.cboSpecies.addItems(filtered_species)
+
+
     def ComboRegionsChanged(self):
-        
+
         # Check whether the program is adding locations while reading the data file
         # if so, abort. If not, the user has clicked the combobox and we should proceed
-        if self.fillingLocationComboBoxesFlag is False:  
+        if self.fillingLocationComboBoxesFlag is False:
                   
             # set the flag to True so the state, county, and location cbos won't trigger
             self.fillingLocationComboBoxesFlag = True    
             
             # clear the color coding for selected filter components
-            self.cboRegions.setStyleSheet("");                
-            self.cboCountries.setStyleSheet("");                
-            self.cboStates.setStyleSheet("");                
-            self.cboCounties.setStyleSheet("");                
-            self.cboLocations.setStyleSheet("");                            
-       
+            self.cboRegions.setStyleSheet("")
+            self.cboCountries.setStyleSheet("")
+            self.cboCountries.clearFocus()
+            self.cboStates.setStyleSheet("")
+            self.cboStates.clearFocus()
+            self.cboCounties.setStyleSheet("")
+            self.cboCounties.clearFocus()
+            self.cboLocations.setStyleSheet("")
+            self.cboLocations.clearFocus()
+
             # use the selected region to filter the masterLocationList
-            # clear the subsidiary comboboxes and populat them anew with filtered locations
+            # clear the subsidiary comboboxes and populate them anew with filtered locations
             thisRegionName = self.cboRegions.currentText()
             thisRegionCode = MainWindow.db.GetRegionCode(self.cboRegions.currentText())
             self.cboCountries.clear()
@@ -3810,13 +3935,15 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 self.cboLocations.addItem("All Locations")
                 self.cboLocations.insertSeparator(1)
                 self.cboLocations.addItems(thisRegionLocations)
-            
+
+            self._refillTaxonomyCombosForFilter(self.GetFilter())
+
             # we're done, so reset flag to false to allow future triggers
             self.fillingLocationComboBoxesFlag = False
 
 
 
-        
+
     def ComboCountriesChanged(self):
         
         # Check whether the program is adding locations while reading the data file
@@ -3827,14 +3954,17 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.fillingLocationComboBoxesFlag = True    
             
             # clear the color coding for selected filter components
-            self.cboRegions.setStyleSheet("");                
-            self.cboCountries.setStyleSheet("");                
-            self.cboStates.setStyleSheet("");                
-            self.cboCounties.setStyleSheet("");                
-            self.cboLocations.setStyleSheet("");                            
-       
+            self.cboRegions.setStyleSheet("")
+            self.cboCountries.setStyleSheet("")
+            self.cboStates.setStyleSheet("")
+            self.cboStates.clearFocus()
+            self.cboCounties.setStyleSheet("")
+            self.cboCounties.clearFocus()
+            self.cboLocations.setStyleSheet("")
+            self.cboLocations.clearFocus()
+
             # use the selected country to filter the masterLocationList
-            # clear the subsidiary comboboxes and populat them anew with filtered locations
+            # clear the subsidiary comboboxes and populate them anew with filtered locations
             thisCountry = self.cboCountries.currentText()
             self.cboStates.clear()
             self.cboCounties.clear()
@@ -3896,7 +4026,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 self.cboLocations.addItem("All Locations")
                 self.cboLocations.insertSeparator(1)
                 self.cboLocations.addItems(thisCountryLocations)
-            
+
+            self._refillTaxonomyCombosForFilter(self.GetFilter())
+
             # we're done, so reset flag to false to allow future triggers
             self.fillingLocationComboBoxesFlag = False
 
@@ -3976,96 +4108,98 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
             self.fillingLocationComboBoxesFlag = True
             thisFamily = self.cboFamilies.currentText()
-            
-            # clear any color coding for selected filter components 
-            self.cboSpecies.setStyleSheet("")
-            self.cboSpecies.clear()
-            
-            if thisFamily == "All Families":
-                self.cboFamilies.setStyleSheet("");
-                self.cboSpecies.addItem("All Species")
-                self.cboSpecies.insertSeparator(1)
-                if self.cboOrders.currentText() == "All Orders":
-                    speciesList = list(MainWindow.db.speciesDict.keys())
-                else:
-                    speciesList = MainWindow.db.orderSpeciesDict[self.cboOrders.currentText()]
-                speciesList.sort()
-                self.cboSpecies.addItems(speciesList)
 
+            if thisFamily == "All Families":
+                self.cboFamilies.setStyleSheet("")
             else:
                 self.highlightFilterElement(self.cboFamilies)
-                self.cboSpecies.addItem("All Species")
-                self.cboSpecies.insertSeparator(1)
-                self.cboSpecies.addItems(MainWindow.db.familySpeciesDict[thisFamily])                
-            
+
+            # Repopulate Species from location+date+order+family filtered sightings
+            f = self.GetFilter()
+            f.setSpeciesName("")
+            f.setSpeciesList([])
+            sightings = MainWindow.db.GetSightings(f)
+            seen_species = set(s["commonName"] for s in sightings)
+            filtered_species = sorted(sp for sp in MainWindow.db.speciesDict.keys() if sp in seen_species)
+
+            self.cboSpecies.setStyleSheet("")
+            self.cboSpecies.clearFocus()
+            self.cboSpecies.clear()
+            self.cboSpecies.addItem("All Species")
+            self.cboSpecies.insertSeparator(1)
+            self.cboSpecies.addItems(filtered_species)
+
             self.fillingLocationComboBoxesFlag = False
 
 
     def ComboLocationsChanged(self):
         
         if self.fillingLocationComboBoxesFlag is False:
-            
+
+            self.fillingLocationComboBoxesFlag = True
+
             thisLocation = self.cboLocations.currentText()
-            
+
             if thisLocation == "All Locations":
-                self.unhighlightFilterElement(self.cboLocations)                
+                self.unhighlightFilterElement(self.cboLocations)
             else:
                 self.highlightFilterElement(self.cboLocations)
-            
+
+            self._refillTaxonomyCombosForFilter(self.GetFilter())
+
+            self.fillingLocationComboBoxesFlag = False
+
             self.cboStartSeasonalRangeMonth.adjustSize()
 
 
     def ComboOrdersChanged(self):
-        
+
         if self.fillingLocationComboBoxesFlag is False:
-            
+
             self.fillingLocationComboBoxesFlag = True
             thisOrder = self.cboOrders.currentText()
-            
-            # clear any color coding for selected filter components 
+
+            if thisOrder == "All Orders":
+                self.cboOrders.setStyleSheet("")
+            else:
+                self.highlightFilterElement(self.cboOrders)
+
+            # Repopulate Family and Species from location+date+order filtered sightings
+            f = self.GetFilter()
+            f.setFamily("")
+            f.setSpeciesName("")
+            f.setSpeciesList([])
+            sightings = MainWindow.db.GetSightings(f)
+            seen_species = set()
+            seen_families = set()
+            for s in sightings:
+                seen_species.add(s["commonName"])
+                if s["family"]: seen_families.add(s["family"])
+
+            filtered_families = [fam for fam in MainWindow.db.familyList if fam in seen_families]
+            filtered_species  = sorted(sp for sp in MainWindow.db.speciesDict.keys() if sp in seen_species)
+
             self.unhighlightFilterElement(self.cboFamilies)
+            self.cboFamilies.clearFocus()
             self.unhighlightFilterElement(self.cboSpecies)
+            self.cboSpecies.clearFocus()
             self.cboFamilies.clear()
             self.cboSpecies.clear()
-            
-            if thisOrder == "All Orders":
-                self.cboOrders.setStyleSheet("");
-                self.cboFamilies.addItem("All Families")
-                self.cboFamilies.insertSeparator(1)
-                self.cboFamilies.addItems(MainWindow.db.familyList)
-                self.cboSpecies.addItem("All Species")
-                self.cboSpecies.insertSeparator(1)
-                speciesList = sorted(MainWindow.db.speciesDict.keys())
-                self.cboSpecies.addItems(speciesList)
+            self.cboFamilies.addItem("All Families")
+            self.cboFamilies.insertSeparator(1)
+            self.cboFamilies.addItems(filtered_families)
+            self.cboSpecies.addItem("All Species")
+            self.cboSpecies.insertSeparator(1)
+            self.cboSpecies.addItems(filtered_species)
 
-            else:
-                thisFamilies = []
-                self.highlightFilterElement(self.cboOrders)
-                for l in MainWindow.db.masterFamilyOrderList:
-                    if l[1] == thisOrder:
-                        if l[0] not in thisFamilies:
-                            thisFamilies.append(l[0])
-                self.cboFamilies.addItem("All Families")
-                self.cboFamilies.insertSeparator(1)
-                self.cboFamilies.addItems(thisFamilies)
-                self.cboSpecies.addItem("All Species")
-                self.cboSpecies.insertSeparator(1)
-                self.cboSpecies.addItems(MainWindow.db.orderSpeciesDict[thisOrder]) 
-                               
             self.fillingLocationComboBoxesFlag = False
 
 
     def textCommonNameSearchChanged(self):
         
         if self.txtCommonNameSearch.text().strip() != "":
-            
-            red = str(code_Stylesheet.mdiAreaColor.red())
-            blue = str(code_Stylesheet.mdiAreaColor.blue())
-            green = str(code_Stylesheet.mdiAreaColor.green())        
-            self.txtCommonNameSearch.setStyleSheet("QLineEdit {color: white; background-color: rgb(" + red + "," + green + "," + blue + ");}")
-
+            self.txtCommonNameSearch.setStyleSheet(f"QLineEdit {{ color: {code_Stylesheet.CHART_PRIMARY}; }}")
         else:
-            
             self.txtCommonNameSearch.setStyleSheet("")
             
         
@@ -4157,8 +4291,10 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             
             # clear any color coding for selected filter components
             self.unhighlightFilterElement(self.cboCounties)
+            self.cboCounties.clearFocus()
             self.unhighlightFilterElement(self.cboLocations)
-            
+            self.cboLocations.clearFocus()
+
             thisState = MainWindow.db.GetStateCode(self.cboStates.currentText())
             self.cboCounties.clear()
             self.cboLocations.clear()
@@ -4187,18 +4323,21 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 self.cboCounties.addItems(thisStateCounties)
                 self.cboLocations.addItem("All Locations")
                 self.cboLocations.insertSeparator(1)
-                self.cboLocations.addItems(thisStateLocations)  
+                self.cboLocations.addItems(thisStateLocations)
+
+            self._refillTaxonomyCombosForFilter(self.GetFilter())
             self.fillingLocationComboBoxesFlag = False
-           
-            
+
+
     def ComboCountiesChanged(self):
         if self.fillingLocationComboBoxesFlag is False:
             self.fillingLocationComboBoxesFlag = True
             thisCounty = self.cboCounties.currentText()
             
-            # clear any color coding for selected filter components 
-            self.cboLocations.setStyleSheet("");          
-            
+            # clear any color coding for selected filter components
+            self.cboLocations.setStyleSheet("")
+            self.cboLocations.clearFocus()
+
             self.cboLocations.clear()
             if thisCounty == "All Counties":
                 self.unhighlightFilterElement(self.cboCounties)
@@ -4215,6 +4354,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 self.cboLocations.addItem("All Locations")
                 self.cboLocations.insertSeparator(1)
                 self.cboLocations.addItems(thisCountyLocations)
+
+            self._refillTaxonomyCombosForFilter(self.GetFilter())
             self.fillingLocationComboBoxesFlag = False
 
 
