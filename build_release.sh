@@ -172,15 +172,20 @@ rm -f "$WORK_DMG" "$WORK_RW_DMG"
 hdiutil create -volname "${DMG_NAME}" -srcfolder "$DMG_STAGING" -ov -format UDRW "$WORK_RW_DMG"
 
 # Mount and configure Finder window (background, icon positions, window size)
-MOUNT_POINT="/Volumes/${DMG_NAME}"
-hdiutil attach "$WORK_RW_DMG" -mountpoint "$MOUNT_POINT"
-sleep 2
+# Let macOS pick the mount point so the script works even if an older DMG is still mounted.
+ATTACH_OUT=$(hdiutil attach "$WORK_RW_DMG" -readwrite -noverify)
+echo "$ATTACH_OUT"
+MOUNT_POINT=$(echo "$ATTACH_OUT" | tail -1 | cut -f3-)
+DISK_DISPLAY=$(basename "$MOUNT_POINT")
+echo "Mounted at: $MOUNT_POINT  (Finder name: $DISK_DISPLAY)"
+
+sleep 5   # give Finder time to register the volume and render the app icon
 # Hide .background on the mounted APFS volume (chflags on staging is not preserved)
 chflags hidden "${MOUNT_POINT}/.background"
 rm -f "${MOUNT_POINT}/.DS_Store"
 osascript << APPLESCRIPT
 tell application "Finder"
-  tell disk "${DMG_NAME}"
+  tell disk "${DISK_DISPLAY}"
     open
     set current view of container window to icon view
     set toolbar visible of container window to false
@@ -190,14 +195,14 @@ tell application "Finder"
     set arrangement of viewOptions to not arranged
     set icon size of viewOptions to 100
     set background picture of viewOptions to file ".background:dmg_background.png"
-    delay 3
+    delay 5
     set position of item "${APP_NAME}.app" of container window to {135, 195}
     set position of item "Applications" of container window to {405, 195}
     try
       set position of item ".background" of container window to {900, 900}
     end try
     update without registering applications
-    delay 3
+    delay 5
     close
   end tell
 end tell
@@ -205,7 +210,7 @@ APPLESCRIPT
 # Remove .fseventsd created by macOS when mounting the APFS volume
 rm -rf "${MOUNT_POINT}/.fseventsd"
 sync
-hdiutil detach "$MOUNT_POINT"
+hdiutil detach "$MOUNT_POINT"   # detach by actual mount point, not hardcoded name
 rm -rf "$DMG_STAGING"
 
 hdiutil convert "$WORK_RW_DMG" -format UDZO -imagekey zlib-level=9 -o "$WORK_DMG"
