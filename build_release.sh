@@ -235,4 +235,36 @@ cp "$WORK_DMG" "dist/${DMG_NAME}.dmg"
 echo "dist/${DMG_NAME}.dmg is ready for distribution."
 
 echo ""
+echo "=== Step 14: Update web/download.html ==="
+DOWNLOAD_HTML="web/download.html"
+OLD_VERSION=$(grep -o 'download/v[0-9][0-9]*\.[0-9][0-9]*/Yearbirder_v' "$DOWNLOAD_HTML" | grep -o '[0-9][0-9]*\.[0-9][0-9]*' | head -1)
+RELEASE_MONTH_YEAR=$(echo "$VERSION_DATE" | awk '{print $1, $3}')
+if [ -z "$OLD_VERSION" ]; then
+    echo "WARNING: Could not detect old version in $DOWNLOAD_HTML — skipping."
+else
+    OLD_V="$OLD_VERSION" NEW_V="$VERSION" NEW_DATE="$RELEASE_MONTH_YEAR" \
+    venv/bin/python3 - <<'PYEOF'
+import os, re
+html_path = "web/download.html"
+old_v    = os.environ["OLD_V"]
+new_v    = os.environ["NEW_V"]
+new_date = os.environ["NEW_DATE"]
+with open(html_path) as f:
+    content = f.read()
+content = content.replace(f"v{old_v}/Yearbirder_v{old_v}.dmg",  f"v{new_v}/Yearbirder_v{new_v}.dmg")
+content = content.replace(f"Yearbirder_v{old_v}.dmg",           f"Yearbirder_v{new_v}.dmg")
+content = content.replace(f"refs/tags/v{old_v}.zip",            f"refs/tags/v{new_v}.zip")
+content = content.replace(f"v{old_v}/Yearbirder_Setup.exe",     f"v{new_v}/Yearbirder_Setup.exe")
+content = re.sub(
+    rf'v{re.escape(old_v)} &nbsp;·&nbsp; \S+ \d+',
+    f'v{new_v} &nbsp;·&nbsp; {new_date}',
+    content
+)
+with open(html_path, "w") as f:
+    f.write(content)
+print(f"  {html_path}: v{old_v} → v{new_v}, date → {new_date}")
+PYEOF
+fi
+
+echo ""
 echo "=== All done! ==="
