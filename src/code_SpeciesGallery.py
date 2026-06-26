@@ -1,3 +1,5 @@
+import base64
+import datetime
 import os
 import queue
 import copy
@@ -10,6 +12,9 @@ from PySide6.QtGui import (
 )
 from PySide6.QtCore import (
     Signal,   # used by _ThumbnailThread.sigFinished
+    QByteArray,
+    QBuffer,
+    QIODevice,
     QSize,
     Qt,
     QThread,
@@ -158,6 +163,77 @@ class SpeciesGallery(QMdiSubWindow, form_SpeciesGallery.Ui_frmSpeciesGallery):
         for i, (_, _, frame) in enumerate(self._cells):
             row, col = divmod(i, self._numCols)
             self.gridPhotos.addWidget(frame, row, col)
+
+    # ------------------------------------------------------------------
+    # Print / PDF support
+    # ------------------------------------------------------------------
+
+    def html(self):
+        title = self.windowTitle()
+        if ': ' in title:
+            type_part, filter_part = title.split(': ', 1)
+            heading = '<h1>' + type_part + '</h1><h2>' + filter_part + '</h2>'
+        else:
+            heading = '<h1>' + title + '</h1>'
+
+        html = """<!DOCTYPE html>
+<html><head></head>
+<style>
+* { font-family: "Times New Roman", Times, serif; }
+h1 { font-size: 16pt; margin-bottom: 2px; }
+h2 { font-size: 11pt; font-weight: normal; margin-top: 0; margin-bottom: 8px; }
+table { width: 100%; border-collapse: collapse; }
+td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
+.caption { font-size: 8pt; margin-top: 4px; text-align: left; }
+</style>
+<body>
+"""
+        html += heading
+
+        cells = []
+        for p, s in self._galleryItems:
+            pixmap = QPixmap(p["fileName"])
+            if pixmap.isNull():
+                continue
+
+            pixmap = pixmap.scaled(540, 400, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+
+            byte_array = QByteArray()
+            buf = QBuffer(byte_array)
+            buf.open(QIODevice.OpenModeFlag.WriteOnly)
+            pixmap.save(buf, "PNG")
+            encoded = base64.b64encode(bytes(byte_array)).decode('ascii')
+            img_tag = '<img src="data:image/png;base64,' + encoded + '" width="270">'
+
+            try:
+                weekday = datetime.datetime(
+                    int(s["date"][0:4]), int(s["date"][5:7]), int(s["date"][8:10])
+                ).strftime("%A")
+            except Exception:
+                weekday = ""
+
+            caption = (
+                '<b>' + s["commonName"] + '</b><br>'
+                '<i>' + s["scientificName"] + '</i><br>'
+                + s["location"] + '<br>'
+                + weekday + ', ' + s["date"]
+            )
+
+            cells.append('<td>' + img_tag + '<div class="caption">' + caption + '</div></td>')
+
+        for i in range(0, len(cells), 6):
+            page_cells = cells[i:i+6]
+            if len(page_cells) % 2 != 0:
+                page_cells.append('<td></td>')
+            html += '<table>'
+            for j in range(0, len(page_cells), 2):
+                html += '<tr>' + page_cells[j] + page_cells[j + 1] + '</tr>'
+            html += '</table>'
+            if i + 6 < len(cells):
+                html += '<div style="page-break-after: always;"></div>'
+
+        html += '</body></html>'
+        return html
 
     # ------------------------------------------------------------------
     # Main fill entry point

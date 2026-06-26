@@ -25,7 +25,7 @@ Yearbirder lets you filter, browse, and visualise your personal eBird sightings 
 - **Satellite and Reset controls on Location and Big Report maps** — The map tab in the Location window and the Big Report window now has the same **Satellite/Map** toggle and **Reset** button found on all other Yearbirder maps.
 - **User Guide keyboard shortcut** — Press **Cmd-?** (Mac) or **F1** (Windows/Linux) to open the User Guide.
 - **eBird button on checklists** — The Checklists List now has a green **eBird** button on every row that opens that checklist on the eBird website. A matching button appears in the sidebar when viewing a single checklist's species list. Requires an eBird API key.
-- **Statistics — file date information** — The Statistics report now shows the download date of your eBird data file and the time of your most recent sighting at the bottom of the sightings column. When a photo catalog is open, the date the catalog was last updated appears at the bottom of the photos column.
+- **Statistics — file date information** — The Statistics report now shows the download date of your eBird data file and the time of your most recent sighting at the bottom of the sightings column. When a media catalog is open, the date the catalog was last updated appears at the bottom of the photos column.
 
 ## What's New in v1.492
 
@@ -52,7 +52,7 @@ Yearbirder lets you filter, browse, and visualise your personal eBird sightings 
 
 ## What's New in v1.47
 
-- **Regional Taxonomy report** — Generates an interactive species checklist for the currently selected region using live eBird API data. Seen species are marked with a checkmark; unseen species appear in grey. When a photo catalog is open, a blue dot marks each species you have photographed. Filter buttons let you focus on seen, unseen, photographed, or not-yet-photographed species. Requires a free eBird API key (set in Preferences).
+- **Regional Taxonomy report** — Generates an interactive species checklist for the currently selected region using live eBird API data. Seen species are marked with a checkmark; unseen species appear in grey. When a media catalog is open, a blue dot marks each species you have photographed. Filter buttons let you focus on seen, unseen, photographed, or not-yet-photographed species. Requires a free eBird API key (set in Preferences).
 - **eBird API key in Preferences** — A new field in Preferences stores your personal eBird API key, required for community reports. Get a free key at [ebird.org/api/keygen](https://ebird.org/api/keygen).
 - **Notable Community Sightings** — **Community → Notable Community Sightings (Past 3 days)** queries the eBird API for species flagged as notable in the selected region over the past three days, sorted taxonomically. Colour-coded badge bubbles mark Life, State, County, and Year firsts relative to your data. Click **+** to expand each species’ checklist entries; duplicate entries (same location, time, and observer) are removed automatically. Hybrid species appear in grey without badges. Requires an eBird API key.
 - **All Community Sightings** — **Community → All Community Sightings (Past 3 days)** shows every species reported in the selected region over the past three days, one row per species showing the most recent sighting. An **All Locations** button opens a new window listing all sightings of that species across the region. The same taxonomic ordering, badge bubbles, and filter bar from Notable Sightings apply here too. Requires an eBird API key.
@@ -65,11 +65,11 @@ Yearbirder lets you filter, browse, and visualise your personal eBird sightings 
 
 ## What's New in v1.41
 
-- **Photo catalog safeguards** — a series of fixes prevents accidental data loss when opening, switching, or closing photo catalogs; the app now guards against overwriting an existing catalog when a new eBird data file is opened
+- **Media catalog safeguards** — a series of fixes prevents accidental data loss when opening, switching, or closing media catalogs; the app now guards against overwriting an existing catalog when a new eBird data file is opened
 - **No catalog, no problem** — adding photos without a catalog open now prompts you to create one before saving; if you cancel, your in-progress work is preserved and you can try again
-- **Unsaved-changes protection** — closing the Manage Photos window or the photo catalog while changes are pending now asks whether to save or discard, rather than silently discarding
-- **Catalog-switching guard** — opening a different photo catalog while Manage Photos is open is blocked to prevent conflicts; switching catalogs with unsaved changes prompts to save first
-- **CSV catalogs must be converted** — legacy CSV photo catalogs must now be converted to the new `.jsonl` format before they can be used; the app guides you through the conversion and will not open a CSV without it
+- **Unsaved-changes protection** — closing the Manage Photos window or the media catalog while changes are pending now asks whether to save or discard, rather than silently discarding
+- **Catalog-switching guard** — opening a different media catalog while Manage Photos is open is blocked to prevent conflicts; switching catalogs with unsaved changes prompts to save first
+- **CSV catalogs must be converted** — legacy CSV media catalogs must now be converted to the new `.jsonl` format before they can be used; the app guides you through the conversion and will not open a CSV without it
 - **Default catalog tracking fixed** — declining "Set as default catalog?" now correctly preserves the previous default; the Preferences dialog always shows the stored default rather than the currently open catalog
 - **Menu visibility** — the Photos menu, Close eBird Data File, and catalog-related File menu items are now shown and hidden based on what is actually open, reducing clutter
 
@@ -93,7 +93,7 @@ Yearbirder lets you filter, browse, and visualise your personal eBird sightings 
 - **Powerful filter panel** — filter everything simultaneously by region, country, state, county, location, taxonomic order, family, species, date range, and seasonal range; the Date Options picker includes a **Select Year** mode that reveals a second dropdown listing every year in your data, so you can filter to any specific calendar year in one step
 - **Big Report** — comprehensive multi-tab report combining species, dates, locations, and checklists
 - **Compare Lists** — compare any two species lists side by side
-- **Species List** — interactive regional species checklist from the eBird API showing seen/unseen status and, when a photo catalog is open, photographed status; filter by seen, unseen, photographed, or not-yet-photographed. When a specific location is selected, queries that location directly; private locations are labelled "(Personal Location)"
+- **Species List** — interactive regional species checklist from the eBird API showing seen/unseen status and, when a media catalog is open, photographed status; filter by seen, unseen, photographed, or not-yet-photographed. When a specific location is selected, queries that location directly; private locations are labelled "(Personal Location)"
 - **Hotspot Map** — map of public eBird hotspots in the selected region, with bubbles sized by checklist count; accessible from the Community menu or the Community Sightings Explorer
 - **Community Sightings Explorer** — browse Notable and All Community Sightings, open a Species List, or open a Hotspot Map for any country, state/province, or county worldwide, independently of the Sighting Filter; country list loaded live from the eBird API with US and Canada at the top
 - **Notable Community Sightings** — live eBird report of species flagged as notable in the selected region over the past three days; Life/State/County/Year badge bubbles highlight firsts relative to your data; collapsible checklist entries; duplicate entries removed automatically; click any blue species name to open an Individual Species window
@@ -124,7 +124,7 @@ Yearbirder lets you filter, browse, and visualise your personal eBird sightings 
   - *Individuals Total Map* — bubble map sized by individual bird count per location
   - *Choropleth by Species* — US states, US counties, Canada, India, Great Britain, and world countries shaded by species count
   - *Choropleth by Checklists* — same regions shaded by checklist count
-- **Photos** — associate your JPEG bird photos with your sightings; browse, filter, and rate them by camera, lens, aperture, shutter speed, focal length, and ISO; **File → Open Photo Catalog** defaults to the photo catalog directory stored in Preferences
+- **Photos** — associate your JPEG bird photos with your sightings; browse, filter, and rate them by camera, lens, aperture, shutter speed, focal length, and ISO; **File → Open Media Catalog** defaults to the media catalog directory stored in Preferences
   - *Browse Photos* — thumbnail gallery of every photo matching the current filter, sortable by taxonomy, date, rating, or name
   - *Species Gallery* — one best-rated photo per species, arranged in taxonomic order; click any tile to see all photos of that species
   - *Geolocated Photos* — geotagged photos plotted on a clustered interactive map; hover for a thumbnail preview, click to open the full enlargement

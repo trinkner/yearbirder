@@ -56,7 +56,7 @@ class Ui_frmPreferences(object):
         self.verticalLayout_2.addLayout(self.hboxStartup)
         self.tabLayout.addWidget(self.grpStartupFolder)
 
-        # Photo Catalog File group
+        # Media Catalog File group
         self.grpPhotoDataFile = QtWidgets.QGroupBox(self.tabDefaultFiles)
         self.grpPhotoDataFile.setObjectName("grpPhotoDataFile")
         self.grpPhotoDataFile.setStyleSheet(
@@ -200,8 +200,8 @@ class Ui_frmPreferences(object):
         self.chkStartupFolder.setText(_translate("frmPreferences", "Set eBird data folder. At startup, Yearbirder will open the most recent eBird file in the folder (e.g., your download folder)."))
         self.btnSelectStartupFolder.setText(_translate("frmPreferences", "Select"))
 
-        self.grpPhotoDataFile.setTitle(_translate("frmPreferences", "Photo Catalog File"))
-        self.chkPhotoDataFile.setText(_translate("frmPreferences", "Load photo catalog file at startup. (Only helpful if you have photos.)"))
+        self.grpPhotoDataFile.setTitle(_translate("frmPreferences", "Media Catalog File"))
+        self.chkPhotoDataFile.setText(_translate("frmPreferences", "Load media catalog file at startup. (Only helpful if you have photos.)"))
         self.btnSelectPhotoDataFile.setText(_translate("frmPreferences", "Select"))
 
         self.grpMyCounty.setTitle(_translate("frmPreferences", "My County"))

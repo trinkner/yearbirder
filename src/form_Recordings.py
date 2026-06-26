@@ -1,37 +1,31 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'form_Photos.ui'
-#
-# Created by: PyQt5 UI code generator 5.11.2
-#
-# WARNING! All changes made in this file will be lost!
-
 from PySide6 import QtCore, QtGui, QtWidgets
 
-class Ui_frmPhotos(object):
-    def setupUi(self, frmPhotos):
-        frmPhotos.setObjectName("frmPhotos")
-        frmPhotos.resize(671, 505)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Preferred, QtWidgets.QSizePolicy.Policy.Preferred)
+
+class Ui_frmRecordings(object):
+    def setupUi(self, frmRecordings):
+        frmRecordings.setObjectName("frmRecordings")
+        frmRecordings.resize(671, 505)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Preferred,
+                                           QtWidgets.QSizePolicy.Policy.Preferred)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(frmPhotos.sizePolicy().hasHeightForWidth())
-        frmPhotos.setSizePolicy(sizePolicy)
-        frmPhotos.setMinimumSize(QtCore.QSize(200, 300))
-        frmPhotos.setSizeIncrement(QtCore.QSize(0, 0))
+        sizePolicy.setHeightForWidth(frmRecordings.sizePolicy().hasHeightForWidth())
+        frmRecordings.setSizePolicy(sizePolicy)
+        frmRecordings.setMinimumSize(QtCore.QSize(200, 300))
         icon = QtGui.QIcon()
         icon.addPixmap(QtGui.QPixmap(":/icon_bird_white.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
-        frmPhotos.setWindowIcon(icon)
+        frmRecordings.setWindowIcon(icon)
 
         # ── Fixed header (never scrolls) ──────────────────────────────────────
-        self.headerFrame = QtWidgets.QFrame(frmPhotos)
-        self.headerFrame.setGeometry(QtCore.QRect(0, 0, 671, 130))
+        self.headerFrame = QtWidgets.QFrame(frmRecordings)
+        self.headerFrame.setGeometry(QtCore.QRect(0, 0, 671, 110))
         self.headerFrame.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
         self.headerFrame.setFrameShadow(QtWidgets.QFrame.Shadow.Plain)
         self.headerFrame.setLineWidth(0)
         self.headerFrame.setObjectName("headerFrame")
 
-        # Top-level horizontal split: labels (left) | button (right)
         self.horizontalLayoutHeader = QtWidgets.QHBoxLayout(self.headerFrame)
         self.horizontalLayoutHeader.setContentsMargins(5, 5, 5, 5)
         self.horizontalLayoutHeader.setSpacing(6)
@@ -121,31 +115,11 @@ class Ui_frmPhotos(object):
 
         self.horizontalLayoutHeader.addWidget(self.frameLabels, 1)
 
-        # ── Right subframe: Slideshow button fills full header height ──────────
-        self.frameButton = QtWidgets.QFrame(self.headerFrame)
-        self.frameButton.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
-        self.frameButton.setFrameShadow(QtWidgets.QFrame.Shadow.Plain)
-        self.frameButton.setLineWidth(0)
-        self.frameButton.setObjectName("frameButton")
-        self.verticalLayoutButton = QtWidgets.QVBoxLayout(self.frameButton)
-        self.verticalLayoutButton.setContentsMargins(0, 0, 0, 0)
-        self.verticalLayoutButton.setSpacing(0)
-        self.verticalLayoutButton.setObjectName("verticalLayoutButton")
-
-        self.buttonSlideshow = QtWidgets.QPushButton(self.frameButton)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Preferred,
-                                           QtWidgets.QSizePolicy.Policy.Preferred)
-        self.buttonSlideshow.setSizePolicy(sizePolicy)
-        self.buttonSlideshow.setObjectName("buttonSlideshow")
-        self.verticalLayoutButton.addWidget(self.buttonSlideshow)
-        self.verticalLayoutButton.addStretch(1)
-
-        self.horizontalLayoutHeader.addWidget(self.frameButton, 0)
-
-        # ── Scroll area (photo grid only) ─────────────────────────────────────
-        self.scrollArea = QtWidgets.QScrollArea(frmPhotos)
-        self.scrollArea.setGeometry(QtCore.QRect(0, 130, 671, 350))
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding)
+        # ── Scroll area (audio grid only) ─────────────────────────────────────
+        self.scrollArea = QtWidgets.QScrollArea(frmRecordings)
+        self.scrollArea.setGeometry(QtCore.QRect(0, 110, 671, 370))
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding,
+                                           QtWidgets.QSizePolicy.Policy.Expanding)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.scrollArea.sizePolicy().hasHeightForWidth())
@@ -154,12 +128,13 @@ class Ui_frmPhotos(object):
         self.scrollArea.setFrameShadow(QtWidgets.QFrame.Shadow.Plain)
         self.scrollArea.setLineWidth(0)
         self.scrollArea.setWidgetResizable(True)
-        self.scrollArea.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignTop)
+        self.scrollArea.setAlignment(QtCore.Qt.AlignLeading | QtCore.Qt.AlignLeft | QtCore.Qt.AlignTop)
         self.scrollArea.setObjectName("scrollArea")
 
         self.layLists = QtWidgets.QWidget()
-        self.layLists.setGeometry(QtCore.QRect(0, 0, 671, 350))
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding)
+        self.layLists.setGeometry(QtCore.QRect(0, 0, 671, 370))
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding,
+                                           QtWidgets.QSizePolicy.Policy.Expanding)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.layLists.sizePolicy().hasHeightForWidth())
@@ -171,61 +146,62 @@ class Ui_frmPhotos(object):
         self.verticalLayout_3.setSpacing(4)
         self.verticalLayout_3.setObjectName("verticalLayout_3")
 
-        self.gridPhotos = QtWidgets.QGridLayout()
-        self.gridPhotos.setObjectName("gridPhotos")
-        self.verticalLayout_3.addLayout(self.gridPhotos)
+        self.gridAudio = QtWidgets.QGridLayout()
+        self.gridAudio.setObjectName("gridAudio")
+        self.verticalLayout_3.addLayout(self.gridAudio)
 
         self.scrollArea.setWidget(self.layLists)
 
-        self.actionSetDateFilter = QtGui.QAction(frmPhotos)
+        # Context menu actions
+        self.actionSetDateFilter = QtGui.QAction(frmRecordings)
         self.actionSetDateFilter.setObjectName("actionSetDateFilter")
-        self.actionSetLocationFilter = QtGui.QAction(frmPhotos)
+        self.actionSetLocationFilter = QtGui.QAction(frmRecordings)
         self.actionSetLocationFilter.setObjectName("actionSetLocationFilter")
-        self.actionSetFirstDateFilter = QtGui.QAction(frmPhotos)
+        self.actionSetFirstDateFilter = QtGui.QAction(frmRecordings)
         self.actionSetFirstDateFilter.setObjectName("actionSetFirstDateFilter")
-        self.actionSetLastDateFilter = QtGui.QAction(frmPhotos)
+        self.actionSetLastDateFilter = QtGui.QAction(frmRecordings)
         self.actionSetLastDateFilter.setObjectName("actionSetLastDateFilter")
-        self.actionSetSpeciesFilter = QtGui.QAction(frmPhotos)
+        self.actionSetSpeciesFilter = QtGui.QAction(frmRecordings)
         self.actionSetSpeciesFilter.setObjectName("actionSetSpeciesFilter")
-        self.actionSetCountryFilter = QtGui.QAction(frmPhotos)
+        self.actionSetCountryFilter = QtGui.QAction(frmRecordings)
         self.actionSetCountryFilter.setObjectName("actionSetCountryFilter")
-        self.actionSetStateFilter = QtGui.QAction(frmPhotos)
+        self.actionSetStateFilter = QtGui.QAction(frmRecordings)
         self.actionSetStateFilter.setObjectName("actionSetStateFilter")
-        self.actionSetCountyFilter = QtGui.QAction(frmPhotos)
+        self.actionSetCountyFilter = QtGui.QAction(frmRecordings)
         self.actionSetCountyFilter.setObjectName("actionSetCountyFilter")
 
-        self.retranslateUi(frmPhotos)
-        QtCore.QMetaObject.connectSlotsByName(frmPhotos)
+        self.retranslateUi(frmRecordings)
+        QtCore.QMetaObject.connectSlotsByName(frmRecordings)
 
-    def retranslateUi(self, frmPhotos):
+    def retranslateUi(self, frmRecordings):
         _translate = QtCore.QCoreApplication.translate
-        frmPhotos.setWindowTitle(_translate("frmPhotos", "Species Report"))
-        self.lblLocation.setText(_translate("frmPhotos", "Location"))
-        self.lblDateRange.setText(_translate("frmPhotos", "Date Range"))
-        self.lblDetails.setText(_translate("frmPhotos", "Details Label"))
-        self.lblSpecies.setText(_translate("frmPhotos", "Species"))
-        self.actionSetDateFilter.setText(_translate("frmPhotos", "Set Filter to Date"))
-        self.actionSetLocationFilter.setText(_translate("frmPhotos", "Set Filter to Location"))
-        self.actionSetFirstDateFilter.setText(_translate("frmPhotos", "Set Filter to \"First\" Date"))
-        self.actionSetLastDateFilter.setText(_translate("frmPhotos", "Set Filter to \"Last\" Date"))
-        self.actionSetSpeciesFilter.setText(_translate("frmPhotos", "Set Filter to Species"))
-        self.actionSetCountryFilter.setText(_translate("frmPhotos", "Set Filter to Country"))
-        self.actionSetStateFilter.setText(_translate("frmPhotos", "Set Filter to State"))
-        self.actionSetCountyFilter.setText(_translate("frmPhotos", "Set Filter to County"))
-        self.lblSortBy.setText(_translate("frmPhotos", "Sort by:"))
-        self.rdoSortSpecies.setText(_translate("frmPhotos", "Alphabetical"))
-        self.rdoSortDate.setText(_translate("frmPhotos", "Date"))
-        self.rdoSortRating.setText(_translate("frmPhotos", "Rating"))
-        self.rdoSortTaxonomy.setText(_translate("frmPhotos", "Taxonomy"))
-        self.buttonSlideshow.setText(_translate("frmPhotos", "Slideshow"))
+        frmRecordings.setWindowTitle(_translate("frmRecordings", "Recordings"))
+        self.lblLocation.setText(_translate("frmRecordings", "Location"))
+        self.lblDateRange.setText(_translate("frmRecordings", "Date Range"))
+        self.lblDetails.setText(_translate("frmRecordings", "Details Label"))
+        self.lblSpecies.setText(_translate("frmRecordings", "Species"))
+        self.actionSetDateFilter.setText(_translate("frmRecordings", "Set Filter to Date"))
+        self.actionSetLocationFilter.setText(_translate("frmRecordings", "Set Filter to Location"))
+        self.actionSetFirstDateFilter.setText(_translate("frmRecordings", "Set Filter to \"First\" Date"))
+        self.actionSetLastDateFilter.setText(_translate("frmRecordings", "Set Filter to \"Last\" Date"))
+        self.actionSetSpeciesFilter.setText(_translate("frmRecordings", "Set Filter to Species"))
+        self.actionSetCountryFilter.setText(_translate("frmRecordings", "Set Filter to Country"))
+        self.actionSetStateFilter.setText(_translate("frmRecordings", "Set Filter to State"))
+        self.actionSetCountyFilter.setText(_translate("frmRecordings", "Set Filter to County"))
+        self.lblSortBy.setText(_translate("frmRecordings", "Sort by:"))
+        self.rdoSortSpecies.setText(_translate("frmRecordings", "Alphabetical"))
+        self.rdoSortDate.setText(_translate("frmRecordings", "Date"))
+        self.rdoSortRating.setText(_translate("frmRecordings", "Rating"))
+        self.rdoSortTaxonomy.setText(_translate("frmRecordings", "Taxonomy"))
+
 
 import icons_rc
 
 if __name__ == "__main__":
     import sys
     app = QtWidgets.QApplication(sys.argv)
-    frmPhotos = QtWidgets.QWidget()
-    ui = Ui_frmPhotos()
-    ui.setupUi(frmPhotos)
-    frmPhotos.show()
+    frmRecordings = QtWidgets.QWidget()
+    ui = Ui_frmRecordings()
+    ui.setupUi(frmRecordings)
+    frmRecordings.show()
     sys.exit(app.exec())

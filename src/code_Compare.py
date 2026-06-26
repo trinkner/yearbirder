@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
+    QGridLayout,
     QScrollArea,
     QFrame,
     QLabel,
@@ -39,12 +40,12 @@ from PySide6.QtPrintSupport import (
 
 # ── Card colors ────────────────────────────────────────────────────────────────
 _COLOR_A        = "#4f8ef7"   # blue  – slot A
-_COLOR_B        = "#e8783a"   # orange – slot B
+_COLOR_B        = "#d98c5a"   # orange – slot B (toned-down, less saturated)
 _COLOR_IDLE     = "#3a3c4a"   # unselected card background
 _COLOR_IDLE_HV  = "#4a4d5e"   # unselected card hover
 _COLOR_BORDER   = "#5a5e73"   # idle border
 _CARD_W         = 160         # px
-_CARD_H         = 80          # px
+_CARD_H         = 64          # px (20% shorter than the original 80)
 
 
 class _ListCard(QFrame):
@@ -59,6 +60,10 @@ class _ListCard(QFrame):
         self.slot    = None          # None | "A" | "B"
         self._hovered = False
 
+        # Named so the border stylesheet can target only this frame.  Without
+        # an objectName a bare "QFrame { border }" rule also matches the child
+        # QLabels (QLabel subclasses QFrame), drawing a stray inner border.
+        self.setObjectName("listCard")
         self.setMinimumHeight(_CARD_H)
         self.setMinimumWidth(_CARD_W)
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
@@ -108,7 +113,7 @@ class _ListCard(QFrame):
         color = self._slot_color()
         border = _COLOR_A if self.slot == "A" else (_COLOR_B if self.slot == "B" else _COLOR_BORDER)
         self.setStyleSheet(
-            f"QFrame {{ background: {color}; border: 2px solid {border}; border-radius: 6px; }}"
+            f"QFrame#listCard {{ background: {color}; border: 2px solid {border}; border-radius: 6px; }}"
         )
         if self.slot:
             self._badge.setText(self.slot)
@@ -171,7 +176,8 @@ class Compare(QMdiSubWindow):
         green = str(code_Stylesheet.speciesColor.green())
         blue  = str(code_Stylesheet.speciesColor.blue())
         species_style = (
-            f"QListWidget {{color: rgb({red},{green},{blue}); font-weight: bold}}"
+            f"QListWidget {{color: rgb({red},{green},{blue}); font-weight: bold; "
+            f"background: #252730}}"
         )
         self.lstLeftOnly.setStyleSheet(species_style)
         self.lstRightOnly.setStyleSheet(species_style)
@@ -221,63 +227,58 @@ class Compare(QMdiSubWindow):
         root.addWidget(self.scrollArea)
 
         results_widget = QWidget()
-        results_layout = QHBoxLayout(results_widget)
-        results_layout.setContentsMargins(0, 0, 0, 0)
-        results_layout.setSpacing(2)
+        # A 3x3 grid (row 0 = list titles, row 1 = "only on this list" counts,
+        # row 2 = the species lists).  Because every grid row shares a single
+        # height across all columns, the three list widgets (row 2) always start
+        # at the same y — even when a title wraps to two lines and the centre
+        # column has no title.  Equal column stretch keeps the widths matched.
+        results_layout = QGridLayout(results_widget)
+        results_layout.setContentsMargins(5, 5, 5, 5)
+        results_layout.setHorizontalSpacing(2)
+        results_layout.setVerticalSpacing(5)
         self.scrollArea.setWidget(results_widget)
 
-        # Left column
-        left_frame = QFrame()
-        left_frame.setFrameShape(QFrame.Shape.NoFrame)
-        left_vbox = QVBoxLayout(left_frame)
-        left_vbox.setContentsMargins(5, 5, 5, 5)
-        left_vbox.setSpacing(5)
-
+        # Row 0 — list titles (centre column has no title)
         self._lbl_a_name = QLabel("")
+        self._lbl_a_name.setWordWrap(True)
+        self._lbl_a_name.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         self._lbl_a_name.setStyleSheet(f"color: {_COLOR_A}; font-weight: bold;")
-        left_vbox.addWidget(self._lbl_a_name)
-
-        self.lblLeftListOnly = QLabel("This List Only")
-        left_vbox.addWidget(self.lblLeftListOnly)
-
-        self.lstLeftOnly = QListWidget()
-        left_vbox.addWidget(self.lstLeftOnly)
-        results_layout.addWidget(left_frame)
-
-        # Center column
-        center_frame = QFrame()
-        center_frame.setFrameShape(QFrame.Shape.NoFrame)
-        center_vbox = QVBoxLayout(center_frame)
-        center_vbox.setContentsMargins(5, 5, 5, 5)
-        center_vbox.setSpacing(5)
-
-        self.lblBothLists = QLabel("Species on Both Lists")
-        self.lblBothLists.setAlignment(Qt.AlignLeft)
-        center_vbox.addWidget(self.lblBothLists)
-
-        self.lstBoth = QListWidget()
-        center_vbox.addWidget(self.lstBoth)
-        results_layout.addWidget(center_frame)
-
-        # Right column
-        right_frame = QFrame()
-        right_frame.setFrameShape(QFrame.Shape.NoFrame)
-        right_vbox = QVBoxLayout(right_frame)
-        right_vbox.setContentsMargins(5, 5, 5, 5)
-        right_vbox.setSpacing(5)
+        results_layout.addWidget(self._lbl_a_name, 0, 0)
 
         self._lbl_b_name = QLabel("")
-        self._lbl_b_name.setAlignment(Qt.AlignLeft)
+        self._lbl_b_name.setWordWrap(True)
+        self._lbl_b_name.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         self._lbl_b_name.setStyleSheet(f"color: {_COLOR_B}; font-weight: bold;")
-        right_vbox.addWidget(self._lbl_b_name)
+        results_layout.addWidget(self._lbl_b_name, 0, 2)
+
+        # Row 1 — per-column counts (centre cell stays empty so its list still
+        # lines up with the side lists)
+        self.lblLeftListOnly = QLabel("This List Only")
+        self.lblLeftListOnly.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        results_layout.addWidget(self.lblLeftListOnly, 1, 0)
+
+        self.lblBothLists = QLabel("Species on Both Lists")
+        self.lblBothLists.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        results_layout.addWidget(self.lblBothLists, 1, 1)
 
         self.lblRightListOnly = QLabel("This List Only")
-        self.lblRightListOnly.setAlignment(Qt.AlignLeft)
-        right_vbox.addWidget(self.lblRightListOnly)
+        self.lblRightListOnly.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        results_layout.addWidget(self.lblRightListOnly, 1, 2)
+
+        # Row 2 — the species lists
+        self.lstLeftOnly = QListWidget()
+        results_layout.addWidget(self.lstLeftOnly, 2, 0)
+
+        self.lstBoth = QListWidget()
+        results_layout.addWidget(self.lstBoth, 2, 1)
 
         self.lstRightOnly = QListWidget()
-        right_vbox.addWidget(self.lstRightOnly)
-        results_layout.addWidget(right_frame)
+        results_layout.addWidget(self.lstRightOnly, 2, 2)
+
+        # Equal column widths; only the list row grows vertically.
+        for col in range(3):
+            results_layout.setColumnStretch(col, 1)
+        results_layout.setRowStretch(2, 1)
 
     # ── Card interaction ───────────────────────────────────────────────────────
 
@@ -346,6 +347,15 @@ class Compare(QMdiSubWindow):
         if len(titles) < 2:
             return False
 
+        # If exactly two lists are available, there's only one possible
+        # comparison — pre-assign them to A and B and show it immediately.
+        if len(self._cards) == 2:
+            self._cards[0].set_slot("A")
+            self._card_a = self._cards[0]
+            self._cards[1].set_slot("B")
+            self._card_b = self._cards[1]
+            self.CompareLists()
+
         self.scaleMe()
         self.resizeMe()
         return True
@@ -408,8 +418,10 @@ class Compare(QMdiSubWindow):
         self.lblBothLists.setText(f"Species on both lists: {self.lstBoth.count()}")
         self.lblRightListOnly.setText(f"Species only on this list: {self.lstRightOnly.count()}")
 
-        self._lbl_a_name.setText(left_title)
-        self._lbl_b_name.setText(right_title)
+        # Drop the redundant "Species: " prefix in the top column labels — the
+        # comparison is plainly about species and the white sub-titles say so.
+        self._lbl_a_name.setText(left_title.removeprefix("Species: "))
+        self._lbl_b_name.setText(right_title.removeprefix("Species: "))
         self._lbl_instruction.hide()
 
     def _clear_results(self):

@@ -1,7 +1,8 @@
 # import project files
-import form_RenamePhotos
+import form_RenameMedia
 import code_Filter
 import code_Stylesheet
+import code_ThumbnailCache
 
 import errno as _errno_mod
 import os
@@ -97,7 +98,7 @@ class _HoverRowDelegate(QStyledItemDelegate):
             painter.restore()
 
 
-class RenamePhotos(QMdiSubWindow, form_RenamePhotos.Ui_frmRenamePhotos):
+class RenameMedia(QMdiSubWindow, form_RenameMedia.Ui_frmRenameMedia):
 
     resized = Signal()
 
@@ -145,6 +146,8 @@ class RenamePhotos(QMdiSubWindow, form_RenamePhotos.Ui_frmRenamePhotos):
         self.chkRemoveSpaces.stateChanged.connect(self._updateProposedNames)
         self.btnSelectAll.clicked.connect(self._selectAll)
         self.btnSelectNone.clicked.connect(self._selectNone)
+        self.btnSelectWav.clicked.connect(lambda: self._selectByExtension({".wav"}))
+        self.btnSelectJpg.clicked.connect(lambda: self._selectByExtension({".jpg", ".jpeg"}))
         self.btnRename.clicked.connect(self._rename)
         self.btnCancel.clicked.connect(self.close)
 
@@ -202,10 +205,12 @@ class RenamePhotos(QMdiSubWindow, form_RenamePhotos.Ui_frmRenamePhotos):
 
     # ── Public ─────────────────────────────────────────────────────────────────
 
-    def FillRenamePhotos(self, sightings):
-        """Populate the table from a list of sightings-with-photos.
+    def FillRenameMedia(self, photo_sightings, recording_file_to_sightings):
+        """Populate the table with photos and recording files.
 
-        Each sighting may carry multiple photos; each photo becomes one row.
+        photo_sightings  — list of sightings-with-photos (same as FillRenameMedia).
+        recording_file_to_sightings — {filename: [sightings]} from GetSightingsByRecordingFile.
+        Each photo and each unique recording file becomes one table row.
         """
         self._rows = []
         self._frozen_paths = set()
@@ -213,53 +218,74 @@ class RenamePhotos(QMdiSubWindow, form_RenamePhotos.Ui_frmRenamePhotos):
         self.tblPhotos.setSortingEnabled(False)
 
         row_index = 0
-        for s in sightings:
+        for s in photo_sightings:
             for p in s.get("photos", []):
                 exif_dt, exif_sub, exif_bad = self._readExifDatetime(p["fileName"])
                 self._rows.append({
+                    "mediaType": "photo",
                     "sighting": s,
                     "photo": p,
                     "exifDatetime": exif_dt,
                     "exifSubsec": exif_sub,
                     "exifDateInvalid": exif_bad,
                 })
-
-                self.tblPhotos.insertRow(row_index)
-
-                # Col 0 — centred checkbox widget
-                chk_widget = QWidget()
-                chk = QCheckBox()
-                chk.setChecked(True)
-                chk.stateChanged.connect(self._updateCount)
-                lay = QHBoxLayout(chk_widget)
-                lay.addWidget(chk)
-                lay.setAlignment(Qt.AlignCenter)
-                lay.setContentsMargins(0, 0, 0, 0)
-                self.tblPhotos.setCellWidget(row_index, _COL_CHECK, chk_widget)
-
-                # Col 1 — current filename; UserRole holds full path for lookup,
-                # tooltip shows the full basename so truncated names are readable
-                basename = os.path.basename(p["fileName"])
-                item_cur = QTableWidgetItem(basename)
-                item_cur.setData(Qt.UserRole, p["fileName"])
-                item_cur.setToolTip(basename)
-                self.tblPhotos.setItem(row_index, _COL_CURRENT, item_cur)
-
-                # Col 2 — proposed (computed below)
-                self.tblPhotos.setItem(row_index, _COL_PROPOSED, QTableWidgetItem(""))
-
-                # Col 3 — status
-                self.tblPhotos.setItem(row_index, _COL_STATUS, QTableWidgetItem(""))
-
+                self._addTableRow(row_index, p["fileName"])
                 row_index += 1
+
+        for filename, sightings in recording_file_to_sightings.items():
+            primary = sightings[0]
+            recording_dict = next(
+                (a for a in primary.get("audio", []) if a["fileName"] == filename),
+                None,
+            )
+            if recording_dict is None:
+                continue
+            wav_dt = self.mdiParent.db.readWavMetadateDatetime(filename)
+            self._rows.append({
+                "mediaType": "recording",
+                "sightings": sightings,
+                "recording": recording_dict,
+                "exifDatetime": wav_dt,
+                "exifSubsec": None,
+                "exifDateInvalid": False,
+            })
+            self._addTableRow(row_index, filename)
+            row_index += 1
 
         self.tblPhotos.setSortingEnabled(True)
         self._updateProposedNames()
         self._updateCount()
         self._resizeContentColumns()
 
+    def FillRenameMedia_PhotosOnly(self, sightings):
+        """Populate the table from photo sightings only (no recordings)."""
+        self.FillRenameMedia(sightings, {})
+
 
     # ── Private helpers ────────────────────────────────────────────────────────
+
+    def _addTableRow(self, row_index, filepath):
+        """Insert one table row for the given file path."""
+        self.tblPhotos.insertRow(row_index)
+
+        chk_widget = QWidget()
+        chk = QCheckBox()
+        chk.setChecked(True)
+        chk.stateChanged.connect(self._updateCount)
+        lay = QHBoxLayout(chk_widget)
+        lay.addWidget(chk)
+        lay.setAlignment(Qt.AlignCenter)
+        lay.setContentsMargins(0, 0, 0, 0)
+        self.tblPhotos.setCellWidget(row_index, _COL_CHECK, chk_widget)
+
+        basename = os.path.basename(filepath)
+        item_cur = QTableWidgetItem(basename)
+        item_cur.setData(Qt.UserRole, filepath)
+        item_cur.setToolTip(basename)
+        self.tblPhotos.setItem(row_index, _COL_CURRENT, item_cur)
+
+        self.tblPhotos.setItem(row_index, _COL_PROPOSED, QTableWidgetItem(""))
+        self.tblPhotos.setItem(row_index, _COL_STATUS, QTableWidgetItem(""))
 
     @staticmethod
     def _readExifDatetime(filepath):
@@ -358,10 +384,10 @@ class RenamePhotos(QMdiSubWindow, form_RenamePhotos.Ui_frmRenamePhotos):
             parens_content = None
             base = text
 
-        sanitized_base = RenamePhotos._sanitizeForFilename(base)
+        sanitized_base = RenameMedia._sanitizeForFilename(base)
 
         if parens_content:
-            sanitized_parens = RenamePhotos._sanitizeForFilename(parens_content)
+            sanitized_parens = RenameMedia._sanitizeForFilename(parens_content)
             if sanitized_base and sanitized_parens:
                 return f"{sanitized_base}_{sanitized_parens}"
             return sanitized_base or sanitized_parens
@@ -377,7 +403,10 @@ class RenamePhotos(QMdiSubWindow, form_RenamePhotos.Ui_frmRenamePhotos):
         format (HH-MM-SS / HHMMSS), append the tenths digit to differentiate
         same-second filenames.
         """
-        s        = row_data["sighting"]
+        if row_data.get("mediaType") == "recording":
+            s = row_data["sightings"][0]
+        else:
+            s = row_data["sighting"]
         exif_dt  = row_data["exifDatetime"]
         exif_sub = row_data["exifSubsec"]
 
@@ -385,6 +414,9 @@ class RenamePhotos(QMdiSubWindow, form_RenamePhotos.Ui_frmRenamePhotos):
             return ""
 
         if slot_label == "Species Name":
+            if (row_data.get("mediaType") == "recording"
+                    and len(row_data.get("sightings", [])) > 1):
+                return "MultipleSpecies"
             name_fmt = self.cboNameFormat.currentText()
             if name_fmt == "eBird Species Code":
                 return self._sanitizeForFilename(s.get("quickEntryCode", ""))
@@ -671,7 +703,10 @@ class RenamePhotos(QMdiSubWindow, form_RenamePhotos.Ui_frmRenamePhotos):
             self.lblSample.setText("Sample: —")
             return
         rd = self._rows[0]
-        ext = os.path.splitext(rd["photo"]["fileName"])[1]
+        if rd.get("mediaType") == "recording":
+            ext = os.path.splitext(rd["recording"]["fileName"])[1]
+        else:
+            ext = os.path.splitext(rd["photo"]["fileName"])[1]
         base = self._buildProposedBasename(rd)
         sample = (base + ext) if base else "—"
         self.lblSample.setText(f"Sample: {sample}")
@@ -689,7 +724,10 @@ class RenamePhotos(QMdiSubWindow, form_RenamePhotos.Ui_frmRenamePhotos):
         original_path = unicodedata.normalize(
             "NFC", cur_item.data(Qt.UserRole) or "")
         for rd in self._rows:
-            fn = rd["photo"].get("fileName", "") or ""
+            if rd.get("mediaType") == "recording":
+                fn = rd["recording"].get("fileName", "") or ""
+            else:
+                fn = rd["photo"].get("fileName", "") or ""
             if unicodedata.normalize("NFC", fn) == original_path:
                 return rd
         return None
@@ -759,6 +797,19 @@ class RenamePhotos(QMdiSubWindow, form_RenamePhotos.Ui_frmRenamePhotos):
                 chk.blockSignals(False)
         self._updateCount()
 
+    def _selectByExtension(self, extensions):
+        """Select only rows whose file extension (case-insensitive) is in extensions."""
+        for row in range(self.tblPhotos.rowCount()):
+            chk = self._getCheckboxForRow(row)
+            if chk is None:
+                continue
+            item = self.tblPhotos.item(row, _COL_CURRENT)
+            ext = os.path.splitext(item.data(Qt.UserRole) if item else "")[1].lower()
+            chk.blockSignals(True)
+            chk.setChecked(ext in extensions)
+            chk.blockSignals(False)
+        self._updateCount()
+
 
     def _updateCount(self):
         total    = self.tblPhotos.rowCount()
@@ -824,7 +875,7 @@ class RenamePhotos(QMdiSubWindow, form_RenamePhotos.Ui_frmRenamePhotos):
             self.mdiParent._promptJsonlMigrationIfNeeded()
             if not db.photoDataFile or not db.photoDataFile.lower().endswith(".jsonl"):
                 QMessageBox.warning(
-                    self, "No Photo Catalog",
+                    self, "No Media Catalog",
                     "A photo settings (.jsonl) file must be open before renaming.\n\n"
                     "Please open or create one and try again.",
                     QMessageBox.StandardButton.Ok,
@@ -877,36 +928,86 @@ class RenamePhotos(QMdiSubWindow, form_RenamePhotos.Ui_frmRenamePhotos):
                 failed += 1
                 continue
 
-            # Update live db dict in-place — rd["photo"] IS the dict in the db
-            rd["photo"]["fileName"] = new_path
+            if rd.get("mediaType") == "recording":
+                # Update fileName in-place for every sighting that references
+                # this file (there may be one per species).  Collect them first
+                # so we can roll back cleanly on a JSONL write failure.
+                recordings_to_update = [
+                    (s, a)
+                    for s in db.sightingList
+                    if "audio" in s
+                    for a in s["audio"]
+                    if a["fileName"] == old_path
+                ]
+                for _, a in recordings_to_update:
+                    a["fileName"] = new_path
 
-            # Write incremental JSONL: new record first, tombstone second.
-            # Writing in this order means a failure on the tombstone write leaves
-            # a harmless duplicate (old name still in JSONL alongside new name)
-            # rather than a tombstone with no replacement, which would cause the
-            # photo to vanish on the next compaction.
-            try:
-                db.appendPhotoToJsonl(rd["sighting"], rd["photo"])
-            except IOError:
-                rd["photo"]["fileName"] = old_path   # undo db update
+                # Write new JSONL records (one per species); new record first
+                # so a partial failure leaves additions rather than orphaned
+                # tombstones.
+                jsonl_ok = True
+                for s, a in recordings_to_update:
+                    try:
+                        db.appendRecordingToJsonl(s, a)
+                    except IOError:
+                        jsonl_ok = False
+                        for _, a2 in recordings_to_update:
+                            a2["fileName"] = old_path
+                        try:
+                            os.rename(new_path, old_path)
+                        except OSError:
+                            pass
+                        break
+
+                if not jsonl_ok:
+                    status_item = self.tblPhotos.item(row, _COL_STATUS)
+                    if status_item:
+                        status_item.setText("Settings save failed")
+                        status_item.setForeground(_ERROR_RED)
+                    self._frozen_paths.add(old_path)
+                    failed += 1
+                    continue
+
                 try:
-                    os.rename(new_path, old_path)    # undo filesystem rename
-                except OSError:
+                    db.appendRecordingDeletionToJsonl(old_path)
+                except IOError:
                     pass
-                status_item = self.tblPhotos.item(row, _COL_STATUS)
-                if status_item:
-                    status_item.setText("Settings save failed")
-                    status_item.setForeground(_ERROR_RED)
-                self._frozen_paths.add(old_path)
-                failed += 1
-                continue
 
-            # Tombstone the old path only after the new record is safely written.
-            # A failure here leaves a harmless duplicate; Optimize will clean it.
-            try:
-                db.appendPhotoDeletionToJsonl(old_path)
-            except IOError:
-                pass
+            else:
+                # Update live db dict in-place — rd["photo"] IS the dict in the db
+                rd["photo"]["fileName"] = new_path
+
+                # Write incremental JSONL: new record first, tombstone second.
+                try:
+                    db.appendPhotoToJsonl(rd["sighting"], rd["photo"])
+                except IOError:
+                    rd["photo"]["fileName"] = old_path
+                    try:
+                        os.rename(new_path, old_path)
+                    except OSError:
+                        pass
+                    status_item = self.tblPhotos.item(row, _COL_STATUS)
+                    if status_item:
+                        status_item.setText("Settings save failed")
+                        status_item.setForeground(_ERROR_RED)
+                    self._frozen_paths.add(old_path)
+                    failed += 1
+                    continue
+
+                try:
+                    db.appendPhotoDeletionToJsonl(old_path)
+                except IOError:
+                    pass
+
+                # Update any open Photos window's pixmap cache.
+                for w in self.mdiParent.mdiArea.subWindowList():
+                    cache = getattr(w, "pixmapCache", None)
+                    if cache and old_path in cache:
+                        cache[new_path] = cache.pop(old_path)
+
+            # Re-key the on-disk thumbnail/spectrogram cache so the renamed file
+            # keeps its cached previews (a rename leaves mtime/size unchanged).
+            code_ThumbnailCache.rename(old_path, new_path)
 
             # Update table row so subsequent operations use the new path
             cur_item = self.tblPhotos.item(row, _COL_CURRENT)
@@ -924,13 +1025,6 @@ class RenamePhotos(QMdiSubWindow, form_RenamePhotos.Ui_frmRenamePhotos):
             status_item = self.tblPhotos.item(row, _COL_STATUS)
             if status_item:
                 status_item.setText("Done")
-
-            # Update any open Photos window's pixmap cache so it doesn't
-            # serve the old path's cached pixmap under the new filename.
-            for w in self.mdiParent.mdiArea.subWindowList():
-                cache = getattr(w, "pixmapCache", None)
-                if cache and old_path in cache:
-                    cache[new_path] = cache.pop(old_path)
 
             self._frozen_paths.add(new_path)
             succeeded += 1
@@ -974,7 +1068,11 @@ class RenamePhotos(QMdiSubWindow, form_RenamePhotos.Ui_frmRenamePhotos):
             item = self.tblPhotos.item(r, _COL_CURRENT)
             if item and item.data(Qt.UserRole) == filename:
                 self.tblPhotos.removeRow(r)
-                self._rows = [row for row in self._rows if row["photo"]["fileName"] != filename]
+                self._rows = [
+                    row for row in self._rows
+                    if (row.get("audio", row.get("photo", {})).get("fileName")
+                        != filename)
+                ]
                 break
 
 

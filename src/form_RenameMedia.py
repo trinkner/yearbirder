@@ -3,19 +3,19 @@
 from PySide6 import QtCore, QtGui, QtWidgets
 
 
-class Ui_frmRenamePhotos(object):
+class Ui_frmRenameMedia(object):
 
-    def setupUi(self, frmRenamePhotos):
-        frmRenamePhotos.setObjectName("frmRenamePhotos")
-        frmRenamePhotos.resize(960, 720)
-        frmRenamePhotos.setMinimumSize(QtCore.QSize(600, 400))
+    def setupUi(self, frmRenameMedia):
+        frmRenameMedia.setObjectName("frmRenameMedia")
+        frmRenameMedia.resize(960, 720)
+        frmRenameMedia.setMinimumSize(QtCore.QSize(600, 400))
         icon = QtGui.QIcon()
         icon.addPixmap(QtGui.QPixmap(":/icon_bird_white.png"),
                        QtGui.QIcon.Normal, QtGui.QIcon.Off)
-        frmRenamePhotos.setWindowIcon(icon)
+        frmRenameMedia.setWindowIcon(icon)
 
         # ── Outer container ───────────────────────────────────────────────────
-        self.frmContainer = QtWidgets.QWidget(frmRenamePhotos)
+        self.frmContainer = QtWidgets.QWidget(frmRenameMedia)
         self.frmContainer.setObjectName("frmContainer")
         self.mainLayout = QtWidgets.QVBoxLayout(self.frmContainer)
         self.mainLayout.setContentsMargins(8, 8, 8, 8)
@@ -233,6 +233,14 @@ class Ui_frmRenamePhotos(object):
         self.btnSelectNone.setObjectName("btnSelectNone")
         self.footerLayout.addWidget(self.btnSelectNone)
 
+        self.btnSelectWav = QtWidgets.QPushButton(self.frmFooter)
+        self.btnSelectWav.setObjectName("btnSelectWav")
+        self.footerLayout.addWidget(self.btnSelectWav)
+
+        self.btnSelectJpg = QtWidgets.QPushButton(self.frmFooter)
+        self.btnSelectJpg.setObjectName("btnSelectJpg")
+        self.footerLayout.addWidget(self.btnSelectJpg)
+
         self.lblCount = QtWidgets.QLabel(self.frmFooter)
         self.lblCount.setObjectName("lblCount")
         self.footerLayout.addWidget(self.lblCount)
@@ -249,57 +257,59 @@ class Ui_frmRenamePhotos(object):
 
         self.mainLayout.addWidget(self.frmFooter)
 
-        self.retranslateUi(frmRenamePhotos)
-        QtCore.QMetaObject.connectSlotsByName(frmRenamePhotos)
+        self.retranslateUi(frmRenameMedia)
+        QtCore.QMetaObject.connectSlotsByName(frmRenameMedia)
 
-    def retranslateUi(self, frmRenamePhotos):
+    def retranslateUi(self, frmRenameMedia):
         _t = QtCore.QCoreApplication.translate
-        frmRenamePhotos.setWindowTitle(_t("frmRenamePhotos", "Rename Photos"))
+        frmRenameMedia.setWindowTitle(_t("frmRenameMedia", "Rename Media"))
 
         # Section 1
-        self.lblFormatTitle.setText(_t("frmRenamePhotos", "Name Format"))
+        self.lblFormatTitle.setText(_t("frmRenameMedia", "Name Format"))
         for n in range(1, 5):
             getattr(self, f"lblSlot{n}").setText(
-                _t("frmRenamePhotos", f"Slot {n}:"))
-        self.lblDateFormat.setText(_t("frmRenamePhotos", "Date Format:"))
-        self.lblTimeFormat.setText(_t("frmRenamePhotos", "Time Format:"))
-        self.lblNameFormat.setText(_t("frmRenamePhotos", "Species Name Format:"))
-        self.lblSample.setText(_t("frmRenamePhotos", "Sample: —"))
+                _t("frmRenameMedia", f"Slot {n}:"))
+        self.lblDateFormat.setText(_t("frmRenameMedia", "Date Format:"))
+        self.lblTimeFormat.setText(_t("frmRenameMedia", "Time Format:"))
+        self.lblNameFormat.setText(_t("frmRenameMedia", "Species Name Format:"))
+        self.lblSample.setText(_t("frmRenameMedia", "Sample: —"))
 
         # Section 2
-        self.lblOptionsTitle.setText(_t("frmRenamePhotos", "Options"))
-        self.chkUseChecklistTime.setText(_t("frmRenamePhotos",
-            "Use checklist time for photos without a time"))
-        self.chkShortenLocation.setText(_t("frmRenamePhotos",
+        self.lblOptionsTitle.setText(_t("frmRenameMedia", "Options"))
+        self.chkUseChecklistTime.setText(_t("frmRenameMedia",
+            "Use checklist time for media without metadata"))
+        self.chkShortenLocation.setText(_t("frmRenameMedia",
             "Shorten location name to the first punctuation mark (, - : @ ( )"))
-        self.chkAddTenths.setText(_t("frmRenamePhotos",
+        self.chkAddTenths.setText(_t("frmRenameMedia",
             "If photos have the same HH-MM-SS, add tenths (if available)"))
-        self.chkRemoveSpaces.setText(_t("frmRenamePhotos", "Remove spaces"))
-        self.lblDuplicateNote.setText(_t("frmRenamePhotos",
+        self.chkRemoveSpaces.setText(_t("frmRenameMedia", "Remove spaces"))
+        self.lblDuplicateNote.setText(_t("frmRenameMedia",
             "When files would share the same proposed name, Yearbirder will add _1, _2, etc."))
-        self.lblWarning.setText(_t("frmRenamePhotos",
+        self.lblWarning.setText(_t("frmRenameMedia",
             "⚠  Renaming is permanent and cannot be undone. "
-            "Backup your photos before proceeding."))
+            "Backup your media before proceeding."))
 
         # Table headers
         self.tblPhotos.setHorizontalHeaderItem(
             0, QtWidgets.QTableWidgetItem(""))
         self.tblPhotos.setHorizontalHeaderItem(
             1, QtWidgets.QTableWidgetItem(
-                _t("frmRenamePhotos", "Current Filename")))
+                _t("frmRenameMedia", "Current Filename")))
         self.tblPhotos.setHorizontalHeaderItem(
             2, QtWidgets.QTableWidgetItem(
-                _t("frmRenamePhotos", "Proposed Filename")))
+                _t("frmRenameMedia", "Proposed Filename")))
         self.tblPhotos.setHorizontalHeaderItem(
             3, QtWidgets.QTableWidgetItem(
-                _t("frmRenamePhotos", "Status")))
+                _t("frmRenameMedia", "Status")))
 
         # Footer
-        self.btnSelectAll.setText(_t("frmRenamePhotos", "Select All"))
-        self.btnSelectNone.setText(_t("frmRenamePhotos", "Select None"))
-        self.lblCount.setText(_t("frmRenamePhotos", "0 of 0 selected"))
-        self.btnRename.setText(_t("frmRenamePhotos", "Rename"))
-        self.btnCancel.setText(_t("frmRenamePhotos", "Cancel"))
+        self.btnSelectAll.setText(_t("frmRenameMedia", "Select All"))
+        self.btnSelectNone.setText(_t("frmRenameMedia", "Select None"))
+        self.btnSelectWav.setText(_t("frmRenameMedia", "WAV"))
+        self.btnSelectJpg.setText(_t("frmRenameMedia", "JPG"))
+        self.lblCount.setText(_t("frmRenameMedia", "0 of 0 selected"))
+        self.btnRename.setText(_t("frmRenameMedia", "Rename"))
+        self.btnCancel.setText(_t("frmRenameMedia", "Cancel"))
 
 
 import icons_rc

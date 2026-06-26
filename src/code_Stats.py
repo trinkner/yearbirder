@@ -223,14 +223,9 @@ class Stats(QMdiSubWindow, form_Stats.Ui_frmStats):
             photo_count        = 0
             photo_species_set  = set()
             photo_location_set = set()
-            photo_family_set   = set()
-            photo_order_set    = set()
             photo_checklist_set= set()
             ratings            = []
-            camera_count       = {}   # camera -> count
-            lens_count         = {}   # lens -> count
             species_photo_count= {}   # commonName -> count
-            species_last_date  = {}   # commonName -> most recent photo date (YYYY-MM-DD)
             species_first_date = {}   # commonName -> earliest photo date (YYYY-MM-DD)
             species_date_photos= {}   # (commonName, date) -> [fileName, ...]
 
@@ -249,9 +244,6 @@ class Stats(QMdiSubWindow, form_Stats.Ui_frmStats):
                         photo_species_set.add(name)
                         species_photo_count[name] = species_photo_count.get(name, 0) + 1
                         if date:
-                            prev = species_last_date.get(name)
-                            if prev is None or date > prev:
-                                species_last_date[name] = date
                             prev_first = species_first_date.get(name)
                             if prev_first is None or date < prev_first:
                                 species_first_date[name] = date
@@ -262,17 +254,7 @@ class Stats(QMdiSubWindow, form_Stats.Ui_frmStats):
                                     species_date_photos[key] = []
                                 species_date_photos[key].append(fname)
                     photo_location_set.add(s["location"])
-                    if s.get("family"):
-                        photo_family_set.add(s["family"])
-                    if s.get("order"):
-                        photo_order_set.add(s["order"])
                     photo_checklist_set.add(s["checklistID"])
-                    cam = (p.get("camera") or "").strip()
-                    if cam:
-                        camera_count[cam] = camera_count.get(cam, 0) + 1
-                    lens = (p.get("lens") or "").strip()
-                    if lens:
-                        lens_count[lens] = lens_count.get(lens, 0) + 1
                     try:
                         r = int(p.get("rating") or 0)
                         if r > 0:
@@ -283,33 +265,9 @@ class Stats(QMdiSubWindow, form_Stats.Ui_frmStats):
             avg_rating = sum(ratings) / len(ratings) if ratings else 0.0
             top_species = sorted(species_photo_count.items(),
                                  key=lambda x: x[1], reverse=True)
-            top_camera = max(camera_count.items(), key=lambda x: x[1]) if camera_count else ("", 0)
-            top_lens   = max(lens_count.items(),   key=lambda x: x[1]) if lens_count   else ("", 0)
 
-            # Most recently photographed: species with the latest last-photo date
-            # Longest since photographed: species with the earliest last-photo date
-            # Most recent new species: species whose first-ever photo date is latest
-            most_recent_species = ""
-            most_recent_date    = ""
-            longest_since_species = ""
-            longest_since_date    = ""
             most_recent_new_species = ""
             most_recent_new_date    = ""
-            if species_last_date:
-                most_recent_date = max(species_last_date.values())
-                tied_mr = [n for n, d in species_last_date.items() if d == most_recent_date]
-                most_recent_species = (
-                    tied_mr[0] if len(tied_mr) == 1 else
-                    _tiebreak_species(tied_mr, most_recent_date, species_date_photos, want_latest=True)
-                )
-
-                longest_since_date = min(species_last_date.values())
-                tied_ls = [n for n, d in species_last_date.items() if d == longest_since_date]
-                longest_since_species = (
-                    tied_ls[0] if len(tied_ls) == 1 else
-                    _tiebreak_species(tied_ls, longest_since_date, species_date_photos, want_latest=False)
-                )
-
             if species_first_date:
                 most_recent_new_date = max(species_first_date.values())
                 tied_mn = [n for n, d in species_first_date.items() if d == most_recent_new_date]
@@ -322,24 +280,75 @@ class Stats(QMdiSubWindow, form_Stats.Ui_frmStats):
                 "photo_count":              photo_count,
                 "photo_species":            len(photo_species_set),
                 "photo_locations":          len(photo_location_set),
-                "photo_families":           len(photo_family_set),
-                "photo_orders":             len(photo_order_set),
                 "photo_checklists":         len(photo_checklist_set),
                 "photo_avg_rating":         avg_rating,
                 "photo_rated_count":        len(ratings),
                 "photo_unrated_count":      photo_count - len(ratings),
-                "photo_top_species":        top_species[:3],
-                "photo_most_recent_species":     most_recent_species,
-                "photo_most_recent_date":        most_recent_date,
-                "photo_longest_since_species":   longest_since_species,
-                "photo_longest_since_date":      longest_since_date,
+                "photo_top_species":        top_species[:1],
                 "photo_most_recent_new_species": most_recent_new_species,
                 "photo_most_recent_new_date":    most_recent_new_date,
-                "photo_top_camera":            top_camera[0],
-                "photo_top_camera_count":      top_camera[1],
-                "photo_top_lens":              top_lens[0],
-                "photo_top_lens_count":        top_lens[1],
             }
+
+        rec_stats = {}
+        if has_photos:
+            rec_count         = 0
+            rec_species_set   = set()
+            rec_location_set  = set()
+            rec_checklist_set = set()
+            rec_ratings       = []
+            rec_sp_count      = {}   # commonName -> recording count
+            rec_sp_first_date = {}   # commonName -> earliest recording date
+
+            for s in sightings:
+                recs = s.get("audio") or []
+                if not recs:
+                    continue
+                name = s["commonName"]
+                is_species = (" x " not in name and
+                              "sp."  not in name and
+                              "/"    not in name)
+                date = s.get("date") or ""
+                for r in recs:
+                    rec_count += 1
+                    if is_species:
+                        rec_species_set.add(name)
+                        rec_sp_count[name] = rec_sp_count.get(name, 0) + 1
+                        if date:
+                            prev = rec_sp_first_date.get(name)
+                            if prev is None or date < prev:
+                                rec_sp_first_date[name] = date
+                    rec_location_set.add(s["location"])
+                    rec_checklist_set.add(s["checklistID"])
+                    try:
+                        rv = int(r.get("rating") or 0)
+                        if rv > 0:
+                            rec_ratings.append(rv)
+                    except (ValueError, TypeError):
+                        pass
+
+            if rec_count > 0:
+                top_rec_sp     = sorted(rec_sp_count.items(), key=lambda x: x[1], reverse=True)
+                rec_avg_rating = sum(rec_ratings) / len(rec_ratings) if rec_ratings else 0.0
+
+                rec_new_sp   = ""
+                rec_new_date = ""
+                if rec_sp_first_date:
+                    rec_new_date = max(rec_sp_first_date.values())
+                    tied = [n for n, d in rec_sp_first_date.items() if d == rec_new_date]
+                    rec_new_sp = sorted(tied)[0]
+
+                rec_stats = {
+                    "rec_count":         rec_count,
+                    "rec_species":       len(rec_species_set),
+                    "rec_locations":     len(rec_location_set),
+                    "rec_checklists":    len(rec_checklist_set),
+                    "rec_avg_rating":    rec_avg_rating,
+                    "rec_rated_count":   len(rec_ratings),
+                    "rec_unrated_count": rec_count - len(rec_ratings),
+                    "rec_top_species":   top_rec_sp[:1],
+                    "rec_new_species":   rec_new_sp,
+                    "rec_new_date":      rec_new_date,
+                }
 
         return {
             "total_species":            len(species_set),
@@ -370,6 +379,7 @@ class Stats(QMdiSubWindow, form_Stats.Ui_frmStats):
             "avg_stat_duration":        _avg(_floats(stationary, "duration")),
             "avg_incidental_species":   _avg([len(c["species"]) for c in incidental]),
             **photo_stats,
+            **rec_stats,
         }
 
 
@@ -482,66 +492,66 @@ class Stats(QMdiSubWindow, form_Stats.Ui_frmStats):
         ], dark)
 
         if has_photos:
-            top = st.get("photo_top_species", [])
-            top_rows = [("Most Photographed", "")]
-            for sp_name, cnt in top:
-                display = sp_name if len(sp_name) <= 28 else sp_name[:26] + "\u2026"
-                top_rows.append((f"\u00a0\u00a0- {display}", fi(cnt)))
             def _sp(name):
                 return name if len(name) <= 28 else name[:26] + "\u2026"
 
-            mr_name = st.get("photo_most_recent_species", "")
-            mr_date = st.get("photo_most_recent_date", "")
-            ls_name = st.get("photo_longest_since_species", "")
-            ls_date = st.get("photo_longest_since_date", "")
+            top = st.get("photo_top_species", [])
+            top_rows = []
+            if top:
+                top_rows = [("Most Photographed", "")]
+                for sp_name, cnt in top:
+                    top_rows.append((f"\u00a0\u00a0- {_sp(sp_name)}", fi(cnt)))
+
             mn_name = st.get("photo_most_recent_new_species", "")
             mn_date = st.get("photo_most_recent_new_date", "")
-
-            recency_rows = []
+            mn_rows = []
             if mn_name:
-                recency_rows += [
+                mn_rows = [
                     ("Most Recent New Species", ""),
                     (f"\u00a0\u00a0- {_sp(mn_name)}", fdate(mn_date)),
-                ]
-            if mr_name:
-                recency_rows += [
-                    ("Most Recently Photographed", ""),
-                    (f"\u00a0\u00a0- {_sp(mr_name)}", fdate(mr_date)),
-                ]
-            if ls_name:
-                recency_rows += [
-                    ("Longest Since Photographed", ""),
-                    (f"\u00a0\u00a0- {_sp(ls_name)}", fdate(ls_date)),
-                ]
-
-            def _trunc(s, n=28):
-                return s if len(s) <= n else s[:n - 1] + "\u2026"
-
-            camera_rows = []
-            if st.get("photo_top_camera"):
-                camera_rows = [
-                    ("Most Used Camera", ""),
-                    (f"\u00a0\u00a0- {_trunc(st['photo_top_camera'])}", fi(st["photo_top_camera_count"])),
-                ]
-            lens_rows = []
-            if st.get("photo_top_lens"):
-                lens_rows = [
-                    ("Most Used Lens", ""),
-                    (f"\u00a0\u00a0- {_trunc(st['photo_top_lens'])}", fi(st["photo_top_lens_count"])),
                 ]
 
             s7 = self._section("Your Photos", [
                 ("Total Photos",              fi(st["photo_count"])),
                 ("Species Photographed",      fi(st["photo_species"])),
-                ("Families Photographed",     fi(st["photo_families"])),
-                ("Orders Photographed",       fi(st["photo_orders"])),
                 ("Locations with Photos",     fi(st["photo_locations"])),
                 ("Checklists with Photos",    fi(st["photo_checklists"])),
                 ("Avg Rating (rated photos)", ff1(st["photo_avg_rating"])),
                 ("Rated Photos",              fi(st["photo_rated_count"])),
                 ("Unrated Photos",            fi(st["photo_unrated_count"])),
-            ] + top_rows + recency_rows + camera_rows + lens_rows, dark)
-            col3 = f'<div class="col">{s7}{{photo_catalog_note}}</div>'
+            ] + top_rows + mn_rows, dark)
+
+            rec_count = st.get("rec_count", 0)
+            if rec_count > 0:
+                rec_top = st.get("rec_top_species", [])
+                rec_top_rows = []
+                if rec_top:
+                    rec_top_rows = [("Most Recorded", "")]
+                    for sp_name, cnt in rec_top:
+                        rec_top_rows.append((f"\u00a0\u00a0- {_sp(sp_name)}", fi(cnt)))
+
+                rec_mn_name = st.get("rec_new_species", "")
+                rec_mn_date = st.get("rec_new_date", "")
+                rec_mn_rows = []
+                if rec_mn_name:
+                    rec_mn_rows = [
+                        ("Most Recent New Species", ""),
+                        (f"\u00a0\u00a0- {_sp(rec_mn_name)}", fdate(rec_mn_date)),
+                    ]
+
+                s8 = self._section("Your Recordings", [
+                    ("Total Recordings",            fi(st["rec_count"])),
+                    ("Species Recorded",            fi(st["rec_species"])),
+                    ("Locations with Recordings",   fi(st["rec_locations"])),
+                    ("Checklists with Recordings",  fi(st["rec_checklists"])),
+                    ("Avg Rating (rated)",          ff1(st["rec_avg_rating"])),
+                    ("Rated Recordings",            fi(st["rec_rated_count"])),
+                    ("Unrated Recordings",          fi(st["rec_unrated_count"])),
+                ] + rec_top_rows + rec_mn_rows, dark)
+            else:
+                s8 = ""
+
+            col3 = f'<div class="col">{s7}{s8}{{photo_catalog_note}}</div>'
             grid_cols = "1fr 1fr 1.3fr"
         else:
             col3 = ""
@@ -594,14 +604,14 @@ class Stats(QMdiSubWindow, form_Stats.Ui_frmStats):
         ebird_note = (f'<p style="{note_style}">{"<br>".join(ebird_lines)}</p>'
                       if ebird_lines else "")
 
-        # Photo catalog last-write date — bottom of col 3
+        # Media catalog last-write date — bottom of col 3
         photo_catalog_note = ""
         if has_photos and db.photoDataFile:
             try:
                 pdt = datetime.datetime.fromtimestamp(os.stat(db.photoDataFile).st_mtime)
                 catalog_stamp = _fmt_dt(pdt)
                 photo_catalog_note = (
-                    f'<p style="{note_style}">Photo catalog last updated:<br>{catalog_stamp}</p>'
+                    f'<p style="{note_style}">Media catalog last updated:<br>{catalog_stamp}</p>'
                 )
             except OSError:
                 pass

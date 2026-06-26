@@ -1,6 +1,7 @@
 # import project files
 import form_Photos
 import code_Enlargement
+import code_ThumbnailCache
 
 import datetime
 import os
@@ -37,6 +38,8 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QVBoxLayout,
+    QHBoxLayout,
+    QWidget,
     QApplication,
     )
 
@@ -68,21 +71,23 @@ class threadLoadThumbnail(QThread):
 
         while True:
 
-            try:
-                row, photoFile = self.workQueue.get_nowait()
-            except queue.Empty:
+            # Block until work arrives, so the pool can be started up-front and
+            # decode thumbnails in parallel while the grid is still being built.
+            item = self.workQueue.get()
+            if item is None:        # sentinel → no more work, exit cleanly
                 break
+            row, photoFile = item
 
-            reader = QImageReader(photoFile)
-            reader.setAutoTransform(True)
-            imgSize = reader.size()
-            if imgSize.isValid():
-                imgSize.scale(QSize(500, 330), Qt.KeepAspectRatio)
-                reader.setScaledSize(imgSize)
-            qimage = reader.read()
+            # Tier 2: on-disk thumbnail cache (tier 1 is the in-memory
+            # pixmapCache, checked before a file is ever queued here).
+            qimage = code_ThumbnailCache.load(photoFile)
+            if qimage is None:
+                # Tier 3: decode the source at reduced scale, then cache it.
+                qimage = code_ThumbnailCache.decode_thumbnail(photoFile)
+                if not qimage.isNull():
+                    code_ThumbnailCache.store(photoFile, qimage)
 
             self.resultQueue.put((row, photoFile, qimage))
-            self.workQueue.task_done()
 
         self.sigThreadFinished.emit()
 
@@ -105,9 +110,17 @@ class Photos(QMdiSubWindow, form_Photos.Ui_frmPhotos):
         self.photoList = []
         self.pixmapCache = {}
         self._missingPhotoSpecies = set()
-        self.gridPhotos.setContentsMargins(2,2,2,2)
-        self.gridPhotos.setSpacing(2)
+        # Qt caps a QGridLayout's total height at ~524k px, which squashes the
+        # photo rows once there are more than ~1,600 photos.  Use a QVBoxLayout of
+        # per-row widgets instead (no such cap until ~50k photos); the form's
+        # gridPhotos is left unused.
+        self.gridPhotos.setContentsMargins(0, 0, 0, 0)
+        self.rowsLayout = QVBoxLayout()
+        self.rowsLayout.setContentsMargins(0, 0, 0, 0)
+        self.rowsLayout.setSpacing(4)
+        self.verticalLayout_3.addLayout(self.rowsLayout)
         self.verticalLayout_3.addStretch(1)
+        self._rowWidgets = {}
         self._abort = False
         self._sorting = False
         self._photoButtons = {}
@@ -133,6 +146,7 @@ class Photos(QMdiSubWindow, form_Photos.Ui_frmPhotos):
 
         self._loadedCount = 0
         self._totalUncached = 0
+        self._building = False   # True while the grid is being built (drain owns no overlay text then)
 
         # Timer drains resultQueue in the main thread at regular intervals.
         # Because no Qt signals are fired from worker threads, the event loop
@@ -143,21 +157,27 @@ class Photos(QMdiSubWindow, form_Photos.Ui_frmPhotos):
 
     def closeEvent(self, event):
         self._abort = True
+        self._building = False
         self._drainTimer.stop()
-        # drain the work queue so worker threads exit their loops promptly
-        while not self.workQueue.empty():
-            try:
+        # Discard pending work, then sentinel each (blocking) worker so it exits
+        # promptly after its current decode.
+        try:
+            while True:
                 self.workQueue.get_nowait()
-                self.workQueue.task_done()
-            except queue.Empty:
-                break
+        except queue.Empty:
+            pass
+        for _ in range(self.threadCount):
+            self.workQueue.put(None)
         # drain the result queue so nothing lingers
         while not self.resultQueue.empty():
             try:
                 self.resultQueue.get_nowait()
             except queue.Empty:
                 break
+        self.mdiParent.progressOverlay.hide()
         self.mdiParent.db.compactJsonlFile()
+        # Keep the on-disk thumbnail cache bounded (off the load path).
+        code_ThumbnailCache.enforce_cap()
         super(self.__class__, self).closeEvent(event)
 
 
@@ -209,9 +229,8 @@ class Photos(QMdiSubWindow, form_Photos.Ui_frmPhotos):
         self.rdoSortRating.setFont(QFont("", fontSize))
         self.rdoSortTaxonomy.setFont(QFont("", fontSize))
 
-        for c in self.layLists.children():
-            if "QLabel" in str(c):
-                c.setFont(QFont("", fontSize))
+        for c in self.layLists.findChildren(QLabel):
+            c.setFont(QFont("", fontSize))
 
         windowWidth =  int(800  * scaleFactor)
         if len(self.photoList) == 1:
@@ -282,16 +301,16 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
 
             cells.append('<td>' + img_tag + '<div class="caption">' + caption + '</div></td>')
 
-        # Lay out 4 photos per page: 2 columns × 2 rows.
-        for i in range(0, len(cells), 4):
-            page_cells = cells[i:i+4]
+        # Lay out 6 photos per page: 2 columns × 3 rows.
+        for i in range(0, len(cells), 6):
+            page_cells = cells[i:i+6]
             if len(page_cells) % 2 != 0:
                 page_cells.append('<td></td>')
             html += '<table>'
             for j in range(0, len(page_cells), 2):
                 html += '<tr>' + page_cells[j] + page_cells[j + 1] + '</tr>'
             html += '</table>'
-            if i + 4 < len(cells):
+            if i + 6 < len(cells):
                 html += '<div style="page-break-after: always;"></div>'
 
         html += '</body></html>'
@@ -307,42 +326,53 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
         # save the filter settings passed to this routine to the form for future use
         self.filter = filter
 
-        # Show progress overlay immediately (indeterminate) before any DB work starts.
-        self.mdiParent.progressOverlay.showForPhotos()
+        # Arm the time-based reveal gate, then prime the overlay.  It only becomes
+        # visible if the whole operation runs longer than the threshold, so small
+        # photo sets (instant on any machine) never flash a progress bar.
+        overlay = self.mdiParent.progressOverlay
+        overlay.armGate(1000)
+        overlay.showForPhotos()
         QApplication.processEvents()
 
-        photoSightings = self.mdiParent.db.GetSightingsWithPhotos(filter)
+        # Phase 1 — query the catalog with a genuinely progressing bar so a large
+        # unfiltered query no longer looks hung behind a static "Preparing" message.
+        _dbShown = {"done": False}
+        def _dbProgress(done, total):
+            if not _dbShown["done"]:
+                overlay.showDeterminate("Reading catalog…", total)
+                _dbShown["done"] = True
+            overlay.setProgress(done)
+            QApplication.processEvents()
+
+        photoSightings = self.mdiParent.db.GetSightingsWithPhotos(
+            filter, progress_callback=_dbProgress)
 
         if len(photoSightings) == 0:
-            self.mdiParent.progressOverlay.hide()
+            overlay.hide()
             return False
 
-        # count photos and species for the header label
+        # Phase 2 — single pass over the matched photos: count species/photos for
+        # the header AND build photoList (previously two passes over every photo).
         species = set()
         photoCount = 0
-        for s in photoSightings:
+        self.photoList = []
+        for i, s in enumerate(photoSightings):
             for p in s["photos"]:
                 if self.mdiParent.db.TestIndividualPhoto(p, filter):
                     photoCount += 1
                     species.add(s["commonName"])
-        photoCountStr = str(photoCount)
-        speciesCount = len(species)
+                    self.photoList.append([p, s])
+            if self._abort:
+                overlay.hide()
+                return False
+            if i % 200 == 0:
+                QApplication.processEvents()
 
-        self.lblSpecies.setText("Species: " + str(speciesCount) + ". Photos: " + photoCountStr)
+        self.lblSpecies.setText("Species: " + str(len(species)) + ". Photos: " + str(photoCount))
         self.mdiParent.SetChildDetailsLabels(self, filter)
         self.setWindowTitle(filter.buildWindowTitle("Photos", self.mdiParent.db, count=photoCount, countUnit="Photos"))
 
-        # Build photoList by iterating all valid photos
-        self.photoList = []
-        for s in photoSightings:
-            for p in s["photos"]:
-                if self.mdiParent.db.TestIndividualPhoto(p, filter):
-                    self.photoList.append([p, s])
-                    if self._abort:
-                        self.mdiParent.progressOverlay.hide()
-                        return False
-
-        # Sort and populate the grid
+        # Sort and populate the grid (shows its own "Preparing photos…" progress)
         self.SortAndDisplayPhotos()
 
         icon = QIcon()
@@ -387,23 +417,43 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
         elif self.rdoSortTaxonomy.isChecked():
             self.photoList.sort(key=lambda x: (float(x[1]["taxonomicOrder"]), x[1]["commonName"]))
 
-        # clear the grid
-        for i in reversed(range(self.gridPhotos.count())):
-            self.gridPhotos.itemAt(i).widget().setParent(None)
+        # clear the existing rows
+        for i in reversed(range(self.rowsLayout.count())):
+            w = self.rowsLayout.itemAt(i).widget()
+            if w:
+                w.setParent(None)
 
-        # create placeholder buttons and captions for every row immediately so the
-        # layout is fully established before any thumbnails arrive from threads
+        # create placeholder rows for every photo immediately so the layout is
+        # fully established before any thumbnails arrive from threads
         self._photoButtons = {}
-        uncached = []
+        self._rowWidgets = {}
 
-        # Drive column and row sizes directly on the grid layout so the constraints
-        # propagate to the scroll-area content widget regardless of label size policy.
-        self.gridPhotos.setColumnMinimumWidth(0, 500)
-        self.gridPhotos.setColumnStretch(1, 1)   # caption column absorbs extra width
+        # Start the worker pool and the result drain BEFORE building the grid, so
+        # thumbnails decode in parallel and pop into their cells as the grid is
+        # built — rather than the grid appearing empty and filling all at once at
+        # the end.  Workers block on the queue and exit on a None sentinel.
+        overlay = self.mdiParent.progressOverlay
+        overlay.armGate(1000, force=False)   # arm for direct re-sorts; keep FillPhotos' clock otherwise
+        overlay.showDeterminate("Loading photos…", len(self.photoList))
+
+        self._loadedCount = 0
+        self._totalUncached = 0
+        self._building = True
+        nThreads = min(self.threadCount, max(1, len(self.photoList)))
+        self.threadsRemaining = nThreads
+        for i in range(nThreads):
+            self.threads[i].start()
+        self._drainTimer.start(50)
 
         for row, (p, s) in enumerate(self.photoList):
 
+            if row % 50 == 0:
+                overlay.setProgress(row)
+                QApplication.processEvents()   # lay out new cells + let the drain fill them
+
             buttonPhoto = QLabel()
+            buttonPhoto.setFixedWidth(500)
+            buttonPhoto.setMinimumHeight(330)
             buttonPhoto.setAlignment(Qt.AlignCenter)
             buttonPhoto.setStyleSheet("QLabel{ background-color: #343333; }")
             buttonPhoto.setCursor(Qt.PointingHandCursor)
@@ -414,8 +464,10 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
 
             labelCaption = QLabel()
             labelCaption.setTextFormat(Qt.RichText)
+            labelCaption.setAlignment(Qt.AlignTop | Qt.AlignLeft)
             labelCaption.setText(
-                s["commonName"] + "<br>"
+                "<br><br>"
+                '<span style="font-size: 1.1em; font-weight: bold;">' + s["commonName"] + "</span><br>"
                 "<i>" + s["scientificName"] + "</i><br><br>" +
                 s["location"] + "<br>" +
                 photoWeekday + ", " + s["date"] + " " + s["time"] + "<br><br>" +
@@ -423,62 +475,59 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
             )
             labelCaption.setStyleSheet("QLabel { background-color: #343333; color: silver; padding: 3px; }")
 
-            self.gridPhotos.addWidget(buttonPhoto, row, 0)
-            self.gridPhotos.addWidget(labelCaption, row, 1)
-            self.gridPhotos.setRowMinimumHeight(row, 330)
+            # One container widget per row in a QVBoxLayout (avoids the grid's
+            # ~524k-px height cap that squashed rows past ~1,600 photos).
+            rowWidget = QWidget()
+            rowWidget.setMinimumHeight(330)
+            rowLayout = QHBoxLayout(rowWidget)
+            rowLayout.setContentsMargins(0, 0, 0, 0)
+            rowLayout.setSpacing(2)
+            rowLayout.addWidget(buttonPhoto)
+            rowLayout.addWidget(labelCaption, 1)   # caption absorbs the extra width
+
+            self.rowsLayout.addWidget(rowWidget)
             self._photoButtons[row] = buttonPhoto
+            self._rowWidgets[row] = rowWidget
 
-            # Cached photos are applied after processEvents() below so the label
-            # has its actual rendered height before we scale the pixmap to fit.
+            # Queue uncached thumbnails for the (already-running) workers as each
+            # row is created, so decoding overlaps grid construction.
             if p["fileName"] not in self.pixmapCache:
-                uncached.append((row, p["fileName"]))
+                self._totalUncached += 1
+                self.workQueue.put((row, p["fileName"]))
 
-        # Let the layout engine run so every label has its real geometry.  Then
-        # apply cached pixmaps scaled to each label's actual size — this ensures
-        # photos fill their row correctly whether rows are 330 px (small list) or
-        # compressed shorter (Qt's QLAYOUTSIZE_MAX cap on very large lists).
+        # Grid built: sentinel the workers so each exits once it drains the queue.
+        # Keep _building True through the rest of this method: the drain fires
+        # during the processEvents below and should keep filling cells, but must
+        # NOT update the overlay text or declare completion until we've handed it
+        # the loading tail — otherwise a fast drain could finish and hide the
+        # overlay, which we'd then re-show in a stuck state.
+        for _ in range(nThreads):
+            self.workQueue.put(None)
+
+        # Final layout pass, then apply any cached thumbnails not yet shown —
+        # including ones decoded before their cell had a real geometry.
         QApplication.processEvents()
         for row, (p, s) in enumerate(self.photoList):
             if p["fileName"] in self.pixmapCache:
                 btn = self._photoButtons.get(row)
                 if btn and btn.height() > 0:
-                    pm = self.pixmapCache[p["fileName"]]
-                    if not pm.isNull():
-                        btn.setPixmap(pm.scaled(btn.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                    cur = btn.pixmap()
+                    if cur is None or cur.isNull():   # skip cells the drain already filled
+                        pm = self.pixmapCache[p["fileName"]]
+                        if not pm.isNull():
+                            btn.setPixmap(pm.scaled(btn.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
 
         self.scrollArea.verticalScrollBar().setValue(0)
 
-        if uncached:
-            for item in uncached:
-                self.workQueue.put(item)
-            threadsToStart = min(self.threadCount, len(uncached))
-            self.threadsRemaining = threadsToStart
-            self._loadedCount = 0
-            self._totalUncached = len(uncached)
-            self._threadsToStart = threadsToStart
+        if self._totalUncached > 0:
+            # Loading tail: switch the bar to "Loading photos" for whatever the
+            # workers haven't caught up on yet (mainly the cold-cache case).
+            overlay.startLoading(self._totalUncached)
+            overlay.setPhotoValue(self._loadedCount)
 
-            # Switch the already-visible overlay from indeterminate to determinate mode.
-            self.mdiParent.progressOverlay.startLoading(len(uncached))
-
-            # Defer thread start until the event loop regains control.
-            # Threads started here would run while FillPhotos() finishes and
-            # the click handler unwinds — loading ~1400 photos before the
-            # drain timer ever gets a chance to fire.
-            QTimer.singleShot(0, self._startThreads)
-        else:
-            # everything was in the cache — finish synchronously
-            self._finishLoading()
-
-
-    def _startThreads(self):
-        """Starts worker threads and the drain timer.  Called via singleShot(0)
-        so it runs on the first event-loop iteration after the click handler
-        that triggered loading has fully returned."""
-        if self._abort:
-            return
-        for i in range(self._threadsToStart):
-            self.threads[i].start()
-        self._drainTimer.start(50)
+        # Hand the overlay to the drain timer; it now owns the "Loading photos"
+        # tail and will finish (hide + reset) once the workers have all exited.
+        self._building = False
 
 
     def _drainResultQueue(self):
@@ -520,12 +569,16 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
 
             self._loadedCount += 1
 
-        # Update the progress overlay on every drain tick that delivered photos.
-        if not self._abort and self._loadedCount > prevCount:
+        # Update the "Loading photos" bar — but only after the build loop has
+        # released the overlay (during the build it shows "Preparing grid").
+        if (not self._abort and not self._building
+                and self._loadedCount > prevCount):
             self.mdiParent.progressOverlay.setPhotoValue(self._loadedCount)
 
-        # finish once all threads are done and the queue is fully drained
-        if self.threadsRemaining == 0 and self.resultQueue.empty():
+        # Finish once the build is done, all workers have exited, and the queue
+        # is fully drained.
+        if (not self._building and self.threadsRemaining == 0
+                and self.resultQueue.empty()):
             self._drainTimer.stop()
             self._finishLoading()
 
@@ -591,11 +644,9 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
         if idx is None:
             return
 
-        for col in (0, 1):
-            item = self.gridPhotos.itemAtPosition(idx, col)
-            if item and item.widget():
-                item.widget().setParent(None)
-        self.gridPhotos.setRowMinimumHeight(idx, 0)
+        rw = self._rowWidgets.get(idx)
+        if rw:
+            rw.setParent(None)
 
         self.photoList.pop(idx)
 
@@ -603,15 +654,21 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
             self.close()
             return
 
+        # Re-index the remaining rows (keys shift down past the deleted one).
         new_buttons = {}
-        for old_row, btn in self._photoButtons.items():
+        new_rows = {}
+        for old_row in sorted(self._photoButtons.keys()):
             if old_row == idx:
                 continue
             new_row = old_row if old_row < idx else old_row - 1
+            btn = self._photoButtons[old_row]
             if new_row != old_row:
                 btn.mousePressEvent = partial(self._photoClicked, new_row)
             new_buttons[new_row] = btn
+            if old_row in self._rowWidgets:
+                new_rows[new_row] = self._rowWidgets[old_row]
         self._photoButtons = new_buttons
+        self._rowWidgets = new_rows
 
 
     def showEnlargement(self, row):

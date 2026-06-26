@@ -29,6 +29,9 @@ hiddenimports = [
     "PySide6.QtWebChannel",
     "matplotlib.backends.backend_qtagg",
     "matplotlib",
+    "mutagen",
+    "mutagen.wave",
+    "mutagen.id3",
 ]
 
 a = Analysis(

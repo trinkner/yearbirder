@@ -26,7 +26,8 @@ from matplotlib.figure import Figure
 
 # App colour palette (matches code_Stylesheet.py)
 from code_Stylesheet import (CHART_PRIMARY, CHART_SECONDARY,
-                             PHOTO_PRIMARY, PHOTO_SECONDARY)
+                             PHOTO_PRIMARY, PHOTO_SECONDARY,
+                             RECORDINGS_PRIMARY, RECORDINGS_SECONDARY)
 _BG_COLOR     = "#1e1f26"
 _AXES_COLOR   = "#252730"
 _TEXT_COLOR   = "#e2e4ec"
@@ -199,6 +200,11 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
 
         windowWidth  = int(800 * scaleFactor)
         windowHeight = int(580 * scaleFactor)
+        # Pie charts need a little extra vertical room so they fit by default
+        # without a vertical scroll bar.
+        if self._chart_type in ("familypie", "indivpie", "locationchecklistpie",
+                                 "photopie", "recordingspie"):
+            windowHeight = int(windowHeight * 1.05)
         self.resize(windowWidth, windowHeight)
 
     def html(self):
@@ -255,9 +261,19 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
     # ------------------------------------------------------------------
 
     def _setup_colors(self):
-        """Switch to yellow palette when the graph involves the photo filter."""
+        """Switch palette based on chart domain (photo=yellow, audio=green, default=blue)."""
+        recording_chart_types = {"totalrecordings", "ytdrecordings", "recordingspie",
+                             "recordingsaccumulation", "cumulativerecordings"}
         photo_chart_types = {"totalphotos", "ytdphotos", "photopie",
                              "photoaccumulation", "cumulativephotos"}
+        if self._chart_type in recording_chart_types:
+            self._bar_color    = RECORDINGS_PRIMARY
+            self._repeat_color = RECORDINGS_SECONDARY
+            rdo_style = self._rdo_checked_style()
+            for btn in (self.rdoYear, self.rdoMonth, self.rdoMonthYear, self.rdoDay,
+                        self.rdoPieFamily, self.rdoPieOrder):
+                btn.setStyleSheet(rdo_style)
+            return
         is_photo = self._chart_type in photo_chart_types
         if not is_photo and self.filter is not None:
             f = self.filter
@@ -855,6 +871,205 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             seen_before |= new_sp_set
 
         return years, new_counts, repeat_counts, new_species
+
+    # ------------------------------------------------------------------
+    # Audio data-building methods (analogues of the photo variants)
+    # ------------------------------------------------------------------
+
+    def _build_ytd_audio_data(self, sightings):
+        """For each year, count recordings made up to today's month/day (YTD)."""
+        today = datetime.date.today()
+        ytd_cutoff = f"{today.month:02d}-{today.day:02d}"
+
+        year_all = defaultdict(int)
+        year_ytd = defaultdict(int)
+        year_ytd_sp_date: dict[str, dict[str, str]] = defaultdict(dict)
+
+        for s in sightings:
+            recs = s.get("audio", [])
+            if not recs:
+                continue
+            year = s["date"][0:4]
+            n    = len(recs)
+            year_all[year] += n
+            if s["date"][5:10] <= ytd_cutoff:
+                year_ytd[year] += n
+                species = s["commonName"]
+                date    = s["date"]
+                prev = year_ytd_sp_date[year].get(species)
+                if prev is None or date > prev:
+                    year_ytd_sp_date[year][species] = date
+
+        if not year_all:
+            return [], [], [], [], today
+
+        years       = sorted(year_all.keys(), reverse=True)
+        ytd_counts  = [year_ytd[y] for y in years]
+        full_counts = [year_all[y] for y in years]
+
+        ytd_recent_items = []
+        for y in years:
+            sp_date = year_ytd_sp_date[y]
+            sorted_pairs = sorted(sp_date.items(), key=lambda x: x[1], reverse=True)
+            ytd_recent_items.append([f"{date}  {sp}" for sp, date in sorted_pairs])
+
+        return years, ytd_counts, full_counts, ytd_recent_items, today
+
+    def _build_audio_count_data(self, sightings, granularity):
+        """Return (labels, counts, species_lists, species_tallies, y_label)."""
+        bucket = defaultdict(lambda: defaultdict(int))
+        for s in sightings:
+            recs = s.get("audio", [])
+            if not recs:
+                continue
+            key = _period_key(s["date"], granularity)
+            bucket[key][s["commonName"]] += len(recs)
+
+        keys   = sorted(bucket.keys())
+        labels = _period_labels(keys, granularity)
+        counts = [sum(bucket[k].values()) for k in keys]
+
+        species_lists   = []
+        species_tallies = []
+        for k in keys:
+            sorted_species = sorted(bucket[k].items(), key=lambda x: x[1], reverse=True)
+            species_lists.append([sp for sp, _ in sorted_species])
+            species_tallies.append([cnt for _, cnt in sorted_species])
+
+        suffix = {"year": "per Year", "month": "per Month",
+                  "monthyear": "per Month", "day": "per Day"}[granularity]
+        return labels, counts, species_lists, species_tallies, f"Recordings {suffix}"
+
+    def _build_cumulative_audio_data(self, sightings):
+        """Return (dates, counts, new_species, y_label) — date of first recording per species."""
+        species_first = {}
+        for s in sightings:
+            if not s.get("audio"):
+                continue
+            sp   = s["commonName"]
+            date = s["date"]
+            if sp not in species_first or date < species_first[sp]:
+                species_first[sp] = date
+
+        if not species_first:
+            return [], [], [], ""
+
+        daily = defaultdict(set)
+        for sp, date in species_first.items():
+            daily[date].add(sp)
+
+        taxo_index = {}
+        for i, s in enumerate(sightings):
+            name = s["commonName"]
+            if name not in taxo_index:
+                taxo_index[name] = i
+
+        dates = sorted(daily.keys())
+        seen  = set()
+        counts      = []
+        new_species = []
+        for d in dates:
+            new_species.append(sorted(daily[d], key=lambda sp: taxo_index.get(sp, 999999)))
+            seen  |= daily[d]
+            counts.append(len(seen))
+        return dates, counts, new_species, "Cumulative Species Recorded"
+
+    def _build_audio_accumulation_data(self, sightings):
+        """Return (years, new_counts, repeat_counts, new_species) for audio accumulation."""
+        species_first = {}
+        by_year_any   = defaultdict(set)
+
+        for s in sightings:
+            if not s.get("audio"):
+                continue
+            sp   = s["commonName"]
+            date = s["date"]
+            year = date[:4]
+            by_year_any[year].add(sp)
+            if sp not in species_first or date < species_first[sp][0]:
+                species_first[sp] = (date, s.get("location", ""))
+
+        if not species_first:
+            return [], [], [], []
+
+        years = sorted(by_year_any.keys())
+        seen_before   = set()
+        new_counts    = []
+        repeat_counts = []
+        new_species   = []
+
+        for year in years:
+            year_species = by_year_any[year]
+            new_sp_set   = year_species - seen_before
+            repeat_count = len(year_species & seen_before)
+            sorted_names = self._taxo_sort(list(new_sp_set), sightings)
+            new_species.append([
+                (name, species_first[name][0], species_first[name][1])
+                for name in sorted_names
+            ])
+            new_counts.append(len(sorted_names))
+            repeat_counts.append(repeat_count)
+            seen_before |= new_sp_set
+
+        return years, new_counts, repeat_counts, new_species
+
+    def _build_family_audio_pie_data(self, sightings):
+        """Return (families, audio_totals, species_lists, species_tallies) by summed recording count."""
+        family_total  = defaultdict(int)
+        family_sp_cnt = defaultdict(lambda: defaultdict(int))
+        for s in sightings:
+            recs = s.get("audio", [])
+            if not recs:
+                continue
+            fam = s.get("family", "") or "Unknown"
+            n   = len(recs)
+            family_total[fam]                  += n
+            family_sp_cnt[fam][s["commonName"]] += n
+        ranked = sorted(
+            ((fam, tot) for fam, tot in family_total.items() if tot > 0),
+            key=lambda x: x[1], reverse=True)
+        if not ranked:
+            return [], [], [], []
+        families = [r[0] for r in ranked]
+        counts   = [r[1] for r in ranked]
+        species_lists = [
+            sorted(family_sp_cnt[fam], key=lambda sp: -family_sp_cnt[fam][sp])
+            for fam in families
+        ]
+        species_tallies = [
+            [family_sp_cnt[fam][sp] for sp in sp_list]
+            for fam, sp_list in zip(families, species_lists)
+        ]
+        return families, counts, species_lists, species_tallies
+
+    def _build_order_audio_pie_data(self, sightings):
+        """Return (orders, audio_totals, species_lists, species_tallies) by summed recording count."""
+        order_total  = defaultdict(int)
+        order_sp_cnt = defaultdict(lambda: defaultdict(int))
+        for s in sightings:
+            recs = s.get("audio", [])
+            if not recs:
+                continue
+            order = s.get("order", "") or "Unknown"
+            n     = len(recs)
+            order_total[order]                  += n
+            order_sp_cnt[order][s["commonName"]] += n
+        ranked = sorted(
+            ((ord_, tot) for ord_, tot in order_total.items() if tot > 0),
+            key=lambda x: x[1], reverse=True)
+        if not ranked:
+            return [], [], [], []
+        orders  = [r[0] for r in ranked]
+        counts  = [r[1] for r in ranked]
+        species_lists = [
+            sorted(order_sp_cnt[ord_], key=lambda sp: -order_sp_cnt[ord_][sp])
+            for ord_ in orders
+        ]
+        species_tallies = [
+            [order_sp_cnt[ord_][sp] for sp in sp_list]
+            for ord_, sp_list in zip(orders, species_lists)
+        ]
+        return orders, counts, species_lists, species_tallies
 
     def _build_top_locations_data(self, sightings):
         """Return (locations, counts, life_counts) sorted descending, capped at _TOP_N_LOCS.
@@ -1464,6 +1679,10 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             labels, counts, sp_lists, sp_tallies, y_label = self._build_photo_count_data(sightings, self._current_granularity)
             self._bar_species_tallies = sp_tallies
             return labels, counts, sp_lists, y_label
+        if self._chart_type == "totalrecordings":
+            labels, counts, sp_lists, sp_tallies, y_label = self._build_audio_count_data(sightings, self._current_granularity)
+            self._bar_species_tallies = sp_tallies
+            return labels, counts, sp_lists, y_label
         # Default: species bar chart
         if self._current_granularity == "month":
             return self._build_month_data(sightings)
@@ -1997,11 +2216,11 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
     _MONTH_DAYS = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 
     def _on_mouse_move(self, event):
-        if self._chart_type in ("ytdreport", "ytdlocations", "ytdchecklists", "ytdphotos"):
+        if self._chart_type in ("ytdreport", "ytdlocations", "ytdchecklists", "ytdphotos", "ytdrecordings"):
             self._update_ytd_hover(event)
         elif self._chart_type == "cumulative":
             self._update_hover_annotation(event)
-        elif self._chart_type == "cumulativephotos":
+        elif self._chart_type in ("cumulativephotos", "cumulativerecordings"):
             self._update_cumulative_photos_hover(event)
         elif self._chart_type == "cumulativelocations":
             self._update_cumulative_locations_hover(event)
@@ -2011,7 +2230,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             self._update_heatmap_hover(event)
         elif self._chart_type == "accumulation":
             self._update_accumulation_hover(event)
-        elif self._chart_type == "photoaccumulation":
+        elif self._chart_type in ("photoaccumulation", "recordingsaccumulation"):
             self._update_photo_accumulation_hover(event)
         elif self._chart_type == "locations":
             self._update_location_hover(event)
@@ -2025,7 +2244,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             self._update_foy_hover(event)
         elif self._chart_type == "loy":
             self._update_loy_hover(event)
-        elif self._chart_type in ("familypie", "indivpie", "locationchecklistpie", "photopie"):
+        elif self._chart_type in ("familypie", "indivpie", "locationchecklistpie", "photopie", "recordingspie"):
             self._update_family_pie_hover(event)
         else:
             self._update_bar_hover(event)
@@ -2119,9 +2338,10 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         best_photo = getattr(self, '_date_species_best', {}).get(date_str, {})
         cache      = getattr(self, '_photo_thumb_cache', {})
 
+        verb = "recorded" if self._chart_type == "cumulativerecordings" else "photographed"
         parts = [
             f"<b>{self._labels[idx]}</b><br>"
-            f"{y} species photographed &nbsp; +{n_new} new<br>"
+            f"{y} species {verb} &nbsp; +{n_new} new<br>"
         ]
 
         for sp in sp_list[:self._MAX_THUMBS]:
@@ -2297,6 +2517,8 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             self._spawn_locations_list(new_filter)
         elif self._chart_type == "totalphotos":
             self._spawn_photos_window(new_filter)
+        elif self._chart_type == "totalrecordings":
+            self._spawn_recordings_browser(new_filter)
         else:
             self._spawn_species_list(new_filter)
 
@@ -2317,6 +2539,8 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
 
         if self._chart_type == "ytdphotos":
             self._spawn_photos_window(new_filter)
+        elif self._chart_type == "ytdrecordings":
+            self._spawn_recordings_browser(new_filter)
         else:
             self._spawn_species_list(new_filter)
 
@@ -2354,7 +2578,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         limit   = self._tooltip_species_limit(anchor_data_xy=(idx, count))
 
         tip = f"{self._labels[idx]}: {count} {self._bar_item_label}"
-        if self._chart_type == "totalphotos" and idx < len(self._bar_species_tallies):
+        if self._chart_type in ("totalphotos", "totalrecordings") and idx < len(self._bar_species_tallies):
             tallies = self._bar_species_tallies[idx]
             num_sp  = len(sp_list)
             for i, name in enumerate(sp_list[:limit]):
@@ -3151,7 +3375,10 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         new_filter = copy.deepcopy(self.filter)
         new_filter.setStartDate(year + "-01-01")
         new_filter.setEndDate(year + "-12-31")
-        self._spawn_photos_window(new_filter)
+        if self._chart_type == "recordingsaccumulation":
+            self._spawn_recordings_browser(new_filter)
+        else:
+            self._spawn_photos_window(new_filter)
 
     def _on_heatmap_click(self, event):
         if event.inaxes is not self._ax or event.xdata is None or event.ydata is None:
@@ -3192,6 +3419,8 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             gallery_filter.setStartDate(date_str)
             gallery_filter.setEndDate(date_str)
             self._spawn_species_gallery(gallery_filter)
+        elif self._chart_type == "cumulativerecordings":
+            self._spawn_species_list(new_filter)
         else:  # cumulative, cumulativefamilies
             self._spawn_species_list(new_filter)
 
@@ -3245,6 +3474,21 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         if sub.FillPhotos(filter) is False:
             self.mdiParent.CreateMessageNoResults()
             sub.close()
+        QApplication.restoreOverrideCursor()
+
+    def _spawn_recordings_browser(self, filter):
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        import code_Recordings
+        if not self.mdiParent.db.GetSightingsWithRecordings(filter):
+            self.mdiParent.CreateMessageNoResults()
+            QApplication.restoreOverrideCursor()
+            return
+        sub = code_Recordings.Recordings()
+        sub.mdiParent = self.mdiParent
+        self.mdiParent.mdiArea.addSubWindow(sub)
+        self.mdiParent.PositionChildWindow(sub, self.mdiParent)
+        sub.show()
+        sub.FillRecordings(filter)
         QApplication.restoreOverrideCursor()
 
     # ------------------------------------------------------------------
@@ -3776,6 +4020,24 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             self.filter.buildWindowTitle(
                 f"Families & Orders by Photos – {title_kind}", self.mdiParent.db))
 
+    def _redraw_audio_pie(self):
+        """Rebuild recording-count pie when the Family/Order radio changes."""
+        sightings = self._filtered_sightings()
+        if not sightings:
+            return
+        if self.rdoPieFamily.isChecked():
+            labels, counts, species_lists, species_tallies = self._build_family_audio_pie_data(sightings)
+            title_kind = "Families"
+        else:
+            labels, counts, species_lists, species_tallies = self._build_order_audio_pie_data(sightings)
+            title_kind = "Orders"
+        self._draw_family_pie_chart(labels, counts, species_lists,
+                                    label_suffix="recordings",
+                                    species_tallies=species_tallies)
+        self.setWindowTitle(
+            self.filter.buildWindowTitle(
+                f"Families & Orders by Recordings – {title_kind}", self.mdiParent.db))
+
     def _redraw_indiv_pie(self):
         """Rebuild individual-tally pie when the Family/Order radio changes."""
         sightings = self._filtered_sightings()
@@ -3836,6 +4098,23 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             self.mdiParent.SetChildDetailsLabels(self, filter)
             self.setWindowTitle(
                 filter.buildWindowTitle("Photographed Species Growth Over Time", self.mdiParent.db))
+            icon = QIcon()
+            icon.addPixmap(QPixmap(":/icon_bird_white.png"),
+                           QIcon.Normal, QIcon.Off)
+            self.setWindowIcon(icon)
+            return True
+
+        if chartType == "cumulativerecordings":
+            self.frmGranularity.setVisible(False)
+            labels, counts, new_species, y_label = self._build_cumulative_audio_data(sightings)
+            if not labels:
+                return False
+            self._draw_line_chart(labels, counts, new_species, y_label)
+            self._date_species_best = {}
+            self._photo_thumb_cache = {}
+            self.mdiParent.SetChildDetailsLabels(self, filter)
+            self.setWindowTitle(
+                filter.buildWindowTitle("Recorded Species Growth Over Time", self.mdiParent.db))
             icon = QIcon()
             icon.addPixmap(QPixmap(":/icon_bird_white.png"),
                            QIcon.Normal, QIcon.Off)
@@ -3953,6 +4232,22 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             self.setWindowIcon(icon)
             return True
 
+        if chartType == "ytdrecordings":
+            self.frmGranularity.setVisible(False)
+            years, ytd_counts, full_counts, ytd_recent_items, today = self._build_ytd_audio_data(sightings)
+            if not years:
+                return False
+            self._draw_ytd_chart(years, ytd_counts, full_counts, ytd_recent_items,
+                                 "recordings", today)
+            self.mdiParent.SetChildDetailsLabels(self, filter)
+            self.setWindowTitle(
+                filter.buildWindowTitle("Year to Date by Recordings", self.mdiParent.db))
+            icon = QIcon()
+            icon.addPixmap(QPixmap(":/icon_bird_white.png"),
+                           QIcon.Normal, QIcon.Off)
+            self.setWindowIcon(icon)
+            return True
+
         if chartType == "accumulation":
             self.frmGranularity.setVisible(False)
             labels, new_counts, repeat_counts, new_species = self._build_accumulation_data(sightings)
@@ -3978,6 +4273,22 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             self.mdiParent.SetChildDetailsLabels(self, filter)
             self.setWindowTitle(
                 filter.buildWindowTitle("New Species Photographed Each Year", self.mdiParent.db))
+            icon = QIcon()
+            icon.addPixmap(QPixmap(":/icon_bird_white.png"),
+                           QIcon.Normal, QIcon.Off)
+            self.setWindowIcon(icon)
+            return True
+
+        if chartType == "recordingsaccumulation":
+            self.frmGranularity.setVisible(False)
+            labels, new_counts, repeat_counts, new_species = self._build_audio_accumulation_data(sightings)
+            if not labels:
+                return False
+            self._draw_stacked_bar_chart(labels, new_counts, repeat_counts, new_species,
+                                         click_handler=self._on_photo_accumulation_click)
+            self.mdiParent.SetChildDetailsLabels(self, filter)
+            self.setWindowTitle(
+                filter.buildWindowTitle("New Species Recorded Each Year", self.mdiParent.db))
             icon = QIcon()
             icon.addPixmap(QPixmap(":/icon_bird_white.png"),
                            QIcon.Normal, QIcon.Off)
@@ -4109,7 +4420,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             self.setWindowTitle(
                 filter.buildWindowTitle("Locations by Checklists", self.mdiParent.db))
             icon = QIcon()
-            icon.addPixmap(QPixmap(":/icon_bird_white.png"),
+            icon.addPixmap(QPixmap(":/icon_piechart_white.png"),
                            QIcon.Normal, QIcon.Off)
             self.setWindowIcon(icon)
             return True
@@ -4134,7 +4445,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
                 filter.buildWindowTitle("Pie Chart by Species – Families",
                                         self.mdiParent.db))
             icon = QIcon()
-            icon.addPixmap(QPixmap(":/icon_bird_white.png"),
+            icon.addPixmap(QPixmap(":/icon_piechart_white.png"),
                            QIcon.Normal, QIcon.Off)
             self.setWindowIcon(icon)
             return True
@@ -4158,7 +4469,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
                 filter.buildWindowTitle("Pie Chart by Individual Tallies – Families",
                                         self.mdiParent.db))
             icon = QIcon()
-            icon.addPixmap(QPixmap(":/icon_bird_white.png"),
+            icon.addPixmap(QPixmap(":/icon_piechart_white.png"),
                            QIcon.Normal, QIcon.Off)
             self.setWindowIcon(icon)
             return True
@@ -4182,7 +4493,31 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
                 filter.buildWindowTitle("Families & Orders by Photos – Families",
                                         self.mdiParent.db))
             icon = QIcon()
-            icon.addPixmap(QPixmap(":/icon_bird_white.png"),
+            icon.addPixmap(QPixmap(":/icon_piechart_white.png"),
+                           QIcon.Normal, QIcon.Off)
+            self.setWindowIcon(icon)
+            return True
+
+        if chartType == "recordingspie":
+            self.frmGranularity.setVisible(False)
+            families, counts, species_lists, species_tallies = self._build_family_audio_pie_data(sightings)
+            if not families:
+                return False
+            self.frmPieMode.setVisible(True)
+            self.rdoPieFamily.setChecked(True)
+            self.rdoPieFamily.toggled.connect(
+                lambda checked: self._redraw_audio_pie() if checked else None)
+            self.rdoPieOrder.toggled.connect(
+                lambda checked: self._redraw_audio_pie() if checked else None)
+            self._draw_family_pie_chart(families, counts, species_lists,
+                                        label_suffix="recordings",
+                                        species_tallies=species_tallies)
+            self.mdiParent.SetChildDetailsLabels(self, filter)
+            self.setWindowTitle(
+                filter.buildWindowTitle("Families & Orders by Recordings – Families",
+                                        self.mdiParent.db))
+            icon = QIcon()
+            icon.addPixmap(QPixmap(":/icon_piechart_white.png"),
                            QIcon.Normal, QIcon.Off)
             self.setWindowIcon(icon)
             return True
@@ -4239,6 +4574,11 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             self._bar_species_tallies = sp_tallies
             item_label = "photos"
             title = "Total Photos"
+        elif chartType == "totalrecordings":
+            labels, counts, item_lists, sp_tallies, y_label = self._build_audio_count_data(sightings, default)
+            self._bar_species_tallies = sp_tallies
+            item_label = "recordings"
+            title = "Total Recordings"
         else:  # "bar"
             if default == "month":
                 labels, counts, item_lists, y_label = self._build_month_data(sightings)

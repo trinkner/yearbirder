@@ -78,6 +78,29 @@ class AppStyle(QProxyStyle):
             return
         super().drawPrimitive(element, option, painter, widget)
 
+    def standardPixmap(self, standardPixmap, option=None, widget=None):
+        if standardPixmap in (
+            QStyle.StandardPixmap.SP_MessageBoxInformation,
+            QStyle.StandardPixmap.SP_MessageBoxWarning,
+            QStyle.StandardPixmap.SP_MessageBoxCritical,
+        ):
+            px = QPixmap(48, 48)
+            px.fill(Qt.GlobalColor.transparent)
+            painter = QPainter(px)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(CHART_PRIMARY))
+            painter.drawEllipse(0, 0, 48, 48)
+            font = painter.font()
+            font.setPixelSize(30)
+            font.setBold(True)
+            painter.setFont(font)
+            painter.setPen(QColor("#ffffff"))
+            painter.drawText(px.rect(), Qt.AlignmentFlag.AlignCenter, "!")
+            painter.end()
+            return px
+        return super().standardPixmap(standardPixmap, option, widget)
+
     def drawComplexControl(self, control, option, painter, widget=None):
         # Let Fusion draw the full title bar (background, buttons, bold text)
         super().drawComplexControl(control, option, painter, widget)
@@ -141,10 +164,12 @@ CHART_PRIMARY   = "#4f8ef7"   # thematic blue — standard-filter charts
 CHART_SECONDARY = "#28384c"   # dark muted blue — repeat / extension bars
 PHOTO_PRIMARY   = "#f7d94f"   # bright golden yellow — photo-filter charts
 PHOTO_SECONDARY = "#594d26"   # dark muted amber — repeat / extension bars
+RECORDINGS_PRIMARY   = "#52c878"   # bright green — recording-filter charts
+RECORDINGS_SECONDARY = "#1e5430"   # dark forest green — repeat / extension bars
 
 baseColor = "#1e1f26"
 tableColor = "#252730"
-mdiAreaColor = QColor(18, 19, 24)
+mdiAreaColor = QColor(39, 39, 43)
 textColor = "#e2e4ec"
 speciesColor = QColor(79, 142, 247)
 
@@ -245,6 +270,7 @@ stylesheetBase = """
     }
     QScrollBar::handle:vertical:hover { background: #4f8ef7; }
     QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+    QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: #1e1f26; }
 
     QScrollBar:horizontal {
         background: #1e1f26;
@@ -257,6 +283,7 @@ stylesheetBase = """
     }
     QScrollBar::handle:horizontal:hover { background: #4f8ef7; }
     QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
+    QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal { background: #1e1f26; }
 
     QDockWidget::title {
         background: #2b2d38;
@@ -324,6 +351,52 @@ stylesheetBase = """
         border-color: #4f8ef7;
     }
 
+    QSlider::groove:horizontal {
+        background: #2b2d38;
+        height: 4px;
+        border-radius: 2px;
+    }
+    QSlider::sub-page:horizontal {
+        background: #4f8ef7;
+        border-radius: 2px;
+    }
+    QSlider::add-page:horizontal {
+        background: #2b2d38;
+        border-radius: 2px;
+    }
+    QSlider::handle:horizontal {
+        background: #4f8ef7;
+        border: none;
+        width: 14px;
+        height: 14px;
+        margin: -5px 0;
+        border-radius: 7px;
+    }
+    QSlider::handle:horizontal:hover { background: #7aaeff; }
+
+    QSlider::groove:vertical {
+        background: #2b2d38;
+        width: 4px;
+        border-radius: 2px;
+    }
+    QSlider::sub-page:vertical {
+        background: #4f8ef7;
+        border-radius: 2px;
+    }
+    QSlider::add-page:vertical {
+        background: #2b2d38;
+        border-radius: 2px;
+    }
+    QSlider::handle:vertical {
+        background: #4f8ef7;
+        border: none;
+        width: 14px;
+        height: 14px;
+        margin: 0 -5px;
+        border-radius: 7px;
+    }
+    QSlider::handle:vertical:hover { background: #7aaeff; }
+
     QStatusBar { background: #16171e; color: #8b8fa8; }
 
     QCalendarWidget QWidget { background: #2b2d38; }
@@ -360,6 +433,44 @@ stylesheetBase += f"""
         image: url({_checkmark_path});
     }}
 """
+
+
+def mediaFilterConflict(parent):
+    """Show conflict dialog when both photo and recording filters are active for a general query.
+    Returns 'photos', 'recordings', or 'cancel'."""
+    px = QPixmap(48, 48)
+    px.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(px)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(QColor(CHART_PRIMARY))
+    painter.drawEllipse(0, 0, 48, 48)
+    font = painter.font()
+    font.setPixelSize(30)
+    font.setBold(True)
+    painter.setFont(font)
+    painter.setPen(QColor("#ffffff"))
+    painter.drawText(px.rect(), Qt.AlignmentFlag.AlignCenter, "?")
+    painter.end()
+
+    msg = QMessageBox(parent)
+    msg.setWindowTitle("Media Filter Conflict")
+    msg.setText(
+        "The Photos and Recordings sections of the Media Filter both have active settings.\n\n"
+        "Which filter should be applied to this query?"
+    )
+    msg.setIconPixmap(px)
+    btnPhotos = msg.addButton("Photos Only", QMessageBox.ButtonRole.AcceptRole)
+    btnAudio  = msg.addButton("Recordings Only", QMessageBox.ButtonRole.AcceptRole)
+    btnCancel = msg.addButton("Cancel", QMessageBox.ButtonRole.RejectRole)
+    msg.setDefaultButton(btnCancel)
+    msg.exec()
+    clicked = msg.clickedButton()
+    if clicked == btnPhotos:
+        return "photos"
+    if clicked == btnAudio:
+        return "recordings"
+    return "cancel"
 
 
 def question(parent, title, text,

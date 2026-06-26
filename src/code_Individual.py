@@ -5,6 +5,7 @@ import code_Lists
 import code_Location 
 import code_Web
 import code_Photos
+import code_Recordings
 import code_Stylesheet
 
 # import the Qt components we'll use
@@ -351,6 +352,13 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
             btnPhotos.clicked.connect(self.createPhotos)
             self.verticalLayout_10.addWidget(btnPhotos)
 
+        recordingSightings = self.mdiParent.db.GetSightingsWithRecordings(filter)
+        if len(recordingSightings) > 0:
+            btnRecordings = QPushButton()
+            btnRecordings.setText("Recordings")
+            btnRecordings.clicked.connect(self.createRecordings)
+            self.verticalLayout_10.addWidget(btnRecordings)
+
         self.scaleMe()
         self.resizeMe()
         # Defer one tick so Qt has completed the first layout pass before scaling
@@ -650,20 +658,36 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
 
 
     def createPhotos(self):
-        
+
         speciesCommonName = self.lblCommonName.text()
 
         sub = code_Photos.Photos()
         sub.mdiParent = self.mdiParent
-        
+
         filter = code_Filter.Filter()
         filter.setSpeciesName(speciesCommonName)
         sub.FillPhotos(filter)
 
         self.parent().parent().addSubWindow(sub)
-        self.mdiParent.PositionChildWindow(sub, self)        
-        
-        sub.show() 
+        self.mdiParent.PositionChildWindow(sub, self)
+
+        sub.show()
+
+
+    def createRecordings(self):
+
+        speciesCommonName = self.lblCommonName.text()
+
+        sub = code_Recordings.Recordings()
+        sub.mdiParent = self.mdiParent
+
+        filter = code_Filter.Filter()
+        filter.setSpeciesName(speciesCommonName)
+
+        self.parent().parent().addSubWindow(sub)
+        self.mdiParent.PositionChildWindow(sub, self)
+        sub.show()
+        sub.FillRecordings(filter)
 
 
     def CreateWebPageForWikipedia(self):
@@ -879,6 +903,16 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
         self.lblSpeciesCode.setFont(detailFont)
         self.lblFirstSeen.setFont(detailFont)
         self.lblMostRecentlySeen.setFont(detailFont)
+
+        # macOS bug guard: these word-wrapped header labels can fall into a
+        # justified / letter-spread paint path (the rich-text QTextDocument
+        # route) after another window — notably Rename Media — has been shown.
+        # Pin them to plain text with explicit left alignment on every (re)layout
+        # so they always take the simple, non-justifying paint path.
+        for _lbl in (self.lblCommonName, self.lblScientificName, self.lblOrderName,
+                     self.lblSpeciesCode, self.lblFirstSeen, self.lblMostRecentlySeen):
+            _lbl.setTextFormat(Qt.TextFormat.PlainText)
+            _lbl.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
 
         metrics = self.trDates.fontMetrics()
         textHeight = int(metrics.boundingRect("2222-22-22").height())

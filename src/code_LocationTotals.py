@@ -692,15 +692,18 @@ class LocationTotals(QMdiSubWindow, form_LocationTotals.Ui_frmLocationTotals):
 
         metrics = QFontMetrics(QFont("", fontSize))
         rowHeight = self.mdiParent.rowHeight
-        rankTextWidth     = int(metrics.boundingRect("Rank").width())
-        speciesTextWidth  = int(metrics.boundingRect("Species").width())
-        checklistTextWidth = int(metrics.boundingRect("Checklists").width())
+        # Room for the sort-indicator arrow plus cell padding; the extra
+        # scrollbar allowance gives every title clear separation from its arrow.
+        arrowAllowance = int(28 * scaleFactor) + int(20 * scaleFactor)
+        rankColWidth      = metrics.horizontalAdvance("Rank") + arrowAllowance
+        speciesColWidth   = metrics.horizontalAdvance("Species") + arrowAllowance
+        checklistColWidth = metrics.horizontalAdvance("Checklists") + arrowAllowance
 
         for t in [self.tblRegionTotals, self.tblCountryTotals, self.tblStateTotals, self.tblCountyTotals, self.tblLocationTotals]:
             header = t.horizontalHeader()
-            header.resizeSection(0, floor(1.7 * rankTextWidth))
-            header.resizeSection(2, floor(1.6 * speciesTextWidth))
-            header.resizeSection(3, floor(1.6 * checklistTextWidth))
+            header.resizeSection(0, rankColWidth)
+            header.resizeSection(2, speciesColWidth)
+            header.resizeSection(3, checklistColWidth)
             t.verticalHeader().setDefaultSectionSize(rowHeight)
 
 

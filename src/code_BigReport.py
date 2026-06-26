@@ -99,6 +99,11 @@ class BigReport(QMdiSubWindow, form_BigReport.Ui_frmBigReport):
         self.lstLocationSpecies.doubleClicked.connect(lambda: self.CreateIndividual(self.lstLocationSpecies))
         self.lstLocationUniqueSpecies.doubleClicked.connect(lambda: self.CreateIndividual(self.lstLocationUniqueSpecies))
         self.lstNewLifeSpecies.doubleClicked.connect(lambda: self.CreateIndividual(self.lstNewLifeSpecies))
+        # Match the lighter-gray table background (#252730) on the Dates,
+        # Locations, and "New for Dates" tabs (default QListWidget bg is darker).
+        for lst in (self.lstNewLifeSpecies, self.lstDates, self.lstSpecies,
+                    self.lstLocations, self.lstLocationSpecies, self.lstLocationUniqueSpecies):
+            lst.setStyleSheet("QListWidget { background: #252730; }")
         self.tblNewYearSpecies.doubleClicked.connect(lambda: self.CreateIndividual(self.tblNewYearSpecies))
         self.tblNewMonthSpecies.doubleClicked.connect(lambda: self.CreateIndividual(self.tblNewMonthSpecies))
         self.tblNewCountrySpecies.doubleClicked.connect(lambda: self.CreateIndividual(self.tblNewCountrySpecies))

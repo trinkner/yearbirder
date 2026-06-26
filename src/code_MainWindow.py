@@ -16,9 +16,11 @@ import code_LocationTotals
 import code_DateTotals
 import code_Graphs
 import code_Photos
+import code_Recordings
 import code_SpeciesGallery
 import code_ManagePhotos
-import code_RenamePhotos
+import code_ManageRecordings
+import code_RenameMedia
 import code_Preferences
 import code_Stylesheet
 
@@ -29,14 +31,20 @@ import sys
 import os
 import glob
 import re
+import queue
+import threading
+import time
 import subprocess
 import datetime
 import json
 import urllib.request
 import urllib.error
 
+import code_ThumbnailCache
+
 from math import (
-    floor, 
+    ceil,
+    floor,
     modf
     )
 
@@ -83,6 +91,7 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QVBoxLayout,
+    QMenu,
     QProxyStyle,
     QStyle,
     QStyleOptionToolButton,
@@ -151,6 +160,13 @@ class _ProgressOverlay(QWidget):
         self._bar.setValue(0)
         layout.addWidget(self._bar)
 
+        # Time-based reveal gate.  When armed, the overlay stays hidden until the
+        # work has run longer than a threshold, so fast operations on quick
+        # machines never flash a progress bar.  Disarmed (default) = show at once.
+        self._gateStart = None
+        self._gateMs = 0
+        self._revealed = True
+
         self.hide()
 
     def _reposition(self):
@@ -161,36 +177,98 @@ class _ProgressOverlay(QWidget):
         self.move(x, y)
         self.raise_()
 
+    def armGate(self, threshold_ms=1000, force=True):
+        """Arm a time-based reveal: keep the overlay hidden until the work has run
+        longer than threshold_ms, so fast operations never flash a progress bar.
+        force=False keeps an already-running clock, so the gate can span
+        FillPhotos → SortAndDisplayPhotos as a single operation."""
+        if not force and self._gateStart is not None:
+            return
+        self._gateStart = time.monotonic()
+        self._gateMs = threshold_ms
+        self._revealed = False
+
+    def _gatedShow(self):
+        """Reveal the overlay immediately when ungated, or once the gate elapses."""
+        if not self._revealed:
+            if (self._gateStart is None
+                    or (time.monotonic() - self._gateStart) * 1000.0 < self._gateMs):
+                return                      # not slow enough yet — stay hidden
+            self._revealed = True
+        if not self.isVisible():
+            self.adjustSize()
+            self._reposition()
+            self.show()
+
+    def hide(self):
+        # Dismissing the overlay also disarms the reveal gate.
+        self._gateStart = None
+        self._revealed = True
+        super().hide()
+
     def showForDataLoad(self):
         self._label.setText("Loading eBird data\u2026")
         self._bar.setRange(0, 100)
         self._bar.setValue(0)
         self.adjustSize()
         self._reposition()
-        self.show()
+        self._gatedShow()
 
     def showForPhotos(self):
+        self._noun = "photos"
         self._label.setText("Preparing photos\u2026")
         self._bar.setRange(0, 0)   # indeterminate until startLoading() is called
         self._bar.setValue(0)
         self.adjustSize()
         self._reposition()
-        self.show()
+        self._gatedShow()
+
+    def showForRecordings(self):
+        self._noun = "recordings"
+        self._label.setText("Preparing recordings\u2026")
+        self._bar.setRange(0, 0)
+        self._bar.setValue(0)
+        self.adjustSize()
+        self._reposition()
+        self._gatedShow()
 
     def startLoading(self, total):
         """Switch from indeterminate to determinate mode once total is known."""
+        noun = getattr(self, "_noun", "photos")
         self._bar.setRange(0, max(total, 1))
         self._bar.setValue(0)
-        self._label.setText(f"Loading photos\u2026  0 of {total:,}")
+        self._label.setText(f"Loading {noun}\u2026  0 of {total:,}")
 
     def setValue(self, v):
         self._bar.setValue(v)
+        self._gatedShow()
 
     def setPhotoValue(self, loaded):
+        noun = getattr(self, "_noun", "photos")
         self._bar.setValue(loaded)
         self._label.setText(
-            f"Loading photos\u2026  {loaded:,} of {self._bar.maximum():,}"
+            f"Loading {noun}\u2026  {loaded:,} of {self._bar.maximum():,}"
         )
+        self._gatedShow()
+
+    def showDeterminate(self, message, total):
+        """Show the overlay in determinate mode with a custom message and known
+        total \u2014 same visual style as photo loading, reused for batch jobs."""
+        self._message = message
+        self._bar.setRange(0, max(total, 1))
+        self._bar.setValue(0)
+        self._label.setText(f"{message}  0 of {total:,}")
+        self.adjustSize()
+        self._reposition()
+        self._gatedShow()
+
+    def setProgress(self, value):
+        self._bar.setValue(value)
+        self._label.setText(
+            f"{getattr(self, '_message', 'Working\u2026')}  "
+            f"{value:,} of {self._bar.maximum():,}"
+        )
+        self._gatedShow()
 
 
 class _WhiteIconToolbarStyle(QProxyStyle):
@@ -221,7 +299,7 @@ class _OptimizePhotoSettingsDialog(QDialog):
         self.db = db
         self.missing = []
 
-        self.setWindowTitle("Compact Photo Catalog")
+        self.setWindowTitle("Compact Media Catalog")
         self.setMinimumWidth(520)
         self.setModal(True)
 
@@ -248,7 +326,7 @@ class _OptimizePhotoSettingsDialog(QDialog):
         self._layout = QVBoxLayout()
         self._layout.setSpacing(12)
 
-        self._statusLabel = QLabel("Checking photo files…")
+        self._statusLabel = QLabel("Checking media files…")
         self._statusLabel.setWordWrap(True)
         self._layout.addWidget(self._statusLabel)
 
@@ -286,7 +364,18 @@ class _OptimizePhotoSettingsDialog(QDialog):
                 if path and not os.path.isfile(path):
                     missing.append({
                         "sighting_idx": i,
-                        "photo_idx": j,
+                        "media_idx": j,
+                        "kind": "photo",
+                        "path": path,
+                        "species": sighting.get("commonName", "Unknown"),
+                    })
+            for j, rec in enumerate(sighting.get("audio", [])):
+                path = rec.get("fileName", "")
+                if path and not os.path.isfile(path):
+                    missing.append({
+                        "sighting_idx": i,
+                        "media_idx": j,
+                        "kind": "recording",
                         "path": path,
                         "species": sighting.get("commonName", "Unknown"),
                     })
@@ -298,15 +387,15 @@ class _OptimizePhotoSettingsDialog(QDialog):
 
         skipped = self.db.jsonlSkippedLines
         skipped_note = (
-            f"\n\n{skipped} line{'s' if skipped != 1 else ''} in the photo "
+            f"\n\n{skipped} line{'s' if skipped != 1 else ''} in the media "
             f"catalog could not be read and will be dropped on compaction."
         ) if skipped > 0 else ""
 
         if not self.missing:
             self._statusLabel.setText(
-                "Good news! Files exist on disk for all photos in the database."
+                "Good news! Files exist on disk for all media files in the catalog."
                 + skipped_note
-                + "\n\nCompact the photo catalog?\n"
+                + "\n\nCompact the media catalog?\n"
             )
             btn_box = QDialogButtonBox()
             btn_box.addButton("Compact", QDialogButtonBox.ButtonRole.AcceptRole)
@@ -316,27 +405,31 @@ class _OptimizePhotoSettingsDialog(QDialog):
             self._layout.addWidget(btn_box)
             return
 
-        n = len(self.missing)
+        n_photos = sum(1 for m in self.missing if m["kind"] == "photo")
+        n_recordings  = sum(1 for m in self.missing if m["kind"] == "recording")
         species_set = {m["species"] for m in self.missing}
         s_count = len(species_set)
 
-        if n == 1:
-            summary = "1 photo file could not be found on disk (1 species)."
-        else:
-            summary = (
-                f"{n} photo files could not be found on disk "
-                f"({s_count} {'species' if s_count != 1 else 'species'})."
-            )
+        parts = []
+        if n_photos:
+            parts.append(f"{n_photos} photo {'file' if n_photos == 1 else 'files'}")
+        if n_recordings:
+            parts.append(f"{n_recordings} recording {'file' if n_recordings == 1 else 'files'}")
+        summary = (
+            f"{' and '.join(parts)} could not be found on disk "
+            f"({s_count} {'species' if s_count != 1 else 'species'})."
+        )
 
         self._statusLabel.setText(
             summary + skipped_note + "\n\n"
-            "These entries will be removed from the photo catalog "
+            "These entries will be removed from the media catalog "
             "and the file will be compacted. This cannot be undone."
         )
 
         for m in self.missing:
+            kind_tag = "[Photo]" if m["kind"] == "photo" else "[Recording]"
             self._listWidget.addItem(
-                f"{os.path.basename(m['path'])}  —  {m['species']}"
+                f"{kind_tag} {os.path.basename(m['path'])}  —  {m['species']}"
             )
         self._listWidget.setVisible(True)
 
@@ -383,13 +476,13 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.setCentralWidget(self.mdiArea)
         self.actionAboutYearbirder.setText("About Yearbirder")
 
-        # The form sets scrPhotoFilter with AlignTop + stretch=0, which prevents it
+        # The form sets scrMediaFilter with AlignTop + stretch=0, which prevents it
         # from expanding to fill the dock and causes a spurious scroll bar.
-        self.verticalLayout_4.setAlignment(self.scrPhotoFilter, Qt.Alignment())
-        self.verticalLayout_4.setStretchFactor(self.scrPhotoFilter, 1)
-        # Pin the photo filter content to the top (mirrors how frmFilter is AlignTop
+        self.verticalLayout_4.setAlignment(self.scrMediaFilter, Qt.Alignment())
+        self.verticalLayout_4.setStretchFactor(self.scrMediaFilter, 1)
+        # Pin the media filter content to the top (mirrors how frmFilter is AlignTop
         # in the standard filter), so items aren't stretched to fill the scroll area.
-        self.verticalLayout_5.setAlignment(self.frmPhotoFilter, Qt.AlignTop)
+        self.verticalLayout_5.setAlignment(self.frmMediaFilter, Qt.AlignTop)
 
         # Black icons for drop-down menus (loaded from Qt resource system)
         _menuIcons = {
@@ -484,12 +577,12 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         
         self.actionShowStandardFilter.triggered.connect(self.showStandardFilter)
         self.actionHideStandardFilter.triggered.connect(self.hideStandardFilter)
-        self.actionShowPhotoFilter.triggered.connect(self.showPhotoFilter)
-        self.actionHidePhotoFilter.triggered.connect(self.hidePhotoFilter)
+        self.actionShowMediaFilter.triggered.connect(self.showMediaFilter)
+        self.actionHideMediaFilter.triggered.connect(self.hideMediaFilter)
 
         self.actionClearAllFilters.triggered.connect(self.clearAllFilters)
         self.actionClearStandardFilter.triggered.connect(self.clearStandardFilter)
-        self.actionClearPhotoFilter.triggered.connect(self.clearPhotoFilter)
+        self.actionClearMediaFilter.triggered.connect(self.clearMediaFilter)
         
         self.actionDateTotals.triggered.connect(self.CreateDateTotals)
         self.actionLocationTotals.triggered.connect(self.CreateLocationTotals)
@@ -502,7 +595,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionLocations.triggered.connect(self.CreateLocationsList)
         self.actionPrint.triggered.connect(self.printMe)
         self.actionCreatePDF.triggered.connect(self.CreatePDF)
-        self.actionFamilies.triggered.connect(self.CreateIndivPieChart)
+        self.actionFamilies.triggered.connect(self.CreateFamilyPieChart)
         self.actionPhotos.triggered.connect(self.createPhotosReport)
         self.actionPhotosByFilter.triggered.connect(self.createPhotosReport)
         self.actionSpeciesGallery.triggered.connect(self.createSpeciesGallery)
@@ -542,12 +635,25 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionClosePhotoSettings.triggered.connect(self.closePhotoSettings)
         self.actionSavePhotoSettings.triggered.connect(self.savePhotoSettings)
         self.actionAddPhotos.triggered.connect(self.addPhotos)
+        self.actionAddRecordings.triggered.connect(self.addAudio)
+        self.actionManageRecordings.triggered.connect(self.createManageRecordings)
+        self.actionBrowseRecordings.triggered.connect(self.createRecordingsBrowser)
         self.actionEditPhotosByFilter.triggered.connect(self.createEditPhotosByFilter)
         self.actionEditPhotosByFilter.setVisible(False)
         self.actionUpdateEXIFDataForAllPhotos.triggered.connect(self.updateEXIFDataForAllPhotos)
         self.actionUpdateEXIFDataForAllPhotos.setVisible(False)
-        self.actionRenamePhotos.triggered.connect(self.createRenamePhotos)
-        self.actionRenamePhotos.setVisible(False)
+        self.actionUpdateRecordingData.triggered.connect(self.updateRecordingDataForAll)
+        self.actionUpdateRecordingData.setVisible(False)
+        self.actionRenameMedia.triggered.connect(self.createRenameMedia)
+        self.actionRenameMedia.setVisible(False)
+
+        # Rebuild thumbnail cache — created dynamically (no generated-form edit)
+        # and inserted into the File menu just after Rename Media.
+        self.actionRebuildThumbnailCache = QAction("Rebuild thumbnail cache…", self)
+        self.actionRebuildThumbnailCache.setMenuRole(QAction.MenuRole.NoRole)
+        self.actionRebuildThumbnailCache.triggered.connect(self.rebuildThumbnailCache)
+        self.menuFile.insertAction(self.actionOptimizePhotoSettings,
+                                   self.actionRebuildThumbnailCache)
         self.actionOptimizePhotoSettings.triggered.connect(self.optimizePhotoSettings)
         self.actionOptimizePhotoSettings.setVisible(False)
         
@@ -571,6 +677,14 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionPhotoBar.triggered.connect(self.CreatePhotoBarChart)
         self.actionPhotoAccumulation.triggered.connect(self.CreatePhotoAccumulationChart)
         self.actionCumulativePhotos.triggered.connect(self.CreateCumulativePhotosChart)
+        self.actionRecordingsSpeciesGallery.triggered.connect(self.createRecordingsSpeciesGallery)
+        self.actionGeolocatedRecordings.triggered.connect(self.createGeolocatedRecordingsMap)
+        self.actionAnimatedRecordingSequenceMap.triggered.connect(self.createAnimatedRecordingSequenceMap)
+        self.actionYTDRecordings.triggered.connect(self.CreateYTDRecordings)
+        self.actionRecordingsPie.triggered.connect(self.CreateRecordingsPieChart)
+        self.actionTotalRecordings.triggered.connect(self.CreateTotalRecordingsChart)
+        self.actionRecordingsAccumulation.triggered.connect(self.CreateRecordingsAccumulationChart)
+        self.actionCumulativeRecordings.triggered.connect(self.CreateCumulativeRecordingsChart)
         self.actionLifeListMap.triggered.connect(self.createLifeListMap)
         self.actionFirstSightingsMap.triggered.connect(self.createFirstSightingsMap)
         self.actionEffortMap.triggered.connect(self.createEffortMap)
@@ -584,7 +698,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         for d in range(1,  32):
             self.cboStartSeasonalRangeDate.addItem(str(d))
             self.cboEndSeasonalRangeDate.addItem(str(d))
-        self.cboDateOptions.addItems(["No Date Filter",  "Use Calendars Below",  "This Year",  "Last Year",  "This Month",  "Today",  "Yesterday", "Last Weekend", "Select Year"])
+        self.cboDateOptions.addItems(["No Date Filter",  "Use Calendars Below",  "This Year",  "Last Year",  "This Month",  "This Week (M-Su)",  "Today",  "Yesterday", "Last Weekend", "Select Year"])
         self.cboSeasonalRangeOptions.addItems([
             "No Seasonal Range",  
             "Use Range Below",  
@@ -680,9 +794,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.cboEndRatingRange.currentIndexChanged.connect(self.ComboEndRatingRangeChanged)
         self.cboSpeciesHasPhoto.addItem("All")
         self.cboSpeciesHasPhoto.insertSeparator(1)
-        self.cboSpeciesHasPhoto.addItems(["Photographed", "Not photographed"])                    
+        self.cboSpeciesHasPhoto.addItems(["Photographed", "Not photographed"])
         self.cboSpeciesHasPhoto.currentIndexChanged.connect(self.ComboSpeciesHasPhotosChanged)
-        self.cboCamera.currentIndexChanged.connect(self.ComboCameraChanged)        
+        self.cboCamera.currentIndexChanged.connect(self.ComboCameraChanged)
         self.cboLens.currentIndexChanged.connect(self.ComboLensChanged)
         self.cboStartShutterSpeedRange.currentIndexChanged.connect(self.ComboStartShutterSpeedChanged)
         self.cboEndShutterSpeedRange.currentIndexChanged.connect(self.ComboEndShutterSpeedChanged)
@@ -692,6 +806,31 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.cboEndFocalLengthRange.currentIndexChanged.connect(self.ComboEndFocalLengthChanged)
         self.cboStartIsoRange.currentIndexChanged.connect(self.ComboStartIsoChanged)
         self.cboEndIsoRange.currentIndexChanged.connect(self.ComboEndIsoChanged)
+
+        # Static audio filter combos (items don't depend on catalog contents)
+        self.cboStartRecordingsRatingRange.addItem("All")
+        self.cboStartRecordingsRatingRange.insertSeparator(1)
+        self.cboStartRecordingsRatingRange.addItems(["0", "1", "2", "3", "4", "5"])
+        self.cboEndRecordingsRatingRange.addItem("All")
+        self.cboEndRecordingsRatingRange.insertSeparator(1)
+        self.cboEndRecordingsRatingRange.addItems(["0", "1", "2", "3", "4", "5"])
+        self.cboSpeciesHasRecording.addItem("All")
+        self.cboSpeciesHasRecording.insertSeparator(1)
+        self.cboSpeciesHasRecording.addItems(["Recorded", "Not recorded"])
+        self.cboChannels.addItem("All")
+        self.cboChannels.insertSeparator(1)
+        self.cboChannels.addItems(["Mono", "Stereo"])
+
+        self.cboStartRecordingsRatingRange.currentIndexChanged.connect(self.ComboStartRecordingsRatingRangeChanged)
+        self.cboEndRecordingsRatingRange.currentIndexChanged.connect(self.ComboEndRecordingsRatingRangeChanged)
+        self.cboSpeciesHasRecording.currentIndexChanged.connect(self.ComboSpeciesHasRecordingChanged)
+        self.cboChannels.currentIndexChanged.connect(self.ComboChannelsChanged)
+        self.cboStartRecordingsDurationRange.currentIndexChanged.connect(self.ComboStartRecordingsDurationChanged)
+        self.cboEndRecordingsDurationRange.currentIndexChanged.connect(self.ComboEndRecordingsDurationChanged)
+
+        # Clicking anywhere on the section header row toggles the section
+        self.frmPhotoHeader.mousePressEvent = lambda e: self._togglePhotoSection()
+        self.frmRecordingsHeader.mousePressEvent = lambda e: self._toggleRecordingsSection()
         
         self.lblSlider = QLabel(self.statusBar)
         self.lblSlider.setText("Display Size")
@@ -711,15 +850,15 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.statusBar.addWidget(self.lblStatusBarMessage, 1)
         self.statusBar.hide()  # status bar unused; kept hidden
         
-        self.dckPhotoFilter.setMinimumWidth(235)
+        self.dckMediaFilter.setMinimumWidth(235)
         self.dckFilter.setMinimumWidth(215)
 
         self.dckFilter.visibilityChanged.connect(
             lambda v: (self.actionShowStandardFilter.setVisible(not v),
                        self.actionHideStandardFilter.setVisible(v)))
-        self.dckPhotoFilter.visibilityChanged.connect(
-            lambda v: (self.actionShowPhotoFilter.setVisible(not v),
-                       self.actionHidePhotoFilter.setVisible(v)))
+        self.dckMediaFilter.visibilityChanged.connect(
+            lambda v: (self.actionShowMediaFilter.setVisible(not v),
+                       self.actionHideMediaFilter.setVisible(v)))
         
         self.setWindowTitle("Yearbirder v. " + self.versionNumber)
 
@@ -743,11 +882,12 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
 
     def closeEvent(self, event):
-
-        reply = self.checkIfPhotoDataNeedSaving()
-
-        if reply is True:
-            event.accept()
+        # Compact/save the media catalog if there are pending changes (matches the
+        # File → Exit path), then remove the custom toolbar style before Qt teardown
+        # so PySide6's shutdown cannot call back into a half-destroyed proxy style.
+        self.checkIfPhotoDataNeedSaving()
+        self.toolBar.setStyle(None)
+        event.accept()
 
 
     def resizeEvent(self, event):
@@ -804,6 +944,16 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.finishedProcessingPreferences()
         
 
+    def _updateMediaMenuVisibility(self):
+        """Show the Photos menu only when the open media catalog actually contains
+        photos, and the Recordings menu only when it contains recordings.  Both
+        hide when no catalog is open.  (File-menu items like Add photos / Add
+        recordings stay available whenever a catalog is open, so you can add the
+        first item of a kind.)"""
+        has_catalog = self.db.photoDataFileOpenFlag
+        self.menuPhotos.menuAction().setVisible(has_catalog and self.db.hasPhotos())
+        self.menuRecordings.menuAction().setVisible(has_catalog and self.db.hasRecordings())
+
     def finishedProcessingPreferences(self):
         self.updateMyLocationButtons()
 
@@ -815,12 +965,14 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateSpeciesList()
             self.actionClose.setVisible(True)
             self.actionOpenPhotoSettings.setVisible(True)
+            # Photos/Recordings menus appear only if the catalog has that media.
+            self._updateMediaMenuVisibility()
 
             #show photo filter if an ebird file has been read and a photo file has been opened
             if self.db.photoDataFileOpenFlag == True:
                 self.fillPhotoComboBoxes()
-                self.showPhotoFilter()
-                self.menuPhotos.menuAction().setVisible(True)
+                self.fillRecordingsComboBoxes()
+                self.showMediaFilter()
                 self._showPhotoCatalogMenuItems()
                 self.actionGeolocatedPhotos.setVisible(True)
                 self.actionGeolocatedPhotosSeparator.setVisible(True)
@@ -833,7 +985,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 self.actionCumulativePhotos.setVisible(True)
                 self.actionEditPhotosByFilter.setVisible(True)
                 self.actionUpdateEXIFDataForAllPhotos.setVisible(True)
-                self.actionRenamePhotos.setVisible(True)
+                self.actionUpdateRecordingData.setVisible(True)
+                self.actionRenameMedia.setVisible(True)
                 self.actionOptimizePhotoSettings.setVisible(True)
 
             self.showFileDataMessage()
@@ -853,7 +1006,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         MainWindow.scaleFactor = self.scaleFactor
         MainWindow.rowHeight = int(QFontMetrics(QFont("", MainWindow.fontSize)).boundingRect("2222-22-22").height() * 1.1)
         
-        self.menuBar.setFont(QFont("", self.fontSize))     
+        self.menuBar.setFont(QFont("", self.fontSize))
+        for _menu in self.menuBar.findChildren(QMenu):
+            _menu.setFont(QFont("", self.fontSize))
                         
         for a in self.toolBar.actions():
             a.setFont(QFont("", self.fontSize))                    
@@ -862,14 +1017,17 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
         filterFrameChildren = (
             self.frmFilter.children() +
-            self.frmPhotoFilter.children() +
+            self.frmPhotoSection.children() +
+            self.frmRecordingsSection.children() +
             self.frmStartSeasonalRange.children() +
             self.frmEndSeasonalRange.children() +
             self.frmShutterSpeedRange.children() +
             self.frmApertureRange.children() +
             self.frmIsoRange.children() +
             self.frmFocalLengthRange.children() +
-            self.frmRatingRange.children()
+            self.frmRatingRange.children() +
+            self.frmRecordingsRatingRange.children() +
+            self.frmRecordingsDurationRange.children()
             )
 
         for w in filterFrameChildren:
@@ -887,7 +1045,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 w.setMaximumHeight(16777215)  # QWIDGETSIZE_MAX — unconstrained
 
             if w.objectName()[0:3] == "lbl":
-                w.setFont(QFont("", self.fontSize))
+                _boldFont = QFont("", self.fontSize)
+                _boldFont.setBold(True)
+                w.setFont(_boldFont)
                 metrics = w.fontMetrics()
                 labelText = w.text()
                 itemTextWidth = metrics.boundingRect(labelText).width()
@@ -896,7 +1056,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 w.setMinimumHeight(floor(itemTextHeight))
                 w.setMaximumHeight(floor(itemTextHeight))
                 w.resize(itemTextHeight, itemTextWidth)
-                w.setStyleSheet("QLabel { font: bold }");
 
             if w.objectName()[0:3] == "cal":
                 w.setFont(QFont("", self.fontSize))
@@ -922,15 +1081,32 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.frmApertureRange,
             self.frmIsoRange,
             self.frmFocalLengthRange,
+            self.frmRecordingsRatingRange,
+            self.frmRecordingsDurationRange,
             ):
             w.setMinimumWidth(floor(2 * itemTextWidth))
             w.setMinimumHeight(floor(2 * itemTextHeight))
             w.setMaximumHeight(16777215)  # QWIDGETSIZE_MAX — unconstrained
 
             
-        self.scrPhotoFilter.setMinimumHeight(0)
-        self.scrPhotoFilter.setMinimumWidth(int(2.5 * itemTextWidth))
+        self.scrMediaFilter.setMinimumHeight(0)
+        self.scrMediaFilter.setMinimumWidth(int(2.5 * itemTextWidth))
         self.scrFilter.setMinimumWidth(int(2.5 * itemTextWidth))
+
+        # Scale section header labels (excluded from filterFrameChildren to avoid
+        # polluting itemTextWidth; scaled explicitly here instead).
+        # Arrow rendered at 2x label size via inline HTML span.
+        _sectionFont = QFont("", self.fontSize)
+        _sectionFont.setBold(True)
+        _arrowPt = self.fontSize * 2
+        self.lblPhotoSection.setFont(_sectionFont)
+        self.lblRecordingsSection.setFont(_sectionFont)
+        _pArrow = "▸" if self.frmPhotoSection.isHidden() else "▾"
+        _aArrow = "▸" if self.frmRecordingsSection.isHidden() else "▾"
+        self.lblPhotoSection.setText(
+            f"Photos  <span style='font-size:{_arrowPt}pt; vertical-align:middle'>{_pArrow}</span>")
+        self.lblRecordingsSection.setText(
+            f"Recordings  <span style='font-size:{_arrowPt}pt; vertical-align:middle'>{_aArrow}</span>")
 
         # scale open children windows
         for w in self.mdiArea.subWindowList():        
@@ -943,7 +1119,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
     def clearAllFilters(self):
         self.clearStandardFilter()
-        self.clearPhotoFilter()
+        self.clearMediaFilter()
     
     
     def clearStandardFilter(self):
@@ -965,7 +1141,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.txtCommonNameSearch.setText("")
 
 
-    def clearPhotoFilter(self):
+    def clearMediaFilter(self):
         self.cboStartRatingRange.setCurrentIndex(0)
         self.cboEndRatingRange.setCurrentIndex(0)
         self.cboSpeciesHasPhoto.setCurrentIndex(0)
@@ -979,6 +1155,12 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.cboEndFocalLengthRange.setCurrentIndex(0)
         self.cboStartIsoRange.setCurrentIndex(0)
         self.cboEndIsoRange.setCurrentIndex(0)
+        self.cboStartRecordingsRatingRange.setCurrentIndex(0)
+        self.cboEndRecordingsRatingRange.setCurrentIndex(0)
+        self.cboSpeciesHasRecording.setCurrentIndex(0)
+        self.cboChannels.setCurrentIndex(0)
+        self.cboStartRecordingsDurationRange.setCurrentIndex(0)
+        self.cboEndRecordingsDurationRange.setCurrentIndex(0)
 
 
     def _warnIfJsonlSkippedLines(self):
@@ -986,11 +1168,11 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         if n > 0:
             QMessageBox.warning(
                 self,
-                "Photo Catalog Warning",
-                f"{n} line{'s' if n != 1 else ''} in the photo catalog could not "
+                "Media Catalog Warning",
+                f"{n} line{'s' if n != 1 else ''} in the media catalog could not "
                 f"be read and {'were' if n != 1 else 'was'} skipped.\n\n"
                 "The file may be partially corrupted. Consider running "
-                "File \u2192 Optimize photo catalog\u2026 to compact and repair it.",
+                "File \u2192 Optimize media catalog\u2026 to compact and repair it.",
                 QMessageBox.StandardButton.Ok,
             )
 
@@ -999,8 +1181,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         if n > 0:
             QMessageBox.warning(
                 self,
-                "Photo Catalog Warning",
-                f"{n} row{'s' if n != 1 else ''} in the photo catalog could "
+                "Media Catalog Warning",
+                f"{n} row{'s' if n != 1 else ''} in the media catalog could "
                 f"not be read due to missing columns and {'were' if n != 1 else 'was'} "
                 f"skipped.\n\n"
                 "This may indicate an older or incompatible CSV format.",
@@ -1012,14 +1194,14 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         if not self.db.eBirdFileOpenFlag:
             QMessageBox.warning(self, "No eBird Data File Open",
                 "Please open an eBird data file first (File → Open), "
-                "then open a photo catalog.")
+                "then open a media catalog.")
             return
 
         # Block if Manage Photos is open — switching catalogs mid-session would corrupt its state
         for w in self.mdiArea.subWindowList():
             if isinstance(w, code_ManagePhotos.ManagePhotos):
                 QMessageBox.warning(self, "Close Manage Photos First",
-                    "Please close the Manage Photos window before opening a different photo catalog.\n\n"
+                    "Please close the Manage Photos window before opening a different media catalog.\n\n"
                     "Having both open at the same time could cause conflicts.")
                 return
 
@@ -1028,13 +1210,14 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
         # If a catalog is already open, confirm the switch
         if self.db.photoDataFileOpenFlag:
-            reply = code_Stylesheet.question(self, "Photo Catalog Already Open",
-                "A photo catalog is already open.\n\n"
+            reply = code_Stylesheet.question(self, "Media Catalog Already Open",
+                "A media catalog is already open.\n\n"
                 "Do you want to close it and open a different one?")
             if reply != QMessageBox.StandardButton.Yes:
                 return
             # Compact any pending changes before switching
             self.checkIfPhotoDataNeedSaving()
+            self._closePhotoDependentWindows()
             self.db.ClearPhotoSettings()
 
         # open data file
@@ -1055,8 +1238,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         # If conversion was declined or the save dialog was cancelled, abort the open
         if self.db.photoDataFile.lower().endswith(".csv"):
             self.db.ClearPhotoSettings()
-            QMessageBox.warning(self, "Photo Catalog Not Opened",
-                "The photo catalog was not opened. CSV catalogs must be converted to "
+            QMessageBox.warning(self, "Media Catalog Not Opened",
+                "The media catalog was not opened. CSV catalogs must be converted to "
                 "Yearbirder's catalog format (.jsonl) before they can be used.\n\n"
                 "Open the file again to convert it.")
             return
@@ -1066,17 +1249,19 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         if (not photoDataFile.lower().endswith(".csv") and
                 os.path.realpath(photoDataFile) != os.path.realpath(prev_default or "")):
             reply = code_Stylesheet.question(self, "Set as Default Catalog?",
-                "Would you like Yearbirder to open this photo catalog automatically "
+                "Would you like Yearbirder to open this media catalog automatically "
                 "each time it starts?\n\n" + photoDataFile)
             if reply == QMessageBox.StandardButton.Yes:
                 self.db.photoDataFileDefault = photoDataFile
                 self.db.writePreferences()
 
         self.fillPhotoComboBoxes()
+        self.fillRecordingsComboBoxes()
 
-        self.showPhotoFilter()
+        self.showMediaFilter()
 
-        self.menuPhotos.menuAction().setVisible(True)
+        # Photos/Recordings menus appear only if the catalog has that media.
+        self._updateMediaMenuVisibility()
         self._showPhotoCatalogMenuItems()
         self.actionGeolocatedPhotos.setVisible(True)
         self.actionGeolocatedPhotosSeparator.setVisible(True)
@@ -1087,7 +1272,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionPhotoBar.setVisible(True)
         self.actionEditPhotosByFilter.setVisible(True)
         self.actionUpdateEXIFDataForAllPhotos.setVisible(True)
-        self.actionRenamePhotos.setVisible(True)
+        self.actionUpdateRecordingData.setVisible(True)
+        self.actionRenameMedia.setVisible(True)
         self.actionOptimizePhotoSettings.setVisible(True)
 
         self.CreateStatsOnLoad()
@@ -1112,7 +1298,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 and not self.db.GetSightingsWithPhotos(filter)):
             QMessageBox.warning(
                 self,
-                "Photo Catalog Mismatch",
+                "Media Catalog Mismatch",
                 "The photos in the catalog don't match the open eBird data file. "
                 "The catalog will be closed.\n\n"
                 + default_catalog,
@@ -1128,7 +1314,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.menuFileCatalogSeparator.setVisible(True)
         self.actionEditPhotosByFilter.setVisible(True)
         self.actionUpdateEXIFDataForAllPhotos.setVisible(True)
-        self.actionRenamePhotos.setVisible(True)
+        self.actionRenameMedia.setVisible(True)
         self.actionOptimizePhotoSettings.setVisible(True)
 
     def _hidePhotoCatalogMenuItems(self):
@@ -1138,35 +1324,26 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.menuFileCatalogSeparator.setVisible(False)
         self.actionEditPhotosByFilter.setVisible(False)
         self.actionUpdateEXIFDataForAllPhotos.setVisible(False)
-        self.actionRenamePhotos.setVisible(False)
+        self.actionUpdateRecordingData.setVisible(False)
+        self.actionRenameMedia.setVisible(False)
         self.actionOptimizePhotoSettings.setVisible(False)
 
     def closePhotoSettings(self):
 
-        if self.db.photosNeedSaving:
-            msg = QMessageBox(self)
-            msg.setWindowTitle("Unsaved Photo Changes")
-            msg.setText("Your photo catalog has changes that have not been saved to disk.\n\n"
-                        "Would you like to save them before closing?")
-            save_btn    = msg.addButton("Save",    QMessageBox.ButtonRole.AcceptRole)
-            discard_btn = msg.addButton("Discard", QMessageBox.ButtonRole.DestructiveRole)
-            cancel_btn  = msg.addButton("Cancel",  QMessageBox.ButtonRole.RejectRole)
-            msg.setDefaultButton(save_btn)
-            msg.exec()
-            clicked = msg.clickedButton()
-            if clicked is cancel_btn:
-                return
-            if clicked is save_btn:
-                self.checkIfPhotoDataNeedSaving()
+        # The media catalog is written to disk continuously, so there is no
+        # unsaved state to prompt about — just compact the .jsonl quietly before
+        # closing (no "save before closing?" dialog).
+        self.checkIfPhotoDataNeedSaving()
 
-        self.clearPhotoFilter()
-        self.hidePhotoFilter()
+        self.clearMediaFilter()
+        self.hideMediaFilter()
         self.db.ClearPhotoSettings()
 
         for w in list(self.mdiArea.subWindowList()):
             if w.objectName() == "frmStats":
                 w.close()
-        self.menuPhotos.menuAction().setVisible(False)
+        # Catalog is now closed — hide both media menus.
+        self._updateMediaMenuVisibility()
         self._hidePhotoCatalogMenuItems()
         self.actionGeolocatedPhotos.setVisible(False)
         self.actionGeolocatedPhotosSeparator.setVisible(False)
@@ -1241,8 +1418,53 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 "No new photo files were found.",
                 QMessageBox.StandardButton.Ok
             )
-           
-    
+
+    def addAudio(self):
+        if not MainWindow.db.eBirdFileOpenFlag:
+            self.CreateMessageNoFile()
+            return
+
+        default_dir = ""
+        if MainWindow.db.photoDataFileOpenFlag:
+            all_audio = MainWindow.db.GetAudio(code_Filter.Filter())
+            if all_audio:
+                default_dir = os.path.dirname(all_audio[-1])
+
+        audio_paths, _ = QFileDialog.getOpenFileNames(
+            self, 'Select recording files', default_dir, "WAV Audio (*.wav)")
+
+        if not audio_paths:
+            return
+
+        already_in_db = {os.path.realpath(a) for a in MainWindow.db.GetAudio(code_Filter.Filter())}
+        new_files = [p for p in audio_paths if os.path.realpath(p) not in already_in_db]
+        already_count = len(audio_paths) - len(new_files)
+
+        if already_count > 0:
+            new_str = "1 file will be added." if len(new_files) == 1 else f"{len(new_files)} files will be added."
+            QMessageBox.information(
+                self, "Recordings",
+                f"{already_count} of the selected files are already in the catalog.\n\n{new_str}",
+                QMessageBox.StandardButton.Ok
+            )
+
+        if new_files:
+            sub = code_ManageRecordings.ManageRecordings()
+            sub.mdiParent = self
+            sub.scaleMe()
+            sub.resizeMe()
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+            QApplication.processEvents()
+            QTimer.singleShot(20, lambda: sub.FillRecordingsByFiles(new_files))
+        else:
+            QMessageBox.information(
+                self, "Recordings",
+                "No new recording files were found.",
+                QMessageBox.StandardButton.Ok
+            )
+
     def _promptJsonlMigrationIfNeeded(self):
         if self.db.photoDataFile.lower().endswith(".jsonl"):
             return
@@ -1251,20 +1473,20 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Icon.Information)
             msg.setText(
-                "No photo catalog is open.\n\n"
-                "Please choose a name and location for a photo catalog. "
+                "No media catalog is open.\n\n"
+                "Please choose a name and location for a media catalog. "
                 "Yearbirder will save your photo data there going forward."
             )
-            msg.setWindowTitle("Photo Catalog")
+            msg.setWindowTitle("Media Catalog")
             msg.setStandardButtons(QMessageBox.StandardButton.Ok)
             msg.exec()
             self.savePhotoSettings()
         else:
             # CSV file — require explicit conversion; offer a clean cancel path
             msg = QMessageBox(self)
-            msg.setWindowTitle("Convert Photo Catalog")
+            msg.setWindowTitle("Convert Media Catalog")
             msg.setText(
-                "Your photo catalog is in the legacy CSV format, which is no longer "
+                "Your media catalog is in the legacy CSV format, which is no longer "
                 "supported.\n\n"
                 "Choose a location to save the converted catalog (.jsonl). "
                 "If you cancel, the catalog will not be opened."
@@ -1274,30 +1496,35 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             msg.exec()
             if msg.clickedButton() is not convert_btn:
                 return   # caller must check db.photoDataFile to detect this
-            self.savePhotoSettings()
+            self.savePhotoSettings(is_conversion=True)
 
         if self.db.photoDataFile.lower().endswith(".jsonl"):
             if code_Stylesheet.question(
                 self, "Set as Default?",
-                "Would you like to set this as your default photo catalog?\n\n"
+                "Would you like to set this as your default media catalog?\n\n"
                 + self.db.photoDataFile,
             ) == QMessageBox.StandardButton.Yes:
                 self.db.photoDataFileDefault = self.db.photoDataFile
                 self.db.writePreferences()
 
 
-    def savePhotoSettings(self):
+    def savePhotoSettings(self, is_conversion=False):
 
         photoFileInUse = self.db.photoDataFile
         # suggest .jsonl path even if user currently has a .csv path
         if photoFileInUse.lower().endswith(".csv"):
             photoFileInUse = photoFileInUse[:-4] + ".jsonl"
 
-        datestamp = datetime.datetime.now().strftime("%Y%m%d")
-        base, ext = os.path.splitext(photoFileInUse)
-        backupDefault = f"{base}_Backup_{datestamp}{ext}"
+        if is_conversion:
+            dialog_title = "Media Catalog"
+            suggested = photoFileInUse
+        else:
+            datestamp = datetime.datetime.now().strftime("%Y%m%d")
+            base, ext = os.path.splitext(photoFileInUse)
+            suggested = f"{base}_Backup_{datestamp}{ext}"
+            dialog_title = "Backup Media Catalog"
 
-        fname = QFileDialog.getSaveFileName(self, "Backup Photo Catalog", backupDefault, "Yearbirder Photo Catalog (*.jsonl)")
+        fname = QFileDialog.getSaveFileName(self, dialog_title, suggested, "Yearbirder Media Catalog (*.jsonl)")
 
         if fname[0] == "":
             return
@@ -1408,6 +1635,56 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             w.setMaximumHeight(16777215)  # QWIDGETSIZE_MAX — unconstrained
 
 
+    def fillRecordingsComboBoxes(self):
+        # Populate only the catalog-derived duration comboboxes; static items
+        # (rating, channels, has-recording) are set once in __init__.
+        for w in (self.cboStartRecordingsDurationRange, self.cboEndRecordingsDurationRange):
+            w.clear()
+            w.addItem("All")
+            w.insertSeparator(1)
+            w.addItems(self.db.durationList)
+            w.setCurrentIndex(0)
+
+        cboHeight = floor(2 * QFontMetrics(QFont("", self.fontSize)).height())
+        for w in (
+            self.cboStartRecordingsRatingRange,
+            self.cboEndRecordingsRatingRange,
+            self.cboSpeciesHasRecording,
+            self.cboChannels,
+            self.cboStartRecordingsDurationRange,
+            self.cboEndRecordingsDurationRange,
+            ):
+            w.setMinimumHeight(cboHeight)
+            w.setMaximumHeight(16777215)
+        for w in (self.frmRecordingsRatingRange, self.frmRecordingsDurationRange):
+            w.setMinimumHeight(cboHeight)
+            w.setMaximumHeight(16777215)
+
+
+    def _togglePhotoSection(self):
+        visible = self.frmPhotoSection.isVisible()
+        _arrowPt = self.fontSize * 2
+        _arrow = "▸" if visible else "▾"
+        self.dckMediaFilter.setUpdatesEnabled(False)
+        self.frmPhotoSection.setVisible(not visible)
+        self.frmMediaFilter.layout().activate()
+        self.lblPhotoSection.setText(
+            f"Photos  <span style='font-size:{_arrowPt}pt; vertical-align:middle'>{_arrow}</span>")
+        self.dckMediaFilter.setUpdatesEnabled(True)
+
+
+    def _toggleRecordingsSection(self):
+        visible = self.frmRecordingsSection.isVisible()
+        _arrowPt = self.fontSize * 2
+        _arrow = "▸" if visible else "▾"
+        self.dckMediaFilter.setUpdatesEnabled(False)
+        self.frmRecordingsSection.setVisible(not visible)
+        self.frmMediaFilter.layout().activate()
+        self.lblRecordingsSection.setText(
+            f"Recordings  <span style='font-size:{_arrowPt}pt; vertical-align:middle'>{_arrow}</span>")
+        self.dckMediaFilter.setUpdatesEnabled(True)
+
+
     def removeUnfoundPhotos(self):
         
         countRemovedPhotos = self.db.removeUnfoundPhotos()
@@ -1424,6 +1701,11 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         for w in self.mdiArea.subWindowList():
             if hasattr(w, 'handlePhotoDeletion'):
                 w.handlePhotoDeletion(filename)
+
+    def notifyAudioDeletion(self, filename):
+        for w in self.mdiArea.subWindowList():
+            if hasattr(w, 'handleAudioDeletion'):
+                w.handleAudioDeletion(filename)
 
 
     def refreshOpenStats(self):
@@ -1458,7 +1740,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()
             return
 
-        filter = self.GetFilter()
+        filter = self.GetPhotoFilter()
 
         # Pre-check before touching the MDI area — PositionChildWindow restores
         # any maximized sibling, so adding then immediately removing a window
@@ -1496,7 +1778,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()
             return
 
-        filter = self.GetFilter()
+        filter = self.GetPhotoFilter()
         sub = code_SpeciesGallery.SpeciesGallery()
         sub.mdiParent = self
         self.mdiArea.addSubWindow(sub)
@@ -1694,7 +1976,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
              self.cboFamilies.setCurrentIndex(index)
              
 
-    def setDateFilter(self, startDate, endDate = ""):
+    def setDateFilter(self, startDate, endDate = "", setCombo = True):
 
         # if only one date is specified, use that date for both start and end dates
         if endDate == "":
@@ -1711,6 +1993,14 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         endDay = int(endDate[8:])
         myEndDate = QDate()
         myEndDate.setDate(endYear, endMonth, endDay)
+
+        # External callers (e.g. clicking a year/date in another window) leave the
+        # Date Options combo showing "Use Calendars Below".  The combo's own
+        # preset handlers pass setCombo=False so the user's specific choice
+        # (e.g. "This Year", "Select Year") remains displayed; GetFilter() still
+        # recomputes the correct dates from that choice.
+        if setCombo:
+            self.cboDateOptions.setCurrentIndex(1)  # "Use Calendars Below"
 
         # Block calendar signals so CalendarClicked doesn't override the combo selection
         self.calStartDate.blockSignals(True)
@@ -1736,11 +2026,11 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             return
 
         for w in self.mdiArea.subWindowList():
-            if isinstance(w, code_RenamePhotos.RenamePhotos):
+            if isinstance(w, code_RenameMedia.RenameMedia):
                 QMessageBox.warning(
                     self,
-                    "Close Rename Photos First",
-                    "Please close the Rename Photos window before editing photos.\n\n"
+                    "Close Rename Media First",
+                    "Please close the Rename Media window before editing photos.\n\n"
                     "Having both windows open at the same time could cause conflicts.",
                     QMessageBox.StandardButton.Ok,
                 )
@@ -1753,7 +2043,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         sub.mdiParent = self 
         
         # call the child's routine to fill it with data
-        if sub.FillPhotosByFilter(self.GetFilter()) is True:
+        if sub.FillPhotosByFilter(self.GetPhotoFilter()) is True:
 
             # add and position the child to our MDI area
             self.mdiArea.addSubWindow(sub)
@@ -1767,30 +2057,82 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             sub.close()
 
 
-    def createRenamePhotos(self):
+    def createManageRecordings(self):
+        if not MainWindow.db.eBirdFileOpenFlag:
+            self.CreateMessageNoFile()
+            return
+
+        sub = code_ManageRecordings.ManageRecordings()
+        sub.mdiParent = self
+
+        if sub.FillRecordingsByFilter(self.GetRecordingsFilter()) is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+
+    def createRecordingsBrowser(self):
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+
+        filter = self.GetRecordingsFilter()
+
+        if not MainWindow.db.GetSightingsWithRecordings(filter):
+            QMessageBox.information(
+                self,
+                "No Recordings",
+                "No recordings match the current filter.",
+                QMessageBox.StandardButton.Ok,
+            )
+            return
+
+        sub = code_Recordings.Recordings()
+        sub.mdiParent = self
+
+        self.mdiArea.addSubWindow(sub)
+        self.PositionChildWindow(sub, self)
+        sub.show()
+
+        if sub.FillRecordings(filter) is False:
+            sub.close()
+            QMessageBox.information(
+                self,
+                "No Recordings",
+                "No recordings match the current filter.",
+                QMessageBox.StandardButton.Ok,
+            )
+
+    def createRenameMedia(self):
 
         if MainWindow.db.eBirdFileOpenFlag is not True:
             self.CreateMessageNoFile()
             return
 
         for w in self.mdiArea.subWindowList():
-            if isinstance(w, code_ManagePhotos.ManagePhotos):
+            if isinstance(w, (code_ManagePhotos.ManagePhotos,
+                               code_ManageRecordings.ManageRecordings)):
                 QMessageBox.warning(
                     self,
-                    "Close Manage Photos First",
-                    "Please close the Manage Photos window before renaming photos.\n\n"
+                    "Close Manage Media First",
+                    "Please close any open Manage Photos or Manage Recordings windows "
+                    "before renaming media.\n\n"
                     "Having both windows open at the same time could cause conflicts.",
                     QMessageBox.StandardButton.Ok,
                 )
                 return
 
-        sightings = MainWindow.db.GetSightingsWithPhotos(self.GetFilter())
+        photo_sightings = MainWindow.db.GetSightingsWithPhotos(self.GetFilter())
+        recording_file_to_sightings = MainWindow.db.GetSightingsByRecordingFile(
+            self.GetFilter())
 
-        if not sightings:
+        if not photo_sightings and not recording_file_to_sightings:
             self.CreateMessageNoResults()
             return
 
-        sub = code_RenamePhotos.RenamePhotos()
+        sub = code_RenameMedia.RenameMedia()
         sub.mdiParent = self
 
         self.mdiArea.addSubWindow(sub)
@@ -1799,7 +2141,110 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         sub.scaleMe()
         sub.resizeMe()
 
-        sub.FillRenamePhotos(sightings)
+        sub.FillRenameMedia(photo_sightings, recording_file_to_sightings)
+
+
+    def rebuildThumbnailCache(self):
+        """Clear and regenerate the on-disk thumbnail cache for every photo in
+        the media catalog, showing the same progress overlay as photo loading.
+
+        Runs asynchronously: worker threads decode/store off the GUI thread while
+        a drain timer updates the overlay, so the app stays responsive (matching
+        the Photos browser's loading pattern)."""
+        if getattr(self, "_rebuildTimer", None) and self._rebuildTimer.isActive():
+            return   # a rebuild is already in progress
+
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+
+        photo_files = MainWindow.db.GetPhotos(code_Filter.Filter())
+        recording_files = MainWindow.db.GetAudio(code_Filter.Filter())
+        n_photos = len(photo_files)
+        n_recordings = len(recording_files)
+        total = n_photos + n_recordings
+        if total == 0:
+            QMessageBox.information(
+                self, "Rebuild Thumbnail Cache",
+                "There is no photo or recording media in the catalog to rebuild.",
+                QMessageBox.StandardButton.Ok)
+            return
+
+        parts = []
+        if n_photos:
+            parts.append(f"{n_photos} photo{'s' if n_photos != 1 else ''}")
+        if n_recordings:
+            parts.append(f"{n_recordings} recording{'s' if n_recordings != 1 else ''}")
+        reply = code_Stylesheet.question(
+            self, "Rebuild Thumbnail Cache",
+            f"Clear and rebuild cached thumbnails for {' and '.join(parts)}?\n\n"
+            "Thumbnails (photos) and spectrograms (recordings) are regenerated "
+            "from the original media files.")
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        # Import the ribbon renderer on the main thread (matplotlib init isn't
+        # thread-safe) before the worker threads use it.
+        import code_RecordingEnlargement
+
+        # Start clean so orphaned/stale entries are removed.
+        code_ThumbnailCache.clear()
+
+        work = queue.Queue()
+        for f in photo_files:
+            work.put(("photo", f))
+        for f in recording_files:
+            work.put(("recording", f))
+        self._rebuildDone = queue.Queue()
+        self._rebuildTotal = total
+        self._rebuildCompleted = 0
+
+        done = self._rebuildDone
+
+        def worker():
+            while True:
+                try:
+                    kind, f = work.get_nowait()
+                except queue.Empty:
+                    break
+                try:
+                    if kind == "photo":
+                        code_ThumbnailCache.build(f)          # decode photo + store
+                    else:
+                        code_ThumbnailCache.build_spectro(f)  # browser thumbnail
+                        code_RecordingEnlargement.build_ribbon_cache(f)  # enlargement ribbon
+                except Exception:
+                    pass
+                done.put(1)
+
+        thread_count = min(os.cpu_count() or 4, 8)
+        self._rebuildWorkers = [threading.Thread(target=worker, daemon=True)
+                                for _ in range(thread_count)]
+        for t in self._rebuildWorkers:
+            t.start()
+
+        self.progressOverlay.showDeterminate("Rebuilding media cache…", total)
+
+        self._rebuildTimer = QTimer(self)
+        self._rebuildTimer.timeout.connect(self._drainRebuild)
+        self._rebuildTimer.start(50)
+
+    def _drainRebuild(self):
+        """Drain completed-thumbnail markers (every 50 ms) and update the overlay."""
+        drained = False
+        try:
+            while True:
+                self._rebuildDone.get_nowait()
+                self._rebuildCompleted += 1
+                drained = True
+        except queue.Empty:
+            pass
+        if drained:
+            self.progressOverlay.setProgress(self._rebuildCompleted)
+        if self._rebuildCompleted >= self._rebuildTotal:
+            self._rebuildTimer.stop()
+            self.progressOverlay.hide()
+            code_ThumbnailCache.enforce_cap()   # keep the cache bounded
 
 
     def optimizePhotoSettings(self):
@@ -1807,8 +2252,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         if not MainWindow.db.photoDataFileOpenFlag:
             QMessageBox.warning(
                 self,
-                "No Photo Catalog",
-                "Please open a photo catalog first.",
+                "No Media Catalog",
+                "Please open a media catalog first.",
                 QMessageBox.StandardButton.Ok,
             )
             return
@@ -1819,25 +2264,41 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
         missing = dlg.missing
         from collections import defaultdict
-        by_sighting = defaultdict(list)
+        by_sighting_photo = defaultdict(list)
+        by_sighting_audio = defaultdict(list)
         for m in missing:
-            by_sighting[m["sighting_idx"]].append(m["photo_idx"])
+            if m["kind"] == "photo":
+                by_sighting_photo[m["sighting_idx"]].append(m["media_idx"])
+            else:
+                by_sighting_audio[m["sighting_idx"]].append(m["media_idx"])
 
-        for sighting_idx, photo_indices in by_sighting.items():
+        for sighting_idx, indices in by_sighting_photo.items():
             sighting = MainWindow.db.sightingList[sighting_idx]
-            for idx in sorted(photo_indices, reverse=True):
+            for idx in sorted(indices, reverse=True):
                 sighting["photos"].pop(idx)
             if not sighting["photos"]:
                 del sighting["photos"]
 
+        for sighting_idx, indices in by_sighting_audio.items():
+            sighting = MainWindow.db.sightingList[sighting_idx]
+            for idx in sorted(indices, reverse=True):
+                sighting["audio"].pop(idx)
+            if not sighting["audio"]:
+                del sighting["audio"]
+
         MainWindow.db.compactJsonlFile()
 
-        n = len(missing)
-        if n == 0:
-            msg = "The photo catalog has been compacted."
+        n_photos = sum(1 for m in missing if m["kind"] == "photo")
+        n_recordings  = sum(1 for m in missing if m["kind"] == "recording")
+        if not missing:
+            msg = "The media catalog has been compacted."
         else:
-            msg = (f"Removed {n} missing photo {'entries' if n != 1 else 'entry'} "
-                   "and compacted the photo catalog.")
+            parts = []
+            if n_photos:
+                parts.append(f"{n_photos} missing photo {'entries' if n_photos != 1 else 'entry'}")
+            if n_recordings:
+                parts.append(f"{n_recordings} missing recordings {'entries' if n_recordings != 1 else 'entry'}")
+            msg = f"Removed {' and '.join(parts)} and compacted the media catalog."
         QMessageBox.information(
             self,
             "Optimize Complete",
@@ -1868,16 +2329,16 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionShowStandardFilter.setVisible(True)        
 
 
-    def showPhotoFilter(self):
-        self.dckPhotoFilter.show()
-        self.actionShowPhotoFilter.setVisible(False)
-        self.actionHidePhotoFilter.setVisible(True)
+    def showMediaFilter(self):
+        self.dckMediaFilter.show()
+        self.actionShowMediaFilter.setVisible(False)
+        self.actionHideMediaFilter.setVisible(True)
         
         
-    def hidePhotoFilter(self):
-        self.dckPhotoFilter.hide()
-        self.actionHidePhotoFilter.setVisible(False)
-        self.actionShowPhotoFilter.setVisible(True)
+    def hideMediaFilter(self):
+        self.dckMediaFilter.hide()
+        self.actionHideMediaFilter.setVisible(False)
+        self.actionShowMediaFilter.setVisible(True)
         
         
     def keyPressEvent(self, e):
@@ -1889,12 +2350,12 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         if e.key() == Qt.Key_F and e.modifiers() & Qt.ControlModifier:
             self.CreateFind()
 
-        # toggle Photo filter dock with Cmd-P
-        if e.key() == Qt.Key_P and e.modifiers() & Qt.ControlModifier:
-            if self.dckPhotoFilter.isVisible():
-                self.hidePhotoFilter()
+        # toggle Media filter dock with Cmd-M
+        if e.key() == Qt.Key_M and e.modifiers() & Qt.ControlModifier:
+            if self.dckMediaFilter.isVisible():
+                self.hideMediaFilter()
             else:
-                self.showPhotoFilter()
+                self.showMediaFilter()
 
         # toggle Sighting Filter dock with Cmd-S
         if e.key() == Qt.Key_S and e.modifiers() & Qt.ControlModifier:
@@ -2042,8 +2503,10 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
             if self.db.photoDataFileOpenFlag:
                 self.fillPhotoComboBoxes()
-                self.showPhotoFilter()
-                self.menuPhotos.menuAction().setVisible(True)
+                self.fillRecordingsComboBoxes()
+                self.showMediaFilter()
+                # Photos/Recordings menus appear only if the catalog has that media.
+                self._updateMediaMenuVisibility()
                 self._showPhotoCatalogMenuItems()
                 self.actionGeolocatedPhotos.setVisible(True)
                 self.actionGeolocatedPhotosSeparator.setVisible(True)
@@ -2056,7 +2519,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 self.actionCumulativePhotos.setVisible(True)
                 self.actionEditPhotosByFilter.setVisible(True)
                 self.actionUpdateEXIFDataForAllPhotos.setVisible(True)
-                self.actionRenamePhotos.setVisible(True)
+                self.actionUpdateRecordingData.setVisible(True)
+                self.actionRenameMedia.setVisible(True)
                 self.actionOptimizePhotoSettings.setVisible(True)
 
             self.CreateStatsOnLoad()
@@ -2165,7 +2629,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()
             return
 
-        filter = self.GetFilter()
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
 
         sub = code_Web.Web()
         sub.mdiParent = self
@@ -2211,7 +2677,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()
             return
 
-        filter = self.GetFilter()
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
         sub = code_Web.Web()
         sub.mdiParent = self
 
@@ -2226,7 +2694,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()
             return
 
-        filter = self.GetFilter()
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
         sub = code_Web.Web()
         sub.mdiParent = self
 
@@ -2241,7 +2711,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()
             return
 
-        filter = self.GetFilter()
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
         sub = code_Web.Web()
         sub.mdiParent = self
 
@@ -2261,7 +2733,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             return
 
         # get the current filter settings to validate before proceeding
-        filter = self.GetFilter()
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
 
         # check if filter is completely empty (no meaningful constraints set)
         filterIsEmpty = (
@@ -2333,7 +2807,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         sub = code_Stats.Stats()
         sub.mdiParent = self
 
-        if sub.FillStats(self.GetFilter()) is True:
+        if sub.FillStats(code_Filter.Filter()) is True:
             self.mdiArea.addSubWindow(sub)
             self.PositionChildWindow(sub, self)
             sub.show()
@@ -2392,14 +2866,16 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             
         
         # get the current filter settings in a list to pass to child
-        filter = self.GetFilter()
-        
-        # create child window 
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
+
+        # create child window
         sub = code_Lists.Lists()
-        
+
         # save the MDI window as the parent for future use in the child
         sub.mdiParent = self
-        
+
         # call the child's fill routine, passing the filter settings list
         if sub.FillChecklists(filter) is True:
             
@@ -2436,7 +2912,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             "frmStats",
             "frmIndividual",
             "frmLocation",
-            "frmBigReport"
+            "frmBigReport",
+            "frmSpeciesGallery",
             ]):
 
             # create a QTextDocument in memory to hold and render our content
@@ -2453,7 +2930,21 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             # set the document to the printer's page size
             pageSize = printer.pageLayout().fullRect(QPageLayout.Unit.Point).size()
             document.setPageSize(pageSize)
-            
+
+            if activeWindow.objectName() in ("frmPhotos", "frmSpeciesGallery"):
+                n = (len(activeWindow.photoList)
+                     if activeWindow.objectName() == "frmPhotos"
+                     else len(activeWindow._galleryItems))
+                pages = ceil(n / 6)
+                reply = code_Stylesheet.question(
+                    self,
+                    "Confirm PDF",
+                    f"This will generate approximately {pages} page{'s' if pages != 1 else ''} "
+                    f"({n} photo{'s' if n != 1 else ''}). Continue?",
+                )
+                if reply != QMessageBox.StandardButton.Yes:
+                    return
+
             filename = QFileDialog.getSaveFileName(self, "Save PDF File", "", "PDF Files (*.pdf)")
             
             if filename[0] != "":
@@ -2475,8 +2966,16 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 else:
                     opener ="open" if sys.platform == "darwin" else "xdg-open"
                     subprocess.call([opener, filename[0]])
-                                
-              
+
+        else:
+            QMessageBox.information(
+                self,
+                "PDF Not Available",
+                "Saving as PDF is not available for this window.",
+                QMessageBox.StandardButton.Ok,
+            )
+
+
     def CreateSpeciesList(self): 
         # Create Filtered List button was clicked
         # create filtered species list child
@@ -2488,14 +2987,16 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             
         
         # get the current filter settings in a list to pass to child
-        filter = self.GetFilter()
-        
-        # create child window 
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
+
+        # create child window
         sub = code_Lists.Lists()
-        
+
         # save the MDI window as the parent for future use in the child
         sub.mdiParent = self
-        
+
         # call the child's fill routine, passing the filter settings list
         if sub.FillSpecies(filter) is True:
             
@@ -2517,7 +3018,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()
             return
 
-        filter = self.GetFilter()
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
         if filter.getLocationType() != "Location" or not filter.getLocationName():
             QMessageBox.information(
                 self,
@@ -2543,8 +3046,10 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             return
         
         
-        filter = self.GetFilter()
-        # create new Location Totals child window        
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
+        # create new Location Totals child window
         sub = code_LocationTotals.LocationTotals()
 
         # save the MDI window as the parent for future use in the child        
@@ -2639,14 +3144,16 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             return
         
         
-        filter = self.GetFilter()
-        # create new Location Totals child window        
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
+        # create new Location Totals child window
         sub = code_Web.Web()
 
-        # save the MDI window as the parent for future use in the child        
-        sub.mdiParent = self        
+        # save the MDI window as the parent for future use in the child
+        sub.mdiParent = self
 
-        # call the child's routine to fill it with data        
+        # call the child's routine to fill it with data
         if sub.LoadLocationsMap(filter) is True:
             
             # add and position the child to our MDI area
@@ -2669,14 +3176,18 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             return
         
 
-        # create new Date Totals child window        
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
+
+        # create new Date Totals child window
         sub = code_DateTotals.DateTotals()
 
-        # save the MDI window as the parent for future use in the child        
-        sub.mdiParent = self 
-        
+        # save the MDI window as the parent for future use in the child
+        sub.mdiParent = self
+
         # call the child's routine to fill it with data
-        if sub.FillDateTotals(self.GetFilter()) is True:
+        if sub.FillDateTotals(filter) is True:
 
             # add and position the child to our MDI area
             self.mdiArea.addSubWindow(sub)
@@ -2699,10 +3210,14 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             return
 
 
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
+
         sub = code_Graphs.Graphs()
         sub.mdiParent = self
 
-        if sub.FillGraph(self.GetFilter(), "bar") is True:
+        if sub.FillGraph(filter, "bar") is True:
             self.mdiArea.addSubWindow(sub)
             self.PositionChildWindow(sub, self)
             sub.show()
@@ -2718,11 +3233,14 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()
             return
 
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
 
         sub = code_Graphs.Graphs()
         sub.mdiParent = self
 
-        if sub.FillGraph(self.GetFilter(), "totalchecklists") is True:
+        if sub.FillGraph(filter, "totalchecklists") is True:
             self.mdiArea.addSubWindow(sub)
             self.PositionChildWindow(sub, self)
             sub.show()
@@ -2738,11 +3256,14 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()
             return
 
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
 
         sub = code_Graphs.Graphs()
         sub.mdiParent = self
 
-        if sub.FillGraph(self.GetFilter(), "totallocations") is True:
+        if sub.FillGraph(filter, "totallocations") is True:
             self.mdiArea.addSubWindow(sub)
             self.PositionChildWindow(sub, self)
             sub.show()
@@ -2758,11 +3279,14 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()
             return
 
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
 
         sub = code_Graphs.Graphs()
         sub.mdiParent = self
 
-        if sub.FillGraph(self.GetFilter(), "cumulative") is True:
+        if sub.FillGraph(filter, "cumulative") is True:
             self.mdiArea.addSubWindow(sub)
             self.PositionChildWindow(sub, self)
             sub.show()
@@ -2778,11 +3302,14 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()
             return
 
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
 
         sub = code_Graphs.Graphs()
         sub.mdiParent = self
 
-        if sub.FillGraph(self.GetFilter(), "cumulativelocations") is True:
+        if sub.FillGraph(filter, "cumulativelocations") is True:
             self.mdiArea.addSubWindow(sub)
             self.PositionChildWindow(sub, self)
             sub.show()
@@ -2798,11 +3325,14 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()
             return
 
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
 
         sub = code_Graphs.Graphs()
         sub.mdiParent = self
 
-        if sub.FillGraph(self.GetFilter(), "cumulativefamilies") is True:
+        if sub.FillGraph(filter, "cumulativefamilies") is True:
             self.mdiArea.addSubWindow(sub)
             self.PositionChildWindow(sub, self)
             sub.show()
@@ -2818,11 +3348,14 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()
             return
 
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
 
         sub = code_Graphs.Graphs()
         sub.mdiParent = self
 
-        if sub.FillGraph(self.GetFilter(), "heatmap") is True:
+        if sub.FillGraph(filter, "heatmap") is True:
             self.mdiArea.addSubWindow(sub)
             self.PositionChildWindow(sub, self)
             sub.show()
@@ -2838,11 +3371,14 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()
             return
 
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
 
         sub = code_Graphs.Graphs()
         sub.mdiParent = self
 
-        if sub.FillGraph(self.GetFilter(), "accumulation") is True:
+        if sub.FillGraph(filter, "accumulation") is True:
             self.mdiArea.addSubWindow(sub)
             self.PositionChildWindow(sub, self)
             sub.show()
@@ -2859,11 +3395,14 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()
             return
 
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
 
         sub = code_Graphs.Graphs()
         sub.mdiParent = self
 
-        if sub.FillGraph(self.GetFilter(), "locations") is True:
+        if sub.FillGraph(filter, "locations") is True:
             self.mdiArea.addSubWindow(sub)
             self.PositionChildWindow(sub, self)
             sub.show()
@@ -2879,10 +3418,14 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()
             return
 
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
+
         sub = code_Graphs.Graphs()
         sub.mdiParent = self
 
-        if sub.FillGraph(self.GetFilter(), "ytdreport") is True:
+        if sub.FillGraph(filter, "ytdreport") is True:
             self.mdiArea.addSubWindow(sub)
             self.PositionChildWindow(sub, self)
             sub.show()
@@ -2898,10 +3441,14 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()
             return
 
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
+
         sub = code_Graphs.Graphs()
         sub.mdiParent = self
 
-        if sub.FillGraph(self.GetFilter(), "ytdlocations") is True:
+        if sub.FillGraph(filter, "ytdlocations") is True:
             self.mdiArea.addSubWindow(sub)
             self.PositionChildWindow(sub, self)
             sub.show()
@@ -2917,10 +3464,14 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()
             return
 
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
+
         sub = code_Graphs.Graphs()
         sub.mdiParent = self
 
-        if sub.FillGraph(self.GetFilter(), "ytdchecklists") is True:
+        if sub.FillGraph(filter, "ytdchecklists") is True:
             self.mdiArea.addSubWindow(sub)
             self.PositionChildWindow(sub, self)
             sub.show()
@@ -2939,7 +3490,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         sub = code_Graphs.Graphs()
         sub.mdiParent = self
 
-        if sub.FillGraph(self.GetFilter(), "ytdphotos") is True:
+        if sub.FillGraph(self.GetPhotoFilter(), "ytdphotos") is True:
             self.mdiArea.addSubWindow(sub)
             self.PositionChildWindow(sub, self)
             sub.show()
@@ -2958,7 +3509,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         sub = code_Graphs.Graphs()
         sub.mdiParent = self
 
-        if sub.FillGraph(self.GetFilter(), "photopie") is True:
+        if sub.FillGraph(self.GetPhotoFilter(), "photopie") is True:
             self.mdiArea.addSubWindow(sub)
             self.PositionChildWindow(sub, self)
             sub.show()
@@ -2976,7 +3527,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         sub = code_Graphs.Graphs()
         sub.mdiParent = self
 
-        if sub.FillGraph(self.GetFilter(), "totalphotos") is True:
+        if sub.FillGraph(self.GetPhotoFilter(), "totalphotos") is True:
             self.mdiArea.addSubWindow(sub)
             self.PositionChildWindow(sub, self)
             sub.show()
@@ -2994,7 +3545,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         sub = code_Graphs.Graphs()
         sub.mdiParent = self
 
-        if sub.FillGraph(self.GetFilter(), "photoaccumulation") is True:
+        if sub.FillGraph(self.GetPhotoFilter(), "photoaccumulation") is True:
             self.mdiArea.addSubWindow(sub)
             self.PositionChildWindow(sub, self)
             sub.show()
@@ -3012,7 +3563,127 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         sub = code_Graphs.Graphs()
         sub.mdiParent = self
 
-        if sub.FillGraph(self.GetFilter(), "cumulativephotos") is True:
+        if sub.FillGraph(self.GetPhotoFilter(), "cumulativephotos") is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+            QTimer.singleShot(0, sub.scaleMe)
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+
+    def createRecordingsSpeciesGallery(self):
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+        filter = self.GetRecordingsFilter()
+        sub = code_Web.Web()
+        sub.mdiParent = self
+        if sub.loadAudioSpeciesGallery(filter) is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+
+    def createGeolocatedRecordingsMap(self):
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+        filter = self.GetRecordingsFilter()
+        sub = code_Web.Web()
+        sub.mdiParent = self
+        if sub.loadGeolocatedRecordingsMap(filter) is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+
+    def createAnimatedRecordingSequenceMap(self):
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+        filter = self.GetRecordingsFilter()
+        sub = code_Web.Web()
+        sub.mdiParent = self
+        if sub.loadAnimatedRecordingSequenceMap(filter) is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+
+    def CreateYTDRecordings(self):
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+        sub = code_Graphs.Graphs()
+        sub.mdiParent = self
+        if sub.FillGraph(self.GetRecordingsFilter(), "ytdrecordings") is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+            QTimer.singleShot(0, sub.scaleMe)
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+
+    def CreateRecordingsPieChart(self):
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+        sub = code_Graphs.Graphs()
+        sub.mdiParent = self
+        if sub.FillGraph(self.GetRecordingsFilter(), "recordingspie") is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+            QTimer.singleShot(0, sub.scaleMe)
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+
+    def CreateTotalRecordingsChart(self):
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+        sub = code_Graphs.Graphs()
+        sub.mdiParent = self
+        if sub.FillGraph(self.GetRecordingsFilter(), "totalrecordings") is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+            QTimer.singleShot(0, sub.scaleMe)
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+
+    def CreateRecordingsAccumulationChart(self):
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+        sub = code_Graphs.Graphs()
+        sub.mdiParent = self
+        if sub.FillGraph(self.GetRecordingsFilter(), "recordingsaccumulation") is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+            QTimer.singleShot(0, sub.scaleMe)
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+
+    def CreateCumulativeRecordingsChart(self):
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+        sub = code_Graphs.Graphs()
+        sub.mdiParent = self
+        if sub.FillGraph(self.GetRecordingsFilter(), "cumulativerecordings") is True:
             self.mdiArea.addSubWindow(sub)
             self.PositionChildWindow(sub, self)
             sub.show()
@@ -3027,11 +3698,14 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()
             return
 
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
 
         sub = code_Graphs.Graphs()
         sub.mdiParent = self
 
-        if sub.FillGraph(self.GetFilter(), "scatter") is True:
+        if sub.FillGraph(filter, "scatter") is True:
             self.mdiArea.addSubWindow(sub)
             self.PositionChildWindow(sub, self)
             sub.show()
@@ -3047,7 +3721,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()
             return
 
-        f = self.GetFilter()
+        f = self.GetGeneralFilter()
+        if f is None:
+            return
         if (f.getSpeciesName() == "" and f.getCommonNameSearch() == ""
                 and f.getFamily() == "" and f.getOrder() == ""):
             reply = code_Stylesheet.question(
@@ -3082,11 +3758,14 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()
             return
 
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
 
         sub = code_Graphs.Graphs()
         sub.mdiParent = self
 
-        if sub.FillGraph(self.GetFilter(), "foy") is True:
+        if sub.FillGraph(filter, "foy") is True:
             self.mdiArea.addSubWindow(sub)
             self.PositionChildWindow(sub, self)
             sub.show()
@@ -3102,11 +3781,14 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()
             return
 
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
 
         sub = code_Graphs.Graphs()
         sub.mdiParent = self
 
-        if sub.FillGraph(self.GetFilter(), "loy") is True:
+        if sub.FillGraph(filter, "loy") is True:
             self.mdiArea.addSubWindow(sub)
             self.PositionChildWindow(sub, self)
             sub.show()
@@ -3122,11 +3804,14 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()
             return
 
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
 
         sub = code_Graphs.Graphs()
         sub.mdiParent = self
 
-        if sub.FillGraph(self.GetFilter(), "locationscatter") is True:
+        if sub.FillGraph(filter, "locationscatter") is True:
             self.mdiArea.addSubWindow(sub)
             self.PositionChildWindow(sub, self)
             sub.show()
@@ -3142,11 +3827,14 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()
             return
 
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
 
         sub = code_Graphs.Graphs()
         sub.mdiParent = self
 
-        if sub.FillGraph(self.GetFilter(), "speciesscatter") is True:
+        if sub.FillGraph(filter, "speciesscatter") is True:
             self.mdiArea.addSubWindow(sub)
             self.PositionChildWindow(sub, self)
             sub.show()
@@ -3162,11 +3850,14 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()
             return
 
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
 
         sub = code_Graphs.Graphs()
         sub.mdiParent = self
 
-        if sub.FillGraph(self.GetFilter(), "indivpie") is True:
+        if sub.FillGraph(filter, "indivpie") is True:
             self.mdiArea.addSubWindow(sub)
             self.PositionChildWindow(sub, self)
             sub.show()
@@ -3182,11 +3873,14 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()
             return
 
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
 
         sub = code_Graphs.Graphs()
         sub.mdiParent = self
 
-        if sub.FillGraph(self.GetFilter(), "locationchecklistpie") is True:
+        if sub.FillGraph(filter, "locationchecklistpie") is True:
             self.mdiArea.addSubWindow(sub)
             self.PositionChildWindow(sub, self)
             sub.show()
@@ -3202,11 +3896,14 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoFile()
             return
 
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
 
         sub = code_Graphs.Graphs()
         sub.mdiParent = self
 
-        if sub.FillGraph(self.GetFilter(), "familypie") is True:
+        if sub.FillGraph(filter, "familypie") is True:
             self.mdiArea.addSubWindow(sub)
             self.PositionChildWindow(sub, self)
             sub.show()
@@ -3230,11 +3927,13 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         # save the MDI window as the parent for future use in the child        
         sub.mdiParent = self
         
-        # get filter 
-        filter = self.GetFilter()
-        
+        # get filter
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
+
         # call the child's routine to fill it with data
-        # these must be called in this exact order, or else the pic chart won't draw 
+        # these must be called in this exact order, or else the pic chart won't draw
         # large enough to fill its area.  I don't really know why.
         if sub.FillFamilies(filter) is True:
         
@@ -3301,8 +4000,10 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             return
 
         
-        filter = self.GetFilter()
-                
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
+
         # create a new list child window
         sub = code_Lists.Lists()
         
@@ -3487,12 +4188,37 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             lastDayOfThisMonth = firstOfNextMonth + datetime.timedelta(days = -1)
             # convert to yyyy-mm-dd string
             endDate = (
-                                     str(lastDayOfThisMonth.year) 
-                                  + "-" 
-                                  + str(lastDayOfThisMonth.month) 
-                                  + "-" 
+                                     str(lastDayOfThisMonth.year)
+                                  + "-"
+                                  + str(lastDayOfThisMonth.month)
+                                  + "-"
                                   + str(lastDayOfThisMonth.day)
                                   )
+
+        # This Week runs Monday through Sunday of the week containing today.
+        if self.cboDateOptions.currentText() == "This Week (M-Su)":
+
+            now = datetime.datetime.now()
+
+            # weekday() is 0=Monday .. 6=Sunday
+            monday = now + datetime.timedelta(days = -now.weekday())
+            sunday = monday + datetime.timedelta(days = 6)
+
+            startDate = (
+                                      str(monday.year)
+                                   + "-"
+                                   + str(monday.month)
+                                   + "-"
+                                   + str(monday.day)
+                                   )
+
+            endDate = (
+                                      str(sunday.year)
+                                   + "-"
+                                   + str(sunday.month)
+                                   + "-"
+                                   + str(sunday.day)
+                                   )
 
         # add leading 0 to date digit strings if less than two digits
         # only take action if startDate has a value
@@ -3823,12 +4549,58 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         if self.cboSpeciesHasPhoto.currentText() == "Photographed":
             validPhotoSpecies = self.db.GetSpeciesWithPhotos(newFilter)
             newFilter.setValidPhotoSpecies(validPhotoSpecies)
-        
+
         if self.cboSpeciesHasPhoto.currentText() == "Not photographed":
             validPhotoSpecies = self.db.GetSpeciesWithoutPhotos(newFilter)
             newFilter.setValidPhotoSpecies(validPhotoSpecies)
-        
+
+        # audio filter fields
+        if self.cboStartRecordingsRatingRange.currentIndex() != 0:
+            newFilter.setStartRecordingRating(self.cboStartRecordingsRatingRange.currentText())
+        if self.cboEndRecordingsRatingRange.currentIndex() != 0:
+            newFilter.setEndRecordingRating(self.cboEndRecordingsRatingRange.currentText())
+        if self.cboSpeciesHasRecording.currentIndex() != 0:
+            newFilter.setSpeciesHasRecording(self.cboSpeciesHasRecording.currentText())
+        if self.cboChannels.currentIndex() != 0:
+            newFilter.setChannels(self.cboChannels.currentText())
+        if self.cboStartRecordingsDurationRange.currentIndex() != 0:
+            newFilter.setStartDuration(self.cboStartRecordingsDurationRange.currentText())
+        if self.cboEndRecordingsDurationRange.currentIndex() != 0:
+            newFilter.setEndDuration(self.cboEndRecordingsDurationRange.currentText())
+
+        if self.cboSpeciesHasRecording.currentText() == "Recorded":
+            newFilter.setValidRecordingSpecies(self.db.GetSpeciesWithRecordings(newFilter))
+        if self.cboSpeciesHasRecording.currentText() == "Not recorded":
+            newFilter.setValidRecordingSpecies(self.db.GetSpeciesWithoutRecordings(newFilter))
+
         return(newFilter)
+
+    def GetPhotoFilter(self):
+        """Filter for Photo-menu queries: recording filter fields are cleared."""
+        f = self.GetFilter()
+        f.clearRecordingFilter()
+        return f
+
+    def GetRecordingsFilter(self):
+        """Filter for Recordings-menu queries: photo filter fields are cleared."""
+        f = self.GetFilter()
+        f.clearPhotoFilter()
+        return f
+
+    def GetGeneralFilter(self):
+        """Filter for general queries. Shows a conflict dialog if both media sections
+        have active settings and lets the user choose which to apply.
+        Returns None if the user cancels."""
+        f = self.GetFilter()
+        if f.hasPhotoFilter() and f.hasRecordingFilter():
+            choice = code_Stylesheet.mediaFilterConflict(self)
+            if choice == "photos":
+                f.clearRecordingFilter()
+            elif choice == "recordings":
+                f.clearPhotoFilter()
+            else:
+                return None
+        return f
                            
                                       
     def updateEXIFDataForAllPhotos(self):
@@ -3879,6 +4651,37 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         )
         
         
+    def updateRecordingDataForAll(self):
+        filter = code_Filter.Filter()
+        sightings = self.db.GetSightingsWithRecordings(filter)
+
+        updated = 0
+        skipped = 0
+        for s in sightings:
+            for i, a in enumerate(s["audio"]):
+                fn = a["fileName"]
+                if not os.path.isfile(fn):
+                    skipped += 1
+                    continue
+                fresh = self.db.getRecordingData(fn)
+                fresh["rating"] = a.get("rating", "0")
+                s["audio"][i] = fresh
+                updated += 1
+
+        self.db.refreshRecordingsLists()
+        self.fillRecordingsComboBoxes()
+
+        self.db.photosNeedSaving = True
+        self.checkIfPhotoDataNeedSaving()
+
+        msg = f"Updated recording data for {updated} recording(s)."
+        if skipped:
+            msg += f"\n\n{skipped} file(s) were not found on disk and were not updated."
+        QMessageBox.information(
+            self, "Updated Recording Data", msg, QMessageBox.StandardButton.Ok
+        )
+
+
     def SeasonalRangeClicked(self):
         self.cboSeasonalRangeOptions.setCurrentIndex(1)
         
@@ -3921,15 +4724,37 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.mdiArea.closeAllSubWindows()
 
 
+    def _closePhotoDependentWindows(self):
+        """Close every child window that displays data from the media catalog."""
+        _PHOTO_GRAPH_TYPES = {"totalphotos", "ytdphotos", "photopie",
+                              "photoaccumulation", "cumulativephotos"}
+        _PHOTO_MAP_TITLES  = {"Geolocated Photos", "Animated Sequence Map"}
+
+        for w in list(self.mdiArea.subWindowList()):
+            if isinstance(w, (code_Photos.Photos,
+                               code_SpeciesGallery.SpeciesGallery,
+                               code_ManagePhotos.ManagePhotos)):
+                w.close()
+            elif w.objectName() == "frmEnlargement":
+                w.close()
+            elif (isinstance(w, code_Web.Web) and
+                  getattr(w, "title", "") in _PHOTO_MAP_TITLES):
+                w.close()
+            elif (isinstance(w, code_Graphs.Graphs) and
+                  getattr(w, "_chart_type", "") in _PHOTO_GRAPH_TYPES):
+                w.close()
+
+
     def HideMainWindowOptions(self):
         self.clearStandardFilter()
-        self.clearPhotoFilter()
+        self.clearMediaFilter()
         self.dckFilter.setVisible(False)
-        self.dckPhotoFilter.setVisible(False)
+        self.dckMediaFilter.setVisible(False)
         self.actionClose.setVisible(False)
         self.menuPhotos.menuAction().setVisible(False)
+        self.menuRecordings.menuAction().setVisible(False)
         self._hidePhotoCatalogMenuItems()
-        
+
 
     def ShowMainWindowOptions(self):
         self.dckFilter.setVisible(True)
@@ -3961,7 +4786,13 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         endIso = filter.getEndIso()
         startFocalLength = filter.getStartFocalLength()
         endFocalLength = filter.getEndFocalLength()
-        
+        speciesRecorded = filter.getSpeciesHasRecording()
+        channels = filter.getChannels()
+        startRecordingRating = filter.getStartRecordingRating()
+        endRecordingRating = filter.getEndRecordingRating()
+        startDuration = filter.getStartDuration()
+        endDuration = filter.getEndDuration()
+
         # set main location label, using "All Locations" if none others are selected
         if locationName == "":   
             sub.lblLocation.setText("All Locations")
@@ -4068,7 +4899,36 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             detailsText = detailsText + "; ISO: from " + startIso
         if startIso == "" and endIso != "":
             detailsText = detailsText + "; ISO: to " + endIso
-                        
+
+        # recording (audio) filter fields
+        if speciesRecorded == "Recorded":
+            detailsText = detailsText + "; Recorded species"
+        if speciesRecorded == "Not recorded":
+            detailsText = detailsText + "; Unrecorded species"
+
+        if channels != "":
+            detailsText = detailsText + "; " + channels
+
+        if startRecordingRating != "" and endRecordingRating != "":
+            if startRecordingRating == endRecordingRating:
+                detailsText = detailsText + "; Recording rating: " + startRecordingRating
+            else:
+                detailsText = detailsText + "; Recording rating: " + startRecordingRating + " to " + endRecordingRating
+        if startRecordingRating != "" and endRecordingRating == "":
+            detailsText = detailsText + "; Recording rating: from " + startRecordingRating
+        if startRecordingRating == "" and endRecordingRating != "":
+            detailsText = detailsText + "; Recording rating: to " + endRecordingRating
+
+        if startDuration != "" and endDuration != "":
+            if startDuration == endDuration:
+                detailsText = detailsText + "; Duration: " + startDuration
+            else:
+                detailsText = detailsText + "; Duration: " + startDuration + " to " + endDuration
+        if startDuration != "" and endDuration == "":
+            detailsText = detailsText + "; Duration: from " + startDuration
+        if startDuration == "" and endDuration != "":
+            detailsText = detailsText + "; Duration: to " + endDuration
+
         #remove leading "; "
         dateText = dateText[2:]
         detailsText = detailsText[2:]
@@ -4146,16 +5006,32 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             return
 
         if activeWindow.objectName() in ([
-            "frmSpeciesList", 
-            "frmFamilies", 
-            "frmCompare", 
-            "frmDateTotals", 
-            "frmLocationTotals", 
-            "frmWeb", 
-            "frmIndividual", 
+            "frmSpeciesList",
+            "frmFamilies",
+            "frmCompare",
+            "frmDateTotals",
+            "frmLocationTotals",
+            "frmWeb",
+            "frmIndividual",
             "frmLocation",
-            "frmBigReport"
+            "frmBigReport",
+            "frmPhotos",
+            "frmSpeciesGallery",
             ]):
+
+            if activeWindow.objectName() in ("frmPhotos", "frmSpeciesGallery"):
+                n = (len(activeWindow.photoList)
+                     if activeWindow.objectName() == "frmPhotos"
+                     else len(activeWindow._galleryItems))
+                pages = ceil(n / 6)
+                reply = code_Stylesheet.question(
+                    self,
+                    "Confirm Print",
+                    f"This will generate approximately {pages} page{'s' if pages != 1 else ''} "
+                    f"({n} photo{'s' if n != 1 else ''}). Continue?",
+                )
+                if reply != QMessageBox.StandardButton.Yes:
+                    return
 
             # create a QTextDocument in memory to hold and render our content
             document = QTextDocument()
@@ -4176,7 +5052,15 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             if dialog.exec():
 
                 # send the html to the physical printer
-                document.print_(printer)            
+                document.print_(printer)
+
+        else:
+            QMessageBox.information(
+                self,
+                "Printing Not Available",
+                "Printing is not available for this window.",
+                QMessageBox.StandardButton.Ok,
+            )
 
 
     def ResetMainWindow(self):
@@ -4184,9 +5068,10 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.CloseAllWindows()
         self.clearAllFilters()
         self.hideStandardFilter()
-        self.hidePhotoFilter()
+        self.hideMediaFilter()
         self.actionClose.setVisible(False)
         self.menuPhotos.menuAction().setVisible(False)
+        self.menuRecordings.menuAction().setVisible(False)
         self._hidePhotoCatalogMenuItems()
         self.db.ClearDatabase()
 
@@ -4455,16 +5340,16 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             elif thisOption == "Select Year":
                 self.highlightFilterElement(self.cboDateOptions)
                 self.highlightFilterElement(self.cboYear)
-                self.unhighlightFilterElement(self.calStartDate)
-                self.unhighlightFilterElement(self.calEndDate)
+                self.highlightFilterElement(self.calStartDate)
+                self.highlightFilterElement(self.calEndDate)
                 year = self.cboYear.currentText()
                 if year:
-                    self.setDateFilter(year + "-01-01", year + "-12-31")
+                    self.setDateFilter(year + "-01-01", year + "-12-31", setCombo=False)
 
             else:
                 self.highlightFilterElement(self.cboDateOptions)
-                self.unhighlightFilterElement(self.calStartDate)
-                self.unhighlightFilterElement(self.calEndDate)
+                self.highlightFilterElement(self.calStartDate)
+                self.highlightFilterElement(self.calEndDate)
 
                 now = datetime.datetime.now()
                 if thisOption == "Today":
@@ -4489,7 +5374,12 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                     dayInNextMonth = now.replace(day=28) + datetime.timedelta(days=4)
                     lastDay = dayInNextMonth.replace(day=1) + datetime.timedelta(days=-1)
                     endDate = lastDay.strftime("%Y-%m-%d")
-                self.setDateFilter(startDate, endDate)
+                elif thisOption == "This Week (M-Su)":
+                    monday = now + datetime.timedelta(days=-now.weekday())
+                    sunday = monday + datetime.timedelta(days=6)
+                    startDate = monday.strftime("%Y-%m-%d")
+                    endDate = sunday.strftime("%Y-%m-%d")
+                self.setDateFilter(startDate, endDate, setCombo=False)
 
 
     def ComboYearChanged(self):
@@ -4497,7 +5387,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             year = self.cboYear.currentText()
             if year:
                 self.highlightFilterElement(self.cboYear)
-                self.setDateFilter(year + "-01-01", year + "-12-31")
+                self.setDateFilter(year + "-01-01", year + "-12-31", setCombo=False)
 
 
     def ComboFamiliesChanged(self):
@@ -4621,11 +5511,14 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 self.highlightFilterElement(self.cboEndSeasonalRangeDate)
 
             else:
+                # Presets (Spring, Summer, This Month, a specific month, etc.)
+                # populate the Start/End combos with the active range, so they
+                # hold non-default values — highlight them blue to match.
                 self.highlightFilterElement(self.cboSeasonalRangeOptions)
-                self.unhighlightFilterElement(self.cboStartSeasonalRangeMonth)
-                self.unhighlightFilterElement(self.cboStartSeasonalRangeDate)
-                self.unhighlightFilterElement(self.cboEndSeasonalRangeMonth)
-                self.unhighlightFilterElement(self.cboEndSeasonalRangeDate)
+                self.highlightFilterElement(self.cboStartSeasonalRangeMonth)
+                self.highlightFilterElement(self.cboStartSeasonalRangeDate)
+                self.highlightFilterElement(self.cboEndSeasonalRangeMonth)
+                self.highlightFilterElement(self.cboEndSeasonalRangeDate)
 
                 # Compute start/end month index (0=Jan) and day index (0=1st)
                 # for the preset so the dropdowns reflect the active range.
@@ -4773,7 +5666,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             if thisSighting == "All":
                 self.unhighlightFilterElement(self.cboStartRatingRange)
             else:
-                self.highlightPhotoFilterElement(self.cboStartRatingRange)
+                self.highlightMediaFilterElement(self.cboStartRatingRange)
 
 
     def ComboEndRatingRangeChanged(self):
@@ -4789,7 +5682,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             if thisSighting == "All":
                 self.unhighlightFilterElement(self.cboEndRatingRange)
             else:
-                self.highlightPhotoFilterElement(self.cboEndRatingRange)
+                self.highlightMediaFilterElement(self.cboEndRatingRange)
 
 
     def ComboSpeciesHasPhotosChanged(self):
@@ -4799,7 +5692,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             if thisSpecies == "All":
                 self.unhighlightFilterElement(self.cboSpeciesHasPhoto)
             else:
-                self.highlightPhotoFilterElement(self.cboSpeciesHasPhoto)
+                self.highlightMediaFilterElement(self.cboSpeciesHasPhoto)
                 
 
     def ComboCameraChanged(self):
@@ -4809,7 +5702,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             if thisCamera == "All Cameras":
                 self.unhighlightFilterElement(self.cboCamera)
             else:
-                self.highlightPhotoFilterElement(self.cboCamera)
+                self.highlightMediaFilterElement(self.cboCamera)
 
 
     def ComboLensChanged(self):
@@ -4819,7 +5712,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             if thisLens== "All Lenses":
                 self.unhighlightFilterElement(self.cboLens)
             else:
-                self.highlightPhotoFilterElement(self.cboLens)
+                self.highlightMediaFilterElement(self.cboLens)
 
 
     def ComboStartShutterSpeedChanged(self):
@@ -4829,7 +5722,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             if thisShutterSpeed == "All":
                 self.unhighlightFilterElement(self.cboStartShutterSpeedRange)
             else:
-                self.highlightPhotoFilterElement(self.cboStartShutterSpeedRange)
+                self.highlightMediaFilterElement(self.cboStartShutterSpeedRange)
                 
 
     def ComboEndShutterSpeedChanged(self):
@@ -4839,7 +5732,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             if thisShutterSpeed == "All":
                 self.unhighlightFilterElement(self.cboEndShutterSpeedRange)
             else:
-                self.highlightPhotoFilterElement(self.cboEndShutterSpeedRange)
+                self.highlightMediaFilterElement(self.cboEndShutterSpeedRange)
 
 
     def ComboStartApertureChanged(self):
@@ -4849,7 +5742,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             if thisAperture == "All":
                 self.unhighlightFilterElement(self.cboStartApertureRange)
             else:
-                self.highlightPhotoFilterElement(self.cboStartApertureRange)
+                self.highlightMediaFilterElement(self.cboStartApertureRange)
                 
 
     def ComboEndApertureChanged(self):
@@ -4859,7 +5752,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             if thisAperture == "All":
                 self.unhighlightFilterElement(self.cboEndApertureRange)
             else:
-                self.highlightPhotoFilterElement(self.cboEndApertureRange)
+                self.highlightMediaFilterElement(self.cboEndApertureRange)
                 
 
     def ComboStartFocalLengthChanged(self):
@@ -4869,7 +5762,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             if thisFocalLength == "All":
                 self.unhighlightFilterElement(self.cboStartFocalLengthRange)
             else:
-                self.highlightPhotoFilterElement(self.cboStartFocalLengthRange)
+                self.highlightMediaFilterElement(self.cboStartFocalLengthRange)
                 
 
     def ComboEndFocalLengthChanged(self):
@@ -4879,7 +5772,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             if thisFocalLength == "All":
                 self.unhighlightFilterElement(self.cboEndFocalLengthRange)
             else:
-                self.highlightPhotoFilterElement(self.cboEndFocalLengthRange)
+                self.highlightMediaFilterElement(self.cboEndFocalLengthRange)
 
 
     def ComboStartIsoChanged(self):
@@ -4889,17 +5782,77 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             if thisIso == "All":
                 self.unhighlightFilterElement(self.cboStartIsoRange)
             else:
-                self.highlightPhotoFilterElement(self.cboStartIsoRange)
+                self.highlightMediaFilterElement(self.cboStartIsoRange)
                 
 
     def ComboEndIsoChanged(self):
-            
+
             thisIso = self.cboEndIsoRange.currentText()
-            
+
             if thisIso == "All":
                 self.unhighlightFilterElement(self.cboEndIsoRange)
             else:
-                self.highlightPhotoFilterElement(self.cboEndIsoRange)
+                self.highlightMediaFilterElement(self.cboEndIsoRange)
+
+
+    def ComboStartRecordingsRatingRangeChanged(self):
+        startRating = self.cboStartRecordingsRatingRange.currentIndex()
+        endRating   = self.cboEndRecordingsRatingRange.currentIndex()
+        if startRating > endRating:
+            if endRating == 0:
+                self.cboEndRecordingsRatingRange.setCurrentIndex(7)
+            else:
+                self.cboEndRecordingsRatingRange.setCurrentIndex(startRating)
+        if self.cboStartRecordingsRatingRange.currentText() == "All":
+            self.unhighlightFilterElement(self.cboStartRecordingsRatingRange)
+        else:
+            self.highlightRecordingFilterElement(self.cboStartRecordingsRatingRange)
+
+    def ComboEndRecordingsRatingRangeChanged(self):
+        startRating = self.cboStartRecordingsRatingRange.currentIndex()
+        endRating   = self.cboEndRecordingsRatingRange.currentIndex()
+        if startRating > endRating:
+            self.cboStartRecordingsRatingRange.setCurrentIndex(endRating)
+        if self.cboEndRecordingsRatingRange.currentText() == "All":
+            self.unhighlightFilterElement(self.cboEndRecordingsRatingRange)
+        else:
+            self.highlightRecordingFilterElement(self.cboEndRecordingsRatingRange)
+
+    def ComboSpeciesHasRecordingChanged(self):
+        if self.cboSpeciesHasRecording.currentText() == "All":
+            self.unhighlightFilterElement(self.cboSpeciesHasRecording)
+        else:
+            self.highlightRecordingFilterElement(self.cboSpeciesHasRecording)
+
+    def ComboChannelsChanged(self):
+        if self.cboChannels.currentText() == "All":
+            self.unhighlightFilterElement(self.cboChannels)
+        else:
+            self.highlightRecordingFilterElement(self.cboChannels)
+
+    def ComboStartRecordingsDurationChanged(self):
+        startIdx = self.cboStartRecordingsDurationRange.currentIndex()
+        endIdx   = self.cboEndRecordingsDurationRange.currentIndex()
+        if startIdx > endIdx:
+            if endIdx == 0:
+                self.cboEndRecordingsDurationRange.setCurrentIndex(
+                    self.cboEndRecordingsDurationRange.count() - 1)
+            else:
+                self.cboEndRecordingsDurationRange.setCurrentIndex(startIdx)
+        if self.cboStartRecordingsDurationRange.currentText() == "All":
+            self.unhighlightFilterElement(self.cboStartRecordingsDurationRange)
+        else:
+            self.highlightRecordingFilterElement(self.cboStartRecordingsDurationRange)
+
+    def ComboEndRecordingsDurationChanged(self):
+        startIdx = self.cboStartRecordingsDurationRange.currentIndex()
+        endIdx   = self.cboEndRecordingsDurationRange.currentIndex()
+        if startIdx > endIdx:
+            self.cboStartRecordingsDurationRange.setCurrentIndex(endIdx)
+        if self.cboEndRecordingsDurationRange.currentText() == "All":
+            self.unhighlightFilterElement(self.cboEndRecordingsDurationRange)
+        else:
+            self.highlightRecordingFilterElement(self.cboEndRecordingsDurationRange)
 
 
     def createChoroplethUSStates(self):
@@ -4910,14 +5863,16 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             return
         
         
-        filter = self.GetFilter()
-        # create new Location Totals child window        
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
+        # create new Location Totals child window
         sub = code_Web.Web()
 
-        # save the MDI window as the parent for future use in the child        
-        sub.mdiParent = self        
+        # save the MDI window as the parent for future use in the child
+        sub.mdiParent = self
 
-        # call the child's routine to fill it with data        
+        # call the child's routine to fill it with data
         if sub.loadChoroplethUSStates(filter) is True:
             
             # add and position the child to our MDI area
@@ -4939,7 +5894,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             return
 
 
-        filter = self.GetFilter()
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
         sub = code_Web.Web()
         sub.mdiParent = self
 
@@ -4960,7 +5917,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             return
 
 
-        filter = self.GetFilter()
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
         sub = code_Web.Web()
         sub.mdiParent = self
 
@@ -4982,7 +5941,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             return
 
 
-        filter = self.GetFilter()
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
         sub = code_Web.Web()
         sub.mdiParent = self
 
@@ -5004,14 +5965,16 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             return
         
         
-        filter = self.GetFilter()
-        # create new Location Totals child window        
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
+        # create new Location Totals child window
         sub = code_Web.Web()
 
-        # save the MDI window as the parent for future use in the child        
-        sub.mdiParent = self        
+        # save the MDI window as the parent for future use in the child
+        sub.mdiParent = self
 
-        # call the child's routine to fill it with data        
+        # call the child's routine to fill it with data
         if sub.loadChoroplethUSCounties(filter) is True:
             
             # add and position the child to our MDI area
@@ -5034,14 +5997,16 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             return
         
         
-        filter = self.GetFilter()
-        # create new Location Totals child window        
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
+        # create new Location Totals child window
         sub = code_Web.Web()
 
-        # save the MDI window as the parent for future use in the child        
-        sub.mdiParent = self        
+        # save the MDI window as the parent for future use in the child
+        sub.mdiParent = self
 
-        # call the child's routine to fill it with data        
+        # call the child's routine to fill it with data
         if sub.loadChoroplethWorldCountries(filter) is True:
 
             # add and position the child to our MDI area
@@ -5060,7 +6025,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         if MainWindow.db.eBirdFileOpenFlag is not True:
             self.CreateMessageNoFile()
             return
-        filter = self.GetFilter()
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
         sub = code_Web.Web()
         sub.mdiParent = self
         if sub.loadChoroplethUSStates(filter, mode='checklists') is True:
@@ -5076,7 +6043,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         if MainWindow.db.eBirdFileOpenFlag is not True:
             self.CreateMessageNoFile()
             return
-        filter = self.GetFilter()
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
         sub = code_Web.Web()
         sub.mdiParent = self
         if sub.loadChoroplethUSCounties(filter, mode='checklists') is True:
@@ -5092,7 +6061,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         if MainWindow.db.eBirdFileOpenFlag is not True:
             self.CreateMessageNoFile()
             return
-        filter = self.GetFilter()
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
         sub = code_Web.Web()
         sub.mdiParent = self
         if sub.loadChoroplethCanadaProvinces(filter, mode='checklists') is True:
@@ -5108,7 +6079,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         if MainWindow.db.eBirdFileOpenFlag is not True:
             self.CreateMessageNoFile()
             return
-        filter = self.GetFilter()
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
         sub = code_Web.Web()
         sub.mdiParent = self
         if sub.loadChoroplethIndiaStates(filter, mode='checklists') is True:
@@ -5124,7 +6097,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         if MainWindow.db.eBirdFileOpenFlag is not True:
             self.CreateMessageNoFile()
             return
-        filter = self.GetFilter()
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
         sub = code_Web.Web()
         sub.mdiParent = self
         if sub.loadChoroplethGBCounties(filter, mode='checklists') is True:
@@ -5140,7 +6115,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         if MainWindow.db.eBirdFileOpenFlag is not True:
             self.CreateMessageNoFile()
             return
-        filter = self.GetFilter()
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
         sub = code_Web.Web()
         sub.mdiParent = self
         if sub.loadChoroplethWorldCountries(filter, mode='checklists') is True:
@@ -5156,7 +6133,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         if MainWindow.db.eBirdFileOpenFlag is not True:
             self.CreateMessageNoFile()
             return
-        filter = self.GetFilter()
+        filter = self.GetPhotoFilter()
         sub = code_Web.Web()
         sub.mdiParent = self
         if sub.loadGeolocatedPhotosMap(filter) is True:
@@ -5172,7 +6149,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         if MainWindow.db.eBirdFileOpenFlag is not True:
             self.CreateMessageNoFile()
             return
-        filter = self.GetFilter()
+        filter = self.GetPhotoFilter()
         sub = code_Web.Web()
         sub.mdiParent = self
         if sub.loadAnimatedPhotoSequenceMap(filter) is True:
@@ -5189,7 +6166,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         if MainWindow.db.eBirdFileOpenFlag is not True:
             self.CreateMessageNoFile()
             return
-        filter = self.GetFilter()
+        filter = self.GetPhotoFilter()
         dlg = code_Slideshow.SlideshowDialog(self)
         if dlg.exec() != code_Slideshow.QDialog.DialogCode.Accepted:
             return
@@ -5209,7 +6186,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         if MainWindow.db.eBirdFileOpenFlag is not True:
             self.CreateMessageNoFile()
             return
-        filter = self.GetFilter()
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
         sub = code_Web.Web()
         sub.mdiParent = self
         if sub.loadLifeListMap(filter) is True:
@@ -5225,7 +6204,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         if MainWindow.db.eBirdFileOpenFlag is not True:
             self.CreateMessageNoFile()
             return
-        filter = self.GetFilter()
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
         sub = code_Web.Web()
         sub.mdiParent = self
         if sub.loadFirstSightingsMap(filter) is True:
@@ -5241,7 +6222,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         if MainWindow.db.eBirdFileOpenFlag is not True:
             self.CreateMessageNoFile()
             return
-        filter = self.GetFilter()
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
         sub = code_Web.Web()
         sub.mdiParent = self
         if sub.loadEffortMap(filter, mode='time') is True:
@@ -5256,7 +6239,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         if MainWindow.db.eBirdFileOpenFlag is not True:
             self.CreateMessageNoFile()
             return
-        filter = self.GetFilter()
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
         sub = code_Web.Web()
         sub.mdiParent = self
         if sub.loadEffortMap(filter, mode='checklists') is True:
@@ -5272,7 +6257,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         if MainWindow.db.eBirdFileOpenFlag is not True:
             self.CreateMessageNoFile()
             return
-        filter = self.GetFilter()
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
         sub = code_Web.Web()
         sub.mdiParent = self
         if sub.loadBubbleMap(filter, mode='species') is True:
@@ -5287,7 +6274,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         if MainWindow.db.eBirdFileOpenFlag is not True:
             self.CreateMessageNoFile()
             return
-        filter = self.GetFilter()
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
         sub = code_Web.Web()
         sub.mdiParent = self
         if sub.loadBubbleMap(filter, mode='individuals') is True:
@@ -5310,7 +6299,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 QMessageBox.StandardButton.Ok,
             )
             return
-        filter = self.GetFilter()
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
         sub = code_Web.Web()
         sub.mdiParent = self
         if sub.loadNotableMap(filter) is True:
@@ -5328,14 +6319,16 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             return
         
         
-        filter = self.GetFilter()
-        # create new Location Totals child window        
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
+        # create new Location Totals child window
         sub = code_Web.Web()
 
-        # save the MDI window as the parent for future use in the child        
-        sub.mdiParent = self        
+        # save the MDI window as the parent for future use in the child
+        sub.mdiParent = self
 
-        # call the child's routine to fill it with data        
+        # call the child's routine to fill it with data
         if sub.loadChoroplethWorldSubregion1(filter) is True:
             
             # add and position the child to our MDI area
@@ -5360,13 +6353,23 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
         if widget.objectName()[0:3] == "cal":
             red = str(code_Stylesheet.mdiAreaColor.red())
-            blue = str(code_Stylesheet.mdiAreaColor.blue())
             green = str(code_Stylesheet.mdiAreaColor.green())
-            widget.setStyleSheet("QDateTimeEdit { background-color: rgb(" + red + "," + green + "," + blue + ")}")
+            blue = str(code_Stylesheet.mdiAreaColor.blue())
+            bg = "rgb(" + red + "," + green + "," + blue + ")"
+            # The displayed date text lives in QDateTimeEdit's internal QLineEdit
+            # (objectName "qt_spinbox_lineedit").  The global "QWidget { color }"
+            # rule matches that line edit directly and out-specifies an inherited
+            # "QDateTimeEdit { color }", so we must colour the line edit itself.
+            widget.setStyleSheet(
+                "QDateTimeEdit { background-color: " + bg + "; color: " + color + "; }"
+                "QDateTimeEdit QLineEdit { color: " + color + "; background: transparent; }"
+            )
 
-    def highlightPhotoFilterElement(self, widget):
+    def highlightMediaFilterElement(self, widget):
         self.highlightFilterElement(widget, color=code_Stylesheet.PHOTO_PRIMARY)
 
+    def highlightRecordingFilterElement(self, widget):
+        self.highlightFilterElement(widget, color=code_Stylesheet.RECORDINGS_PRIMARY)
 
     def unhighlightFilterElement(self, widget):
         
@@ -5374,12 +6377,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
  
                 
-    def closeEvent(self, event):
-        # Remove the custom toolbar style before Qt teardown so PySide6's shutdown
-        # sequence cannot call back into a partially-destroyed Python proxy style object.
-        self.toolBar.setStyle(None)
-        event.accept()
-
     def ExitApp(self):
 
         self.checkIfPhotoDataNeedSaving()

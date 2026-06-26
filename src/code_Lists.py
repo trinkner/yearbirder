@@ -316,11 +316,15 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
             lastDateTextWidth = maxWidth
             
             # --- compute fixed widths ---
+            # Reserve room for the sort-indicator arrow plus cell padding so the
+            # Checklists / % of Checklists titles and arrows never overlap, while
+            # keeping the data-based width as a floor.
+            arrowAllowance = int(28 * scaleFactor) + int(20 * scaleFactor)
             w0 = floor(2.5 * taxTextWidth)
             w2 = floor(1.75 * firstDateTextWidth)
             w3 = floor(1.75 * lastDateTextWidth)
-            w4 = floor(1.3 * dateTextWidth)
-            w5 = floor(1.8 * dateTextWidth)
+            w4 = max(floor(1.3 * dateTextWidth), metrics.horizontalAdvance("Checklists") + arrowAllowance)
+            w5 = max(floor(1.8 * dateTextWidth), metrics.horizontalAdvance("% of Checklists") + arrowAllowance)
 
             # give species name column the remaining width
             header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
@@ -349,10 +353,13 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         
         if self.listType == "Locations":
             dateTextWidth = int(metrics.boundingRect("2222-22-22 22:22").width())
-            checklistsWidth = int(metrics.boundingRect("Checklists").width())
             header.resizeSection(1, floor(1.75 * dateTextWidth))
             header.resizeSection(2, floor(1.75 * dateTextWidth))
-            header.resizeSection(3, floor(1.3 * checklistsWidth))
+            # Reserve room for the sort-indicator arrow plus cell padding so the
+            # Checklists title and arrow never overlap, while still fitting the data.
+            arrowAllowance = int(28 * scaleFactor) + int(20 * scaleFactor)
+            checklistsDataWidth = metrics.horizontalAdvance("99999")
+            header.resizeSection(3, max(checklistsDataWidth, metrics.horizontalAdvance("Checklists") + arrowAllowance))
 
         if self.listType == "Checklists":
 
@@ -366,11 +373,14 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
             dateTextWidth = int(metrics.boundingRect("2222-22-22").width())
             header.resizeSection(4,  floor(1.75 * dateTextWidth))
 
-            timeTextWidth = int(metrics.boundingRect("22:22").width())
-            header.resizeSection(5,  floor(1.75 * timeTextWidth))
-            
-            speciesColumnWidth = int(metrics.boundingRect("Species").width())
-            header.resizeSection(6,  floor(1.45 * speciesColumnWidth))
+            # Reserve room for the sort-indicator arrow plus cell padding so the
+            # header title and arrow never overlap, while still fitting the data.
+            arrowAllowance = int(28 * scaleFactor) + int(20 * scaleFactor)
+            timeDataWidth = metrics.horizontalAdvance("22:22")
+            header.resizeSection(5, max(timeDataWidth, metrics.horizontalAdvance("Time") + arrowAllowance))
+
+            speciesDataWidth = metrics.horizontalAdvance("9999")
+            header.resizeSection(6, max(speciesDataWidth, metrics.horizontalAdvance("Species") + arrowAllowance))
             header.resizeSection(7, 66)
 
         if self.listType == "Find Results":

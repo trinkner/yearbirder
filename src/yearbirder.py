@@ -78,6 +78,10 @@ def _force_macos_dark_appearance():
 def main():
     app = QApplication(sys.argv)
 
+    # Stable app name → stable per-platform cache/data locations
+    # (QStandardPaths.CacheLocation is used by the thumbnail cache).
+    app.setApplicationName("Yearbirder")
+
     app.setStyle(code_Stylesheet.AppStyle("Fusion"))
 
     font = app.font()

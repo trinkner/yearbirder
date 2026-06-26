@@ -31,8 +31,16 @@ class Filter():
     startIso = ""
     endIso = ""
     startRating = ""
-    endRating = ""  
-        
+    endRating = ""
+
+    speciesHasRecording = ""
+    validRecordingSpecies = []
+    channels = ""
+    startRecordingRating = ""
+    endRecordingRating = ""
+    startDuration = ""
+    endDuration = ""
+
         
     def setLocationType(self,  locationType):
         self.locationType = locationType
@@ -279,9 +287,106 @@ class Filter():
 
     
     def getEndIso(self):
-        return(self.endIso)       
+        return(self.endIso)
 
-        
+
+    def setSpeciesHasRecording(self, speciesHasRecording):
+        self.speciesHasRecording = speciesHasRecording
+
+    def getSpeciesHasRecording(self):
+        return self.speciesHasRecording
+
+    def setValidRecordingSpecies(self, validRecordingSpecies):
+        self.validRecordingSpecies = validRecordingSpecies
+
+    def getValidRecordingSpecies(self):
+        return self.validRecordingSpecies
+
+    def setChannels(self, channels):
+        self.channels = channels
+
+    def getChannels(self):
+        return self.channels
+
+    def setStartRecordingRating(self, startRecordingRating):
+        self.startRecordingRating = startRecordingRating
+
+    def getStartRecordingRating(self):
+        return self.startRecordingRating
+
+    def setEndRecordingRating(self, endRecordingRating):
+        self.endRecordingRating = endRecordingRating
+
+    def getEndRecordingRating(self):
+        return self.endRecordingRating
+
+    def setStartDuration(self, startDuration):
+        self.startDuration = startDuration
+
+    def getStartDuration(self):
+        return self.startDuration
+
+    def setEndDuration(self, endDuration):
+        self.endDuration = endDuration
+
+    def getEndDuration(self):
+        return self.endDuration
+
+    def hasPhotoFilter(self):
+        return any([
+            self.sightingHasPhoto != "",
+            self.speciesHasPhoto != "",
+            self.camera != "",
+            self.lens != "",
+            self.startShutterSpeed != "",
+            self.endShutterSpeed != "",
+            self.startAperture != "",
+            self.endAperture != "",
+            self.startFocalLength != "",
+            self.endFocalLength != "",
+            self.startIso != "",
+            self.endIso != "",
+            self.startRating != "",
+            self.endRating != "",
+        ])
+
+    def hasRecordingFilter(self):
+        return any([
+            self.speciesHasRecording != "",
+            self.channels != "",
+            self.startRecordingRating != "",
+            self.endRecordingRating != "",
+            self.startDuration != "",
+            self.endDuration != "",
+        ])
+
+    def clearPhotoFilter(self):
+        self.sightingHasPhoto = ""
+        self.speciesHasPhoto = ""
+        self.validPhotoSpecies = []
+        self.camera = ""
+        self.lens = ""
+        self.startShutterSpeed = ""
+        self.endShutterSpeed = ""
+        self.startAperture = ""
+        self.endAperture = ""
+        self.startFocalLength = ""
+        self.endFocalLength = ""
+        self.startIso = ""
+        self.endIso = ""
+        self.startRating = ""
+        self.endRating = ""
+
+    def clearRecordingFilter(self):
+        self.speciesHasRecording = ""
+        self.validRecordingSpecies = []
+        self.channels = ""
+        self.startRecordingRating = ""
+        self.endRecordingRating = ""
+        self.startDuration = ""
+        self.endDuration = ""
+
+
     def buildWindowTitle(self, prefix, db, count=None, countUnit=""):
         """Return a descriptive MDI child window title for this filter.
 

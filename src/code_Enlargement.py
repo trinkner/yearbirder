@@ -247,6 +247,7 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
         
         self.detailsPane = QFrame()
         self.detailsPane.setFrameShape(QFrame.NoFrame)
+        self.detailsPane.setFixedWidth(340)
         self.detailsPane.setLayout(self.detailsPaneLayout)
         self.detailsPane.setStyleSheet("color:silver; background-color: #343333; border: none;")
         
@@ -264,6 +265,7 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
 
         # create label for camera details text
         self.cameraDetails = QLabel()
+        self.cameraDetails.setWordWrap(True)
         self.cameraDetails.setStyleSheet("color:silver; background-color: #343333; padding: 3px")                
         self.detailsPane.setVisible(False)
         self.detailsPaneLayout.addWidget(self.cameraDetails)
@@ -394,11 +396,11 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
 
         mw = self.mdiParent.mdiParent
         if e.modifiers() & Qt.ControlModifier:
-            if e.key() == Qt.Key_P:
-                if mw.dckPhotoFilter.isVisible():
-                    mw.hidePhotoFilter()
+            if e.key() == Qt.Key_M:
+                if mw.dckMediaFilter.isVisible():
+                    mw.hideMediaFilter()
                 else:
-                    mw.showPhotoFilter()
+                    mw.showMediaFilter()
             elif e.key() == Qt.Key_S:
                 if mw.dckFilter.isVisible():
                     mw.hideStandardFilter()
@@ -434,7 +436,7 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
             db.appendPhotoToJsonl(self.photoList[self.currentIndex][1], self.photoList[self.currentIndex][0])
         except IOError as exc:
             QMessageBox.warning(self, "Settings File Error",
-                f"Rating saved in memory but could not be written to the photo catalog:\n{exc}")
+                f"Rating saved in memory but could not be written to the media catalog:\n{exc}")
         self.viewEnlargement.setFocus()
                                                 
 
@@ -583,7 +585,7 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
     def detachFile(self):
         
         # remove photo from database, but don't delete it from file system
-        msgText = "Remove \n\n" + self.photoList[self.currentIndex][0]["fileName"] + "\n\n from the photo catalog?"
+        msgText = "Remove \n\n" + self.photoList[self.currentIndex][0]["fileName"] + "\n\n from the media catalog?"
         msgText = msgText + "\n\n(File will NOT be deleted from file system)"
 
         buttonClicked = code_Stylesheet.question(self, "Remove photo from catalog?", msgText)
@@ -600,7 +602,7 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
                 self.mdiParent.mdiParent.db.appendPhotoDeletionToJsonl(currentPhoto)
             except IOError as exc:
                 QMessageBox.warning(self, "Settings File Error",
-                    f"Photo removed from memory but could not be recorded in the photo catalog:\n{exc}")
+                    f"Photo removed from memory but could not be recorded in the media catalog:\n{exc}")
 
             # remove photo from current window's photo list
             self.photoList.remove(self.photoList[self.currentIndex])
@@ -641,7 +643,7 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
             self.mdiParent.mdiParent.db.appendPhotoDeletionToJsonl(currentPhoto)
         except IOError as exc:
             QMessageBox.warning(self, "Settings File Error",
-                f"Photo removed from memory but could not be recorded in the photo catalog:\n{exc}")
+                f"Photo removed from memory but could not be recorded in the media catalog:\n{exc}")
 
         self.mdiParent.mdiParent.db.photosNeedSaving = True
 
@@ -689,7 +691,7 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
             self.showMaximized()
             self.setWindowFlags(Qt.FramelessWindowHint)
             mainWindow.dckFilter.setVisible(False)
-            mainWindow.dckPhotoFilter.setVisible(False)
+            mainWindow.dckMediaFilter.setVisible(False)
             mainWindow.menuBar.setVisible(False)
             mainWindow.toolBar.setVisible(False)
             mainWindow.statusBar.setVisible(False)
@@ -697,7 +699,7 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
 
         else:
             mainWindow.dckFilter.setVisible(True)
-            mainWindow.dckPhotoFilter.setVisible(True)
+            mainWindow.dckMediaFilter.setVisible(True)
             mainWindow.menuBar.setVisible(True)
             mainWindow.toolBar.setVisible(True)
             mainWindow.statusBar.setVisible(True)
@@ -850,7 +852,11 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
         detailsText = detailsText + "Aperture: " + str(photoExifAperture) + "\n"
         detailsText = detailsText + "ISO: " + str(photoExifISO) + "\n"
         detailsText = detailsText + "Dimensions: " + str(photoDimensions) + " pixels\n"
-        detailsText = detailsText + "\n\n" + ntpath.basename(currentPhoto)
+        _fname = (ntpath.basename(currentPhoto)
+                  .replace('_', '_​')
+                  .replace('-', '-​')
+                  .replace('.', '.​'))
+        detailsText = detailsText + "\n\n" + _fname
         detailsText = detailsText + "\n\n\n"  #add space to separate rating stars from text
         
         if photoRating == "0":

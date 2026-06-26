@@ -12,6 +12,7 @@ import code_Filter
 import json
 import piexif
 from math import floor
+import wave
 from natsort import natsorted
 
 from PySide6.QtWidgets import (
@@ -77,7 +78,166 @@ def _safe_rating(val, default=0):
     except (TypeError, ValueError):
         return default
 
-    
+
+def _read_wav_metadata_datetime(filepath):
+    """Extract recording date/time from WAV file metadata.
+
+    Walks the RIFF structure manually to read all relevant chunk types, then
+    falls back to a prepended-ID3 scan for files written by tools like mutagen.
+
+    Priority: BWF bext > embedded id3 chunk > RIFF INFO TITL > ICMT > ICRD > prepended ID3
+
+    Returns (date_str 'YYYY-MM-DD', time_str 'HH:MM') or ('', '').
+    """
+    import struct as _struct
+
+    def _parse_date(s):
+        m = re.match(r'(20\d\d)[-./](0[1-9]|1[0-2])[-./](0[1-9]|[12]\d|3[01])',
+                     (s or '').strip())
+        return f'{m.group(1)}-{m.group(2)}-{m.group(3)}' if m else ''
+
+    def _parse_time(s):
+        m = re.match(r'([01]\d|2[0-3])[:.h]([0-5]\d)', (s or '').strip())
+        return f'{m.group(1)}:{m.group(2)}' if m else ''
+
+    def _id3_datetime(tags):
+        """Pull date/time from a mutagen ID3Tags-like object."""
+        try:
+            frame = tags.get('TDRC')
+            if frame:
+                ts = str(frame.text[0]) if hasattr(frame, 'text') else str(frame)
+                d = _parse_date(ts[:10])
+                if d:
+                    return d, (_parse_time(ts[11:16]) if len(ts) >= 16 else '')
+        except Exception:
+            pass
+        try:
+            frame = tags.get('TIT2')
+            if frame:
+                title = str(frame.text[0]) if hasattr(frame, 'text') else str(frame)
+                m2 = re.match(r'(20\d\d-\d\d-\d\d)[ T](\d\d[.:]\d\d)', title.strip())
+                if m2:
+                    d = _parse_date(m2.group(1))
+                    if d:
+                        return d, _parse_time(m2.group(2))
+        except Exception:
+            pass
+        try:
+            for key in list(tags.keys()):
+                if key.startswith('COMM'):
+                    frame = tags[key]
+                    text = str(frame.text[0]) if hasattr(frame, 'text') else str(frame)
+                    dm = re.search(r'Date[:\s]+(\d{4}-\d{2}-\d{2})', text)
+                    tm_m = re.search(r'Time[:\s]+(\d{2})[:\.](\d{2})', text)
+                    if dm:
+                        d = _parse_date(dm.group(1))
+                        if d:
+                            return d, (f'{tm_m.group(1)}:{tm_m.group(2)}' if tm_m else '')
+        except Exception:
+            pass
+        return None
+
+    try:
+        with open(filepath, 'rb') as fh:
+            header = fh.read(12)
+            if len(header) < 12:
+                return '', ''
+
+            # ── Files with a prepended ID3 header (not standard, but mutagen can write these)
+            if header[:3] == b'ID3':
+                try:
+                    from mutagen.id3 import ID3
+                    r = _id3_datetime(ID3(filepath))
+                    return r if r else ('', '')
+                except Exception:
+                    return '', ''
+
+            if header[:4] != b'RIFF' or header[8:12] != b'WAVE':
+                return '', ''
+
+            bext_result = id3_result = titl_result = icmt_result = icrd_result = None
+
+            pos = 12
+            while True:
+                fh.seek(pos)
+                chunk_hdr = fh.read(8)
+                if len(chunk_hdr) < 8:
+                    break
+                cid = chunk_hdr[:4]
+                csz = _struct.unpack_from('<I', chunk_hdr, 4)[0]
+                data_pos = pos + 8
+
+                # ── BWF bext ─────────────────────────────────────────────────
+                # OriginationDate at offset 256 (10 bytes), OriginationTime at 266 (8 bytes).
+                if cid == b'bext' and csz >= 274 and not bext_result:
+                    fh.seek(data_pos)
+                    data = fh.read(min(csz, 300))
+                    orig_date = data[256:266].split(b'\x00')[0].decode('ascii', 'replace').strip()
+                    orig_time = data[266:274].split(b'\x00')[0].decode('ascii', 'replace').strip()
+                    d = _parse_date(orig_date)
+                    if d:
+                        bext_result = (d, _parse_time(orig_time[:5]))
+
+                # ── Embedded ID3 chunk ('id3 ' or 'ID3 ') ────────────────────
+                # Standard location for ID3 inside RIFF/WAVE (RFC 2361 / BWF extension).
+                elif cid in (b'id3 ', b'ID3 ') and not id3_result:
+                    try:
+                        import io as _io
+                        from mutagen.id3 import ID3
+                        fh.seek(data_pos)
+                        r = _id3_datetime(ID3(fileobj=_io.BytesIO(fh.read(csz))))
+                        if r:
+                            id3_result = r
+                    except Exception:
+                        pass
+
+                # ── RIFF INFO LIST chunk ──────────────────────────────────────
+                # Consumer apps (including Shure MOTIV) write INFO sub-chunks:
+                # TITL "YYYY-MM-DD HH.MM.SS", ICMT/CMNT with Date:/Time: fields,
+                # ICRD with a date string.
+                elif cid == b'LIST':
+                    fh.seek(data_pos)
+                    list_type = fh.read(4)
+                    if list_type == b'INFO':
+                        sub_pos = data_pos + 4
+                        sub_end = data_pos + csz
+                        while sub_pos + 8 <= sub_end:
+                            fh.seek(sub_pos)
+                            sh = fh.read(8)
+                            if len(sh) < 8:
+                                break
+                            sid = sh[:4]
+                            ssz = _struct.unpack_from('<I', sh, 4)[0]
+                            fh.seek(sub_pos + 8)
+                            val = fh.read(ssz).split(b'\x00')[0].decode('latin-1', 'replace').strip()
+                            if sid in (b'TITL', b'INAM') and not titl_result:
+                                m2 = re.match(r'(20\d\d-\d\d-\d\d)[ T](\d\d[.:]\d\d)', val)
+                                if m2:
+                                    d = _parse_date(m2.group(1))
+                                    if d:
+                                        titl_result = (d, _parse_time(m2.group(2)))
+                            elif sid in (b'ICMT', b'CMNT') and not icmt_result:
+                                dm = re.search(r'Date[:\s]+(\d{4}-\d{2}-\d{2})', val)
+                                tm_m = re.search(r'Time[:\s]+(\d{2})[:\.](\d{2})', val)
+                                if dm:
+                                    d = _parse_date(dm.group(1))
+                                    if d:
+                                        icmt_result = (d, f'{tm_m.group(1)}:{tm_m.group(2)}' if tm_m else '')
+                            elif sid == b'ICRD' and not icrd_result:
+                                d = _parse_date(val)
+                                if d:
+                                    icrd_result = (d, _parse_time(val[11:16]) if len(val) >= 16 else '')
+                            sub_pos += 8 + ssz + (ssz % 2)
+
+                pos += 8 + csz + (csz % 2)  # RIFF chunks are word-aligned
+
+    except Exception:
+        return '', ''
+
+    result = bext_result or id3_result or titl_result or icmt_result or icrd_result
+    return result if result else ('', '')
+
+
 class DataBase():
 
     # this is the class that will store all our data and the data-seeking logic 
@@ -100,6 +260,7 @@ class DataBase():
         self.apertureList = []
         self.focalLengthList=[]
         self.isoList = []
+        self.durationList = []
         self.sightingList = []
         self.eBirdFileOpenFlag = False
         self.eBirdFilePath = ""
@@ -632,6 +793,286 @@ class DataBase():
         }
 
 
+    # ------------------------------------------------------------------
+    # Audio: filename date parsing, metadata, checklist matching, combo data
+    # ------------------------------------------------------------------
+
+    def _parseDateTimeFromFilename(self, filepath):
+        """Try to parse a recording date/time from the filename.
+        Returns (date_str 'YYYY-MM-DD', time_str 'HH:MM') or ('', '')."""
+        name = os.path.splitext(os.path.basename(filepath))[0]
+        S = r'[^0-9]?'
+        year_p = r'(20\d\d)'
+        mon_p  = r'(0[1-9]|1[0-2])'
+        day_p  = r'(0[1-9]|[12]\d|3[01])'
+        hr_p   = r'([01]\d|2[0-3])'
+        min_p  = r'([0-5]\d)'
+
+        # YYYY[sep]MM[sep]DD optionally followed by [sep]HH[sep]MM
+        m = re.search(
+            year_p + S + mon_p + S + day_p +
+            r'(?:' + S + hr_p + S + min_p + r')?',
+            name,
+        )
+        if m:
+            y, mo, d = m.group(1), m.group(2), m.group(3)
+            h, mi = m.group(4), m.group(5)
+            return f"{y}-{mo}-{d}", (f"{h}:{mi}" if h and mi else "")
+
+        # MM[sep]DD[sep]YYYY optionally followed by [sep]HH[sep]MM
+        m = re.search(
+            mon_p + S + day_p + S + year_p +
+            r'(?:' + S + hr_p + S + min_p + r')?',
+            name,
+        )
+        if m:
+            mo, d, y = m.group(1), m.group(2), m.group(3)
+            h, mi = m.group(4), m.group(5)
+            return f"{y}-{mo}-{d}", (f"{h}:{mi}" if h and mi else "")
+
+        return "", ""
+
+    def getRecordingData(self, fileName):
+        """Return a dict of file-level audio metadata."""
+        recordingData = {"fileName": fileName, "rating": "0"}
+
+        meta_date, meta_time = _read_wav_metadata_datetime(fileName)
+        fn_date, fn_time = self._parseDateTimeFromFilename(fileName)
+        if meta_date:
+            recordingData["date"] = meta_date
+            recordingData["time"] = meta_time
+            recordingData["dateSource"] = "metadata"
+        else:
+            recordingData["date"] = fn_date if fn_date else "Date unknown"
+            recordingData["time"] = fn_time if fn_time else "Time unknown"
+            recordingData["dateSource"] = "filename"
+
+        try:
+            mtime = os.path.getmtime(fileName)
+            recordingData["mtime"] = datetime.datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M")
+        except Exception:
+            recordingData["mtime"] = ""
+
+        try:
+            with wave.open(fileName, 'r') as wf:
+                fs = wf.getframerate()
+                n = wf.getnframes()
+                dur = n / fs if fs else 0
+                ch = wf.getnchannels()
+            m_part, s_part = divmod(int(dur), 60)
+            recordingData["duration"] = f"{m_part}:{s_part:02d}"
+            recordingData["sampleRate"] = f"{fs} Hz"
+            recordingData["channels"] = "Stereo" if ch == 2 else "Mono"
+        except Exception:
+            recordingData["duration"] = ""
+            recordingData["sampleRate"] = ""
+            recordingData["channels"] = ""
+
+        return recordingData
+
+    def readWavMetadateDatetime(self, filepath):
+        """Return WAV metadata datetime as an EXIF-format string, or None.
+
+        Returns 'YYYY:MM:DD HH:MM:00' when both date and time are found,
+        'YYYY:MM:DD' when only a date is found, or None when no metadata
+        datetime exists.  The EXIF format makes the result usable directly
+        in the exifDatetime slot in Rename Media rows.
+        """
+        d, t = _read_wav_metadata_datetime(filepath)
+        if not d:
+            return None
+        exif_date = d.replace('-', ':')
+        if t and len(t) >= 5:
+            return f'{exif_date} {t[0:2]}:{t[3:5]}:00'
+        return exif_date
+
+    def matchRecording(self, file):
+        """Suggest a checklist match for a WAV file, preferring embedded metadata
+        over filename-based date/time parsing when metadata is available."""
+        meta_date, meta_time = _read_wav_metadata_datetime(file)
+        fn_date, fn_time = self._parseDateTimeFromFilename(file)
+        recordingDate = meta_date or fn_date
+        recordingTime = meta_time or fn_time
+        rawRecordingTime = recordingTime
+
+        dateMatchFound = False
+        timeMatchFound = False
+        if recordingDate:
+            _df = code_Filter.Filter()
+            _df.setStartDate(recordingDate)
+            _df.setEndDate(recordingDate)
+            dateMatchFound = len(self.GetLocations(_df, "OnlyLocations")) > 0
+            if dateMatchFound and recordingTime:
+                _tf = code_Filter.Filter()
+                _tf.setStartDate(recordingDate)
+                _tf.setEndDate(recordingDate)
+                _tf.setTime(recordingTime)
+                timeMatchFound = len(self.GetLocations(_tf, "OnlyLocations")) > 0
+            elif dateMatchFound:
+                timeMatchFound = True
+
+        recordingLocation = ""
+        f = code_Filter.Filter()
+        f.setStartDate(recordingDate)
+        f.setEndDate(recordingDate)
+        f.setTime(recordingTime)
+        locations = self.GetLocations(f, "OnlyLocations")
+
+        if len(locations) == 1:
+            recordingLocation = locations[0]
+            if recordingTime:
+                fwl = code_Filter.Filter()
+                fwl.setStartDate(recordingDate)
+                fwl.setEndDate(recordingDate)
+                fwl.setLocationName(recordingLocation)
+                fwl.setLocationType("Location")
+                fwl.setTime(recordingTime)
+                startTimes = self.GetStartTimes(fwl)
+                if startTimes:
+                    am = 60 * int(recordingTime[0:2]) + int(recordingTime[3:5])
+                    recordingTime = min(startTimes, key=lambda t: abs(60 * int(t[0:2]) + int(t[3:5]) - am))
+        else:
+            recordingLocation = ""
+
+        if recordingLocation == "" and recordingDate:
+            f2 = code_Filter.Filter()
+            f2.setStartDate(recordingDate)
+            f2.setEndDate(recordingDate)
+            locs2 = self.GetLocations(f2, "OnlyLocations")
+            if len(locs2) == 1:
+                recordingLocation = locs2[0]
+                if recordingTime:
+                    checklists = self.GetChecklists(f2)
+                    if checklists:
+                        am = 60 * int(recordingTime[0:2]) + int(recordingTime[3:5])
+                        recordingTime = min(checklists, key=lambda c: _checklist_distance(c, am))[5]
+                else:
+                    pts = self.GetStartTimes(f2)
+                    if pts:
+                        recordingTime = pts[0]
+            elif len(locs2) > 1 and recordingTime:
+                checklists = self.GetChecklists(f2)
+                if checklists:
+                    am = 60 * int(recordingTime[0:2]) + int(recordingTime[3:5])
+                    best = min(checklists, key=lambda c: _checklist_distance(c, am))
+                    recordingLocation = best[3]
+                    recordingTime = best[5]
+
+        # Species name matching from filename (same algorithm as matchPhoto)
+        recordingCommonName = ""
+        if recordingLocation and recordingDate and recordingTime:
+            f3 = code_Filter.Filter()
+            f3.setLocationType("Location")
+            f3.setLocationName(recordingLocation)
+            f3.setStartDate(recordingDate)
+            f3.setEndDate(recordingDate)
+            f3.setTime(recordingTime)
+            possibleNames = self.GetSpecies(f3)
+
+            fn_lower = os.path.splitext(os.path.basename(file))[0].lower()
+            fn_alpha = re.sub(r'[^a-z]', '', fn_lower)
+            fn_alnum = re.sub(r'[^a-z0-9]', '', fn_lower)
+
+            best_score = 0
+            for pcn in possibleNames:
+                score = 0
+                ebird = self.GeteBirdCode(pcn).lower()
+                if ebird and ebird in fn_alnum:
+                    score = max(score, len(ebird))
+                bbl = self.GetBBLCode(pcn).lower()
+                if bbl and bbl in fn_alnum:
+                    score = max(score, len(bbl))
+                common_clean = re.sub(r'[^a-z]', '', pcn.lower())
+                if common_clean:
+                    score = max(score, _longest_substr_in(common_clean, fn_alpha))
+                sci = self.GetScientificName(pcn)
+                if sci:
+                    sci_clean = re.sub(r'[^a-z]', '', sci.lower())
+                    if sci_clean:
+                        score = max(score, _longest_substr_in(sci_clean, fn_alpha))
+                if score > best_score:
+                    best_score = score
+                    recordingCommonName = pcn
+            if best_score < 4:
+                recordingCommonName = ""
+
+        return {
+            "recordingLocation": recordingLocation,
+            "recordingDate": recordingDate,
+            "recordingTime": recordingTime,
+            "recordingCommonName": recordingCommonName,
+            "dateMatchFound": dateMatchFound,
+            "timeMatchFound": timeMatchFound,
+        }
+
+    def getComboDataForAudio(self, audioMatchData):
+        """Pre-compute combo box data for a new recording file (date-first cascade)."""
+        recordingDate = audioMatchData.get("recordingDate", "")
+        recordingLocation = audioMatchData.get("recordingLocation", "")
+        recordingTime = audioMatchData.get("recordingTime", "")
+
+        allDates = self.GetDates(code_Filter.Filter())
+
+        locationsByDate = []
+        if recordingDate:
+            f = code_Filter.Filter()
+            f.setStartDate(recordingDate)
+            f.setEndDate(recordingDate)
+            locationsByDate = self.GetLocations(f)
+
+        timesByDateAndLocation = []
+        if recordingDate and recordingLocation:
+            f = code_Filter.Filter()
+            f.setStartDate(recordingDate)
+            f.setEndDate(recordingDate)
+            f.setLocationName(recordingLocation)
+            f.setLocationType("Location")
+            timesByDateAndLocation = self.GetStartTimes(f)
+
+        speciesByChecklist = []
+        if recordingDate and recordingLocation and recordingTime:
+            f = code_Filter.Filter()
+            f.setLocationType("Location")
+            f.setLocationName(recordingLocation)
+            f.setStartDate(recordingDate)
+            f.setEndDate(recordingDate)
+            f.setTime(recordingTime)
+            speciesByChecklist = self.GetSpecies(f)
+
+        return {
+            "allDates": allDates,
+            "locationsByDate": locationsByDate,
+            "timesByDateAndLocation": timesByDateAndLocation,
+            "speciesByChecklist": speciesByChecklist,
+        }
+
+    def getComboDataForAudioExisting(self, sighting):
+        """Pre-compute combo box data for an audio recording already in the catalog."""
+        allLocations = list(self.locationList)
+
+        f = code_Filter.Filter()
+        f.setLocationName(sighting["location"])
+        f.setLocationType("Location")
+        datesByLocation = self.GetDates(f)
+
+        f2 = code_Filter.Filter()
+        f2.setLocationName(sighting["location"])
+        f2.setLocationType("Location")
+        f2.setStartDate(sighting["date"])
+        f2.setEndDate(sighting["date"])
+        timesByLocationAndDate = self.GetStartTimes(f2)
+
+        f3 = code_Filter.Filter()
+        f3.setChecklistID(sighting.get("checklistID", ""))
+        speciesByChecklist = self.GetSpecies(f3)
+
+        return {
+            "allLocations": allLocations,
+            "datesByLocation": datesByLocation,
+            "timesByLocationAndDate": timesByLocationAndDate,
+            "speciesByChecklist": speciesByChecklist,
+        }
+
     def addPhotoToDatabase(self, filter, photoData, skip_file_check=False):
 
         if not skip_file_check and not os.path.isfile(photoData["fileName"]):
@@ -663,13 +1104,16 @@ class DataBase():
     def writePhotoDataToFile(self, fileName):
 
         filter = code_Filter.Filter()
-        sightings = self.GetSightingsWithPhotos(filter)
+        photoSightings = self.GetSightingsWithPhotos(filter)
+        recordingSightings = self.GetSightingsWithRecordings(filter)
 
         try:
             with open(fileName, mode='w', encoding='utf-8') as f:
-                for s in sightings:
+                # Wave 1: photos
+                for s in photoSightings:
                     for p in s["photos"]:
                         record = {
+                            "type":        "photo",
                             "ChecklistID": s["checklistID"],
                             "CommonName":  s["commonName"],
                             "FileName":    p["fileName"],
@@ -682,10 +1126,23 @@ class DataBase():
                             "Rating":      p["rating"],
                         }
                         f.write(json.dumps(record) + '\n')
+                # Wave 2: audio
+                for s in recordingSightings:
+                    for a in s["audio"]:
+                        record = {
+                            "type":        "audio",
+                            "ChecklistID": s["checklistID"],
+                            "CommonName":  s["commonName"],
+                            "FileName":    a["fileName"],
+                            "Duration":    a.get("duration", ""),
+                            "SampleRate":  a.get("sampleRate", ""),
+                            "Rating":      a.get("rating", "0"),
+                        }
+                        f.write(json.dumps(record) + '\n')
         except IOError as err:
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Icon.Warning)
-            msg.setText("Error occurred while saving the photo data to disk.\n" + str(err))
+            msg.setText("Error occurred while saving the media catalog to disk.\n" + str(err))
             msg.setWindowTitle("Save Error")
             msg.setStandardButtons(QMessageBox.StandardButton.Ok)
             msg.exec()
@@ -695,6 +1152,7 @@ class DataBase():
         if not self.photoDataFile or not self.photoDataFile.lower().endswith(".jsonl"):
             return
         record = {
+            "type":        "photo",
             "ChecklistID": sighting["checklistID"],
             "CommonName":  sighting["commonName"],
             "FileName":    photoData["fileName"],
@@ -716,6 +1174,73 @@ class DataBase():
         with open(self.photoDataFile, mode='a', encoding='utf-8') as f:
             f.write(json.dumps({"FileName": fileName, "deleted": True}) + '\n')
 
+    def addRecordingToDatabase(self, filter, recordingData, skip_file_check=False):
+        if not skip_file_check and not os.path.isfile(recordingData["fileName"]):
+            return None
+
+        checklistID = filter.getChecklistID()
+        speciesName = filter.getSpeciesName()
+        if checklistID and speciesName and checklistID in self.checklistDict:
+            candidates = self.checklistDict[checklistID]
+            s = next((c for c in candidates
+                      if c["commonName"] == speciesName
+                      or c.get("subspeciesName") == speciesName), None)
+        else:
+            sightings = self.GetSightings(filter)
+            s = sightings[0] if sightings else None
+
+        if s is not None:
+            if "audio" not in s:
+                s["audio"] = [recordingData]
+            elif recordingData not in s["audio"]:
+                s["audio"].append(recordingData)
+            return s
+
+        return None
+
+    def removeRecordingFromDatabase(self, location, date, time, commonName, audioFileName):
+        f = code_Filter.Filter()
+        f.setLocationName(location)
+        f.setLocationType("Location")
+        f.setStartDate(date)
+        f.setEndDate(date)
+        f.setTime(time)
+        f.setSpeciesName(commonName)
+        sightings = self.GetSightingsWithRecordings(f)
+        for s in sightings:
+            if "audio" in s:
+                s["audio"] = [a for a in s["audio"] if a["fileName"] != audioFileName]
+                if not s["audio"]:
+                    del s["audio"]
+
+    def removeRecordingFileFromDatabase(self, audioFileName):
+        for s in self.sightingList:
+            if "audio" in s:
+                s["audio"] = [a for a in s["audio"] if a["fileName"] != audioFileName]
+                if not s["audio"]:
+                    del s["audio"]
+
+    def appendRecordingToJsonl(self, sighting, recordingData):
+        if not self.photoDataFile or not self.photoDataFile.lower().endswith(".jsonl"):
+            return
+        record = {
+            "type": "audio",
+            "ChecklistID": sighting["checklistID"],
+            "CommonName":  sighting["commonName"],
+            "FileName":    recordingData["fileName"],
+            "Duration":    recordingData.get("duration", ""),
+            "SampleRate":  recordingData.get("sampleRate", ""),
+            "Channels":    recordingData.get("channels", ""),
+            "Rating":      recordingData.get("rating", "0"),
+        }
+        with open(self.photoDataFile, mode='a', encoding='utf-8') as f:
+            f.write(json.dumps(record) + '\n')
+
+    def appendRecordingDeletionToJsonl(self, fileName):
+        if not self.photoDataFile or not self.photoDataFile.lower().endswith(".jsonl"):
+            return
+        with open(self.photoDataFile, mode='a', encoding='utf-8') as f:
+            f.write(json.dumps({"type": "audio", "FileName": fileName, "deleted": True}) + '\n')
 
     def compactJsonlFile(self):
         if self.photoDataFile and self.photoDataFile.lower().endswith(".jsonl"):
@@ -769,7 +1294,9 @@ class DataBase():
     def _readPhotoDataFromJsonl(self, fileName):
         try:
             self.jsonlSkippedLines = 0
-            state = {}
+            photo_state = {}      # fn → record or None
+            recordings_state = {}      # (fn, checklistID, commonName) → record
+
             with open(fileName, encoding='utf-8') as f:
                 for line in f:
                     line = line.strip()
@@ -783,17 +1310,28 @@ class DataBase():
                     fn = record.get("FileName", "")
                     if not fn:
                         continue
-                    state[fn] = None if record.get("deleted") else record
+                    record_type = record.get("type", "photo")
+                    if record_type == "audio":
+                        if record.get("deleted"):
+                            for k in [k for k in recordings_state if k[0] == fn]:
+                                del recordings_state[k]
+                        else:
+                            key = (fn, record.get("ChecklistID", ""), record.get("CommonName", ""))
+                            recordings_state[key] = record
+                    else:
+                        photo_state[fn] = None if record.get("deleted") else record
 
-            self.photoRecordsInCatalog = sum(1 for v in state.values() if v is not None)
+            self.photoRecordsInCatalog = (
+                sum(1 for v in photo_state.values() if v is not None) + len(recordings_state)
+            )
 
-            for fn, row in state.items():
+            for fn, row in photo_state.items():
                 if row is None:
                     continue
-                photoData = {}
                 filter = code_Filter.Filter()
                 filter.setChecklistID(row.get("ChecklistID", ""))
                 filter.setSpeciesName(row.get("CommonName", ""))
+                photoData = {}
                 photoData["fileName"] = row.get("FileName", "")
                 photoData["camera"] = row.get("Camera", "")
                 photoData["lens"] = row.get("Lens", "")
@@ -804,7 +1342,27 @@ class DataBase():
                 rating = row.get("Rating", "0")
                 photoData["rating"] = rating if rating in ["0","1","2","3","4","5"] else "0"
                 self.addPhotoToDatabase(filter, photoData, skip_file_check=True)
-        except:
+
+            for (fn, checklistID, commonName), row in recordings_state.items():
+                filter = code_Filter.Filter()
+                filter.setChecklistID(checklistID)
+                filter.setSpeciesName(commonName)
+                recordingData = {}
+                recordingData["fileName"] = fn
+                recordingData["duration"] = row.get("Duration", "")
+                recordingData["sampleRate"] = row.get("SampleRate", "")
+                ch_val = row.get("Channels", "")
+                if not ch_val and os.path.isfile(fn):
+                    try:
+                        with wave.open(fn, 'r') as wf:
+                            ch_val = "Stereo" if wf.getnchannels() == 2 else "Mono"
+                    except Exception:
+                        pass
+                recordingData["channels"] = ch_val
+                rating = row.get("Rating", "0")
+                recordingData["rating"] = rating if rating in ["0","1","2","3","4","5"] else "0"
+                self.addRecordingToDatabase(filter, recordingData, skip_file_check=True)
+        except Exception:
             pass
 
 
@@ -846,8 +1404,29 @@ class DataBase():
         self.apertureList = natsorted(list(apertureSet))
         self.isoList = natsorted(list(isoSet))
         self.focalLengthList = natsorted(list(focalLengthSet))
-                
-                
+
+        self.refreshRecordingsLists()
+
+
+    def refreshRecordingsLists(self):
+        import math
+        duration_set = set()
+        for s in self.sightingList:
+            if "audio" in s:
+                for a in s["audio"]:
+                    dur_str = a.get("duration", "")
+                    if dur_str:
+                        try:
+                            parts = dur_str.split(":")
+                            total_sec = int(parts[0]) * 60 + int(parts[1])
+                            rounded = math.ceil(total_sec / 5) * 5
+                            if rounded > 0:
+                                duration_set.add(rounded)
+                        except (ValueError, IndexError):
+                            pass
+        self.durationList = [f"{d}s" for d in sorted(duration_set)]
+
+
     def CountSpecies(self, speciesList):
         
         # method to count true species in a list. Entries with parens, /, or sp. or hybrids should not be counted,
@@ -1656,14 +2235,35 @@ class DataBase():
         return(unphotographedSpeciesSet)
     
 
-    def GetSightingsWithPhotos(self, filter):
+    def GetSpeciesWithRecordings(self, filter):
+        returnSet = set()
+        filteredSightingList = self.GetMinimalFilteredSightingsList(filter)
+        cf = self.CompileFilter(filter)
+        for s in filteredSightingList:
+            commonName = s["commonName"]
+            if "/" not in commonName and "sp." not in commonName:
+                if self.TestSightingCompiled(s, cf) is True:
+                    if "audio" in s:
+                        returnSet.add(commonName)
+        return returnSet
+
+    def GetSpeciesWithoutRecordings(self, filter):
+        recordedSpeciesSet = self.GetSpeciesWithRecordings(filter)
+        return {species for species in self.allSpeciesList if species not in recordedSpeciesSet}
+
+    def GetSightingsWithPhotos(self, filter, progress_callback=None):
         returnList = []
         photosFound = set()
 
         filteredSightingList = self.GetMinimalFilteredSightingsList(filter)
 
         cf = self.CompileFilter(filter)
-        for s in filteredSightingList:
+        total = len(filteredSightingList)
+        for i, s in enumerate(filteredSightingList):
+            # Report progress periodically so the caller can drive a determinate
+            # progress bar while we work through the catalog.
+            if progress_callback is not None and i % 200 == 0:
+                progress_callback(i, total)
             commonName = s["commonName"]
             # if "/" not in commonName and "sp." not in commonName:
             if self.TestSightingCompiled(s, cf) is True:
@@ -1671,15 +2271,25 @@ class DataBase():
                     if s["photos"][0]["fileName"] not in photosFound:
                         photosFound.add(s["photos"][0]["fileName"])
                         returnList.append(s)
+        if progress_callback is not None:
+            progress_callback(total, total)
 
         returnList = sorted(returnList, key=lambda x: (float(x["taxonomicOrder"]), x["date"], x["time"]))
 
         return(returnList)
 
 
+    def hasPhotos(self):
+        """True if any sighting in the loaded catalog has at least one photo."""
+        return any(s.get("photos") for s in self.sightingList)
+
+    def hasRecordings(self):
+        """True if any sighting in the loaded catalog has at least one recording."""
+        return any(s.get("audio") for s in self.sightingList)
+
     def GetPhotos(self, filter):
         returnList = []
-        
+
         filteredSightingList = self.GetMinimalFilteredSightingsList(filter)
 
         for s in filteredSightingList:
@@ -1692,6 +2302,55 @@ class DataBase():
         
         return(returnList)
 
+
+    def GetSightingsWithRecordings(self, filter):
+        returnList = []
+        audioFound = set()
+        filteredSightingList = self.GetMinimalFilteredSightingsList(filter)
+        cf = self.CompileFilter(filter)
+        for s in filteredSightingList:
+            if self.TestSightingCompiled(s, cf):
+                if "audio" in s:
+                    if s["audio"][0]["fileName"] not in audioFound:
+                        audioFound.add(s["audio"][0]["fileName"])
+                        returnList.append(s)
+        returnList = sorted(returnList, key=lambda x: (float(x["taxonomicOrder"]), x["date"], x["time"]))
+        return returnList
+
+    def GetSightingsByRecordingFile(self, filter):
+        """Return {filename: [sighting, ...]} for all sightings with audio matching filter.
+
+        Each file maps to every sighting it is associated with, sorted by
+        taxonomic order.  Files are ordered by the taxonomic order of their
+        first (lowest-ranked) species.
+        """
+        result = {}
+        filteredSightingList = self.GetMinimalFilteredSightingsList(filter)
+        cf = self.CompileFilter(filter)
+        for s in filteredSightingList:
+            if self.TestSightingCompiled(s, cf):
+                if "audio" in s:
+                    for a in s["audio"]:
+                        fn = a["fileName"]
+                        if fn not in result:
+                            result[fn] = []
+                        if s not in result[fn]:
+                            result[fn].append(s)
+        for fn in result:
+            result[fn].sort(key=lambda x: float(x["taxonomicOrder"]))
+        return dict(sorted(result.items(),
+                           key=lambda kv: float(kv[1][0]["taxonomicOrder"])))
+
+    def GetAudio(self, filter):
+        returnList = []
+        filteredSightingList = self.GetMinimalFilteredSightingsList(filter)
+        for s in filteredSightingList:
+            if "audio" in s:
+                for a in s["audio"]:
+                    if a["fileName"] not in returnList:
+                        returnList.append(a["fileName"])
+        returnList.sort()
+        return returnList
 
     def GetSpecies(self, filter, filteredSightingList=[]):
         speciesList = []
@@ -1722,6 +2381,7 @@ class DataBase():
         checklistID = filter.getChecklistID()
         order = filter.getOrder()
         family = filter.getFamily()
+        commonNameSearch = filter.getCommonNameSearch()
 
         # if we're dealing with a sp. or slash species,
         # we need to return the whole database since those sightings
@@ -1759,6 +2419,25 @@ class DataBase():
             returnList = self.countyDict[locationName]
         elif locationType == "Location" and locationName in self.locationDict:
             returnList = self.locationDict[locationName]
+        elif commonNameSearch != "" and "s:" not in commonNameSearch:
+            # Name Search (substring on the common/subspecies name): instead of
+            # scanning every sighting, scan the far smaller set of species names
+            # in speciesDict and gather the sightings of matching species.  A
+            # sighting is filed under both its common and subspecies name, so
+            # dedupe by object identity.  Placed below the more-specific date /
+            # location dimensions (so those still win when set) but above the
+            # broad order / family fallbacks and the whole-database else.
+            # Scientific-name searches ("s:" prefix) fall through, since
+            # speciesDict is not keyed by sci-name; the per-sighting test still
+            # validates the full filter in every case.
+            needle = commonNameSearch.lower()
+            seen = set()
+            for speciesName_key, speciesSightings in self.speciesDict.items():
+                if needle in speciesName_key.lower():
+                    for s in speciesSightings:
+                        if id(s) not in seen:
+                            seen.add(id(s))
+                            returnList.append(s)
         elif order != "" and order in self.orderDict:
             returnList = self.orderDict[order]
         elif family != "" and family in self.familyDict:
@@ -2100,8 +2779,15 @@ class DataBase():
             'endFocalLength':     filter.getEndFocalLength(),
             'startIso':           filter.getStartIso(),
             'endIso':             filter.getEndIso(),
-            'startRating':        filter.getStartRating(),
-            'endRating':          filter.getEndRating(),
+            'startRating':         filter.getStartRating(),
+            'endRating':           filter.getEndRating(),
+            'speciesHasRecording': filter.getSpeciesHasRecording(),
+            'validRecordingSpecies':   filter.getValidRecordingSpecies(),
+            'channels':            filter.getChannels(),
+            'startRecordingRating':    filter.getStartRecordingRating(),
+            'endRecordingRating':      filter.getEndRecordingRating(),
+            'startDuration':       filter.getStartDuration(),
+            'endDuration':         filter.getEndDuration(),
         }
 
     def TestSightingCompiled(self, sighting, cf):
@@ -2139,6 +2825,13 @@ class DataBase():
         endIso = cf['endIso']
         startRating = cf['startRating']
         endRating = cf['endRating']
+        speciesHasRecording = cf['speciesHasRecording']
+        validRecordingSpecies = cf['validRecordingSpecies']
+        channels = cf['channels']
+        startRecordingRating = cf['startRecordingRating']
+        endRecordingRating = cf['endRecordingRating']
+        startDuration = cf['startDuration']
+        endDuration = cf['endDuration']
 
         # Check every filter setting. Return False immediately if sighting fails.
         # If sighting survives the filter, return True
@@ -2580,6 +3273,101 @@ class DataBase():
             if ratingOK is False:
                 return(False)
 
+        # check audio settings
+        if (
+            speciesHasRecording == "Recorded" or
+            channels != "" or
+            startRecordingRating != "" or
+            endRecordingRating != "" or
+            startDuration != "" or
+            endDuration != ""
+        ):
+            if "audio" not in sighting:
+                return False
+
+        if speciesHasRecording == "Not recorded":
+            if "audio" in sighting:
+                return False
+
+        if validRecordingSpecies != []:
+            if sighting["commonName"] not in validRecordingSpecies:
+                return False
+
+        if "audio" in sighting:
+            if startRecordingRating != "" and endRecordingRating == "":
+                ratingOK = False
+                filterStart = _safe_rating(startRecordingRating)
+                for a in sighting["audio"]:
+                    if _safe_rating(a.get("rating", "")) >= filterStart:
+                        ratingOK = True
+                if not ratingOK:
+                    return False
+
+            if startRecordingRating == "" and endRecordingRating != "":
+                ratingOK = False
+                filterEnd = _safe_rating(endRecordingRating)
+                for a in sighting["audio"]:
+                    if _safe_rating(a.get("rating", "")) <= filterEnd:
+                        ratingOK = True
+                if not ratingOK:
+                    return False
+
+            if startRecordingRating != "" and endRecordingRating != "":
+                ratingOK = False
+                lo = min(_safe_rating(startRecordingRating), _safe_rating(endRecordingRating))
+                hi = max(_safe_rating(startRecordingRating), _safe_rating(endRecordingRating))
+                for a in sighting["audio"]:
+                    r = _safe_rating(a.get("rating", ""))
+                    if lo <= r <= hi:
+                        ratingOK = True
+                if not ratingOK:
+                    return False
+
+            if channels != "":
+                channelsOK = False
+                for a in sighting["audio"]:
+                    if a.get("channels", "") == channels:
+                        channelsOK = True
+                if not channelsOK:
+                    return False
+
+            def _dur_to_sec(dur_str):
+                parts = dur_str.split(":")
+                if len(parts) == 2:
+                    return int(parts[0]) * 60 + int(parts[1])
+                return 0
+
+            if startDuration != "" and endDuration == "":
+                durationOK = False
+                filterSec = int(startDuration.rstrip("s"))
+                for a in sighting["audio"]:
+                    if a.get("duration", "") and _dur_to_sec(a["duration"]) >= filterSec:
+                        durationOK = True
+                if not durationOK:
+                    return False
+
+            if startDuration == "" and endDuration != "":
+                durationOK = False
+                filterSec = int(endDuration.rstrip("s"))
+                for a in sighting["audio"]:
+                    if a.get("duration", "") and _dur_to_sec(a["duration"]) <= filterSec:
+                        durationOK = True
+                if not durationOK:
+                    return False
+
+            if startDuration != "" and endDuration != "":
+                durationOK = False
+                sec1 = int(startDuration.rstrip("s"))
+                sec2 = int(endDuration.rstrip("s"))
+                lo, hi = min(sec1, sec2), max(sec1, sec2)
+                for a in sighting["audio"]:
+                    if a.get("duration", ""):
+                        s = _dur_to_sec(a["duration"])
+                        if lo <= s <= hi:
+                            durationOK = True
+                if not durationOK:
+                    return False
+
         # if we've arrived here, the sighting passes the filter.
         return(True)
 
@@ -2679,7 +3467,8 @@ class DataBase():
         self.apertureList = []
         self.focalLengthList=[]
         self.isoList = []
-        
+        self.durationList = []
+
         # remove photo data from sightings
         for s in self.sightingList:
             if "photos" in s:

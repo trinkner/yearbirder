@@ -2,6 +2,7 @@
 import form_ManagePhotos
 import code_Filter
 import code_Stylesheet
+import code_ThumbnailCache
 import os
 
 import piexif
@@ -1225,11 +1226,11 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
 
         if not self.photosAlreadyInDb and not self.mdiParent.db.photoDataFileOpenFlag:
             msg = QMessageBox(self)
-            msg.setWindowTitle("No Photo Catalog Open")
+            msg.setWindowTitle("No Media Catalog Open")
             msg.setText(
-                "You need to create a photo catalog file for Yearbirder to save "
+                "You need to create a media catalog file for Yearbirder to save "
                 "your photo information.\n\n"
-                "A photo catalog is a file that stores the species, checklist, and "
+                "A media catalog is a file that stores the species, checklist, and "
                 "rating data for each of your bird photos. Without one, your work "
                 "here cannot be saved to disk.\n\n"
                 "Would you like to create a new catalog file now, or go back and "
@@ -1253,9 +1254,9 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
             initial_dir = self.mdiParent.db.startupFolder or os.path.expanduser("~")
             fname, _ = QFileDialog.getSaveFileName(
                 self,
-                "Create Photo Catalog File",
-                os.path.join(initial_dir, "Yearbirder_PhotoCatalog.jsonl"),
-                "Yearbirder Photo Catalog (*.jsonl)",
+                "Create Media Catalog File",
+                os.path.join(initial_dir, "Yearbirder_MediaCatalog.jsonl"),
+                "Yearbirder Media Catalog (*.jsonl)",
             )
             if not fname:
                 return  # user cancelled the save dialog — stay open
@@ -1273,16 +1274,19 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
             if reply == QMessageBox.StandardButton.Yes:
                 self.mdiParent.db.photoDataFileDefault = fname
                 self.mdiParent.db.writePreferences()
-            self.mdiParent.menuPhotos.menuAction().setVisible(True)
+            self.mdiParent._updateMediaMenuVisibility()
             self.mdiParent._showPhotoCatalogMenuItems()
             self.mdiParent.actionGeolocatedPhotos.setVisible(True)
             self.mdiParent.actionGeolocatedPhotosSeparator.setVisible(True)
             self.mdiParent.actionAnimatedPhotoSequence.setVisible(True)
             self.mdiParent.actionSlideshow.setVisible(True)
 
+        # Collect files successfully added so their thumbnails can be cached.
+        added_photo_files = set()
+
         # call database function to remove modified photos from db
         for r in range(self.gridPhotos.rowCount()):
-            
+
             # check if we're processing photos new to the db or ones already in the db
             if self.photosAlreadyInDb is True:
                 
@@ -1333,11 +1337,12 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
 
                     s = self.mdiParent.db.addPhotoToDatabase(filter, self.metaDataByRow[r]["photoData"])
                     if s:
+                        added_photo_files.add(self.metaDataByRow[r]["photoData"]["fileName"])
                         try:
                             self.mdiParent.db.appendPhotoToJsonl(s, self.metaDataByRow[r]["photoData"])
                         except IOError as exc:
                             QMessageBox.warning(self, "Settings File Error",
-                                f"Photo saved in memory but could not be written to the photo catalog:\n{exc}")
+                                f"Photo saved in memory but could not be written to the media catalog:\n{exc}")
 
             if self.photosAlreadyInDb is False:
             
@@ -1369,20 +1374,26 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
 
                     s = self.mdiParent.db.addPhotoToDatabase(filter, self.metaDataByRow[r]["photoData"])
                     if s:
+                        added_photo_files.add(self.metaDataByRow[r]["photoData"]["fileName"])
                         try:
                             self.mdiParent.db.appendPhotoToJsonl(s, self.metaDataByRow[r]["photoData"])
                         except IOError as exc:
                             QMessageBox.warning(self, "Settings File Error",
-                                f"Photo saved in memory but could not be written to the photo catalog:\n{exc}")
+                                f"Photo saved in memory but could not be written to the media catalog:\n{exc}")
+
+        # Cache thumbnails for the added photos in the background so every
+        # catalogued photo exists in the cache (skips ones already cached).
+        if added_photo_files:
+            code_ThumbnailCache.prebuild_async(photo_paths=added_photo_files)
 
         if self.photosAlreadyInDb is False:
-            
-            # ensure that photo filter is visible, if we've added new photos.
-            self.mdiParent.dckPhotoFilter.setVisible(True)
 
-            # update the photo filter's cbo boxes                    
+            # ensure that photo filter is visible, if we've added new photos.
+            self.mdiParent.dckMediaFilter.setVisible(True)
+
+            # update the photo filter's cbo boxes
             self.mdiParent.fillPhotoComboBoxes()
-        
+
         # set flag indicating that some photo data isn't yet saved to file
         self.mdiParent.db.photosNeedSaving = True
         self.mdiParent._promptJsonlMigrationIfNeeded()
@@ -1390,6 +1401,8 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         self.mdiParent.db.refreshPhotoLists()
 
         self.mdiParent.fillPhotoComboBoxes()
+        # Reveal the Photos menu if this added the first photo to the catalog.
+        self.mdiParent._updateMediaMenuVisibility()
         self._changesSaved = True
 
         # close the window (closeEvent will refresh any open Stats windows)

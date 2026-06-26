@@ -314,6 +314,99 @@ class PhotosMapBridge(QObject):
         sub.fillEnlargement()
 
 
+class _AudioGalleryBridge(QObject):
+    """JS→Python bridge for the Audio Species Gallery.
+
+    Clicking a species row calls speciesClicked(species) which opens
+    the audio browser filtered to that species.
+    """
+
+    def __init__(self, web_window, base_filter):
+        super().__init__()
+        self._web    = web_window
+        self._filter = base_filter
+
+    @Slot(str)
+    def speciesClicked(self, species):
+        import code_Recordings
+        from copy import deepcopy
+        new_filter = deepcopy(self._filter)
+        new_filter.setSpeciesName(species)
+        main = self._web.mdiParent
+        if not main.db.GetSightingsWithRecordings(new_filter):
+            return
+        sub = code_Recordings.Recordings()
+        sub.mdiParent = main
+        main.mdiArea.addSubWindow(sub)
+        main.PositionChildWindow(sub, self._web)
+        sub.show()
+        sub.FillRecordings(new_filter)
+
+
+class GeolocatedRecordingsBridge(QObject):
+    """JS→Python bridge for the Geolocated Recordings map.
+
+    Clicking a marker calls recordingClicked(idx) which opens the audio browser
+    filtered to that sighting's location.
+    """
+
+    def __init__(self, web_window, locations):
+        super().__init__()
+        self._web       = web_window
+        self._locations = locations   # one location name per audio sighting
+
+    @Slot(int)
+    def recordingClicked(self, idx):
+        import code_Recordings
+        from copy import deepcopy
+        if idx < 0 or idx >= len(self._locations):
+            return
+        new_filter = deepcopy(self._web.filter)
+        new_filter.setLocationType("Location")
+        new_filter.setLocationName(self._locations[idx])
+        main = self._web.mdiParent
+        if not main.db.GetSightingsWithRecordings(new_filter):
+            return
+        sub = code_Recordings.Recordings()
+        sub.mdiParent = main
+        main.mdiArea.addSubWindow(sub)
+        main.PositionChildWindow(sub, self._web)
+        sub.show()
+        sub.FillRecordings(new_filter)
+
+
+class AnimatedRecordingsBridge(QObject):
+    """JS→Python bridge for the Animated Recording Sequence Map.
+
+    Clicking a dot calls recordingClicked(idx) which opens the audio browser
+    filtered to that sighting's location.
+    """
+
+    def __init__(self, web_window, locations):
+        super().__init__()
+        self._web       = web_window
+        self._locations = locations
+
+    @Slot(int)
+    def recordingClicked(self, idx):
+        import code_Recordings
+        from copy import deepcopy
+        if idx < 0 or idx >= len(self._locations):
+            return
+        new_filter = deepcopy(self._web.filter)
+        new_filter.setLocationType("Location")
+        new_filter.setLocationName(self._locations[idx])
+        main = self._web.mdiParent
+        if not main.db.GetSightingsWithRecordings(new_filter):
+            return
+        sub = code_Recordings.Recordings()
+        sub.mdiParent = main
+        main.mdiArea.addSubWindow(sub)
+        main.PositionChildWindow(sub, self._web)
+        sub.show()
+        sub.FillRecordings(new_filter)
+
+
 class RegionalTaxonomyBridge(QObject):
     """JS→Python bridge for the Regional Taxonomy.
 
@@ -1345,7 +1438,7 @@ document.addEventListener("DOMContentLoaded", function() {{
             self.showMaximized()
             self.setWindowFlags(Qt.FramelessWindowHint)
             mainWindow.dckFilter.setVisible(False)
-            mainWindow.dckPhotoFilter.setVisible(False)
+            mainWindow.dckMediaFilter.setVisible(False)
             mainWindow.menuBar.setVisible(False)
             mainWindow.toolBar.setVisible(False)
             mainWindow.statusBar.setVisible(False)
@@ -1360,7 +1453,7 @@ document.addEventListener("DOMContentLoaded", function() {{
                 self._escShortcut.deleteLater()
                 self._escShortcut = None
             mainWindow.dckFilter.setVisible(True)
-            mainWindow.dckPhotoFilter.setVisible(True)
+            mainWindow.dckMediaFilter.setVisible(True)
             mainWindow.menuBar.setVisible(True)
             mainWindow.toolBar.setVisible(True)
             mainWindow.statusBar.setVisible(True)
@@ -3414,6 +3507,503 @@ document.addEventListener("DOMContentLoaded", function() {{
         return True
 
 
+    def loadGeolocatedRecordingsMap(self, filter):
+        from copy import deepcopy
+        import folium
+        from folium.plugins import MarkerCluster
+        import tempfile
+        import json
+
+        self.title = "Geolocated Recordings"
+        self.filter = deepcopy(filter)
+
+        recordingSightings = self.mdiParent.db.GetSightingsWithRecordings(filter)
+
+        markers  = []   # (lat, lon, species, date, location, idx)
+        for s in recordingSightings:
+            try:
+                lat = float(s["latitude"])
+                lon = float(s["longitude"])
+            except (ValueError, TypeError, KeyError):
+                continue
+            if lat == 0.0 and lon == 0.0:
+                continue
+            markers.append((lat, lon,
+                             s.get("commonName", "Unknown"),
+                             s.get("date", ""),
+                             s.get("location", ""),
+                             len(markers)))
+
+        if not markers:
+            return False
+
+        marker_js = json.dumps(
+            [{"lat": m[0], "lon": m[1],
+              "species": m[2], "date": m[3], "location": m[4],
+              "idx": m[5]}
+             for m in markers],
+            ensure_ascii=False,
+        )
+
+        avg_lat = sum(m[0] for m in markers) / len(markers)
+        avg_lon = sum(m[1] for m in markers) / len(markers)
+
+        rec_map = folium.Map(location=[avg_lat, avg_lon], zoom_start=5,
+                             tiles="CartoDB Voyager")
+        MarkerCluster(options={"spiderfyOnMaxZoom": True,
+                                "spiderfyDistanceMultiplier": 2}).add_to(rec_map)
+        lats = [m[0] for m in markers]
+        lons = [m[1] for m in markers]
+        rec_map.fit_bounds([[min(lats), min(lons)], [max(lats), max(lons)]], max_zoom=15)
+
+        html = rec_map.get_root().render()
+
+        self._recordingsBridge = GeolocatedRecordingsBridge(
+            self, [m[4] for m in markers])
+        channel = QWebChannel(self.webView.page())
+        channel.registerObject("bridge", self._recordingsBridge)
+        self.webView.page().setWebChannel(channel)
+
+        qwc_file = QFile(":/qtwebchannel/qwebchannel.js")
+        qwc_file.open(QIODevice.OpenModeFlag.ReadOnly)
+        qwc_js = bytes(qwc_file.readAll()).decode("utf-8")
+        qwc_file.close()
+
+        inject = f"""
+<script>
+{qwc_js}
+(function() {{
+    var recData = {marker_js};
+
+    var tipDiv = document.createElement('div');
+    tipDiv.style.cssText = (
+        'position:fixed; display:none; pointer-events:none; z-index:9999;' +
+        'background:#252730; color:#e2e4ec; border:2px solid {CHART_PRIMARY};' +
+        'border-radius:8px; padding:10px 12px; font-family:sans-serif;' +
+        'box-shadow:0 4px 20px rgba(0,0,0,0.55);'
+    );
+    document.body.appendChild(tipDiv);
+
+    function showTip(e, d) {{
+        tipDiv.innerHTML = (
+            '<b style="font-size:13px">' + d.species + '</b><br>' +
+            '<span style="font-size:11px; color:#aaa">' +
+                d.date + ' · ' + d.location +
+            '</span>'
+        );
+        tipDiv.style.display = 'block';
+        var cx = e.originalEvent.clientX, cy = e.originalEvent.clientY;
+        var GAP = 14, tipW = tipDiv.offsetWidth, tipH = tipDiv.offsetHeight;
+        var absX = (cx > window.innerWidth / 2) ? cx - tipW - GAP : cx + GAP;
+        absX = Math.max(GAP, Math.min(absX, window.innerWidth - tipW - GAP));
+        var absY = cy - tipH / 2;
+        absY = Math.max(GAP, Math.min(absY, window.innerHeight - tipH - GAP));
+        tipDiv.style.left = absX + 'px';
+        tipDiv.style.top  = absY + 'px';
+    }}
+
+    function findMap() {{
+        var keys = Object.keys(window);
+        for (var i = 0; i < keys.length; i++) {{
+            try {{ var obj = window[keys[i]]; if (obj && obj instanceof L.Map) return obj; }} catch(e) {{}}
+        }}
+        return null;
+    }}
+
+    new QWebChannel(qt.webChannelTransport, function(channel) {{
+        window.recBridge = channel.objects.bridge;
+    }});
+
+    function init() {{
+        var map = findMap();
+        if (!map) {{ setTimeout(init, 150); return; }}
+        var cluster = L.markerClusterGroup({{spiderfyOnMaxZoom: true, spiderfyDistanceMultiplier: 2}});
+        recData.forEach(function(d) {{
+            var marker = L.marker([d.lat, d.lon]);
+            marker.on('mousemove', function(e) {{ showTip(e, d); }});
+            marker.on('mouseout',  function()  {{ tipDiv.style.display = 'none'; }});
+            marker.on('click', function() {{
+                tipDiv.style.display = 'none';
+                if (window.recBridge) window.recBridge.recordingClicked(d.idx);
+            }});
+            cluster.addLayer(marker);
+        }});
+        map.addLayer(cluster);
+    }}
+    init();
+}})();
+</script>
+"""
+        html = html.replace("</body>", inject + self._satellite_toggle_js() + "\n</body>")
+
+        settings = QWebEngineProfile.defaultProfile().settings()
+        settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
+        settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessFileUrls, True)
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as f:
+            f.write(html)
+            tmp_path = f.name
+
+        self.webView.setUrl(QUrl.fromLocalFile(tmp_path))
+        self._buildFilterTitle(filter, "Geolocated Recordings",
+                               count=len(markers), countUnit="Recordings")
+        return True
+
+
+    def loadAnimatedRecordingSequenceMap(self, filter):
+        """Animate geolocated recordings appearing on the map in chronological order."""
+        from copy import deepcopy
+        import folium
+        import json
+        import tempfile
+
+        self.title = "Animated Recording Sequence Map"
+        self.filter = deepcopy(filter)
+
+        recordingSightings = self.mdiParent.db.GetSightingsWithRecordings(filter)
+
+        recordings = []
+        for s in sorted(recordingSightings,
+                        key=lambda x: (x.get("date", ""), x.get("time", ""))):
+            try:
+                lat = float(s["latitude"])
+                lon = float(s["longitude"])
+            except (ValueError, TypeError, KeyError):
+                continue
+            if lat == 0.0 and lon == 0.0:
+                continue
+            recordings.append({
+                "idx":      len(recordings),
+                "lat":      lat,
+                "lon":      lon,
+                "species":  s.get("commonName", ""),
+                "date":     s.get("date", ""),
+                "location": s.get("location", ""),
+            })
+
+        if not recordings:
+            return False
+
+        total       = len(recordings)
+        recs_js     = json.dumps(recordings, ensure_ascii=False)
+
+        lats = [r["lat"] for r in recordings]
+        lons = [r["lon"] for r in recordings]
+
+        rec_map = folium.Map(
+            location=[sum(lats) / total, sum(lons) / total],
+            zoom_start=4, tiles="CartoDB Voyager")
+        rec_map.fit_bounds([[min(lats), min(lons)], [max(lats), max(lons)]], max_zoom=15)
+
+        html = rec_map.get_root().render()
+
+        self._animatedRecBridge = AnimatedRecordingsBridge(
+            self, [r["location"] for r in recordings])
+        channel = QWebChannel(self.webView.page())
+        channel.registerObject("bridge", self._animatedRecBridge)
+        self.webView.page().setWebChannel(channel)
+
+        qwc_file = QFile(":/qtwebchannel/qwebchannel.js")
+        qwc_file.open(QIODevice.OpenModeFlag.ReadOnly)
+        qwc_js = bytes(qwc_file.readAll()).decode("utf-8")
+        qwc_file.close()
+
+        animation = f"""
+<style>
+#ars-bar {{
+    position:absolute; bottom:28px; left:50%; transform:translateX(-50%);
+    z-index:1000; background:rgba(255,255,255,0.93);
+    border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,0.25);
+    padding:7px 14px 8px;
+    display:flex; flex-direction:column; align-items:stretch; gap:5px;
+    font-family:sans-serif; font-size:13px; white-space:nowrap; user-select:none;
+}}
+#ars-controls {{ display:flex; align-items:center; gap:10px; }}
+#ars-bar button {{ background:none; border:none; cursor:pointer; font-size:17px; padding:0 2px; line-height:1; }}
+#ars-slider {{ width:200px; cursor:pointer; }}
+#ars-speed  {{ width:65px;  cursor:pointer; vertical-align:middle; }}
+#ars-info   {{ min-width:140px; color:#333; }}
+#ars-caption {{ text-align:center; font-size:12px; color:#444; min-height:15px; letter-spacing:0.01em; }}
+</style>
+<div id="ars-bar">
+  <div id="ars-controls">
+    <button id="ars-restart" title="Restart">&#9198;</button>
+    <button id="ars-play"    title="Play / Pause">&#9654;</button>
+    <input  id="ars-slider"  type="range" min="0" max="{total}" value="0">
+    <span   id="ars-info">0 / {total} recordings</span>
+    <label  title="Animation speed" style="display:flex;align-items:center;gap:4px">
+        Slower<input id="ars-speed" type="range" min="0" max="10" value="4">Faster
+    </label>
+  </div>
+  <div id="ars-caption"></div>
+</div>
+<script>
+{qwc_js}
+(function() {{
+    var recs  = {recs_js};
+    var map   = null;
+    var dots  = [];
+    var shown = 0;
+    var current = -1;
+    var playing = false;
+    var timer   = null;
+    var DELAYS  = [5000, 3500, 2500, 1800, 1300, 950, 700, 500, 375, 300, 250];
+
+    new QWebChannel(qt.webChannelTransport, function(ch) {{
+        window.recBridge = ch.objects.bridge;
+    }});
+
+    function delayMs() {{
+        return DELAYS[parseInt(document.getElementById('ars-speed').value)] || 150;
+    }}
+
+    function updateUI() {{
+        var idx = Math.max(0, shown - 1);
+        document.getElementById('ars-info').textContent = shown + ' / ' + recs.length + ' recordings';
+        document.getElementById('ars-slider').value = shown;
+        var capEl = document.getElementById('ars-caption');
+        if (shown > 0) {{
+            var r = recs[idx];
+            capEl.innerHTML = '<b>' + r.species + '</b> &nbsp;·&nbsp; ' + r.location + ' &nbsp;·&nbsp; ' + r.date;
+        }} else {{ capEl.textContent = ''; }}
+    }}
+
+    function showAt(idx) {{
+        current = idx;
+        if (current >= 0 && current < recs.length) {{
+            dots[current].setStyle({{opacity: 1, fillOpacity: 0.9}});
+            var dotEl = dots[current].getElement();
+            if (dotEl) {{ dotEl.style.pointerEvents = 'auto'; dotEl.style.cursor = 'pointer'; }}
+            shown = current + 1;
+        }} else {{ shown = 0; }}
+        updateUI();
+    }}
+
+    function resetMarkers() {{
+        current = -1; shown = 0;
+        for (var i = 0; i < dots.length; i++) {{
+            dots[i].setStyle({{opacity: 0, fillOpacity: 0}});
+            var el = dots[i].getElement();
+            if (el) el.style.pointerEvents = 'none';
+        }}
+        updateUI();
+    }}
+
+    function scheduleStep() {{
+        timer = setTimeout(function() {{
+            if (!playing) return;
+            if (shown < recs.length) {{ showAt(shown); scheduleStep(); }}
+            else pause();
+        }}, delayMs());
+    }}
+
+    function play() {{
+        if (shown >= recs.length) resetMarkers();
+        playing = true;
+        document.getElementById('ars-play').innerHTML = '&#9646;&#9646;';
+        scheduleStep();
+    }}
+
+    function pause() {{
+        playing = false; clearTimeout(timer);
+        document.getElementById('ars-play').innerHTML = '&#9654;';
+    }}
+
+    document.getElementById('ars-play').onclick    = function() {{ if (playing) pause(); else play(); }};
+    document.getElementById('ars-restart').onclick = function() {{ pause(); resetMarkers(); }};
+    document.getElementById('ars-slider').oninput  = function() {{
+        var target = parseInt(this.value);
+        pause();
+        if (target === 0) {{
+            resetMarkers();
+        }} else {{
+            for (var i = shown; i < target - 1; i++) {{
+                dots[i].setStyle({{opacity: 1, fillOpacity: 0.9}});
+                var el = dots[i].getElement();
+                if (el) {{ el.style.pointerEvents = 'auto'; el.style.cursor = 'pointer'; }}
+            }}
+            for (var i = target; i < shown; i++) {{
+                dots[i].setStyle({{opacity: 0, fillOpacity: 0}});
+                var el = dots[i].getElement();
+                if (el) el.style.pointerEvents = 'none';
+            }}
+            showAt(target - 1);
+        }}
+    }};
+
+    function fixBarWidth() {{
+        var bar = document.getElementById('ars-bar');
+        var capEl = document.getElementById('ars-caption');
+        var best = recs.reduce(function(b, r) {{
+            var len = r.species.length + r.location.length + r.date.length;
+            return len > b.len ? {{len: len, r: r}} : b;
+        }}, {{len: 0, r: null}});
+        if (best.r) {{
+            var r = best.r;
+            capEl.innerHTML = '<b>' + r.species + '</b> &nbsp;·&nbsp; ' + r.location + ' &nbsp;·&nbsp; ' + r.date;
+            bar.style.minWidth = bar.offsetWidth + 'px';
+            capEl.textContent = '';
+        }}
+    }}
+    fixBarWidth();
+
+    function findMap() {{
+        var keys = Object.keys(window);
+        for (var i = 0; i < keys.length; i++) {{
+            try {{ var obj = window[keys[i]]; if (obj && obj instanceof L.Map) return obj; }} catch(e) {{}}
+        }}
+        return null;
+    }}
+
+    function init() {{
+        map = findMap();
+        if (!map) {{ setTimeout(init, 150); return; }}
+        recs.forEach(function(r) {{
+            var dot = L.circleMarker([r.lat, r.lon], {{
+                radius: 6, fillColor: '{CHART_PRIMARY}',
+                color: '#ffffff', weight: 1.5, opacity: 0, fillOpacity: 0,
+            }});
+            dot.on('click', function() {{
+                if (window.recBridge) window.recBridge.recordingClicked(r.idx);
+            }});
+            dot.addTo(map);
+            var dotEl = dot.getElement();
+            if (dotEl) dotEl.style.pointerEvents = 'none';
+            dots.push(dot);
+        }});
+        setTimeout(play, 300);
+    }}
+    init();
+}})();
+</script>
+"""
+        html = html.replace("</body>", animation + self._satellite_toggle_js() + "\n</body>")
+
+        settings = QWebEngineProfile.defaultProfile().settings()
+        settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
+        settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessFileUrls, True)
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as f:
+            f.write(html)
+            tmp_path = f.name
+
+        self.webView.setUrl(QUrl.fromLocalFile(tmp_path))
+        self._buildFilterTitle(filter, "Animated Recording Sequence Map",
+                               count=total, countUnit="Recordings")
+        return True
+
+
+    def loadAudioSpeciesGallery(self, filter):
+        """HTML table of species with recordings, in taxonomic order.
+
+        Clicking a species row opens the audio browser filtered to that species.
+        """
+        from copy import deepcopy
+        import json
+
+        self.title = "Recordings by Species"
+        self.filter = deepcopy(filter)
+
+        recordingSightings = self.mdiParent.db.GetSightingsWithRecordings(filter)
+        if not recordingSightings:
+            return False
+
+        # Count recordings per species, preserve taxonomic order
+        species_order = []
+        species_count = {}
+        species_taxo  = {}
+        for s in recordingSightings:
+            sp = s["commonName"]
+            n  = len(s.get("audio", []))
+            if sp not in species_count:
+                species_order.append(sp)
+                species_count[sp] = 0
+                species_taxo[sp]  = float(s.get("taxonomicOrder", 0))
+            species_count[sp] += n
+
+        species_order.sort(key=lambda sp: species_taxo[sp])
+
+        rows_data = [{"species": sp, "count": species_count[sp]}
+                     for sp in species_order]
+        rows_js = json.dumps(rows_data, ensure_ascii=False)
+
+        channel = QWebChannel(self.webView.page())
+        self.webView.page().setWebChannel(channel)
+
+        qwc_file = QFile(":/qtwebchannel/qwebchannel.js")
+        qwc_file.open(QIODevice.OpenModeFlag.ReadOnly)
+        qwc_js = bytes(qwc_file.readAll()).decode("utf-8")
+        qwc_file.close()
+
+        total_recs    = sum(species_count.values())
+        total_species = len(species_order)
+
+        html = f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>
+  body {{ margin:0; padding:0; background:#1e1f26; color:#e2e4ec;
+          font-family:sans-serif; font-size:13px; }}
+  #header {{ padding:10px 14px 8px; background:#252730;
+             border-bottom:1px solid #333; display:flex; align-items:baseline; gap:16px; }}
+  #header h2 {{ margin:0; font-size:15px; font-weight:600; }}
+  #header .sub {{ font-size:12px; color:#8b8fa8; }}
+  table {{ width:100%; border-collapse:collapse; }}
+  th {{ position:sticky; top:0; background:#252730; padding:6px 14px;
+        text-align:left; font-size:11px; color:#8b8fa8; letter-spacing:0.05em;
+        text-transform:uppercase; border-bottom:1px solid #333; }}
+  tr.sp-row {{ cursor:pointer; }}
+  tr.sp-row:hover td {{ background:#2e3040; }}
+  td {{ padding:7px 14px; border-bottom:1px solid #2a2b35; }}
+  td.num {{ text-align:right; color:{CHART_PRIMARY}; font-variant-numeric:tabular-nums; }}
+  td.bar-cell {{ width:180px; padding-right:14px; }}
+  .bar {{ height:10px; background:{CHART_PRIMARY}; border-radius:3px; min-width:2px; }}
+</style>
+</head><body>
+<div id="header">
+  <h2>Recordings by Species</h2>
+  <span class="sub">{total_species} species &nbsp;·&nbsp; {total_recs} recordings</span>
+</div>
+<table>
+  <thead><tr>
+    <th>#</th><th>Species</th><th style="text-align:right">Recordings</th><th>Proportion</th>
+  </tr></thead>
+  <tbody id="tbody"></tbody>
+</table>
+<script>
+{qwc_js}
+new QWebChannel(qt.webChannelTransport, function(ch) {{
+    window.galleryBridge = ch.objects.galleryBridge;
+}});
+var rows = {rows_js};
+var maxCount = Math.max.apply(null, rows.map(function(r) {{ return r.count; }}));
+var tbody = document.getElementById('tbody');
+rows.forEach(function(r, i) {{
+  var tr = document.createElement('tr');
+  tr.className = 'sp-row';
+  var pct = maxCount > 0 ? (r.count / maxCount * 170) : 0;
+  tr.innerHTML = (
+    '<td>' + (i + 1) + '</td>' +
+    '<td>' + r.species + '</td>' +
+    '<td class="num">' + r.count + '</td>' +
+    '<td class="bar-cell"><div class="bar" style="width:' + Math.round(pct) + 'px"></div></td>'
+  );
+  tr.addEventListener('click', function() {{
+    if (window.galleryBridge) window.galleryBridge.speciesClicked(r.species);
+  }});
+  tbody.appendChild(tr);
+}});
+</script>
+</body></html>"""
+
+        self._galleryBridge = _AudioGalleryBridge(self, filter)
+        channel.registerObject("galleryBridge", self._galleryBridge)
+
+        self.webView.setHtml(html)
+        self._buildFilterTitle(filter, "Recordings by Species",
+                               count=total_species, countUnit="Species")
+        return True
+
+
     def loadEffortMap(self, filter, mode='time'):
 
         from copy import deepcopy
@@ -4239,7 +4829,7 @@ body {{ background:#16171d; color:#e2e4ec;
             seen_set.add(name)
             seen_set.add(_base(name))
 
-        # Photo set: only when a photo catalog is open
+        # Photo set: only when a media catalog is open
         photos_open = self.mdiParent.db.photoDataFileOpenFlag
         photo_set = set()
         if photos_open and not _forced_empty:
