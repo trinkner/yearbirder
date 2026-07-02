@@ -19,7 +19,10 @@ class Ui_frmRenameMedia(object):
         self.frmContainer.setObjectName("frmContainer")
         self.mainLayout = QtWidgets.QVBoxLayout(self.frmContainer)
         self.mainLayout.setContentsMargins(8, 8, 8, 8)
-        self.mainLayout.setSpacing(6)
+        # Spacing is 0; each inter-section gap is set explicitly with addSpacing()
+        # so it is an exact pixel value (a non-zero base spacing would otherwise
+        # be added on both sides of every inserted spacer).
+        self.mainLayout.setSpacing(0)
 
         # ══════════════════════════════════════════════════════════════════════
         # SECTION 1 — Name Format
@@ -29,7 +32,7 @@ class Ui_frmRenameMedia(object):
         self.frmFormat.setObjectName("frmFormat")
         self.frmFormatLayout = QtWidgets.QVBoxLayout(self.frmFormat)
         self.frmFormatLayout.setContentsMargins(0, 0, 0, 0)
-        self.frmFormatLayout.setSpacing(4)
+        self.frmFormatLayout.setSpacing(0)   # gaps set explicitly via addSpacing()
 
         # Section title
         self.lblFormatTitle = QtWidgets.QLabel(self.frmFormat)
@@ -39,6 +42,7 @@ class Ui_frmRenameMedia(object):
         font.setWeight(QtGui.QFont.Weight.Bold)
         self.lblFormatTitle.setFont(font)
         self.frmFormatLayout.addWidget(self.lblFormatTitle)
+        self.frmFormatLayout.addSpacing(5)
 
         # Slot row
         self.frmSlots = QtWidgets.QFrame(self.frmFormat)
@@ -49,57 +53,24 @@ class Ui_frmRenameMedia(object):
         self.slotsLayout.setSpacing(8)
 
         for n in range(1, 5):
+            # Each slot is a vertical column: label on top, combo below.
+            slotCol = QtWidgets.QVBoxLayout()
+            slotCol.setContentsMargins(0, 0, 0, 0)
+            slotCol.setSpacing(5)
             lbl = QtWidgets.QLabel(self.frmSlots)
             lbl.setObjectName(f"lblSlot{n}")
-            self.slotsLayout.addWidget(lbl)
+            slotCol.addWidget(lbl)
             cbo = QtWidgets.QComboBox(self.frmSlots)
             cbo.setObjectName(f"cboSlot{n}")
-            cbo.setMinimumWidth(110)
-            self.slotsLayout.addWidget(cbo)
+            cbo.setMinimumWidth(180)   # holds full "Category: Format" strings
+            slotCol.addWidget(cbo)
+            self.slotsLayout.addLayout(slotCol)
             setattr(self, f"lblSlot{n}", lbl)
             setattr(self, f"cboSlot{n}", cbo)
 
         self.slotsLayout.addStretch()
         self.frmFormatLayout.addWidget(self.frmSlots)
-
-        # Date/time format row
-        self.frmFormats = QtWidgets.QFrame(self.frmFormat)
-        self.frmFormats.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
-        self.frmFormats.setObjectName("frmFormats")
-        self.formatsLayout = QtWidgets.QHBoxLayout(self.frmFormats)
-        self.formatsLayout.setContentsMargins(0, 0, 0, 0)
-        self.formatsLayout.setSpacing(8)
-
-        self.lblDateFormat = QtWidgets.QLabel(self.frmFormats)
-        self.lblDateFormat.setObjectName("lblDateFormat")
-        self.formatsLayout.addWidget(self.lblDateFormat)
-        self.cboDateFormat = QtWidgets.QComboBox(self.frmFormats)
-        self.cboDateFormat.setObjectName("cboDateFormat")
-        self.cboDateFormat.setMinimumWidth(130)
-        self.formatsLayout.addWidget(self.cboDateFormat)
-
-        self.formatsLayout.addSpacing(16)
-
-        self.lblTimeFormat = QtWidgets.QLabel(self.frmFormats)
-        self.lblTimeFormat.setObjectName("lblTimeFormat")
-        self.formatsLayout.addWidget(self.lblTimeFormat)
-        self.cboTimeFormat = QtWidgets.QComboBox(self.frmFormats)
-        self.cboTimeFormat.setObjectName("cboTimeFormat")
-        self.cboTimeFormat.setMinimumWidth(130)
-        self.formatsLayout.addWidget(self.cboTimeFormat)
-
-        self.formatsLayout.addSpacing(16)
-
-        self.lblNameFormat = QtWidgets.QLabel(self.frmFormats)
-        self.lblNameFormat.setObjectName("lblNameFormat")
-        self.formatsLayout.addWidget(self.lblNameFormat)
-        self.cboNameFormat = QtWidgets.QComboBox(self.frmFormats)
-        self.cboNameFormat.setObjectName("cboNameFormat")
-        self.cboNameFormat.setMinimumWidth(150)
-        self.formatsLayout.addWidget(self.cboNameFormat)
-
-        self.formatsLayout.addStretch()
-        self.frmFormatLayout.addWidget(self.frmFormats)
+        self.frmFormatLayout.addSpacing(15)   # combos → Sample
 
         # Sample filename label
         self.lblSample = QtWidgets.QLabel(self.frmFormat)
@@ -107,13 +78,7 @@ class Ui_frmRenameMedia(object):
         self.frmFormatLayout.addWidget(self.lblSample)
 
         self.mainLayout.addWidget(self.frmFormat)
-
-        # Separator 1
-        self.lineSep1 = QtWidgets.QFrame(self.frmContainer)
-        self.lineSep1.setFrameShape(QtWidgets.QFrame.Shape.HLine)
-        self.lineSep1.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
-        self.lineSep1.setObjectName("lineSep1")
-        self.mainLayout.addWidget(self.lineSep1)
+        self.mainLayout.addSpacing(15)   # Sample → Options
 
         # ══════════════════════════════════════════════════════════════════════
         # SECTION 2 — Options
@@ -137,42 +102,13 @@ class Ui_frmRenameMedia(object):
         self.chkRemoveSpaces.setChecked(True)
         self.frmOptionsLayout.addWidget(self.chkRemoveSpaces)
 
-        # Checklist time fallback checkbox
-        self.chkUseChecklistTime = QtWidgets.QCheckBox(self.frmOptions)
-        self.chkUseChecklistTime.setObjectName("chkUseChecklistTime")
-        self.chkUseChecklistTime.setChecked(True)
-        self.frmOptionsLayout.addWidget(self.chkUseChecklistTime)
-
         # Shorten location names checkbox
         self.chkShortenLocation = QtWidgets.QCheckBox(self.frmOptions)
         self.chkShortenLocation.setObjectName("chkShortenLocation")
         self.frmOptionsLayout.addWidget(self.chkShortenLocation)
 
-        # Add tenths checkbox
-        self.chkAddTenths = QtWidgets.QCheckBox(self.frmOptions)
-        self.chkAddTenths.setObjectName("chkAddTenths")
-        self.frmOptionsLayout.addWidget(self.chkAddTenths)
-
-        self.frmOptionsLayout.addSpacing(8)
-
-        # Duplicate-suffix note
-        self.lblDuplicateNote = QtWidgets.QLabel(self.frmOptions)
-        self.lblDuplicateNote.setObjectName("lblDuplicateNote")
-        self.frmOptionsLayout.addWidget(self.lblDuplicateNote)
-
-        # Backup warning
-        self.lblWarning = QtWidgets.QLabel(self.frmOptions)
-        self.lblWarning.setObjectName("lblWarning")
-        self.frmOptionsLayout.addWidget(self.lblWarning)
-
         self.mainLayout.addWidget(self.frmOptions)
-
-        # Separator 2
-        self.lineSep2 = QtWidgets.QFrame(self.frmContainer)
-        self.lineSep2.setFrameShape(QtWidgets.QFrame.Shape.HLine)
-        self.lineSep2.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
-        self.lineSep2.setObjectName("lineSep2")
-        self.mainLayout.addWidget(self.lineSep2)
+        self.mainLayout.addSpacing(15)   # Options → table
 
         # ══════════════════════════════════════════════════════════════════════
         # TABLE
@@ -186,7 +122,7 @@ class Ui_frmRenameMedia(object):
         self.tblPhotos.setSelectionMode(
             QtWidgets.QAbstractItemView.SelectionMode.NoSelection)
         self.tblPhotos.setHorizontalScrollBarPolicy(
-            QtCore.Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.tblPhotos.horizontalHeader().setVisible(True)
         self.tblPhotos.horizontalHeader().setHighlightSections(False)
         self.tblPhotos.horizontalHeader().setStretchLastSection(False)
@@ -207,13 +143,7 @@ class Ui_frmRenameMedia(object):
             3, QtWidgets.QHeaderView.ResizeMode.Interactive)
 
         self.mainLayout.addWidget(self.tblPhotos, stretch=1)
-
-        # Separator 3
-        self.lineSep3 = QtWidgets.QFrame(self.frmContainer)
-        self.lineSep3.setFrameShape(QtWidgets.QFrame.Shape.HLine)
-        self.lineSep3.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
-        self.lineSep3.setObjectName("lineSep3")
-        self.mainLayout.addWidget(self.lineSep3)
+        self.mainLayout.addSpacing(15)   # table → buttons
 
         # ══════════════════════════════════════════════════════════════════════
         # FOOTER
@@ -265,39 +195,27 @@ class Ui_frmRenameMedia(object):
         frmRenameMedia.setWindowTitle(_t("frmRenameMedia", "Rename Media"))
 
         # Section 1
-        self.lblFormatTitle.setText(_t("frmRenameMedia", "Name Format"))
+        self.lblFormatTitle.setText(_t("frmRenameMedia", "File Name Format"))
         for n in range(1, 5):
             getattr(self, f"lblSlot{n}").setText(
-                _t("frmRenameMedia", f"Slot {n}:"))
-        self.lblDateFormat.setText(_t("frmRenameMedia", "Date Format:"))
-        self.lblTimeFormat.setText(_t("frmRenameMedia", "Time Format:"))
-        self.lblNameFormat.setText(_t("frmRenameMedia", "Species Name Format:"))
+                _t("frmRenameMedia", f"Part {n}"))
         self.lblSample.setText(_t("frmRenameMedia", "Sample: —"))
 
         # Section 2
         self.lblOptionsTitle.setText(_t("frmRenameMedia", "Options"))
-        self.chkUseChecklistTime.setText(_t("frmRenameMedia",
-            "Use checklist time for media without metadata"))
         self.chkShortenLocation.setText(_t("frmRenameMedia",
             "Shorten location name to the first punctuation mark (, - : @ ( )"))
-        self.chkAddTenths.setText(_t("frmRenameMedia",
-            "If photos have the same HH-MM-SS, add tenths (if available)"))
         self.chkRemoveSpaces.setText(_t("frmRenameMedia", "Remove spaces"))
-        self.lblDuplicateNote.setText(_t("frmRenameMedia",
-            "When files would share the same proposed name, Yearbirder will add _1, _2, etc."))
-        self.lblWarning.setText(_t("frmRenameMedia",
-            "⚠  Renaming is permanent and cannot be undone. "
-            "Backup your media before proceeding."))
 
         # Table headers
         self.tblPhotos.setHorizontalHeaderItem(
             0, QtWidgets.QTableWidgetItem(""))
         self.tblPhotos.setHorizontalHeaderItem(
             1, QtWidgets.QTableWidgetItem(
-                _t("frmRenameMedia", "Current Filename")))
+                _t("frmRenameMedia", "Current File Name")))
         self.tblPhotos.setHorizontalHeaderItem(
             2, QtWidgets.QTableWidgetItem(
-                _t("frmRenameMedia", "Proposed Filename")))
+                _t("frmRenameMedia", "Proposed File Name")))
         self.tblPhotos.setHorizontalHeaderItem(
             3, QtWidgets.QTableWidgetItem(
                 _t("frmRenameMedia", "Status")))

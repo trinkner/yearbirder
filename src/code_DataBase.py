@@ -15,6 +15,129 @@ from math import floor
 import wave
 from natsort import natsorted
 
+# libsndfile (via soundfile) reads audio-format metadata for ALL formats the app
+# supports — 24-bit, 32-bit float (Zoom F3), FLAC, AIFF — where the stdlib `wave`
+# module fails.  Guarded so the data layer degrades gracefully if it's missing.
+try:
+    import soundfile as _sf
+except Exception:
+    _sf = None
+
+# libsndfile subtype -> friendly bit-depth label shown in the Media Filter.
+_BIT_DEPTH_LABELS = {
+    "PCM_S8": "8-bit", "PCM_U8": "8-bit",
+    "PCM_16": "16-bit", "PCM_24": "24-bit", "PCM_32": "32-bit",
+    "FLOAT": "32-bit float", "DOUBLE": "64-bit float",
+}
+# Display order for the bit-depth multi-select (low fidelity -> high).
+_BIT_DEPTH_ORDER = ["8-bit", "16-bit", "24-bit", "32-bit", "32-bit float", "64-bit float"]
+
+
+def _bit_depth_label(subtype):
+    """Friendly bit-depth label for a libsndfile subtype, or '' if unknown."""
+    return _BIT_DEPTH_LABELS.get(subtype, "")
+
+
+def _hz_from_rate_str(s):
+    """Parse a sample-rate string ('48000 Hz', '48 kHz', '44.1 kHz') to an int
+    number of Hz, or None.  Accepts either the catalog ('… Hz') or combo
+    ('… kHz') format so the same matcher handles both."""
+    if not s:
+        return None
+    t = str(s).strip().lower()
+    try:
+        if "khz" in t:
+            return int(round(float(t.replace("khz", "").strip()) * 1000))
+        if "hz" in t:
+            return int(round(float(t.replace("hz", "").strip())))
+        return int(round(float(t)))
+    except Exception:
+        return None
+
+
+def _khz_label(hz):
+    """Format an Hz int as a kHz combo label ('48 kHz', '44.1 kHz')."""
+    return f"{hz / 1000:g} kHz"
+
+
+def _glean_audio_format(fileName):
+    """Return (sampleRate_str, bitDepth_str, channels_str) for an audio file via
+    libsndfile.  Handles every format the app supports; empty strings on any
+    failure or if soundfile is unavailable."""
+    if _sf is None:
+        return "", "", ""
+    try:
+        info = _sf.info(fileName)
+        return (f"{info.samplerate} Hz",
+                _bit_depth_label(info.subtype),
+                "Stereo" if info.channels == 2 else "Mono")
+    except Exception:
+        return "", "", ""
+
+
+def _exif_datetime_from_dict(exif_dict):
+    """(datetime_str 'YYYY:MM:DD HH:MM:SS' | None, subsec_str | None, bad_flag).
+
+    Mirrors code_RenameMedia._readExifDatetime but operates on an already-loaded
+    piexif dict, so a caller that has read EXIF (e.g. getPhotoData) can capture
+    the photo's exact shooting time without a second file read.  bad_flag is True
+    when EXIF was present but the date was invalid or undecodable.
+    """
+    try:
+        dt_raw = exif_dict.get("Exif", {}).get(piexif.ExifIFD.DateTimeOriginal)
+    except Exception:
+        return None, None, False
+    if dt_raw is None:
+        return None, None, False
+    try:
+        dt_str = dt_raw.decode("utf-8")
+    except Exception:
+        return None, None, True
+    try:
+        if len(dt_str) < 19:
+            raise ValueError
+        year = int(dt_str[0:4]); month = int(dt_str[5:7]); day = int(dt_str[8:10])
+        hour = int(dt_str[11:13]); minute = int(dt_str[14:16])
+        if not (1 <= month <= 12 and 1 <= day <= 31 and 0 <= hour <= 23
+                and 0 <= minute <= 59 and year > 0):
+            raise ValueError
+    except (ValueError, IndexError):
+        return None, None, True
+    sub_raw = exif_dict.get("Exif", {}).get(piexif.ExifIFD.SubSecTimeOriginal)
+    sub_str = None
+    if sub_raw is not None:
+        try:
+            sub_str = sub_raw.decode("utf-8").strip("\x00").strip()
+        except Exception:
+            pass
+    return dt_str, sub_str, False
+
+
+def _photo_exif_fields(p):
+    """Optional catalog fields carrying a photo's cached EXIF capture time.
+
+    Emitted only when the value is known (the ``exifDatetime`` key is present),
+    so legacy records that were never gleaned stay un-cached and are read on
+    demand the first time Rename Media needs them."""
+    if "exifDatetime" not in p:
+        return {}
+    return {
+        "ExifDateTime":    p.get("exifDatetime") or "",
+        "ExifSubSec":      p.get("exifSubsec") or "",
+        "ExifDateInvalid": bool(p.get("exifDateInvalid")),
+    }
+
+
+def _recording_meta_fields(a):
+    """Optional catalog fields carrying a recording's cached embedded date/time."""
+    if "metaDate" not in a:
+        return {}
+    return {
+        "MetaDate": a.get("metaDate") or "",
+        "MetaTime": a.get("metaTime") or "",
+    }
+
+
 from PySide6.QtWidgets import (
     QApplication,
     QMessageBox
@@ -25,14 +148,26 @@ from PySide6.QtWidgets import (
 _MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                 "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
+def _hhmm_to_minutes(t):
+    """Parse an 'HH:MM' time string to minutes since midnight, or None when the
+    value is blank or malformed (e.g. a checklist with no recorded start time)."""
+    try:
+        return 60 * int(t[0:2]) + int(t[3:5])
+    except (ValueError, IndexError, TypeError):
+        return None
+
+
 def _checklist_distance(c, photo_minutes):
     """Return minutes between photo_minutes and the nearest edge of checklist c.
 
     Returns 0 if the photo was taken during the checklist (i.e. within the
     window [start, start+duration]).  c is a GetChecklists() row where
     c[5] = start time "HH:MM" and c[7] = duration (str, int, or empty/None).
+    Checklists without a usable start time sort last.
     """
-    start = 60 * int(c[5][0:2]) + int(c[5][3:5])
+    start = _hhmm_to_minutes(c[5])
+    if start is None:
+        return float('inf')
     dur   = int(c[7]) if c[7] else 0
     end   = start + dur
     if start <= photo_minutes <= end:
@@ -92,7 +227,9 @@ def _read_wav_metadata_datetime(filepath):
     import struct as _struct
 
     def _parse_date(s):
-        m = re.match(r'(20\d\d)[-./](0[1-9]|1[0-2])[-./](0[1-9]|[12]\d|3[01])',
+        # Accept -, ., / or : as separators (BWF OriginationDate is usually
+        # YYYY-MM-DD but some recorders write YYYY:MM:DD).
+        m = re.match(r'(20\d\d)[-./:](0[1-9]|1[0-2])[-./:](0[1-9]|[12]\d|3[01])',
                      (s or '').strip())
         return f'{m.group(1)}-{m.group(2)}-{m.group(3)}' if m else ''
 
@@ -168,12 +305,15 @@ def _read_wav_metadata_datetime(filepath):
                 data_pos = pos + 8
 
                 # ── BWF bext ─────────────────────────────────────────────────
-                # OriginationDate at offset 256 (10 bytes), OriginationTime at 266 (8 bytes).
-                if cid == b'bext' and csz >= 274 and not bext_result:
+                # Per EBU Tech 3285, the 'bext' chunk layout is:
+                #   Description 0-255, Originator 256-287, OriginatorReference
+                #   288-319, OriginationDate 320-329 (10 bytes, YYYY-MM-DD),
+                #   OriginationTime 330-337 (8 bytes, HH:MM:SS).
+                if cid == b'bext' and csz >= 338 and not bext_result:
                     fh.seek(data_pos)
-                    data = fh.read(min(csz, 300))
-                    orig_date = data[256:266].split(b'\x00')[0].decode('ascii', 'replace').strip()
-                    orig_time = data[266:274].split(b'\x00')[0].decode('ascii', 'replace').strip()
+                    data = fh.read(min(csz, 512))
+                    orig_date = data[320:330].split(b'\x00')[0].decode('ascii', 'replace').strip()
+                    orig_time = data[330:338].split(b'\x00')[0].decode('ascii', 'replace').strip()
                     d = _parse_date(orig_date)
                     if d:
                         bext_result = (d, _parse_time(orig_time[:5]))
@@ -238,6 +378,63 @@ def _read_wav_metadata_datetime(filepath):
     return result if result else ('', '')
 
 
+def _read_wav_device(filepath):
+    """Return the recording device/model from WAV metadata, or ''.
+
+    Priority: BWF 'bext' Originator (field recorders, e.g. 'ZOOM F3') > a
+    'Recorded with <device>' phrase in a RIFF INFO comment (e.g. the Shure MOTIV
+    app writes 'Recorded with Shure MV88.').  Files with no metadata return ''.
+    """
+    import struct as _struct
+    try:
+        with open(filepath, 'rb') as fh:
+            header = fh.read(12)
+            if len(header) < 12 or header[:4] != b'RIFF' or header[8:12] != b'WAVE':
+                return ''
+            originator = ''
+            comment = ''
+            pos = 12
+            while True:
+                fh.seek(pos)
+                chunk_hdr = fh.read(8)
+                if len(chunk_hdr) < 8:
+                    break
+                cid = chunk_hdr[:4]
+                csz = _struct.unpack_from('<I', chunk_hdr, 4)[0]
+                data_pos = pos + 8
+                if cid == b'bext' and csz >= 288 and not originator:
+                    fh.seek(data_pos)
+                    data = fh.read(min(csz, 288))
+                    originator = data[256:288].split(b'\x00')[0].decode('latin-1', 'replace').strip()
+                elif cid == b'LIST':
+                    fh.seek(data_pos)
+                    if fh.read(4) == b'INFO' and not comment:
+                        sub_pos = data_pos + 4
+                        sub_end = data_pos + csz
+                        while sub_pos + 8 <= sub_end:
+                            fh.seek(sub_pos)
+                            sh = fh.read(8)
+                            if len(sh) < 8:
+                                break
+                            sid = sh[:4]
+                            ssz = _struct.unpack_from('<I', sh, 4)[0]
+                            if sid in (b'ICMT', b'CMNT', b'COMM'):
+                                fh.seek(sub_pos + 8)
+                                comment = fh.read(ssz).split(b'\x00')[0].decode('latin-1', 'replace')
+                                break
+                            sub_pos += 8 + ssz + (ssz % 2)
+                pos += 8 + csz + (csz % 2)
+            if originator:
+                return originator
+            if comment:
+                m = re.search(r'[Rr]ecorded with\s+(.+?)\s*[.\n]', comment)
+                if m:
+                    return m.group(1).strip()
+    except Exception:
+        return ''
+    return ''
+
+
 class DataBase():
 
     # this is the class that will store all our data and the data-seeking logic 
@@ -261,6 +458,9 @@ class DataBase():
         self.focalLengthList=[]
         self.isoList = []
         self.durationList = []
+        self.sampleRateList = []
+        self.bitDepthList = []
+        self.deviceList = []
         self.sightingList = []
         self.eBirdFileOpenFlag = False
         self.eBirdFilePath = ""
@@ -486,7 +686,9 @@ class DataBase():
                 startTimes = self.GetStartTimes(filterWithLocation)
                 if startTimes:
                     photoMinutes = 60 * int(photoTime[0:2]) + int(photoTime[3:5])
-                    photoTime = min(startTimes, key=lambda t: abs(60 * int(t[0:2]) + int(t[3:5]) - photoMinutes))
+                    _valid = [t for t in startTimes if _hhmm_to_minutes(t) is not None]
+                    if _valid:
+                        photoTime = min(_valid, key=lambda t: abs(_hhmm_to_minutes(t) - photoMinutes))
 
         else:
             photoLocation = ""
@@ -551,7 +753,9 @@ class DataBase():
                 startTimes = self.GetStartTimes(filterWithLocation)
                 if startTimes:
                     toggledMinutes = 60 * toggledHour + int(toggledTime[3:5])
-                    photoTime = min(startTimes, key=lambda t: abs(60 * int(t[0:2]) + int(t[3:5]) - toggledMinutes))
+                    _valid = [t for t in startTimes if _hhmm_to_minutes(t) is not None]
+                    if _valid:
+                        photoTime = min(_valid, key=lambda t: abs(_hhmm_to_minutes(t) - toggledMinutes))
             elif len(toggledLocations) > 1:
                 filter = code_Filter.Filter()
                 filter.setStartDate(photoDate)
@@ -731,7 +935,11 @@ class DataBase():
             photoExifDate = "Date unknown"
             photoExifTime = "Time unknown"
         
-        photoData["fileName"] = fileName                    
+        # Exact shooting time for Rename Media — extracted from the EXIF already
+        # loaded above, so it is cached in the catalog and never re-read per file.
+        exif_dt, exif_sub, exif_bad = _exif_datetime_from_dict(exif_dict)
+
+        photoData["fileName"] = fileName
         photoData["camera"] = photoCamera
         photoData["lens"] = photoLens
         photoData["shutterSpeed"] = str(photoShutterSpeed)
@@ -741,7 +949,10 @@ class DataBase():
         photoData["time"] = photoExifTime
         photoData["date"] = photoExifDate
         photoData["rating"] = "0"
-        
+        photoData["exifDatetime"] = exif_dt
+        photoData["exifSubsec"] = exif_sub
+        photoData["exifDateInvalid"] = exif_bad
+
         return(photoData)
 
 
@@ -830,6 +1041,22 @@ class DataBase():
             h, mi = m.group(4), m.group(5)
             return f"{y}-{mo}-{d}", (f"{h}:{mi}" if h and mi else "")
 
+        # Fall back to a 2-digit year: YY[sep]MM[sep]DD optionally followed by
+        # [sep]HH[sep]MM — e.g. the Zoom F3's 260702_007 → 2026-07-02.  Only
+        # reached when no 4-digit-year date matched, so YYYYMMDD is preferred.
+        # The lookbehind stops YY from being grabbed out of the middle of a
+        # longer digit run; a 2-digit year is assumed to be 20YY.
+        yy_p = r'(\d\d)'
+        m = re.search(
+            r'(?<!\d)' + yy_p + S + mon_p + S + day_p +
+            r'(?:' + S + hr_p + S + min_p + r')?',
+            name,
+        )
+        if m:
+            yy, mo, d = m.group(1), m.group(2), m.group(3)
+            h, mi = m.group(4), m.group(5)
+            return f"20{yy}-{mo}-{d}", (f"{h}:{mi}" if h and mi else "")
+
         return "", ""
 
     def getRecordingData(self, fileName):
@@ -838,6 +1065,10 @@ class DataBase():
 
         meta_date, meta_time = _read_wav_metadata_datetime(fileName)
         fn_date, fn_time = self._parseDateTimeFromFilename(fileName)
+        # Embedded file metadata date/time, kept separately from the assigned
+        # date/time so the UI can show the user what the file itself records.
+        recordingData["metaDate"] = meta_date or ""
+        recordingData["metaTime"] = meta_time or ""
         if meta_date:
             recordingData["date"] = meta_date
             recordingData["time"] = meta_time
@@ -853,22 +1084,33 @@ class DataBase():
         except Exception:
             recordingData["mtime"] = ""
 
+        # Audio format metadata via libsndfile (all formats incl. 24-bit, 32-bit
+        # float, FLAC); the stdlib wave module can't read those.
         try:
-            with wave.open(fileName, 'r') as wf:
-                fs = wf.getframerate()
-                n = wf.getnframes()
-                dur = n / fs if fs else 0
-                ch = wf.getnchannels()
+            info = _sf.info(fileName) if _sf is not None else None
+            if info is None:
+                raise ValueError
+            dur = info.frames / info.samplerate if info.samplerate else 0
             m_part, s_part = divmod(int(dur), 60)
             recordingData["duration"] = f"{m_part}:{s_part:02d}"
-            recordingData["sampleRate"] = f"{fs} Hz"
-            recordingData["channels"] = "Stereo" if ch == 2 else "Mono"
+            recordingData["sampleRate"] = f"{info.samplerate} Hz"
+            recordingData["bitDepth"] = _bit_depth_label(info.subtype)
+            recordingData["channels"] = "Stereo" if info.channels == 2 else "Mono"
         except Exception:
             recordingData["duration"] = ""
             recordingData["sampleRate"] = ""
+            recordingData["bitDepth"] = ""
             recordingData["channels"] = ""
 
+        recordingData["device"] = _read_wav_device(fileName)
+
         return recordingData
+
+    def getRecordingMetaDatetime(self, filepath):
+        """Return a recording's embedded (date 'YYYY-MM-DD', time 'HH:MM'), or
+        ('', ''). Lightweight header read used by Rename Media to backfill the
+        cached metaDate/metaTime for catalogs that predate that field."""
+        return _read_wav_metadata_datetime(filepath)
 
     def readWavMetadateDatetime(self, filepath):
         """Return WAV metadata datetime as an EXIF-format string, or None.
@@ -930,7 +1172,9 @@ class DataBase():
                 startTimes = self.GetStartTimes(fwl)
                 if startTimes:
                     am = 60 * int(recordingTime[0:2]) + int(recordingTime[3:5])
-                    recordingTime = min(startTimes, key=lambda t: abs(60 * int(t[0:2]) + int(t[3:5]) - am))
+                    _valid = [t for t in startTimes if _hhmm_to_minutes(t) is not None]
+                    if _valid:
+                        recordingTime = min(_valid, key=lambda t: abs(_hhmm_to_minutes(t) - am))
         else:
             recordingLocation = ""
 
@@ -1125,6 +1369,7 @@ class DataBase():
                             "FocalLength": p["focalLength"],
                             "Rating":      p["rating"],
                         }
+                        record.update(_photo_exif_fields(p))
                         f.write(json.dumps(record) + '\n')
                 # Wave 2: audio
                 for s in recordingSightings:
@@ -1136,8 +1381,12 @@ class DataBase():
                             "FileName":    a["fileName"],
                             "Duration":    a.get("duration", ""),
                             "SampleRate":  a.get("sampleRate", ""),
+                            "BitDepth":    a.get("bitDepth", ""),
+                            "Channels":    a.get("channels", ""),
+                            "Device":      a.get("device", ""),
                             "Rating":      a.get("rating", "0"),
                         }
+                        record.update(_recording_meta_fields(a))
                         f.write(json.dumps(record) + '\n')
         except IOError as err:
             msg = QMessageBox()
@@ -1164,6 +1413,7 @@ class DataBase():
             "FocalLength": photoData["focalLength"],
             "Rating":      photoData["rating"],
         }
+        record.update(_photo_exif_fields(photoData))
         with open(self.photoDataFile, mode='a', encoding='utf-8') as f:
             f.write(json.dumps(record) + '\n')
 
@@ -1230,9 +1480,12 @@ class DataBase():
             "FileName":    recordingData["fileName"],
             "Duration":    recordingData.get("duration", ""),
             "SampleRate":  recordingData.get("sampleRate", ""),
+            "BitDepth":    recordingData.get("bitDepth", ""),
             "Channels":    recordingData.get("channels", ""),
+            "Device":      recordingData.get("device", ""),
             "Rating":      recordingData.get("rating", "0"),
         }
+        record.update(_recording_meta_fields(recordingData))
         with open(self.photoDataFile, mode='a', encoding='utf-8') as f:
             f.write(json.dumps(record) + '\n')
 
@@ -1286,6 +1539,10 @@ class DataBase():
                     photoData["focalLength"] = row["FocalLength"]
                     rating = row.get("Rating", "0")
                     photoData["rating"] = rating if rating in ["0","1","2","3","4","5"] else "0"
+                    if "ExifDateTime" in row:
+                        photoData["exifDatetime"] = row.get("ExifDateTime") or None
+                        photoData["exifSubsec"] = row.get("ExifSubSec") or None
+                        photoData["exifDateInvalid"] = bool(row.get("ExifDateInvalid"))
                     self.addPhotoToDatabase(filter, photoData, skip_file_check=True)
         except Exception:
             pass
@@ -1341,6 +1598,12 @@ class DataBase():
                 photoData["focalLength"] = row.get("FocalLength", "")
                 rating = row.get("Rating", "0")
                 photoData["rating"] = rating if rating in ["0","1","2","3","4","5"] else "0"
+                # Cached EXIF capture time (present only once gleaned); absent →
+                # Rename Media reads it on demand and caches it back.
+                if "ExifDateTime" in row:
+                    photoData["exifDatetime"] = row.get("ExifDateTime") or None
+                    photoData["exifSubsec"] = row.get("ExifSubSec") or None
+                    photoData["exifDateInvalid"] = bool(row.get("ExifDateInvalid"))
                 self.addPhotoToDatabase(filter, photoData, skip_file_check=True)
 
             for (fn, checklistID, commonName), row in recordings_state.items():
@@ -1350,17 +1613,31 @@ class DataBase():
                 recordingData = {}
                 recordingData["fileName"] = fn
                 recordingData["duration"] = row.get("Duration", "")
-                recordingData["sampleRate"] = row.get("SampleRate", "")
+                sr_val = row.get("SampleRate", "")
+                bd_val = row.get("BitDepth", "")
                 ch_val = row.get("Channels", "")
-                if not ch_val and os.path.isfile(fn):
-                    try:
-                        with wave.open(fn, 'r') as wf:
-                            ch_val = "Stereo" if wf.getnchannels() == 2 else "Mono"
-                    except Exception:
-                        pass
+                # Backfill format fields for catalogs written before these were
+                # captured (one cheap header read via libsndfile).
+                if (not sr_val or not bd_val or not ch_val) and os.path.isfile(fn):
+                    g_sr, g_bd, g_ch = _glean_audio_format(fn)
+                    sr_val = sr_val or g_sr
+                    bd_val = bd_val or g_bd
+                    ch_val = ch_val or g_ch
+                recordingData["sampleRate"] = sr_val
+                recordingData["bitDepth"] = bd_val
                 recordingData["channels"] = ch_val
+                # Recording device: backfill from the file if not persisted yet.
+                dev_val = row.get("Device", "")
+                if not dev_val and "Device" not in row and os.path.isfile(fn):
+                    dev_val = _read_wav_device(fn)
+                recordingData["device"] = dev_val
                 rating = row.get("Rating", "0")
                 recordingData["rating"] = rating if rating in ["0","1","2","3","4","5"] else "0"
+                # Cached embedded date/time (present only once gleaned); absent →
+                # Rename Media reads it on demand and caches it back.
+                if "MetaDate" in row:
+                    recordingData["metaDate"] = row.get("MetaDate") or ""
+                    recordingData["metaTime"] = row.get("MetaTime") or ""
                 self.addRecordingToDatabase(filter, recordingData, skip_file_check=True)
         except Exception:
             pass
@@ -1411,6 +1688,10 @@ class DataBase():
     def refreshRecordingsLists(self):
         import math
         duration_set = set()
+        rate_set = set()
+        depth_set = set()
+        device_set = set()
+        has_unknown_device = False
         for s in self.sightingList:
             if "audio" in s:
                 for a in s["audio"]:
@@ -1424,7 +1705,26 @@ class DataBase():
                                 duration_set.add(rounded)
                         except (ValueError, IndexError):
                             pass
+                    hz = _hz_from_rate_str(a.get("sampleRate", ""))
+                    if hz:
+                        rate_set.add(hz)
+                    bd = a.get("bitDepth", "")
+                    if bd:
+                        depth_set.add(bd)
+                    dev = a.get("device", "")
+                    if dev:
+                        device_set.add(dev)
+                    else:
+                        has_unknown_device = True
         self.durationList = [f"{d}s" for d in sorted(duration_set)]
+        # Sample rates as kHz combo labels, low→high; bit depths in fidelity order.
+        self.sampleRateList = [_khz_label(hz) for hz in sorted(rate_set)]
+        self.bitDepthList = [d for d in _BIT_DEPTH_ORDER if d in depth_set]
+        # Recording devices found (alphabetical); "Unknown" last if any recording
+        # has no device metadata, so those can still be filtered.
+        self.deviceList = sorted(device_set)
+        if has_unknown_device:
+            self.deviceList.append("Unknown")
 
 
     def CountSpecies(self, speciesList):
@@ -2788,6 +3088,10 @@ class DataBase():
             'endRecordingRating':      filter.getEndRecordingRating(),
             'startDuration':       filter.getStartDuration(),
             'endDuration':         filter.getEndDuration(),
+            'startSampleRate':     filter.getStartSampleRate(),
+            'endSampleRate':       filter.getEndSampleRate(),
+            'bitDepths':           filter.getBitDepths(),
+            'device':              filter.getDevice(),
         }
 
     def TestSightingCompiled(self, sighting, cf):
@@ -2832,6 +3136,10 @@ class DataBase():
         endRecordingRating = cf['endRecordingRating']
         startDuration = cf['startDuration']
         endDuration = cf['endDuration']
+        startSampleRate = cf['startSampleRate']
+        endSampleRate = cf['endSampleRate']
+        bitDepths = cf['bitDepths']
+        device = cf['device']
 
         # Check every filter setting. Return False immediately if sighting fails.
         # If sighting survives the filter, return True
@@ -3280,7 +3588,11 @@ class DataBase():
             startRecordingRating != "" or
             endRecordingRating != "" or
             startDuration != "" or
-            endDuration != ""
+            endDuration != "" or
+            startSampleRate != "" or
+            endSampleRate != "" or
+            bitDepths != [] or
+            device != ""
         ):
             if "audio" not in sighting:
                 return False
@@ -3366,6 +3678,39 @@ class DataBase():
                         if lo <= s <= hi:
                             durationOK = True
                 if not durationOK:
+                    return False
+
+            if startSampleRate != "" or endSampleRate != "":
+                lo = _hz_from_rate_str(startSampleRate)
+                hi = _hz_from_rate_str(endSampleRate)
+                if lo is not None and hi is not None and lo > hi:
+                    lo, hi = hi, lo
+                rateOK = False
+                for a in sighting["audio"]:
+                    hz = _hz_from_rate_str(a.get("sampleRate", ""))
+                    if hz is None:
+                        continue
+                    if (lo is None or hz >= lo) and (hi is None or hz <= hi):
+                        rateOK = True
+                if not rateOK:
+                    return False
+
+            if bitDepths != []:
+                depthOK = False
+                for a in sighting["audio"]:
+                    if a.get("bitDepth", "") in bitDepths:
+                        depthOK = True
+                if not depthOK:
+                    return False
+
+            if device != "":
+                # "Unknown" matches recordings with no device metadata.
+                wanted = "" if device == "Unknown" else device
+                deviceOK = False
+                for a in sighting["audio"]:
+                    if a.get("device", "") == wanted:
+                        deviceOK = True
+                if not deviceOK:
                     return False
 
         # if we've arrived here, the sighting passes the filter.
@@ -3468,6 +3813,9 @@ class DataBase():
         self.focalLengthList=[]
         self.isoList = []
         self.durationList = []
+        self.sampleRateList = []
+        self.bitDepthList = []
+        self.deviceList = []
 
         # remove photo data from sightings
         for s in self.sightingList:

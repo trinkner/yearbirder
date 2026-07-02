@@ -40,6 +40,10 @@ class Filter():
     endRecordingRating = ""
     startDuration = ""
     endDuration = ""
+    startSampleRate = ""
+    endSampleRate = ""
+    bitDepths = []
+    device = ""
 
         
     def setLocationType(self,  locationType):
@@ -332,6 +336,30 @@ class Filter():
     def getEndDuration(self):
         return self.endDuration
 
+    def setStartSampleRate(self, startSampleRate):
+        self.startSampleRate = startSampleRate
+
+    def getStartSampleRate(self):
+        return self.startSampleRate
+
+    def setEndSampleRate(self, endSampleRate):
+        self.endSampleRate = endSampleRate
+
+    def getEndSampleRate(self):
+        return self.endSampleRate
+
+    def setBitDepths(self, bitDepths):
+        self.bitDepths = bitDepths
+
+    def getBitDepths(self):
+        return self.bitDepths
+
+    def setDevice(self, device):
+        self.device = device
+
+    def getDevice(self):
+        return self.device
+
     def hasPhotoFilter(self):
         return any([
             self.sightingHasPhoto != "",
@@ -358,6 +386,10 @@ class Filter():
             self.endRecordingRating != "",
             self.startDuration != "",
             self.endDuration != "",
+            self.startSampleRate != "",
+            self.endSampleRate != "",
+            self.bitDepths != [],
+            self.device != "",
         ])
 
     def clearPhotoFilter(self):
@@ -385,6 +417,10 @@ class Filter():
         self.endRecordingRating = ""
         self.startDuration = ""
         self.endDuration = ""
+        self.startSampleRate = ""
+        self.endSampleRate = ""
+        self.bitDepths = []
+        self.device = ""
 
 
     def buildWindowTitle(self, prefix, db, count=None, countUnit=""):

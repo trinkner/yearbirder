@@ -1164,6 +1164,13 @@ td {{ border-bottom:1px solid #e8e8e8; vertical-align:middle; }}
       Open Database License (ODbL).</li>
   <li><b>piexif</b>, by hMatoba, is used under the MIT License.</li>
   <li><b>natsort</b>, by Seth M. Morton, is used under the MIT License.</li>
+  <li><b>SoundFile</b>, by Bastian Bechtold, used to read audio recordings, is
+      licensed under the BSD 3-Clause License. It bundles <b>libsndfile</b>, by
+      Erik de Castro Lopo, used under the GNU Lesser General Public License (LGPL)
+      version 2.1.</li>
+  <li><b>python-soxr</b>, by Dofuuz, used for high-quality audio resampling, is
+      licensed under the GNU Lesser General Public License (LGPL) version 2.1. It
+      bundles <b>libsoxr</b>, by Rob Sykes.</li>
   <li><b>PyInstaller</b>, by the PyInstaller Development Team, is licensed under the
       GPL with a special exception that permits bundling of non-GPL applications.</li>
 </ul>

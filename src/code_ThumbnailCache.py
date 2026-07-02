@@ -41,6 +41,13 @@ _KIND_FMT = {
 }
 _CACHE_EXTS = tuple(ext for (ext, _f, _q) in _KIND_FMT.values())
 
+# PNG zlib effort (0-100).  PNG is lossless at every level, so this trades file
+# size for encode speed with no effect on the decoded image.  The default (max)
+# level spends ~920 ms zlib-packing a 16000x700 ribbon; level 50 is visually and
+# byte-for-byte identical on decode but encodes ~3x faster (~290 ms) for only a
+# slightly larger file (~3.1 vs ~2.6 MB) — a big win for the rebuild pass.
+_PNG_COMPRESSION = 50
+
 _cache_dir = None
 
 
@@ -74,12 +81,34 @@ def build_spectro(wav_path):
 
     Lazily imports the renderer to avoid an import cycle.  True on success.
     """
-    import code_ManageRecordings
-    img, _dur, _sr, _bbox = code_ManageRecordings._render_spectrogram_qimage(wav_path)
+    import code_Audio
+    img, _dur, _sr, _bbox = code_Audio.render_spectrogram_qimage(wav_path)
     if img is None or img.isNull():
         return False
     store(wav_path, img, "spectro_thumb")
     return True
+
+
+def rebuild_one(item):
+    """Build all cache entries for one media file — module-level so it can run in
+    a multiprocessing worker (spawn-picklable).
+
+    ``item`` is ``(kind, path)`` where kind is "photo" or "recording".  For a
+    recording it builds both the browser thumbnail and the enlargement ribbon.
+    Returns ``path`` regardless of success (the caller only needs a progress
+    tick); failures are swallowed so one bad file can't stall the pool.
+    """
+    kind, path = item
+    try:
+        if kind == "photo":
+            build(path)
+        else:
+            build_spectro(path)
+            import code_RecordingEnlargement
+            code_RecordingEnlargement.build_ribbon_cache(path)
+    except Exception:
+        pass
+    return path
 
 
 def prebuild_async(photo_paths=(), recording_paths=()):
@@ -294,6 +323,8 @@ def store(source_path, qimage, kind="photo", variant=""):
     writer = QImageWriter(tmp, fmt)
     if quality >= 0:
         writer.setQuality(quality)
+    elif fmt == b"png":
+        writer.setCompression(_PNG_COMPRESSION)   # lossless; faster encode
     if writer.write(qimage):
         try:
             os.replace(tmp, cp)   # atomic on POSIX and Windows

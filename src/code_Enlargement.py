@@ -776,20 +776,21 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
         except:
             exif_dict = ""
         
-        # get photo date from EXIF
+        # Photo creation date/time from the catalog (cached EXIF); fall back to
+        # the checklist date/time when the photo has no stored creation date.
+        exif_dt = self.photoList[self.currentIndex][0].get("exifDatetime")
+        sighting = self.photoList[self.currentIndex][1]
+        if exif_dt and len(exif_dt) >= 10:
+            photoExifDate = exif_dt[0:4] + "-" + exif_dt[5:7] + "-" + exif_dt[8:10]
+            photoExifTime = exif_dt[11:16] if len(exif_dt) >= 16 else ""
+        else:
+            photoExifDate = sighting.get("date", "")
+            photoExifTime = sighting.get("time", "")
         try:
-            photoDateTime = exif_dict["Exif"][piexif.ExifIFD.DateTimeOriginal].decode("utf-8")
-            
-            #parse EXIF data for date/time components
-            photoExifDate = photoDateTime[0:4] + "-" + photoDateTime[5:7] + "-" + photoDateTime[8:10]
-            photoExifTime = photoDateTime[11:13] + ":" + photoDateTime[14:16]
-            
-            photoWeekday = datetime.datetime(int(photoDateTime[0:4]), int(photoDateTime[5:7]), int(photoDateTime[8:10]))
-            photoWeekday = photoWeekday.strftime("%A") + ", "
-            
-        except:
-            photoExifDate = "Date unknown"
-            photoExifTime = "Time unknown"
+            photoWeekday = datetime.datetime(
+                int(photoExifDate[0:4]), int(photoExifDate[5:7]), int(photoExifDate[8:10])
+            ).strftime("%A") + ", "
+        except Exception:
             photoWeekday = ""
             
         try:

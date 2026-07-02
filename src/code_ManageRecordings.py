@@ -2,6 +2,7 @@ import form_ManageRecordings
 import code_Filter
 import code_Stylesheet
 import code_ThumbnailCache
+import code_ChecklistTree
 import os
 import queue
 from functools import partial
@@ -18,383 +19,34 @@ from PySide6.QtCore import (
 from PySide6.QtWidgets import (
     QMdiSubWindow, QPushButton, QApplication, QWidget, QLabel,
     QComboBox, QHBoxLayout, QVBoxLayout, QMessageBox, QFileDialog,
-    QSlider,
+    QSlider, QCheckBox,
 )
 from PySide6.QtMultimedia import (
     QMediaPlayer, QAudioFormat, QAudioSink, QMediaDevices,
 )
 
 
-def _decode_wav_pcm16(wav_path, normalize=True, target_fs=None, target_channels=None):
-    """Decode a WAV file to interleaved little-endian 16-bit PCM bytes.
-
-    Returns ``(bytes, sample_rate, channels, duration_ms)`` or ``None`` on
-    failure.  When ``target_fs`` / ``target_channels`` are given the audio is
-    resampled (linear interpolation) and re-channelled to that fixed output
-    format — this lets a single QAudioSink be reused across files of differing
-    native formats, avoiding a costly per-file sink re-create.  ``duration_ms``
-    is always the true wall-clock length, independent of resampling.  When
-    ``normalize`` is true, quiet recordings (peak < 0.1 full-scale) are boosted
-    in memory — replacing the old temp-file normalisation with a zero-I/O
-    equivalent.
-    """
-    import wave as _wave
-    try:
-        with _wave.open(wav_path, 'r') as wf:
-            n_ch     = wf.getnchannels()
-            fs       = wf.getframerate()
-            n_frames = wf.getnframes()
-            sw       = wf.getsampwidth()
-            raw      = wf.readframes(n_frames)
-    except Exception:
-        return None
-
-    if sw == 1:
-        data = (np.frombuffer(raw, dtype=np.uint8).astype(np.float32) - 128.0) / 128.0
-    elif sw == 2:
-        data = np.frombuffer(raw, dtype='<i2').astype(np.float32) / 32768.0
-    elif sw == 3:
-        b = np.frombuffer(raw, dtype=np.uint8).reshape(-1, 3).astype(np.int32)
-        a = b[:, 0] | (b[:, 1] << 8) | (b[:, 2] << 16)
-        a = np.where(a >= 0x800000, a - 0x1000000, a)
-        data = a.astype(np.float32) / 8388608.0
-    elif sw == 4:
-        data = np.frombuffer(raw, dtype='<i4').astype(np.float32) / 2147483648.0
-    else:
-        return None
-
-    dur_ms = int(round(n_frames / fs * 1000)) if fs else 0
-
-    out_ch = target_channels if target_channels else n_ch
-    out_fs = target_fs if target_fs else fs
-
-    # De-interleave to (frames, channels) for re-channelling / resampling.
-    frames = data.reshape(-1, n_ch) if n_ch > 1 else data.reshape(-1, 1)
-
-    if out_ch != n_ch:
-        if out_ch == 1:
-            frames = frames.mean(axis=1, keepdims=True)
-        else:                                   # up/replicate to out_ch
-            cols = [frames[:, min(c, n_ch - 1)] for c in range(out_ch)]
-            frames = np.column_stack(cols)
-
-    if out_fs != fs and frames.shape[0] > 1:
-        n_old = frames.shape[0]
-        n_new = max(1, int(round(n_old * out_fs / fs)))
-        old_x = np.arange(n_old, dtype=np.float64)
-        new_x = np.linspace(0.0, n_old - 1, n_new)
-        frames = np.column_stack(
-            [np.interp(new_x, old_x, frames[:, c]) for c in range(frames.shape[1])])
-
-    data = frames.reshape(-1)
-
-    if normalize and len(data) > 0:
-        peak = float(np.max(np.abs(data)))
-        if 0.0 < peak < 0.1:
-            data = data * (0.9 / peak)
-
-    pcm = np.clip(data, -1.0, 1.0)
-    pcm = (pcm * 32767.0).astype('<i2')
-    return pcm.tobytes(), out_fs, out_ch, dur_ms
-
-
-class _PcmStreamDevice(QIODevice):
-    """Endless pull source for a continuously-running QAudioSink.
-
-    Returns real PCM (advancing an internal byte cursor) while ``_playing`` is
-    set, and silence otherwise — so the sink is never starved and the audio
-    output device stays running.  Keeping the device running is what avoids the
-    per-start mute/spin-up latency that a stop/start (or suspend/resume) of the
-    sink incurs on macOS Core Audio.
-    """
-
-    finished = Signal()
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self._data       = b''
-        self._cursor     = 0       # byte offset of next real sample to emit
-        self._frame      = 2       # bytes per audio frame (channels * 2)
-        self._playing    = False
-        self._emittedEnd = False
-
-    def loadData(self, data, frame_bytes):
-        self._data       = data
-        self._frame      = max(1, int(frame_bytes))
-        self._cursor     = 0
-        self._emittedEnd = False
-
-    def lengthBytes(self):
-        return len(self._data)
-
-    def cursorBytes(self):
-        return self._cursor
-
-    def setPlaying(self, playing):
-        self._playing = bool(playing)
-
-    def seekBytes(self, off):
-        off = max(0, min(int(off), len(self._data)))
-        off -= off % self._frame
-        self._cursor = off
-        self._emittedEnd = False
-
-    # QIODevice overrides ------------------------------------------------
-    def isSequential(self):
-        return True
-
-    def bytesAvailable(self):
-        # Endless source: always advertise a healthy chunk so the sink pulls.
-        return (1 << 20) + super().bytesAvailable()
-
-    def readData(self, maxlen):
-        n = int(maxlen)
-        n -= n % self._frame
-        if n <= 0:
-            n = self._frame
-        if self._playing and self._cursor < len(self._data):
-            end   = min(self._cursor + n, len(self._data))
-            chunk = self._data[self._cursor:end]
-            self._cursor = end
-            if self._cursor >= len(self._data) and not self._emittedEnd:
-                self._emittedEnd = True
-                self.finished.emit()
-            if len(chunk) < n:                 # pad final partial frame run
-                chunk = chunk + b'\x00' * (n - len(chunk))
-            return bytes(chunk)
-        # Paused, stopped, or past end → silence keeps the device warm.
-        return b'\x00' * n
-
-    def writeData(self, data):
-        return 0
-
-
-class PcmAudioPlayer(QObject):
-    """Low-latency WAV player built on a continuously-running QAudioSink.
-
-    QMediaPlayer's macOS/AVFoundation backend re-primes its audio renderer on
-    every ``setSource()`` (0-7 s of silent-but-advancing output).  Creating a
-    fresh QAudioSink per play has the same problem: starting a Core Audio output
-    unit incurs a variable 0-7 s spin-up/mute the *first* time it runs.
-
-    This player therefore creates **one** QAudioSink **once, at construction**,
-    and never re-creates it — so the audio device is warmed as soon as the owning
-    window opens, long before the user presses Play.  It is fed by an endless
-    :class:`_PcmStreamDevice` that emits silence when not playing, so the unit
-    never stops either.  Loading a new file just swaps the device's PCM data;
-    play/pause/seek only flip a flag or move a byte cursor.  Because the sink is
-    fixed-format, every file is decoded/resampled to that one output format
-    (:data:`_OUT_FS` / :data:`_OUT_CH`).
-
-    The public API mirrors the subset of QMediaPlayer used by the Recordings
-    browser and Enlargement window, reusing QMediaPlayer's own enum values so
-    the callers' comparisons and signal handlers are unchanged.
-    """
-
-    playbackStateChanged = Signal(object)
-    mediaStatusChanged   = Signal(object)
-
-    # Sink buffer: small enough that the leading silence drains quickly when
-    # play() flips the device to real audio (this sets the residual latency),
-    # large enough to avoid underruns from the Python pull callback.
-    _BUFFER_SECONDS = 0.05
-    _OUT_CH = 2                       # fixed output channel count
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self._durationMs = 0
-        self._hasMedia   = False
-        self._state      = QMediaPlayer.PlaybackState.StoppedState
-
-        # Fixed output format — chosen from the device's preferred rate so the
-        # single persistent sink is always supported; all files are resampled
-        # to it.  Int16 stereo is universally accepted.
-        pref = QMediaDevices.defaultAudioOutput().preferredFormat()
-        self._outFs = pref.sampleRate() if pref.sampleRate() > 0 else 48000
-        self._bytesPerFrame = 2 * self._OUT_CH
-
-        fmt = QAudioFormat()
-        fmt.setSampleRate(self._outFs)
-        fmt.setChannelCount(self._OUT_CH)
-        fmt.setSampleFormat(QAudioFormat.SampleFormat.Int16)
-
-        self._device = _PcmStreamDevice(self)
-        self._device.loadData(b'', self._bytesPerFrame)
-        self._device.finished.connect(self._onFinished)
-        self._device.open(QIODevice.OpenModeFlag.ReadOnly)
-
-        self._sink = QAudioSink(QMediaDevices.defaultAudioOutput(), fmt, self)
-        buf = int(self._outFs * self._bytesPerFrame * self._BUFFER_SECONDS)
-        if buf > 0:
-            self._sink.setBufferSize(buf)
-        # Starts now (silent) so Core Audio is warm before the first Play click.
-        self._sink.start(self._device)
-
-    # ── source ──────────────────────────────────────────────────────────
-    def setSourceWav(self, wav_path):
-        decoded = _decode_wav_pcm16(
-            wav_path, target_fs=self._outFs, target_channels=self._OUT_CH)
-        if not decoded:
-            self._hasMedia = False
-            self._durationMs = 0
-            self.mediaStatusChanged.emit(QMediaPlayer.MediaStatus.InvalidMedia)
-            return False
-        pcm, _fs, _ch, dur_ms = decoded
-        self._durationMs = dur_ms
-        self._hasMedia   = True
-        # Swap data in the already-running device; the sink is untouched.
-        self._device.setPlaying(False)
-        self._device.loadData(pcm, self._bytesPerFrame)
-        self._setState(QMediaPlayer.PlaybackState.StoppedState)
-        self.mediaStatusChanged.emit(QMediaPlayer.MediaStatus.LoadedMedia)
-        return True
-
-    def mediaStatus(self):
-        return (QMediaPlayer.MediaStatus.LoadedMedia
-                if self._hasMedia
-                else QMediaPlayer.MediaStatus.NoMedia)
-
-    # ── transport ───────────────────────────────────────────────────────
-    def play(self):
-        if not self._hasMedia:
-            return
-        if self._device.cursorBytes() >= self._device.lengthBytes():
-            self._device.seekBytes(0)          # at end → restart from start
-        self._device.setPlaying(True)
-        self._setState(QMediaPlayer.PlaybackState.PlayingState)
-
-    def pause(self):
-        if self._state == QMediaPlayer.PlaybackState.PlayingState:
-            self._device.setPlaying(False)
-            self._setState(QMediaPlayer.PlaybackState.PausedState)
-
-    def stop(self):
-        self._device.setPlaying(False)
-        self._device.seekBytes(0)
-        self._setState(QMediaPlayer.PlaybackState.StoppedState)
-
-    def setPosition(self, ms):
-        ms = max(0, min(int(ms), self._durationMs))
-        self._device.seekBytes(int(ms * self._outFs / 1000) * self._bytesPerFrame)
-
-    # ── queries ─────────────────────────────────────────────────────────
-    def position(self):
-        ms = int(self._device.cursorBytes() / self._bytesPerFrame / self._outFs * 1000)
-        return min(ms, self._durationMs)
-
-    def duration(self):
-        return self._durationMs
-
-    def playbackState(self):
-        return self._state
-
-    # ── internals ───────────────────────────────────────────────────────
-    def _setState(self, state):
-        if state != self._state:
-            self._state = state
-            self.playbackStateChanged.emit(state)
-
-    def _onFinished(self):
-        # Reached the end of the clip while playing (queued from the pull thread).
-        self._device.setPlaying(False)
-        self._device.seekBytes(0)
-        self._setState(QMediaPlayer.PlaybackState.StoppedState)
-        self.mediaStatusChanged.emit(QMediaPlayer.MediaStatus.EndOfMedia)
-
-
-# Fixed axes rectangle (x0, x1, y0, y1, figure-fraction, origin bottom-left)
-# produced by the subplots_adjust() margins below.  Because it's constant, a
-# cached spectrogram image can be reused without storing per-file bbox metadata.
-SPECTRO_AX_BBOX = (0.13, 0.98, 0.15, 0.95)
-
-
-def _render_spectrogram_qimage(wav_path, max_freq=10000):
-    """Render a spectrogram for wav_path, returning a QImage.
-
-    Returns (QImage, duration_secs, sample_rate, ax_bbox) where ax_bbox is the
-    constant SPECTRO_AX_BBOX.  Returns (None, 0, 0, None) on error.  Uses only the
-    Agg backend and QImage (no QPixmap), so it is safe to call off the GUI thread.
-    """
-    import wave as _wave
-    try:
-        with _wave.open(wav_path, 'r') as wf:
-            n_ch = wf.getnchannels()
-            fs = wf.getframerate()
-            n_frames = wf.getnframes()
-            sw = wf.getsampwidth()
-            raw = wf.readframes(n_frames)
-    except Exception:
-        return None, 0, 0, None
-
-    duration = n_frames / fs if fs else 0
-
-    if sw == 1:
-        data = np.frombuffer(raw, dtype=np.uint8).astype(np.float32)
-        data = (data - 128.0) / 128.0
-    elif sw == 4:
-        data = np.frombuffer(raw, dtype=np.int32).astype(np.float32) / 2147483648.0
-    else:
-        data = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
-
-    if n_ch > 1:
-        data = data[::n_ch]
-
-    if len(data) < 64:
-        return None, duration, fs, None
-
-    # Adaptive overlap: keep 75 % overlap (noverlap=384) for short clips, but
-    # widen the hop on long recordings so the STFT produces only ~900 columns
-    # instead of many thousands.  The thumbnail is ~500 px wide, so the extra
-    # columns are invisible work; the max(128, …) floor preserves quality on
-    # short clips and noverlap stays in [0, NFFT) so windows remain contiguous.
-    NFFT = 512
-    hop = max(128, (len(data) - NFFT) // 900)
-    noverlap = max(0, min(NFFT - hop, NFFT - 1))
-
-    fig = Figure(figsize=(5.0, 2.9), dpi=100)
-    fig.patch.set_facecolor('white')
-    ax = fig.add_subplot(111)
-    try:
-        with np.errstate(divide='ignore', invalid='ignore'):
-            spectrum, _freqs, _bins, im = ax.specgram(
-                data, Fs=fs, NFFT=NFFT, noverlap=noverlap, cmap='gray_r', scale='dB')
-        db = 10.0 * np.log10(np.maximum(spectrum, 1e-12))
-        db_hi = float(np.percentile(db, 99.5))
-        im.set_clim(db_hi - 80.0 * 0.50, db_hi)   # 50 % contrast, matches AudioEnlargement default
-    except Exception:
-        return None, duration, fs, None
-
-    ax.set_ylim(0, min(max_freq, fs // 2))
-    ax.set_facecolor('white')
-    ax.tick_params(colors='#444444', labelsize=7)
-    ax.set_ylabel('Hz', color='#444444', fontsize=7)
-    ax.set_xlabel('sec', color='#444444', fontsize=7)
-    for sp in ax.spines.values():
-        sp.set_edgecolor('#aaaaaa')
-    # Fixed margins (not tight_layout) so the data rect is a known constant
-    # (SPECTRO_AX_BBOX) — the cached image needs no per-file bbox metadata.
-    fig.subplots_adjust(left=0.13, right=0.98, bottom=0.15, top=0.95)
-
-    canvas = FigureCanvasAgg(fig)
-    canvas.draw()
-
-    ax_bbox = SPECTRO_AX_BBOX
-
-    # Build the QPixmap straight from the Agg RGBA buffer — avoids a PNG
-    # encode/decode round-trip that dominated render time.  copy() is required:
-    # the buffer is released when the figure/canvas is garbage-collected.
-    w_px, h_px = canvas.get_width_height()
-    img = QImage(canvas.buffer_rgba(), w_px, h_px, QImage.Format_RGBA8888)
-    return img.copy(), duration, fs, ax_bbox
-
-
-def _build_spectrogram_pixmap(wav_path, max_freq=10000):
-    """QPixmap wrapper around _render_spectrogram_qimage for GUI-thread/QThread
-    callers that display the result.  Returns (QPixmap, dur, fs, ax_bbox)."""
-    img, duration, fs, ax_bbox = _render_spectrogram_qimage(wav_path, max_freq)
-    if img is None or img.isNull():
-        return None, duration, fs, ax_bbox
-    return QPixmap.fromImage(img), duration, fs, ax_bbox
+# Colours for the assignment labels.  A field's value is shown green only while
+# it still equals the value auto-derived from the recording's metadata/filename;
+# once the user overrides it via the tree it reverts to the neutral text colour.
+_FIELD_NAME_COLOR = "#8b8fa8"          # muted label ("Date", "Location", …)
+_MATCH_COLOR      = "#4CAF50"          # green  – value came from metadata/filename
+_VALUE_COLOR      = "#e2e4ec"          # neutral – manually chosen / not auto-derived
+_SKIPPED_COLOR    = "#6b6e7e"          # muted value when the row is skipped
+
+
+# ── Audio decode / spectrogram rendering / playback ──────────────────────────
+# These now live in code_Audio (single source of truth for WAV sample-format
+# handling, the spectrogram thumbnail render, and the persistent-sink player).
+# Re-export under the names other modules already import from here so their
+# imports keep working.
+from code_Audio import (
+    PcmAudioPlayer,
+    SPECTRO_AX_BBOX,
+    render_spectrogram_qimage as _render_spectrogram_qimage,
+    build_spectrogram_pixmap as _build_spectrogram_pixmap,
+    decode_wav_pcm16 as _decode_wav_pcm16,
+)
 
 
 class SpectrogramLabel(QWidget):
@@ -484,10 +136,19 @@ class SpeciesTagStrip(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._species = []
+        self._skipped = False
         self._layout = QVBoxLayout(self)
         self._layout.setContentsMargins(0, 2, 0, 2)
         self._layout.setSpacing(3)
         self.setVisible(False)
+
+    def setSkipped(self, skipped):
+        """Grey the chips (instead of the thematic blue) when the recording is
+        being removed/skipped, to emphasise it won't be kept."""
+        skipped = bool(skipped)
+        if skipped != self._skipped:
+            self._skipped = skipped
+            self._rebuild()
 
     def addSpecies(self, name):
         if name and name not in self._species:
@@ -536,7 +197,9 @@ class SpeciesTagStrip(QWidget):
         chipLayout.addWidget(label)
         chipLayout.addStretch()
         chipLayout.addWidget(removeBtn)
-        chip.setStyleSheet("QWidget { background-color: #4a86c8; border-radius: 8px; }")
+        bg = _SKIPPED_COLOR if self._skipped else "#4a86c8"
+        chip.setStyleSheet(
+            "QWidget { background-color: %s; border-radius: 8px; }" % bg)
         return chip
 
 
@@ -567,7 +230,17 @@ class threadGetAudioData(QThread):
             file = item["file"]
             mode = item.get("mode", "new")
 
-            pixmap, _dur, _fs, ax_bbox = _build_spectrogram_pixmap(file)
+            # Reuse the on-disk spectrogram cache (the same "spectro_thumb"
+            # image the Recordings browser caches); render only on a miss, then
+            # store, so re-opening this window is fast.
+            img = code_ThumbnailCache.load(file, "spectro_thumb")
+            if img is not None and not img.isNull():
+                pixmap = QPixmap.fromImage(img)
+                ax_bbox = SPECTRO_AX_BBOX
+            else:
+                pixmap, _dur, _fs, ax_bbox = _build_spectrogram_pixmap(file)
+                if pixmap is not None and not pixmap.isNull():
+                    code_ThumbnailCache.store(file, pixmap.toImage(), "spectro_thumb")
             recordingData = self.parent.mdiParent.db.getRecordingData(file)
 
             if mode == "new":
@@ -622,6 +295,8 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         self.btnSaveAudioSettings.clicked.connect(self.saveAudioSettings)
         self.btnCancel.clicked.connect(self.closeWindow)
         self.metaDataByRow = {}
+        # Per-row widget references for the label/Select/Skip panel.
+        self._rowLabels = {}
         self.audioAlreadyInDb = True
         self._changesSaved = False
         self._skipCloseGuard = False
@@ -675,12 +350,13 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
                 not self._changesSaved and
                 not self.audioAlreadyInDb and
                 self.metaDataByRow):
-            reply = QMessageBox.question(
+            reply = code_Stylesheet.question(
                 self, "Unsaved Recordings",
                 "Your recording information has not been saved to a catalog.\n\n"
                 "Close anyway and discard your work?",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No,
+                yes_text="Close and discard", no_text="Keep working",
             )
             if reply == QMessageBox.StandardButton.No:
                 event.ignore()
@@ -1014,464 +690,325 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         detailsLayout.setAlignment(Qt.AlignTop)
         self.gridAudio.addWidget(container, row, 1)
 
-        cboLocation = QComboBox()
-        cboLocation.currentIndexChanged.connect(partial(self.cboLocationChanged, row))
-        cboDate = QComboBox()
-        cboDate.currentIndexChanged.connect(partial(self.cboDateChanged, row))
-        cboTime = QComboBox()
-        cboTime.currentIndexChanged.connect(partial(self.cboTimeChanged, row))
-        cboCommonName = QComboBox()
-        cboCommonName.currentIndexChanged.connect(partial(self.cboCommonNameChanged, row))
-        cboRating = QComboBox()
-        cboRating.addItems(["Not Rated", "1", "2", "3", "4", "5"])
-        cboRating.currentIndexChanged.connect(partial(self.cboRatingChanged, row))
-
-        for c in [cboLocation, cboDate, cboTime, cboCommonName, cboRating]:
-            self.removeHighlight(c)
-
-        if cascadeMode == "date_first":
-            cboDate.addItems(comboData.get("allDates", []))
-            if recordingDate:
-                idx = cboDate.findText(recordingDate)
-                if idx >= 0:
-                    cboDate.setCurrentIndex(idx)
-
-            cboLocation.addItems(comboData.get("locationsByDate", []))
-            if recordingLocation:
-                idx = cboLocation.findText(recordingLocation)
-                if idx >= 0:
-                    cboLocation.setCurrentIndex(idx)
-
-            cboTime.addItems(comboData.get("timesByDateAndLocation", []))
-            if recordingTime:
-                idx = cboTime.findText(recordingTime)
-                if idx >= 0:
-                    cboTime.setCurrentIndex(idx)
-
-            cboCommonName.addItem("-- Add a species --")
-            cboCommonName.addItems(comboData.get("speciesByChecklist", []))
-            cboCommonName.setCurrentIndex(0)
-
-            if (not self.audioAlreadyInDb and
-                    audioMatchData.get("dateMatchFound", False) and
-                    audioMatchData.get("timeMatchFound", False) and
-                    recordingLocation):
-                for combo, match_text in (
-                    (cboDate, recordingDate),
-                    (cboLocation, recordingLocation),
-                    (cboTime, recordingTime),
-                ):
-                    combo.setStyleSheet("QComboBox { color: #4CAF50; }")
-        else:
-            cboLocation.addItems(comboData.get("allLocations", []))
-            if recordingLocation:
-                idx = cboLocation.findText(recordingLocation)
-                if idx >= 0:
-                    cboLocation.setCurrentIndex(idx)
-
-            cboDate.addItems(comboData.get("datesByLocation", []))
-            if recordingDate:
-                idx = cboDate.findText(recordingDate)
-                if idx >= 0:
-                    cboDate.setCurrentIndex(idx)
-
-            cboTime.addItems(comboData.get("timesByLocationAndDate", []))
-            if recordingTime:
-                idx = cboTime.findText(recordingTime)
-                if idx >= 0:
-                    cboTime.setCurrentIndex(idx)
-
-            cboCommonName.addItem("-- Add a species --")
-            cboCommonName.addItems(comboData.get("speciesByChecklist", []))
-            cboCommonName.setCurrentIndex(0)
-
-            try:
-                rating_idx = max(0, min(5, int(recordingData.get("rating", "0"))))
-            except (ValueError, TypeError):
-                rating_idx = 0
-            cboRating.setCurrentIndex(rating_idx)
-
-        cboLocation.setObjectName("cboLocation" + str(row))
-        cboDate.setObjectName("cboDate" + str(row))
-        cboTime.setObjectName("cboTime" + str(row))
-        cboCommonName.setObjectName("cboCommonName" + str(row))
-        cboRating.setObjectName("cboRating" + str(row))
-
-        tagStrip = SpeciesTagStrip()
-        tagStrip.setObjectName("tagStrip" + str(row))
+        # Seed this row's working metadata, then build the colour-coded label /
+        # Select / Skip panel.  Date, location and time are shown as labels; the
+        # species tag strip (multiple chips) is fed by the checklist tree picker.
+        isExisting = self.audioAlreadyInDb
         if allSightings:
-            tagStrip.setSpeciesList([s["commonName"] for s in allSightings])
+            initialSpecies = [s["commonName"] for s in allSightings]
         elif recordingCommonName:
-            tagStrip.setSpeciesList([recordingCommonName])
-        tagStrip.speciesChanged.connect(partial(self.saveNewMetaData, row))
-
-        # Header info labels
-        lblFileName = QLabel("File: " + os.path.basename(recordingData["fileName"]))
-
-        lblParsedDate = QLabel()
-        parsedDate = recordingData.get("date", "")
-        dateSource = recordingData.get("dateSource", "filename")
-        if parsedDate and parsedDate != "Date unknown":
-            if dateSource == "metadata":
-                lblParsedDate.setText("Recording date (metadata): " + parsedDate)
-            else:
-                lblParsedDate.setText("Filename date: " + parsedDate)
+            initialSpecies = [recordingCommonName]
         else:
-            lblParsedDate.setText("No date found in filename or metadata.")
-            lblParsedDate.setStyleSheet("color: orange;")
-
-        lblMtime = QLabel()
-        mtime = recordingData.get("mtime", "")
-        if mtime:
-            lblMtime.setText("File saved: " + mtime)
-
-        lblDur = QLabel()
-        dur = recordingData.get("duration", "")
-        if dur:
-            sr = recordingData.get("sampleRate", "")
-            lblDur.setText(f"Duration: {dur}" + (f"  |  {sr}" if sr else ""))
-
-        detailsLayout.addWidget(lblFileName)
-        detailsLayout.addWidget(lblParsedDate)
-        if mtime:
-            detailsLayout.addWidget(lblMtime)
-        if dur:
-            detailsLayout.addWidget(lblDur)
-
-        lblCboDate = QLabel("Date")
-        _f = QFont(); _f.setBold(True); lblCboDate.setFont(_f)
-        detailsLayout.addWidget(lblCboDate)
-        detailsLayout.addWidget(cboDate)
-
-        lblCboLocation = QLabel("Location")
-        _f = QFont(); _f.setBold(True); lblCboLocation.setFont(_f)
-        detailsLayout.addWidget(lblCboLocation)
-        detailsLayout.addWidget(cboLocation)
-
-        lblCboTime = QLabel("Time")
-        _f = QFont(); _f.setBold(True); lblCboTime.setFont(_f)
-        detailsLayout.addWidget(lblCboTime)
-        detailsLayout.addWidget(cboTime)
-
-        lblCboSpecies = QLabel("Species")
-        _f = QFont(); _f.setBold(True); lblCboSpecies.setFont(_f)
-        detailsLayout.addWidget(lblCboSpecies)
-        detailsLayout.addWidget(cboCommonName)
-        detailsLayout.addWidget(tagStrip)
-
-        lblCboRating = QLabel("Rating")
-        _f = QFont(); _f.setBold(True); lblCboRating.setFont(_f)
-        detailsLayout.addWidget(lblCboRating)
-        detailsLayout.addWidget(cboRating)
-
-        btnReset = QPushButton("Reset")
-        btnReset.clicked.connect(partial(self.btnResetClicked, row))
-        detailsLayout.addWidget(btnReset)
+            initialSpecies = []
 
         thisAudioMetaData = {}
         thisAudioMetaData["location"] = recordingLocation
         thisAudioMetaData["date"] = recordingDate
-        thisAudioMetaData["time"] = cboTime.currentText()
-        thisAudioMetaData["commonNames"] = tagStrip.getSpecies()
-        thisAudioMetaData["origCommonNames"] = tagStrip.getSpecies()
+        thisAudioMetaData["time"] = recordingTime
+        thisAudioMetaData["commonNames"] = list(initialSpecies)
+        thisAudioMetaData["origCommonNames"] = list(initialSpecies)
         thisAudioMetaData["allSightings"] = allSightings or []
         thisAudioMetaData["recordingData"] = recordingData
         thisAudioMetaData["rating"] = recordingData.get("rating", "0")
         thisAudioMetaData["cascadeMode"] = cascadeMode
+        thisAudioMetaData["skip"] = False
+        thisAudioMetaData["newLocation"] = recordingLocation
+        thisAudioMetaData["newDate"] = recordingDate
+        thisAudioMetaData["newTime"] = recordingTime
+        thisAudioMetaData["newCommonNames"] = list(initialSpecies)
+        thisAudioMetaData["autoDate"] = recordingDate
+        thisAudioMetaData["autoLocation"] = recordingLocation
+        thisAudioMetaData["autoTime"] = recordingTime
+        if isExisting:
+            thisAudioMetaData["autoGreen"] = {"date": True, "location": True, "time": True}
+        else:
+            thisAudioMetaData["autoGreen"] = self._computeAutoGreen(audioMatchData)
 
         self.metaDataByRow[row] = thisAudioMetaData
+        self._buildDetailsPanel(row, detailsLayout, recordingData, isExisting)
         self.saveNewMetaData(row)
         self.fillingCombos = False
 
     # ------------------------------------------------------------------
-    # Combo cascade helpers  (mirror ManagePhotos pattern)
+    # Assignment panel + checklist tree
     # ------------------------------------------------------------------
 
-    def _getRowWidgets(self, row):
-        container = self.gridAudio.itemAtPosition(row, 1).widget()
-        widgets = {}
-        for w in container.children():
-            name = w.objectName()
-            if name.startswith("cboLocation"):
-                widgets["location"] = w
-            elif name.startswith("cboDate"):
-                widgets["date"] = w
-            elif name.startswith("cboTime"):
-                widgets["time"] = w
-            elif name.startswith("cboCommonName"):
-                widgets["species"] = w
-            elif name.startswith("cboRating"):
-                widgets["rating"] = w
-            elif name.startswith("tagStrip"):
-                widgets["tagStrip"] = w
-        return widgets
+    def _computeAutoGreen(self, md):
+        """Which fields were confirmed from the recording's metadata/filename
+        (only these may show green): date matched a checklist date, time matched
+        exactly, location confirmed only when the exact checklist matched."""
+        dmf = md.get("dateMatchFound", False)
+        tmf = md.get("timeMatchFound", False)
+        return {"date": dmf, "time": tmf, "location": tmf}
 
-    def cboLocationChanged(self, row, _index=None):
-        if self.fillingCombos:
+    def _fieldGreen(self, md, field):
+        """Green only if the field was auto-derived AND still equals that value."""
+        if field not in ("date", "location", "time"):
+            return False
+        if not md.get("autoGreen", {}).get(field, False):
+            return False
+        current = {"date": md.get("newDate", ""),
+                   "location": md.get("newLocation", ""),
+                   "time": md.get("newTime", "")}[field]
+        auto = {"date": md.get("autoDate", ""),
+                "location": md.get("autoLocation", ""),
+                "time": md.get("autoTime", "")}[field]
+        return current == auto
+
+    def _fieldHtml(self, name, value, green, skipped):
+        if skipped:
+            valColor = _SKIPPED_COLOR
+        elif green:
+            valColor = _MATCH_COLOR
+        else:
+            valColor = _VALUE_COLOR
+        return ('<span style="color:%s">%s</span>&nbsp;&nbsp;'
+                '<span style="color:%s; font-weight:600">%s</span>'
+                % (_FIELD_NAME_COLOR, name, valColor, value))
+
+    def _buildDetailsPanel(self, row, detailsLayout, recordingData, isExisting):
+        """Minimalist row panel: filename, colour-coded Date/Location/Time
+        labels, the species tag strip, and a right-hand Select / Reset / Rating /
+        Skip column.  The checklist tree sets date/location/time and adds chips."""
+        lbls = {}
+        self._rowLabels[row] = lbls
+
+        bodyRow = QHBoxLayout()
+        bodyRow.setSpacing(14)
+        # Right inset so the control column clears the vertical scrollbar.
+        bodyRow.setContentsMargins(0, 0, 16, 0)
+
+        # Left column: filename + duration above the assignment labels and the
+        # species tag strip.
+        leftCol = QVBoxLayout()
+        leftCol.setSpacing(4)
+
+        lblFileName = QLabel(os.path.basename(recordingData["fileName"]))
+        lblFileName.setStyleSheet("color: %s;" % _FIELD_NAME_COLOR)
+        # Wrap the (often long) filename so it can't force the whole right-hand
+        # section wider than the window and truncate the buttons.
+        lblFileName.setWordWrap(True)
+        leftCol.addWidget(lblFileName)
+
+        # The recording's own embedded date/time (EXIF / WAV-metadata
+        # equivalent), shown so the user can judge how to assign it.
+        metaDate = recordingData.get("metaDate", "")
+        metaTime = recordingData.get("metaTime", "")
+        if metaDate:
+            metaStr = "Recorded %s" % metaDate
+            if metaTime:
+                metaStr += " %s" % metaTime
+        else:
+            metaStr = "Recording date unknown"
+        lblMeta = QLabel(metaStr)
+        lblMeta.setStyleSheet("color: %s;" % _FIELD_NAME_COLOR)
+        leftCol.addWidget(lblMeta)
+        leftCol.addSpacing(10)   # line feed after the metadata line
+
+        for key in ("date", "location", "time"):
+            lbl = QLabel()
+            lbl.setTextFormat(Qt.TextFormat.RichText)
+            lbls[key] = lbl
+            leftCol.addWidget(lbl)
+
+        speciesHeader = QLabel()
+        speciesHeader.setTextFormat(Qt.TextFormat.RichText)
+        lbls["speciesHeader"] = speciesHeader
+        leftCol.addWidget(speciesHeader)
+
+        tagStrip = SpeciesTagStrip()
+        tagStrip.setObjectName("tagStrip" + str(row))
+        tagStrip.setSpeciesList(list(self.metaDataByRow[row]["commonNames"]))
+        tagStrip.speciesChanged.connect(partial(self._onSpeciesChanged, row))
+        lbls["tagStrip"] = tagStrip
+        leftCol.addWidget(tagStrip)
+
+        leftCol.addStretch()
+        bodyRow.addLayout(leftCol, 1)
+
+        # Right column, top-to-bottom: Select, Reset, Rating combo, Skip/Remove.
+        # Held to a fixed, narrow width so the buttons always render in full.
+        # Pin every control to one explicit font so the combo text can't end up
+        # a different size from the buttons (they otherwise resolve fonts via
+        # different inheritance paths).
+        _panelFont = QFont("", getattr(self.mdiParent, "fontSize", 11))
+        controlsCol = QVBoxLayout()
+        controlsCol.setContentsMargins(0, 0, 0, 0)
+        controlsCol.setSpacing(8)
+
+        btnSelect = QPushButton("Select")
+        btnSelect.setFont(_panelFont)
+        btnSelect.clicked.connect(partial(self._openSelectTree, row))
+        controlsCol.addWidget(btnSelect)
+
+        btnReset = QPushButton("Reset")
+        btnReset.setFont(_panelFont)
+        btnReset.clicked.connect(partial(self.btnResetClicked, row))
+        controlsCol.addWidget(btnReset)
+
+        cboRating = QComboBox()
+        cboRating.addItems(["Not Rated", "1", "2", "3", "4", "5"])
+        cboRating.setObjectName("cboRating" + str(row))
+        cboRating.setFont(_panelFont)
+        cboRating.setEditable(True)
+        cboRating.lineEdit().setReadOnly(True)
+        cboRating.lineEdit().setAlignment(Qt.AlignCenter)
+        cboRating.lineEdit().setFocusPolicy(Qt.NoFocus)
+        cboRating.lineEdit().setFont(_panelFont)
+        # Transparent line edit; the left padding offsets the drop-down arrow on
+        # the right so the text sits centred under the full control, not just the
+        # area left of the arrow.
+        cboRating.lineEdit().setStyleSheet(
+            "QLineEdit { background: transparent; border: none; padding-left: 30px; }")
+        for _i in range(cboRating.count()):
+            cboRating.setItemData(_i, Qt.AlignCenter, Qt.TextAlignmentRole)
+        try:
+            cboRating.setCurrentIndex(max(0, min(5, int(self.metaDataByRow[row]["rating"]))))
+        except (TypeError, ValueError):
+            cboRating.setCurrentIndex(0)
+        cboRating.currentIndexChanged.connect(partial(self.cboRatingChanged, row))
+        lbls["rating"] = cboRating
+        controlsCol.addWidget(cboRating)
+
+        chkSkip = QCheckBox("Remove" if isExisting else "Skip")
+        chkSkip.setFont(_panelFont)
+        chkSkip.toggled.connect(partial(self._toggleSkip, row))
+        lbls["skip"] = chkSkip
+        controlsCol.addWidget(chkSkip)
+
+        controlsCol.addStretch()
+        controlsWidget = QWidget()
+        controlsWidget.setLayout(controlsCol)
+        # Wide enough that "Not Rated" plus the dropdown arrow plus the centring
+        # padding all fit without clipping the leading letter.
+        controlsWidget.setFixedWidth(160)
+        bodyRow.addWidget(controlsWidget)
+
+        detailsLayout.addLayout(bodyRow)
+        self._refreshRowLabels(row)
+
+    def _refreshRowLabels(self, row):
+        md = self.metaDataByRow[row]
+        lbls = self._rowLabels.get(row)
+        if not lbls:
             return
-        self.fillingCombos = True
-        w = self._getRowWidgets(row)
-        cboLocation = w.get("location")
-        if cboLocation:
-            orig = self.metaDataByRow[row]["location"]
-            if cboLocation.currentText() == orig:
-                self.removeHighlight(cboLocation)
+        skipped = md.get("skip", False)
+        date = md.get("newDate") or "\u2014"
+        loc  = md.get("newLocation") or "\u2014"
+        tm   = md.get("newTime") or "\u2014"
+        lbls["date"].setText(self._fieldHtml("Date", date, self._fieldGreen(md, "date"), skipped))
+        lbls["location"].setText(self._fieldHtml("Location", loc, self._fieldGreen(md, "location"), skipped))
+        lbls["time"].setText(self._fieldHtml("Time", tm, self._fieldGreen(md, "time"), skipped))
+        ts = lbls.get("tagStrip")
+        if ts is not None:
+            ts.setEnabled(not skipped)
+            ts.setSkipped(skipped)
+        # No standing "Species" header: show the skip note when skipped, a prompt
+        # when nothing is selected, and nothing at all once species are chosen.
+        hdr = lbls.get("speciesHeader")
+        if hdr is not None:
+            if skipped:
+                note = "Will be removed" if self.audioAlreadyInDb else "Will be skipped"
+                hdr.setText('<span style="color:%s">%s</span>' % (_SKIPPED_COLOR, note))
+                hdr.setVisible(True)
+            elif ts is not None and ts.getSpecies():
+                hdr.setText("")
+                hdr.setVisible(False)
             else:
-                self.highlightWidget(cboLocation)
-        if self.metaDataByRow[row].get("cascadeMode") == "location_first":
-            self._setCboDate(row)
-        self._setCboTime(row)
-        self._setCboCommonName(row)
-        self.saveNewMetaData(row)
-        self.fillingCombos = False
+                hdr.setText('<span style="color:%s">Species not yet selected</span>'
+                            % _FIELD_NAME_COLOR)
+                hdr.setVisible(True)
 
-    def cboDateChanged(self, row, _index=None):
-        if self.fillingCombos:
-            return
-        self.fillingCombos = True
-        w = self._getRowWidgets(row)
-        cboDate = w.get("date")
-        if cboDate:
-            orig = self.metaDataByRow[row]["date"]
-            if cboDate.currentText() == orig:
-                self.removeHighlight(cboDate)
+    def _openSelectTree(self, row):
+        md = self.metaDataByRow[row]
+        dlg = code_ChecklistTree.ChecklistTreeDialog(self.mdiParent.db, self)
+        dlg.expand_to(md.get("newDate", ""), md.get("newLocation", ""),
+                      md.get("newTime", ""), "")
+        if dlg.exec() and dlg.result:
+            self._applyTreeResult(row, dlg.result)
+
+    def _applyTreeResult(self, row, result):
+        md = self.metaDataByRow[row]
+        ts = self._rowLabels.get(row, {}).get("tagStrip")
+        # A recording belongs to one checklist; keep species consistent with it.
+        sameChecklist = (result["date"] == md.get("newDate") and
+                         result["location"] == md.get("newLocation") and
+                         result["time"] == md.get("newTime"))
+        md["newDate"] = result["date"]
+        md["newLocation"] = result["location"]
+        md["newTime"] = result["time"]
+        md["skip"] = False
+        chk = self._rowLabels.get(row, {}).get("skip")
+        if chk is not None:
+            chk.blockSignals(True)
+            chk.setChecked(False)
+            chk.blockSignals(False)
+        if ts is not None:
+            if sameChecklist:
+                ts.addSpecies(result["species"])        # same checklist: add a species
             else:
-                self.highlightWidget(cboDate)
-        if self.metaDataByRow[row].get("cascadeMode") == "date_first":
-            self._setCboLocationByDate(row)
-        self._setCboTime(row)
-        self._setCboCommonName(row)
+                ts.setSpeciesList([result["species"]])  # new checklist: reset species
+        self._refreshRowLabels(row)
         self.saveNewMetaData(row)
-        self.fillingCombos = False
 
-    def cboTimeChanged(self, row, _index=None):
-        if self.fillingCombos:
-            return
-        self.fillingCombos = True
-        w = self._getRowWidgets(row)
-        cboTime = w.get("time")
-        if cboTime:
-            orig = self.metaDataByRow[row]["time"]
-            if cboTime.currentText() == orig:
-                self.removeHighlight(cboTime)
-            else:
-                self.highlightWidget(cboTime)
-        self._setCboCommonName(row)
+    def _onSpeciesChanged(self, row):
         self.saveNewMetaData(row)
-        self.fillingCombos = False
 
-    def cboCommonNameChanged(self, row, _index=None):
-        if self.fillingCombos:
-            return
-        w = self._getRowWidgets(row)
-        cbo = w.get("species")
-        tagStrip = w.get("tagStrip")
-        if cbo and tagStrip:
-            selected = cbo.currentText()
-            if selected and selected != "-- Add a species --":
-                tagStrip.addSpecies(selected)
-                self.fillingCombos = True
-                cbo.setCurrentIndex(0)
-                self.fillingCombos = False
+    def _toggleSkip(self, row, checked):
+        self.metaDataByRow[row]["skip"] = checked
+        self._refreshRowLabels(row)
         self.saveNewMetaData(row)
 
     def cboRatingChanged(self, row, _index=None):
         if self.fillingCombos:
             return
-        w = self._getRowWidgets(row)
-        cbo = w.get("rating")
-        if cbo:
-            orig = self.metaDataByRow[row]["rating"]
-            if cbo.currentText() == orig:
-                self.removeHighlight(cbo)
-            else:
-                self.highlightWidget(cbo)
         self.saveNewMetaData(row)
 
-    def _setCboDate(self, row):
-        w = self._getRowWidgets(row)
-        cboLocation = w.get("location")
-        cboDate = w.get("date")
-        if not cboDate or not cboLocation:
-            return
-        orig = self.metaDataByRow[row]["date"]
-        current = cboDate.currentText()
-        f = code_Filter.Filter()
-        f.setLocationName(cboLocation.currentText())
-        f.setLocationType("Location")
-        dates = self.mdiParent.db.GetDates(f)
-        cboDate.clear()
-        cboDate.addItems(dates)
-        idx = cboDate.findText(current)
-        if idx >= 0:
-            cboDate.setCurrentIndex(idx)
-        else:
-            idx = cboDate.findText(orig)
-            if idx >= 0:
-                cboDate.setCurrentIndex(idx)
-        if cboDate.currentText() == orig:
-            self.removeHighlight(cboDate)
-        else:
-            self.highlightWidget(cboDate)
-
-    def _setCboLocationByDate(self, row):
-        w = self._getRowWidgets(row)
-        cboDate = w.get("date")
-        cboLocation = w.get("location")
-        if not cboDate or not cboLocation:
-            return
-        orig = self.metaDataByRow[row]["location"]
-        current = cboLocation.currentText()
-        f = code_Filter.Filter()
-        f.setStartDate(cboDate.currentText())
-        f.setEndDate(cboDate.currentText())
-        locations = self.mdiParent.db.GetLocations(f)
-        cboLocation.clear()
-        cboLocation.addItems(locations)
-        idx = cboLocation.findText(current)
-        if idx >= 0:
-            cboLocation.setCurrentIndex(idx)
-        if cboLocation.currentText() == orig:
-            self.removeHighlight(cboLocation)
-        else:
-            self.highlightWidget(cboLocation)
-
-    def _setCboTime(self, row):
-        w = self._getRowWidgets(row)
-        cboLocation = w.get("location")
-        cboDate = w.get("date")
-        cboTime = w.get("time")
-        if not all([cboLocation, cboDate, cboTime]):
-            return
-        orig = self.metaDataByRow[row]["time"]
-        current = cboTime.currentText()
-        f = code_Filter.Filter()
-        f.setLocationName(cboLocation.currentText())
-        f.setLocationType("Location")
-        f.setStartDate(cboDate.currentText())
-        f.setEndDate(cboDate.currentText())
-        times = self.mdiParent.db.GetStartTimes(f)
-        cboTime.clear()
-        cboTime.addItems(times)
-        idx = cboTime.findText(current)
-        if idx >= 0:
-            cboTime.setCurrentIndex(idx)
-        if cboTime.currentText() == orig:
-            self.removeHighlight(cboTime)
-        else:
-            self.highlightWidget(cboTime)
-
-    def _setCboCommonName(self, row):
-        w = self._getRowWidgets(row)
-        cboLocation = w.get("location")
-        cboDate = w.get("date")
-        cboTime = w.get("time")
-        cboCommonName = w.get("species")
-        if not all([cboLocation, cboDate, cboTime, cboCommonName]):
-            return
-        f = code_Filter.Filter()
-        f.setLocationName(cboLocation.currentText())
-        f.setLocationType("Location")
-        f.setStartDate(cboDate.currentText())
-        f.setEndDate(cboDate.currentText())
-        f.setTime(cboTime.currentText())
-        names = self.mdiParent.db.GetSpecies(f)
-        cboCommonName.clear()
-        cboCommonName.addItem("-- Add a species --")
-        cboCommonName.addItems(names)
-        cboCommonName.setCurrentIndex(0)
-
     def saveNewMetaData(self, row):
-        w = self._getRowWidgets(row)
-        if "location" in w:
-            self.metaDataByRow[row]["newLocation"] = w["location"].currentText()
-        if "date" in w:
-            self.metaDataByRow[row]["newDate"] = w["date"].currentText()
-        if "time" in w:
-            self.metaDataByRow[row]["newTime"] = w["time"].currentText()
-        if "tagStrip" in w:
-            self.metaDataByRow[row]["newCommonNames"] = w["tagStrip"].getSpecies()
-        if "rating" in w:
-            self.metaDataByRow[row]["newRating"] = str(w["rating"].currentIndex())
+        md = self.metaDataByRow.get(row)
+        if md is None:
+            return
+        lbls = self._rowLabels.get(row, {})
+        md.setdefault("newLocation", md["location"])
+        md.setdefault("newDate", md["date"])
+        md.setdefault("newTime", md["time"])
+        if md.get("skip"):
+            md["newCommonNames"] = []
+        else:
+            ts = lbls.get("tagStrip")
+            if ts is not None:
+                md["newCommonNames"] = ts.getSpecies()
+            else:
+                md.setdefault("newCommonNames", list(md.get("commonNames", [])))
+        cbo = lbls.get("rating")
+        if cbo is not None:
+            md["newRating"] = str(cbo.currentIndex())
+        else:
+            md.setdefault("newRating", str(md.get("rating", "0")))
 
     def btnResetClicked(self, row):
-        self.fillingCombos = True
-        w = self._getRowWidgets(row)
-        meta = self.metaDataByRow[row]
-
-        origLocation = meta["location"]
-        origDate = meta["date"]
-        origTime = meta["time"]
-        origCommonNames = meta["origCommonNames"]
-        origRating = meta["rating"]
-
-        cboLocation = w.get("location")
-        cboDate = w.get("date")
-        cboTime = w.get("time")
-        cboCommonName = w.get("species")
-        cboRating = w.get("rating")
-        tagStrip = w.get("tagStrip")
-
-        if cboLocation:
-            idx = cboLocation.findText(origLocation)
-            if idx >= 0:
-                cboLocation.setCurrentIndex(idx)
-
-        if cboDate:
-            f = code_Filter.Filter()
-            f.setLocationName(origLocation)
-            f.setLocationType("Location")
-            dates = self.mdiParent.db.GetDates(f)
-            cboDate.clear()
-            cboDate.addItems(dates)
-            idx = cboDate.findText(origDate)
-            if idx >= 0:
-                cboDate.setCurrentIndex(idx)
-
-        if cboTime:
-            f = code_Filter.Filter()
-            f.setLocationName(origLocation)
-            f.setLocationType("Location")
-            f.setStartDate(origDate)
-            f.setEndDate(origDate)
-            times = self.mdiParent.db.GetStartTimes(f)
-            cboTime.clear()
-            cboTime.addItems(times)
-            idx = cboTime.findText(origTime)
-            if idx >= 0:
-                cboTime.setCurrentIndex(idx)
-
-        if cboCommonName:
-            f = code_Filter.Filter()
-            f.setLocationName(origLocation)
-            f.setLocationType("Location")
-            f.setStartDate(origDate)
-            f.setEndDate(origDate)
-            f.setTime(origTime)
-            names = self.mdiParent.db.GetSpecies(f)
-            cboCommonName.clear()
-            cboCommonName.addItem("-- Add a species --")
-            cboCommonName.addItems(names)
-            cboCommonName.setCurrentIndex(0)
-
-        if tagStrip:
-            tagStrip.setSpeciesList(origCommonNames)
-
-        if cboRating:
+        md = self.metaDataByRow[row]
+        md["newLocation"] = md["location"]
+        md["newDate"] = md["date"]
+        md["newTime"] = md["time"]
+        md["skip"] = False
+        lbls = self._rowLabels.get(row, {})
+        chk = lbls.get("skip")
+        if chk is not None:
+            chk.blockSignals(True)
+            chk.setChecked(False)
+            chk.blockSignals(False)
+        ts = lbls.get("tagStrip")
+        if ts is not None:
+            ts.setSpeciesList(list(md.get("origCommonNames", [])))
+        cbo = lbls.get("rating")
+        if cbo is not None:
             try:
-                cboRating.setCurrentIndex(int(origRating))
-            except (ValueError, TypeError):
-                cboRating.setCurrentIndex(0)
-
-        for cbo in [cboLocation, cboDate, cboTime, cboRating]:
-            if cbo:
-                self.removeHighlight(cbo)
-
-        self.fillingCombos = False
-
-    # ------------------------------------------------------------------
-    # Save
-    # ------------------------------------------------------------------
+                cbo.setCurrentIndex(max(0, min(5, int(md["rating"]))))
+            except (TypeError, ValueError):
+                cbo.setCurrentIndex(0)
+        self._refreshRowLabels(row)
+        self.saveNewMetaData(row)
 
     def saveAudioSettings(self):
         if not self.audioAlreadyInDb and not self.mdiParent.db.photoDataFileOpenFlag:
@@ -1598,6 +1135,11 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         if added_recording_files:
             code_ThumbnailCache.prebuild_async(recording_paths=added_recording_files)
 
+        # Rebuild the Media Filter's recording options so any new sample rate or
+        # bit depth introduced by the saved recordings appears immediately (this
+        # mirrors what Manage Photos does for the photo filters on save).
+        self.mdiParent.db.refreshRecordingsLists()
+        self.mdiParent.fillRecordingsComboBoxes()
         # Reveal the Recordings menu if this added the first recording to the catalog.
         self.mdiParent._updateMediaMenuVisibility()
         self.mdiParent.db.photosNeedSaving = True

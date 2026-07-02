@@ -1,5 +1,10 @@
 import form_Recordings
-from code_ManageRecordings import _build_spectrogram_pixmap, SpectrogramLabel, PcmAudioPlayer, SPECTRO_AX_BBOX
+from code_ManageRecordings import SpectrogramLabel   # UI widget stays in its module
+from code_Audio import (
+    build_spectrogram_pixmap as _build_spectrogram_pixmap,
+    PcmAudioPlayer,
+    SPECTRO_AX_BBOX,
+)
 import code_ThumbnailCache
 
 import datetime
@@ -495,12 +500,21 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
             self._filePaths[row] = fileName
 
             # ── Col 1: caption ─────────────────────────────────────────────────
+            # Prefer the recording's true (embedded) creation date/time; fall
+            # back to the checklist date/time when the file carries no metadata.
+            if a.get("metaDate"):
+                dispDate, dispTime = a["metaDate"], a.get("metaTime", "")
+            else:
+                dispDate, dispTime = s.get("date", ""), s.get("time", "")
             try:
                 weekday = datetime.datetime(
-                    int(s["date"][0:4]), int(s["date"][5:7]), int(s["date"][8:10])
+                    int(dispDate[0:4]), int(dispDate[5:7]), int(dispDate[8:10])
                 ).strftime("%A")
             except Exception:
                 weekday = ""
+            dateLine = dispDate + ((" " + dispTime) if dispTime else "")
+            if weekday:
+                dateLine = weekday + ", " + dateLine
 
             duration = a.get("duration", "")
             rating = a.get("rating", "0")
@@ -510,7 +524,7 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
                 '<span style="font-size: 1.1em; font-weight: bold;">' + s["commonName"] + "</span><br>"
                 "<i>" + s["scientificName"] + "</i><br><br>"
                 + s["location"] + "<br>"
-                + weekday + ", " + s["date"] + " " + s["time"]
+                + dateLine
                 + ("<br>Duration: " + duration if duration else "")
                 + "<br>Rating: " + rating
             )
@@ -619,6 +633,9 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
         import code_RecordingEnlargement
         if row >= len(self.audioList):
             return
+        # Stop Browse Recordings playback before spawning the enlargement so the
+        # two windows don't play over each other.
+        self._player.stop()
         a, s = self.audioList[row]
         fileName = a.get("fileName", "")
         cached = self.spectroCache.get(fileName)   # (QPixmap, ax_bbox) or None

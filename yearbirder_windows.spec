@@ -32,6 +32,14 @@ hiddenimports = [
     "mutagen",
     "mutagen.wave",
     "mutagen.id3",
+    # Audio decode: libsndfile via soundfile (+ its cffi binding).  The native
+    # libsndfile DLL is bundled into _soundfile_data/ by hook-soundfile.
+    "soundfile",
+    "cffi",
+    # Audio resampling: libsoxr via python-soxr (self-contained abi3 extension;
+    # libsoxr is statically linked, so there is no separate shared lib to bundle).
+    "soxr",
+    "soxr.soxr_ext",
 ]
 
 a = Analysis(

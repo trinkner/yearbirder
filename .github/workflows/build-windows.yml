@@ -20,7 +20,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install pyinstaller pyside6 piexif folium matplotlib numpy natsort requests pillow
+          pip install pyinstaller pyside6 piexif folium matplotlib numpy natsort requests pillow soundfile soxr
 
       - name: Convert PNG icon to ICO
         run: |

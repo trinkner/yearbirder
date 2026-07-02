@@ -28,6 +28,7 @@ from PySide6.QtCore import (
     Qt,
     QEvent,
     QPoint,
+    QTimer,
 )
 
 from PySide6.QtWidgets import (
@@ -44,10 +45,26 @@ from PySide6.QtWidgets import (
 
 
 # ── Slot option labels ─────────────────────────────────────────────────────────
-_SLOT_OPTIONS  = ["(omit)", "Species Name", "Location", "Date", "Time"]
-_DATE_FORMATS  = ["YYYY-MM-DD", "YYYYMMDD", "(omit)"]
-_TIME_FORMATS  = ["HH-MM-SS", "HHMMSS", "HH-MM-SSt", "HHMMSSt", "(omit)"]
-_NAME_FORMATS  = ["Common Name", "Scientific Name", "eBird Species Code"]
+# Each slot combo carries every component *and* its format in one flat list
+# ("Category: Format"), so there are no separate format combos.  _buildComponent
+# parses the selection on "Category: Format".
+_SLOT_OPTIONS  = [
+    "(omit)",
+    "Date: YYYY-MM-DD",
+    "Date: YYYYMMDD",
+    "Time: HH-MM-SS",
+    "Time: HH-MM-SSt",
+    "Time: HHMMSS",
+    "Time: HHMMSSt",
+    "Species: Common Name",
+    "Species: Scientific Name",
+    "Species: 4-digit Code",
+    "Location",
+]
+# Time formats that already carry a tenths digit (the tenths pre-pass skips them).
+_TIME_TENTHS_FORMATS = ("Time: HH-MM-SSt", "Time: HHMMSSt")
+# Seconds-only time formats the tenths pre-pass can promote on collision.
+_TIME_SECONDS_FORMATS = ("Time: HH-MM-SS", "Time: HHMMSS")
 
 # ── Column indices ─────────────────────────────────────────────────────────────
 _COL_CHECK    = 0
@@ -57,6 +74,18 @@ _COL_STATUS   = 3
 
 # Red used for error messages in the Status column.
 _ERROR_RED = QColor("#e05c5c")
+
+
+def _exif_dt_from_meta(meta_date, meta_time):
+    """Build an EXIF-format datetime ('YYYY:MM:DD HH:MM:00') from a recording's
+    cached metaDate ('YYYY-MM-DD') / metaTime ('HH:MM'), or None.  Matches
+    DataBase.readWavMetadateDatetime so cached and freshly-read values agree."""
+    if not meta_date:
+        return None
+    exif_date = meta_date.replace('-', ':')
+    if meta_time and len(meta_time) >= 5:
+        return f'{exif_date} {meta_time[0:2]}:{meta_time[3:5]}:00'
+    return exif_date
 
 # Human-readable messages for the most common OS rename failures.
 _OSERROR_MESSAGES = {
@@ -113,6 +142,15 @@ class RenameMedia(QMdiSubWindow, form_RenameMedia.Ui_frmRenameMedia):
         #              "exifDatetime": str|None, "exifSubsec": str|None}
         self._rows = []
 
+        # Memoized 200px hover-tooltip pixmaps, keyed by file path (value may be
+        # None for an unreadable file) so re-hovering a row is instant.
+        self._tooltipCache = {}
+
+        # NFC-normalised path -> row record, rebuilt in FillRenameMedia.  An O(1)
+        # index so _rowDataForTableRow (called once per row in the proposed-name
+        # passes) does not rescan every row each time (which was O(n^2)).
+        self._rowByPath = {}
+
         # Paths that have been through the rename loop (success or failure) and
         # must not have their Status/Proposed columns overwritten by subsequent
         # _updateProposedNames() calls.
@@ -123,26 +161,17 @@ class RenameMedia(QMdiSubWindow, form_RenameMedia.Ui_frmRenameMedia):
             cbo = getattr(self, f"cboSlot{n}")
             cbo.addItems(_SLOT_OPTIONS)
 
-        # Defaults: Date | Time | Species Name | Location
-        self.cboSlot1.setCurrentIndex(_SLOT_OPTIONS.index("Date"))
-        self.cboSlot2.setCurrentIndex(_SLOT_OPTIONS.index("Time"))
-        self.cboSlot3.setCurrentIndex(_SLOT_OPTIONS.index("Species Name"))
+        # Defaults: Date | Time | Species (common) | Location
+        self.cboSlot1.setCurrentIndex(_SLOT_OPTIONS.index("Date: YYYY-MM-DD"))
+        self.cboSlot2.setCurrentIndex(_SLOT_OPTIONS.index("Time: HH-MM-SS"))
+        self.cboSlot3.setCurrentIndex(_SLOT_OPTIONS.index("Species: Common Name"))
         self.cboSlot4.setCurrentIndex(_SLOT_OPTIONS.index("Location"))
-
-        self.cboDateFormat.addItems(_DATE_FORMATS)
-        self.cboTimeFormat.addItems(_TIME_FORMATS)
-        self.cboNameFormat.addItems(_NAME_FORMATS)   # default = "Common Name"
 
         # Wire signals
         for n in range(1, 5):
             getattr(self, f"cboSlot{n}").currentIndexChanged.connect(
                 self._updateProposedNames)
-        self.cboDateFormat.currentIndexChanged.connect(self._updateProposedNames)
-        self.cboTimeFormat.currentIndexChanged.connect(self._updateProposedNames)
-        self.cboNameFormat.currentIndexChanged.connect(self._updateProposedNames)
-        self.chkUseChecklistTime.stateChanged.connect(self._updateProposedNames)
         self.chkShortenLocation.stateChanged.connect(self._updateProposedNames)
-        self.chkAddTenths.stateChanged.connect(self._updateProposedNames)
         self.chkRemoveSpaces.stateChanged.connect(self._updateProposedNames)
         self.btnSelectAll.clicked.connect(self._selectAll)
         self.btnSelectNone.clicked.connect(self._selectNone)
@@ -181,26 +210,47 @@ class RenameMedia(QMdiSubWindow, form_RenameMedia.Ui_frmRenameMedia):
                 item = self.tblPhotos.item(row, _COL_CURRENT)
                 if item:
                     path = item.data(Qt.UserRole)
-                    if path and os.path.isfile(path):
-                        px = QPixmap(path)
-                        if not px.isNull():
-                            px = px.scaled(200, 200,
-                                           Qt.AspectRatioMode.KeepAspectRatio,
-                                           Qt.TransformationMode.SmoothTransformation)
-                            buf = px.toImage()
-                            from PySide6.QtCore import QBuffer, QByteArray, QIODevice
-                            ba = QByteArray()
-                            qbuf = QBuffer(ba)
-                            qbuf.open(QIODevice.OpenModeFlag.WriteOnly)
-                            buf.save(qbuf, "JPEG", 85)
-                            qbuf.close()
-                            b64 = base64.b64encode(bytes(ba)).decode("ascii")
-                            html = f'<img src="data:image/jpeg;base64,{b64}">'
-                            QToolTip.showText(event.globalPos(), html, self.tblPhotos.viewport())
-                            return True
+                    px = self._tooltipPixmap(path)
+                    if px is not None and not px.isNull():
+                        buf = px.toImage()
+                        from PySide6.QtCore import QBuffer, QByteArray, QIODevice
+                        ba = QByteArray()
+                        qbuf = QBuffer(ba)
+                        qbuf.open(QIODevice.OpenModeFlag.WriteOnly)
+                        buf.save(qbuf, "JPEG", 85)
+                        qbuf.close()
+                        b64 = base64.b64encode(bytes(ba)).decode("ascii")
+                        html = f'<img src="data:image/jpeg;base64,{b64}">'
+                        QToolTip.showText(event.globalPos(), html, self.tblPhotos.viewport())
+                        return True
             QToolTip.hideText()
             return True
         return super().eventFilter(obj, event)
+
+    def _tooltipPixmap(self, path):
+        """Return a memoized ~200px hover-preview QPixmap for a photo path, or
+        None.  Reuses the on-disk thumbnail cache (the same ~500px 'photo'
+        thumbnails the browsers populate); on a miss it does a *scaled* decode
+        (never a full-resolution decode of a large JPEG) and warms the cache.
+        Non-image files (recordings) resolve to None."""
+        if not path:
+            return None
+        if path in self._tooltipCache:
+            return self._tooltipCache[path]
+        px = None
+        if os.path.isfile(path):
+            img = code_ThumbnailCache.load(path, "photo")
+            if img is None or img.isNull():
+                img = code_ThumbnailCache.decode_thumbnail(path)   # scaled, EXIF-oriented
+                if img is not None and not img.isNull():
+                    code_ThumbnailCache.store(path, img, "photo")
+            if img is not None and not img.isNull():
+                px = QPixmap.fromImage(img).scaled(
+                    200, 200,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation)
+        self._tooltipCache[path] = px
+        return px
 
 
     # ── Public ─────────────────────────────────────────────────────────────────
@@ -216,11 +266,28 @@ class RenameMedia(QMdiSubWindow, form_RenameMedia.Ui_frmRenameMedia):
         self._frozen_paths = set()
         self.tblPhotos.setRowCount(0)
         self.tblPhotos.setSortingEnabled(False)
+        # Populate while hidden: a *visible* QTableWidget relays out its whole
+        # geometry on every insertRow/setCellWidget, which is O(rows) per insert
+        # (~8 s for 3,300 rows).  Hidden, the same build is ~0.2 s; we re-show it
+        # before sizing the columns so the viewport width is valid.
+        self.tblPhotos.setVisible(False)
 
         row_index = 0
         for s in photo_sightings:
             for p in s.get("photos", []):
-                exif_dt, exif_sub, exif_bad = self._readExifDatetime(p["fileName"])
+                # Use the catalog-cached EXIF capture time when present; otherwise
+                # read it from the file once and cache it back on the live photo
+                # record, so the compaction on window-close persists it and future
+                # opens are instant (no per-file disk reads).
+                if "exifDatetime" in p:
+                    exif_dt = p["exifDatetime"]
+                    exif_sub = p.get("exifSubsec")
+                    exif_bad = p.get("exifDateInvalid", False)
+                else:
+                    exif_dt, exif_sub, exif_bad = self._readExifDatetime(p["fileName"])
+                    p["exifDatetime"] = exif_dt
+                    p["exifSubsec"] = exif_sub
+                    p["exifDateInvalid"] = exif_bad
                 self._rows.append({
                     "mediaType": "photo",
                     "sighting": s,
@@ -240,7 +307,16 @@ class RenameMedia(QMdiSubWindow, form_RenameMedia.Ui_frmRenameMedia):
             )
             if recording_dict is None:
                 continue
-            wav_dt = self.mdiParent.db.readWavMetadateDatetime(filename)
+            # Cached embedded date/time when present; otherwise read once and
+            # cache back (persisted by the close-time compaction).
+            if "metaDate" in recording_dict:
+                wav_dt = _exif_dt_from_meta(recording_dict.get("metaDate"),
+                                            recording_dict.get("metaTime"))
+            else:
+                meta_date, meta_time = self.mdiParent.db.getRecordingMetaDatetime(filename)
+                recording_dict["metaDate"] = meta_date
+                recording_dict["metaTime"] = meta_time
+                wav_dt = _exif_dt_from_meta(meta_date, meta_time)
             self._rows.append({
                 "mediaType": "recording",
                 "sightings": sightings,
@@ -252,8 +328,16 @@ class RenameMedia(QMdiSubWindow, form_RenameMedia.Ui_frmRenameMedia):
             self._addTableRow(row_index, filename)
             row_index += 1
 
+        # O(1) path -> row index for _rowDataForTableRow (avoids O(n^2) rescans).
+        self._rowByPath = {}
+        for rd in self._rows:
+            fn = (rd["recording"]["fileName"] if rd["mediaType"] == "recording"
+                  else rd["photo"]["fileName"]) or ""
+            self._rowByPath[unicodedata.normalize("NFC", fn)] = rd
+
         self.tblPhotos.setSortingEnabled(True)
         self._updateProposedNames()
+        self.tblPhotos.setVisible(True)        # re-show before column sizing
         self._updateCount()
         self._resizeContentColumns()
 
@@ -413,20 +497,6 @@ class RenameMedia(QMdiSubWindow, form_RenameMedia.Ui_frmRenameMedia):
         if slot_label == "(omit)":
             return ""
 
-        if slot_label == "Species Name":
-            if (row_data.get("mediaType") == "recording"
-                    and len(row_data.get("sightings", [])) > 1):
-                return "MultipleSpecies"
-            name_fmt = self.cboNameFormat.currentText()
-            if name_fmt == "eBird Species Code":
-                return self._sanitizeForFilename(s.get("quickEntryCode", ""))
-            use_scientific = name_fmt == "Scientific Name"
-            raw = s.get("scientificName" if use_scientific else "commonName", "")
-            result = self._sanitizeSpeciesName(raw, scientific=use_scientific)
-            if self.chkRemoveSpaces.isChecked():
-                result = result.replace(" ", "_" if use_scientific else "")
-            return result
-
         if slot_label == "Location":
             loc = s.get("location", "")
             if self.chkShortenLocation.isChecked():
@@ -438,10 +508,23 @@ class RenameMedia(QMdiSubWindow, form_RenameMedia.Ui_frmRenameMedia):
                 result = result.replace(" ", "")
             return result
 
-        if slot_label == "Date":
-            fmt = self.cboDateFormat.currentText()
-            if fmt == "(omit)":
-                return ""
+        # Remaining options carry their format: "Category: Format".
+        category, _, fmt = slot_label.partition(": ")
+
+        if category == "Species":
+            if (row_data.get("mediaType") == "recording"
+                    and len(row_data.get("sightings", [])) > 1):
+                return "MultipleSpecies"
+            if fmt == "4-digit Code":
+                return self._sanitizeForFilename(s.get("quickEntryCode", ""))
+            use_scientific = fmt == "Scientific Name"
+            raw = s.get("scientificName" if use_scientific else "commonName", "")
+            result = self._sanitizeSpeciesName(raw, scientific=use_scientific)
+            if self.chkRemoveSpaces.isChecked():
+                result = result.replace(" ", "_" if use_scientific else "")
+            return result
+
+        if category == "Date":
             if exif_dt and len(exif_dt) >= 10:
                 # EXIF: 'YYYY:MM:DD HH:MM:SS'
                 y, m, d = exif_dt[0:4], exif_dt[5:7], exif_dt[8:10]
@@ -455,15 +538,9 @@ class RenameMedia(QMdiSubWindow, form_RenameMedia.Ui_frmRenameMedia):
                 return f"{y}-{m}-{d}"
             if fmt == "YYYYMMDD":
                 return f"{y}{m}{d}"
-            if fmt == "YYYY":
-                return y
             return ""
 
-        if slot_label == "Time":
-            fmt = self.cboTimeFormat.currentText()
-            if fmt == "(omit)":
-                return ""
-            use_fallback = self.chkUseChecklistTime.isChecked()
+        if category == "Time":
             if exif_dt and len(exif_dt) >= 19:
                 # EXIF: 'YYYY:MM:DD HH:MM:SS'
                 hh, mm, ss = exif_dt[11:13], exif_dt[14:16], exif_dt[17:19]
@@ -478,9 +555,10 @@ class RenameMedia(QMdiSubWindow, form_RenameMedia.Ui_frmRenameMedia):
                 if fmt == "HHMMSS":
                     return (f"{hh}{mm}{ss}{tenth}"
                             if force_tenths else f"{hh}{mm}{ss}")
-            elif use_fallback:
-                # Checklist time is 'HH:MM' — seconds default to 00;
-                # no subsecond data is available so force_tenths is a no-op here
+            else:
+                # No embedded time metadata: always fall back to the checklist
+                # time ('HH:MM'); seconds default to 00.  No subsecond data, so
+                # force_tenths is a no-op here.
                 t = s.get("time", "")
                 if len(t) >= 5:
                     hh, mm = t[0:2], t[3:5]
@@ -527,40 +605,39 @@ class RenameMedia(QMdiSubWindow, form_RenameMedia.Ui_frmRenameMedia):
         """Inner implementation called by _updateProposedNames."""
         row_count = self.tblPhotos.rowCount()
 
-        # ── Pre-pass: find rows that need tenths added to Time slot ───────────
-        # Only runs when chkAddTenths is checked, a Time slot is active, and the
-        # current time format does not already include tenths (HH-MM-SS.t).
-        # Rows that share the same proposed basename (ignoring tenths) are both
-        # promoted to the .t / t variant.  Checklist-fallback rows are skipped
-        # because they have no subsecond EXIF data.
+        # ── Pre-pass: find rows that need tenths added to the Time slot ───────
+        # When a seconds-only Time slot (HH-MM-SS / HHMMSS) is active, rows that
+        # would share the same proposed basename are automatically promoted to
+        # the tenths variant to differentiate them (the …t formats already carry
+        # tenths).  Checklist-fallback rows are skipped because they have no
+        # subsecond EXIF data; any remaining collisions get _1/_2 suffixes in
+        # Pass 2.
         tenths_paths = set()   # set of original_path strings needing force_tenths
-        if self.chkAddTenths.isChecked():
-            time_slot_active = any(
-                getattr(self, f"cboSlot{n}").currentText() == "Time"
-                for n in range(1, 5)
-            )
-            if time_slot_active and self.cboTimeFormat.currentText() not in (
-                    "(omit)", "HH-MM-SSt", "HHMMSSt"):
-                pre = {}   # original_path -> (base, ext)
-                for ri in range(row_count):
-                    chk = self._getCheckboxForRow(ri)
-                    if chk is None or not chk.isChecked():
-                        continue
-                    cur_item = self.tblPhotos.item(ri, _COL_CURRENT)
-                    if cur_item is None:
-                        continue
-                    opath = cur_item.data(Qt.UserRole)
-                    if not opath:
-                        continue
-                    rd = self._rowDataForTableRow(ri)
-                    if rd is None or rd["exifDatetime"] is None:
-                        continue
-                    b = self._buildProposedBasename(rd, force_tenths=False)
-                    e = os.path.splitext(opath)[1].lower()
-                    pre[opath] = (b, e)
-                key_counts = Counter(v for v in pre.values() if v[0])
-                tenths_paths = {p for p, ke in pre.items()
-                                if key_counts[ke] > 1}
+        seconds_only_time = any(
+            getattr(self, f"cboSlot{n}").currentText() in _TIME_SECONDS_FORMATS
+            for n in range(1, 5)
+        )
+        if seconds_only_time:
+            pre = {}   # original_path -> (base, ext)
+            for ri in range(row_count):
+                chk = self._getCheckboxForRow(ri)
+                if chk is None or not chk.isChecked():
+                    continue
+                cur_item = self.tblPhotos.item(ri, _COL_CURRENT)
+                if cur_item is None:
+                    continue
+                opath = cur_item.data(Qt.UserRole)
+                if not opath:
+                    continue
+                rd = self._rowDataForTableRow(ri)
+                if rd is None or rd["exifDatetime"] is None:
+                    continue
+                b = self._buildProposedBasename(rd, force_tenths=False)
+                e = os.path.splitext(opath)[1].lower()
+                pre[opath] = (b, e)
+            key_counts = Counter(v for v in pre.values() if v[0])
+            tenths_paths = {p for p, ke in pre.items()
+                            if key_counts[ke] > 1}
 
         # ── Pass 1: collect one record per checked row ────────────────────────
         # Each record is (base, ext, original_dir, original_path).
@@ -723,14 +800,7 @@ class RenameMedia(QMdiSubWindow, form_RenameMedia.Ui_frmRenameMedia):
             return None
         original_path = unicodedata.normalize(
             "NFC", cur_item.data(Qt.UserRole) or "")
-        for rd in self._rows:
-            if rd.get("mediaType") == "recording":
-                fn = rd["recording"].get("fileName", "") or ""
-            else:
-                fn = rd["photo"].get("fileName", "") or ""
-            if unicodedata.normalize("NFC", fn) == original_path:
-                return rd
-        return None
+        return self._rowByPath.get(original_path)
 
 
     def _getCheckboxForRow(self, table_row):
@@ -745,37 +815,28 @@ class RenameMedia(QMdiSubWindow, form_RenameMedia.Ui_frmRenameMedia):
 
 
     def _resizeContentColumns(self):
-        """Size cols 1-3 to content, then ensure the Status column is always
-        visible by capping cols 1 and 2 to share the remaining viewport width.
-
-        Long filenames are still fully readable via horizontal scrolling and
-        the per-cell tooltips set earlier.
+        """Fill the table viewport with no empty space to the right of the Status
+        column: Status is sized just wide enough for its longest value
+        ("Duplicate: Append _2"), the checkbox column is fixed, and the remaining
+        width is split evenly between the Current and Proposed File Name columns.
+        Long names stay readable via the per-cell tooltips set earlier.
         """
-        # Size all three to their natural content width first
-        for col in (_COL_CURRENT, _COL_PROPOSED, _COL_STATUS):
-            self.tblPhotos.resizeColumnToContents(col)
+        # viewport().width() already excludes the vertical scrollbar, so the
+        # column widths sum exactly to the visible area — no leftover space.
+        try:
+            viewport_w = self.tblPhotos.viewport().width()
+        except RuntimeError:
+            return                       # deferred call after the window closed
+        status_w = self.tblPhotos.fontMetrics().horizontalAdvance(
+            "Duplicate: Append _2") + 24            # cell padding + sort margin
+        self.tblPhotos.setColumnWidth(_COL_STATUS, status_w)
 
-        # Reserve space: checkbox col + status col + vertical-scrollbar allowance
-        vbar_w = self.tblPhotos.verticalScrollBar().sizeHint().width()
-        reserved = (self.tblPhotos.columnWidth(_COL_CHECK)
-                    + self.tblPhotos.columnWidth(_COL_STATUS)
-                    + vbar_w + 4)          # 4 px for borders
-        available = self.tblPhotos.viewport().width() - reserved
-
-        col1_natural = self.tblPhotos.columnWidth(_COL_CURRENT)
-        col2_natural = self.tblPhotos.columnWidth(_COL_PROPOSED)
-
-        if col1_natural + col2_natural > available:
-            # Split available space proportionally to natural widths,
-            # with a 120 px floor so neither column collapses entirely.
-            total = col1_natural + col2_natural
-            if total > 0:
-                col1_w = max(120, int(available * col1_natural / total))
-                col2_w = max(120, available - col1_w)
-            else:
-                col1_w = col2_w = max(120, available // 2)
-            self.tblPhotos.setColumnWidth(_COL_CURRENT,  col1_w)
-            self.tblPhotos.setColumnWidth(_COL_PROPOSED, col2_w)
+        available = viewport_w - self.tblPhotos.columnWidth(_COL_CHECK) - status_w
+        if available < 0:
+            available = 0
+        col1_w = available // 2
+        self.tblPhotos.setColumnWidth(_COL_CURRENT,  col1_w)
+        self.tblPhotos.setColumnWidth(_COL_PROPOSED, available - col1_w)
 
 
     def _selectAll(self):
@@ -1080,6 +1141,11 @@ class RenameMedia(QMdiSubWindow, form_RenameMedia.Ui_frmRenameMedia):
         windowWidth  = self.width() - 10
         windowHeight = self.height()
         self.frmContainer.setGeometry(5, 27, windowWidth, windowHeight - 32)
+        # Size immediately for the common case, then again after the event loop
+        # has re-laid out the table: on maximize the viewport width is still
+        # stale here, which would otherwise leave empty space to the right.
+        self._resizeContentColumns()
+        QTimer.singleShot(0, self._resizeContentColumns)
 
 
     def scaleMe(self):

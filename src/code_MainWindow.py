@@ -91,6 +91,7 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QVBoxLayout,
+    QCheckBox,
     QMenu,
     QProxyStyle,
     QStyle,
@@ -648,11 +649,12 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionRenameMedia.setVisible(False)
 
         # Rebuild thumbnail cache — created dynamically (no generated-form edit)
-        # and inserted into the File menu just after Rename Media.
+        # and inserted into the File menu's media-wide group, just after Rename
+        # Media (i.e. immediately before that group's trailing separator).
         self.actionRebuildThumbnailCache = QAction("Rebuild thumbnail cache…", self)
         self.actionRebuildThumbnailCache.setMenuRole(QAction.MenuRole.NoRole)
         self.actionRebuildThumbnailCache.triggered.connect(self.rebuildThumbnailCache)
-        self.menuFile.insertAction(self.actionOptimizePhotoSettings,
+        self.menuFile.insertAction(self.menuFileMediaSeparator,
                                    self.actionRebuildThumbnailCache)
         self.actionOptimizePhotoSettings.triggered.connect(self.optimizePhotoSettings)
         self.actionOptimizePhotoSettings.setVisible(False)
@@ -827,6 +829,10 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.cboChannels.currentIndexChanged.connect(self.ComboChannelsChanged)
         self.cboStartRecordingsDurationRange.currentIndexChanged.connect(self.ComboStartRecordingsDurationChanged)
         self.cboEndRecordingsDurationRange.currentIndexChanged.connect(self.ComboEndRecordingsDurationChanged)
+        self.cboStartRecordingsSampleRateRange.currentIndexChanged.connect(self.ComboStartRecordingsSampleRateChanged)
+        self.cboEndRecordingsSampleRateRange.currentIndexChanged.connect(self.ComboEndRecordingsSampleRateChanged)
+        self.cboRecordingsDevice.currentIndexChanged.connect(self.ComboRecordingsDeviceChanged)
+        self._bitDepthChecks = []   # runtime QCheckBoxes, one per catalog bit depth
 
         # Clicking anywhere on the section header row toggles the section
         self.frmPhotoHeader.mousePressEvent = lambda e: self._togglePhotoSection()
@@ -1027,7 +1033,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.frmFocalLengthRange.children() +
             self.frmRatingRange.children() +
             self.frmRecordingsRatingRange.children() +
-            self.frmRecordingsDurationRange.children()
+            self.frmRecordingsDurationRange.children() +
+            self.frmRecordingsSampleRateRange.children()
             )
 
         for w in filterFrameChildren:
@@ -1083,6 +1090,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.frmFocalLengthRange,
             self.frmRecordingsRatingRange,
             self.frmRecordingsDurationRange,
+            self.frmRecordingsSampleRateRange,
             ):
             w.setMinimumWidth(floor(2 * itemTextWidth))
             w.setMinimumHeight(floor(2 * itemTextHeight))
@@ -1161,6 +1169,11 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.cboChannels.setCurrentIndex(0)
         self.cboStartRecordingsDurationRange.setCurrentIndex(0)
         self.cboEndRecordingsDurationRange.setCurrentIndex(0)
+        self.cboStartRecordingsSampleRateRange.setCurrentIndex(0)
+        self.cboEndRecordingsSampleRateRange.setCurrentIndex(0)
+        self.cboRecordingsDevice.setCurrentIndex(0)
+        for chk in getattr(self, "_bitDepthChecks", []):
+            chk.setChecked(False)
 
 
     def _warnIfJsonlSkippedLines(self):
@@ -1636,14 +1649,59 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
 
     def fillRecordingsComboBoxes(self):
-        # Populate only the catalog-derived duration comboboxes; static items
-        # (rating, channels, has-recording) are set once in __init__.
+        # Populate only the catalog-derived comboboxes (duration, sample rate,
+        # bit depth); static items (rating, channels, has-recording) are set once
+        # in __init__.
+        # Block signals while repopulating: clearing a combo drops its index to
+        # -1, which would otherwise fire the range-coupling handlers and leave the
+        # paired combo blank and falsely highlighted.  Reset to "All" + clear any
+        # stale highlight from a prior selection.
         for w in (self.cboStartRecordingsDurationRange, self.cboEndRecordingsDurationRange):
+            w.blockSignals(True)
             w.clear()
             w.addItem("All")
             w.insertSeparator(1)
             w.addItems(self.db.durationList)
             w.setCurrentIndex(0)
+            w.blockSignals(False)
+            self.unhighlightFilterElement(w)
+
+        for w in (self.cboStartRecordingsSampleRateRange, self.cboEndRecordingsSampleRateRange):
+            w.blockSignals(True)
+            w.clear()
+            w.addItem("All")
+            w.insertSeparator(1)
+            w.addItems(self.db.sampleRateList)
+            w.setCurrentIndex(0)
+            w.blockSignals(False)
+            self.unhighlightFilterElement(w)
+
+        # Bit-depth multi-select: one checkbox per distinct depth in the catalog.
+        for chk in getattr(self, "_bitDepthChecks", []):
+            self._recordingsBitDepthLayout.removeWidget(chk)
+            chk.deleteLater()
+        self._bitDepthChecks = []
+        chkFont = QFont("", self.fontSize)
+        for depth in self.db.bitDepthList:
+            chk = QCheckBox(depth, self.frmRecordingsBitDepth)
+            chk.setFont(chkFont)
+            chk.toggled.connect(self._onBitDepthToggled)
+            self._recordingsBitDepthLayout.addWidget(chk)
+            self._bitDepthChecks.append(chk)
+        self.frmRecordingsBitDepth.setVisible(bool(self._bitDepthChecks))
+        self.lblRecordingsBitDepth.setVisible(bool(self._bitDepthChecks))
+
+        # Recording-device combo: catalog-derived, single-select.
+        self.cboRecordingsDevice.blockSignals(True)
+        self.cboRecordingsDevice.clear()
+        self.cboRecordingsDevice.addItem("All")
+        self.cboRecordingsDevice.insertSeparator(1)
+        self.cboRecordingsDevice.addItems(self.db.deviceList)
+        self.cboRecordingsDevice.setCurrentIndex(0)
+        self.cboRecordingsDevice.blockSignals(False)
+        self.unhighlightFilterElement(self.cboRecordingsDevice)
+        self.cboRecordingsDevice.setVisible(bool(self.db.deviceList))
+        self.lblRecordingsDevice.setVisible(bool(self.db.deviceList))
 
         cboHeight = floor(2 * QFontMetrics(QFont("", self.fontSize)).height())
         for w in (
@@ -1653,10 +1711,14 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.cboChannels,
             self.cboStartRecordingsDurationRange,
             self.cboEndRecordingsDurationRange,
+            self.cboStartRecordingsSampleRateRange,
+            self.cboEndRecordingsSampleRateRange,
+            self.cboRecordingsDevice,
             ):
             w.setMinimumHeight(cboHeight)
             w.setMaximumHeight(16777215)
-        for w in (self.frmRecordingsRatingRange, self.frmRecordingsDurationRange):
+        for w in (self.frmRecordingsRatingRange, self.frmRecordingsDurationRange,
+                  self.frmRecordingsSampleRateRange):
             w.setMinimumHeight(cboHeight)
             w.setMaximumHeight(16777215)
 
@@ -2175,46 +2237,66 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             parts.append(f"{n_photos} photo{'s' if n_photos != 1 else ''}")
         if n_recordings:
             parts.append(f"{n_recordings} recording{'s' if n_recordings != 1 else ''}")
-        reply = code_Stylesheet.question(
+
+        # Offer per-kind rebuilds: the photo option only when the catalog has
+        # photos, the recording option only when it has recordings, and "all"
+        # only when it has both (otherwise the single-kind option *is* "all").
+        # Order left-to-right: Cancel, photos, recordings, all.
+        labels = ["Cancel"]
+        if n_photos:
+            labels.append("Rebuild photo thumbnails")
+        if n_recordings:
+            labels.append("Rebuild recording thumbnails")
+        if n_photos and n_recordings:
+            labels.append("Rebuild all thumbnails")
+
+        choice = code_Stylesheet.choose(
             self, "Rebuild Thumbnail Cache",
-            f"Clear and rebuild cached thumbnails for {' and '.join(parts)}?\n\n"
-            "Thumbnails (photos) and spectrograms (recordings) are regenerated "
-            "from the original media files.")
-        if reply != QMessageBox.StandardButton.Yes:
+            "Cached thumbnails (photos) and spectrograms (recordings) are "
+            "regenerated from the original media files.\n\n"
+            f"The catalog has {' and '.join(parts)}.",
+            labels)
+        if choice in (None, "Cancel"):
             return
+
+        rebuild_all        = choice == "Rebuild all thumbnails"
+        rebuild_photos     = rebuild_all or choice == "Rebuild photo thumbnails"
+        rebuild_recordings = rebuild_all or choice == "Rebuild recording thumbnails"
 
         # Import the ribbon renderer on the main thread (matplotlib init isn't
         # thread-safe) before the worker threads use it.
         import code_RecordingEnlargement
 
-        # Start clean so orphaned/stale entries are removed.
-        code_ThumbnailCache.clear()
+        # A full rebuild starts clean so orphaned/stale entries are removed; a
+        # single-kind rebuild regenerates just that kind's entries in place,
+        # leaving the other kind's cache untouched.
+        if rebuild_all:
+            code_ThumbnailCache.clear()
 
         work = queue.Queue()
-        for f in photo_files:
-            work.put(("photo", f))
-        for f in recording_files:
-            work.put(("recording", f))
+        if rebuild_photos:
+            for f in photo_files:
+                work.put(("photo", f))
+        if rebuild_recordings:
+            for f in recording_files:
+                work.put(("recording", f))
+        total = (n_photos if rebuild_photos else 0) + (n_recordings if rebuild_recordings else 0)
         self._rebuildDone = queue.Queue()
         self._rebuildTotal = total
         self._rebuildCompleted = 0
 
         done = self._rebuildDone
 
+        # Worker *threads* (not processes): the renderers release the GIL during
+        # the heavy work (libsndfile decode, numpy FFT, matplotlib's Agg C++), so
+        # threads parallelise it well — and without process-spawn overhead.
         def worker():
             while True:
                 try:
-                    kind, f = work.get_nowait()
+                    item = work.get_nowait()
                 except queue.Empty:
                     break
-                try:
-                    if kind == "photo":
-                        code_ThumbnailCache.build(f)          # decode photo + store
-                    else:
-                        code_ThumbnailCache.build_spectro(f)  # browser thumbnail
-                        code_RecordingEnlargement.build_ribbon_cache(f)  # enlargement ribbon
-                except Exception:
-                    pass
+                code_ThumbnailCache.rebuild_one(item)
                 done.put(1)
 
         thread_count = min(os.cpu_count() or 4, 8)
@@ -4567,6 +4649,15 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             newFilter.setStartDuration(self.cboStartRecordingsDurationRange.currentText())
         if self.cboEndRecordingsDurationRange.currentIndex() != 0:
             newFilter.setEndDuration(self.cboEndRecordingsDurationRange.currentText())
+        if self.cboStartRecordingsSampleRateRange.currentIndex() != 0:
+            newFilter.setStartSampleRate(self.cboStartRecordingsSampleRateRange.currentText())
+        if self.cboEndRecordingsSampleRateRange.currentIndex() != 0:
+            newFilter.setEndSampleRate(self.cboEndRecordingsSampleRateRange.currentText())
+        checkedDepths = [chk.text() for chk in getattr(self, "_bitDepthChecks", []) if chk.isChecked()]
+        if checkedDepths:
+            newFilter.setBitDepths(checkedDepths)
+        if self.cboRecordingsDevice.currentIndex() != 0:
+            newFilter.setDevice(self.cboRecordingsDevice.currentText())
 
         if self.cboSpeciesHasRecording.currentText() == "Recorded":
             newFilter.setValidRecordingSpecies(self.db.GetSpeciesWithRecordings(newFilter))
@@ -4792,6 +4883,10 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         endRecordingRating = filter.getEndRecordingRating()
         startDuration = filter.getStartDuration()
         endDuration = filter.getEndDuration()
+        startSampleRate = filter.getStartSampleRate()
+        endSampleRate = filter.getEndSampleRate()
+        bitDepths = filter.getBitDepths()
+        device = filter.getDevice()
 
         # set main location label, using "All Locations" if none others are selected
         if locationName == "":   
@@ -4928,6 +5023,22 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             detailsText = detailsText + "; Duration: from " + startDuration
         if startDuration == "" and endDuration != "":
             detailsText = detailsText + "; Duration: to " + endDuration
+
+        if startSampleRate != "" and endSampleRate != "":
+            if startSampleRate == endSampleRate:
+                detailsText = detailsText + "; Sample rate: " + startSampleRate
+            else:
+                detailsText = detailsText + "; Sample rate: " + startSampleRate + " to " + endSampleRate
+        if startSampleRate != "" and endSampleRate == "":
+            detailsText = detailsText + "; Sample rate: from " + startSampleRate
+        if startSampleRate == "" and endSampleRate != "":
+            detailsText = detailsText + "; Sample rate: to " + endSampleRate
+
+        if bitDepths:
+            detailsText = detailsText + "; " + ", ".join(bitDepths)
+
+        if device != "":
+            detailsText = detailsText + "; " + device
 
         #remove leading "; "
         dateText = dateText[2:]
@@ -5853,6 +5964,41 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.unhighlightFilterElement(self.cboEndRecordingsDurationRange)
         else:
             self.highlightRecordingFilterElement(self.cboEndRecordingsDurationRange)
+
+    def ComboStartRecordingsSampleRateChanged(self):
+        startIdx = self.cboStartRecordingsSampleRateRange.currentIndex()
+        endIdx   = self.cboEndRecordingsSampleRateRange.currentIndex()
+        if startIdx > endIdx:
+            if endIdx == 0:
+                self.cboEndRecordingsSampleRateRange.setCurrentIndex(
+                    self.cboEndRecordingsSampleRateRange.count() - 1)
+            else:
+                self.cboEndRecordingsSampleRateRange.setCurrentIndex(startIdx)
+        if self.cboStartRecordingsSampleRateRange.currentText() == "All":
+            self.unhighlightFilterElement(self.cboStartRecordingsSampleRateRange)
+        else:
+            self.highlightRecordingFilterElement(self.cboStartRecordingsSampleRateRange)
+
+    def ComboEndRecordingsSampleRateChanged(self):
+        startIdx = self.cboStartRecordingsSampleRateRange.currentIndex()
+        endIdx   = self.cboEndRecordingsSampleRateRange.currentIndex()
+        if startIdx > endIdx:
+            self.cboStartRecordingsSampleRateRange.setCurrentIndex(endIdx)
+        if self.cboEndRecordingsSampleRateRange.currentText() == "All":
+            self.unhighlightFilterElement(self.cboEndRecordingsSampleRateRange)
+        else:
+            self.highlightRecordingFilterElement(self.cboEndRecordingsSampleRateRange)
+
+    def _onBitDepthToggled(self):
+        color = code_Stylesheet.RECORDINGS_PRIMARY
+        for chk in self._bitDepthChecks:
+            chk.setStyleSheet(f"color: {color};" if chk.isChecked() else "")
+
+    def ComboRecordingsDeviceChanged(self):
+        if self.cboRecordingsDevice.currentText() == "All":
+            self.unhighlightFilterElement(self.cboRecordingsDevice)
+        else:
+            self.highlightRecordingFilterElement(self.cboRecordingsDevice)
 
 
     def createChoroplethUSStates(self):

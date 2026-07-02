@@ -430,8 +430,12 @@
     <tr><td>Recorded</td><td>Show only species that have a recording / that have no recording</td></tr>
     <tr><td>Channels</td><td>Filter by Mono or Stereo recordings</td></tr>
     <tr><td>Duration Range</td><td>Minimum and maximum recording length</td></tr>
+    <tr><td>Sample Rate Range</td><td>Minimum and maximum sample rate (in kHz, e.g. 44.1&nbsp;kHz, 48&nbsp;kHz, 96&nbsp;kHz). Yearbirder reads each recording's sample rate from the file itself when you add it.</td></tr>
+    <tr><td>Bit Depth</td><td>A set of checkboxes — one for each bit depth found in your catalog (for example 16-bit, 24-bit, or 32-bit float). Tick any combination to show only recordings of those bit depths.</td></tr>
+    <tr><td>Recording Device</td><td>Filter by the device a recording was made with (for example <em>ZOOM F3</em> or <em>Shure MV88</em>). Yearbirder reads the device from the file's metadata when you add it; recordings whose files carry no device information are grouped under <em>Unknown</em>.</td></tr>
   </tbody>
 </table>
+<p>The <strong>Sample Rate Range</strong>, <strong>Bit Depth</strong>, and <strong>Recording Device</strong> controls list only the values that actually occur in your catalog, so you will never see an option that returns no results. The bit-depth checkboxes are a multi-select: leaving them all unticked disables the filter, while ticking two or more shows recordings matching <em>any</em> of the ticked depths.</p>
 
 <hr>
 
@@ -1116,6 +1120,10 @@
 <h3>Playback</h3>
 <p>Click <strong>Play</strong> to listen to a recording. A <strong>red cursor line</strong> sweeps across the spectrogram in real time to show your position, and the scrubber tracks along with it. Drag the scrubber to jump to any point in the recording. Click <strong>Pause</strong> to stop; clicking Play on a different recording switches to it.</p>
 
+<h3>Audio quality and formats</h3>
+<p>Yearbirder plays WAV recordings across the full range of bit depths a field recordist is likely to use — <strong>16-bit</strong>, <strong>24-bit</strong>, and <strong>32-bit</strong> integer, as well as <strong>32-bit float</strong> (the format used by recorders such as the Zoom F3). It also handles a wide span of sample rates, from low rates up through high-resolution <strong>96&nbsp;kHz</strong> and <strong>192&nbsp;kHz</strong>. Each recording is decoded at its full resolution, so the fine detail and wide dynamic range of high-bit-depth files are preserved.</p>
+<p>You don't need to configure anything for playback to sound right. Yearbirder automatically <strong>conforms to your computer's current audio output settings</strong>: it plays in high-quality 32-bit float when your sound device supports it, and at the sample rate your device is currently set to. When a recording's sample rate differs from your device's — for example, playing a 96&nbsp;kHz recording while your output is set to 48&nbsp;kHz — Yearbirder converts it on the fly using a high-quality resampler, so it always plays at the correct pitch and speed. If you switch output devices or change your device's audio settings while Yearbirder is running, playback adjusts to the new settings automatically.</p>
+
 <h3>Opening a recording for detailed study</h3>
 <p>Click any spectrogram to open the <strong>Recording Enlargement</strong> view (see <a href="#recording-enlargement">Section 28</a>), where you can zoom, adjust the frequency range and contrast, and examine the sound in detail.</p>
 
@@ -1312,38 +1320,44 @@
 
 <h1 class="group-heading">Miscellaneous</h1>
 <h2 id="rename-photos">35. Rename Media</h2>
-<p>Open with <strong>File → Rename media…</strong>. Available once a media catalog is loaded.</p>
-<p>Rename Media lets you batch-rename your photo and recording files on disk using a structured name you compose from up to four information slots. The new names are built from the data Yearbirder already knows about each file — its species, date, time, and location — so the resulting filenames are descriptive and consistently formatted. After renaming, Yearbirder automatically updates all references in your media catalog.</p>
+<p>Open with <strong>File → Rename media files…</strong>. Available once a media catalog is loaded.</p>
+<p>Rename Media lets you batch-rename your photo and recording files on disk using a structured name you compose from up to four named <strong>parts</strong>. The new names are built from the data Yearbirder already knows about each file — its species, date, time, and location — so the resulting filenames are descriptive and consistently formatted. After renaming, Yearbirder automatically updates all references in your media catalog.</p>
 <p>Photos and recordings appear together in one table — each photo and each WAV recording becomes a row — so you can rename both media types in a single pass. The <strong>WAV</strong> and <strong>JPG</strong> buttons (alongside <strong>Select All</strong> and <strong>Select None</strong>) let you quickly check just your recordings or just your photos. For recordings, the species, date, time, and location come from the sighting they are attached to in your catalog rather than from embedded file metadata.</p>
 <p><strong>Renaming is permanent and cannot be undone.</strong> Back up your photos and recordings before proceeding.</p>
 
 <h3>Name Format</h3>
-<p>The top section of the window lets you build the filename template. Choose up to four <strong>slots</strong>, each of which contributes one piece of information to the name. Slots are joined by underscores. Any slot can be set to <strong>(omit)</strong> to leave it out.</p>
+<p>The top section of the window lets you build the filename template from four <strong>parts</strong> — <em>Part 1</em> through <em>Part 4</em> — joined by underscores. Each part is a single drop-down that lists every available piece of information together with its format, so there is just one choice to make per part. Set any part to <strong>(omit)</strong> to leave it out.</p>
 <table>
-  <thead><tr><th>Slot option</th><th>What it produces</th></tr></thead>
+  <thead><tr><th>Part option</th><th>What it produces</th></tr></thead>
   <tbody>
-    <tr><td>Species Name</td><td>The species common or scientific name (your choice)</td></tr>
-    <tr><td>Date</td><td>The date the photo was taken, in your chosen format</td></tr>
-    <tr><td>Time</td><td>The time the photo was taken, in your chosen format</td></tr>
+    <tr><td>(omit)</td><td>This part is skipped</td></tr>
+    <tr><td>Date: YYYY-MM-DD</td><td>Date with dashes, e.g. <code>2024-05-14</code></td></tr>
+    <tr><td>Date: YYYYMMDD</td><td>Date with no separators, e.g. <code>20240514</code></td></tr>
+    <tr><td>Time: HH-MM-SS</td><td>Time to the second, e.g. <code>07-23-45</code></td></tr>
+    <tr><td>Time: HH-MM-SSt</td><td>Time to the second plus a tenths digit, e.g. <code>07-23-45<strong>3</strong></code></td></tr>
+    <tr><td>Time: HHMMSS / HHMMSSt</td><td>The same two time options with no separators</td></tr>
+    <tr><td>Species: Common Name</td><td>The species' common name, e.g. <code>BaltimoreOriole</code></td></tr>
+    <tr><td>Species: Scientific Name</td><td>The scientific name, e.g. <code>Icterus_galbula</code></td></tr>
+    <tr><td>Species: 4-digit Code</td><td>The short eBird alpha code, e.g. <code>baor</code> for Baltimore Oriole. Requires an eBird taxonomy file to be loaded at startup.</td></tr>
     <tr><td>Location</td><td>The eBird location name associated with the sighting</td></tr>
-    <tr><td>(omit)</td><td>This slot is skipped</td></tr>
   </tbody>
 </table>
-<p>The default order is <strong>Date → Time → Species Name → Location</strong>, which produces filenames like <code>2024-05-14_07-23-45_Black-throatedBlueWarbler_CentralPark.jpg</code>.</p>
-<p>Additional format controls appear below the slots:</p>
-<ul>
-  <li><strong>Date Format</strong> — <em>YYYY-MM-DD</em>, <em>YYYYMMDD</em>, or <em>(omit)</em>.</li>
-  <li><strong>Time Format</strong> — <em>HH-MM-SS</em>, <em>HHMMSS</em>, <em>HH-MM-SSt</em> (with tenths digit), <em>HHMMSSt</em>, or <em>(omit)</em>. Time is read from the photo's EXIF data.</li>
-  <li><strong>Species Name Format</strong> — <em>Common Name</em>, <em>Scientific Name</em>, or <em>eBird Species Code</em>. The eBird Species Code option uses the short eBird alpha code (for example, <code>rufhum</code> for Rufous Hummingbird, <code>amecro</code> for American Crow), which is useful for workflows that keep filenames aligned with eBird identifiers. Requires an eBird taxonomy file to be loaded at startup.</li>
-</ul>
-<p>A <strong>Sample</strong> line below the format controls shows a live preview of what the first photo's new name would look like as you adjust your settings.</p>
+<p>The default is <strong>Date: YYYY-MM-DD → Time: HH-MM-SS → Species: Common Name → Location</strong>, producing filenames like <code>2024-05-14_07-23-45_Black-throatedBlueWarbler_CentralPark.jpg</code>.</p>
+<p>Date and time are taken from the file's own metadata (EXIF for photos, embedded metadata for recordings). When a file has no embedded date or time, Yearbirder automatically falls back to the date and start time of the eBird checklist the file is attached to — so a name part is filled in whenever possible.</p>
+<p>A <strong>Sample</strong> line below the parts shows a live preview of what the first file's new name would look like as you adjust your choices.</p>
+
+<h3>How duplicate names are differentiated</h3>
+<p>When two or more files would end up with the <em>same</em> proposed name, Yearbirder differentiates them automatically — you don't have to configure anything:</p>
+<ol>
+  <li><strong>Tenths of a second first.</strong> If a Time part is in use and the clashing files carry subsecond information in their metadata, Yearbirder appends the tenths-of-a-second digit so each name becomes unique (for example, <code>…_07-23-45<strong>2</strong></code> and <code>…_07-23-45<strong>7</strong></code>). This keeps the names meaningful and in true chronological order.</li>
+  <li><strong>Numeric suffix as a fallback.</strong> If tenths aren't available, or two files still match after adding tenths (for instance, frames from a burst with identical subsecond stamps, or names with no Time part at all), Yearbirder appends <code>_1</code>, <code>_2</code>, and so on — zero-padded when needed so they sort correctly.</li>
+</ol>
+<p>The Status column (below) shows which files are receiving a suffix, so you always see how a clash is being resolved before you commit.</p>
 
 <h3>Options</h3>
 <ul>
   <li><strong>Remove spaces</strong> — strips spaces from species and location name components so the filename contains no whitespace (on by default).</li>
-  <li><strong>Use checklist time for photos without a time</strong> — when a photo has no EXIF time, falls back to the eBird checklist start time (on by default).</li>
   <li><strong>Shorten location name to the first punctuation mark</strong> — trims long location names at the first comma, dash, colon, @, or parenthesis. For example, <em>"Central Park, Manhattan, NY"</em> becomes <em>"Central Park"</em>.</li>
-  <li><strong>If photos have the same HH-MM-SS, add tenths (if available)</strong> — when two or more photos share an identical second-level timestamp, appends the tenths digit from the EXIF subsecond field to differentiate them.</li>
 </ul>
 
 <h3>The media table</h3>
@@ -1365,9 +1379,9 @@
   <tbody>
     <tr><td>Ready</td><td>The proposed name is valid and the rename will proceed</td></tr>
     <tr><td>No Change</td><td>The proposed name is identical to the current name; nothing will happen</td></tr>
-    <tr><td>Duplicate: Append _N</td><td>Multiple photos would share the same proposed name; Yearbirder will append a numeric suffix (<em>_1</em>, <em>_2</em>, etc.) to each</td></tr>
+    <tr><td>Duplicate: Append _N</td><td>Multiple files would share the same proposed name and tenths of a second could not differentiate them, so Yearbirder appends a numeric suffix (<em>_1</em>, <em>_2</em>, etc.) to each (see <em>How duplicate names are differentiated</em> above)</td></tr>
     <tr><td>Name in use</td><td>A different file already exists at the proposed path; this file will be skipped</td></tr>
-    <tr><td>No Name</td><td>All slots are set to (omit), so no name can be generated</td></tr>
+    <tr><td>No Name</td><td>All parts are set to (omit), so no name can be generated</td></tr>
   </tbody>
 </table>
 

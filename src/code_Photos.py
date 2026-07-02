@@ -459,8 +459,23 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
             buttonPhoto.setCursor(Qt.PointingHandCursor)
             buttonPhoto.mousePressEvent = partial(self._photoClicked, row)
 
-            photoWeekday = datetime.datetime(int(s["date"][0:4]), int(s["date"][5:7]), int(s["date"][8:10]))
-            photoWeekday = photoWeekday.strftime("%A")
+            # Prefer the photo's true (EXIF) creation date/time from the catalog;
+            # fall back to the checklist date/time when none is stored.
+            exif_dt = p.get("exifDatetime")
+            if exif_dt and len(exif_dt) >= 10:
+                dispDate = exif_dt[0:4] + "-" + exif_dt[5:7] + "-" + exif_dt[8:10]
+                dispTime = exif_dt[11:16] if len(exif_dt) >= 16 else ""
+            else:
+                dispDate, dispTime = s.get("date", ""), s.get("time", "")
+            try:
+                photoWeekday = datetime.datetime(
+                    int(dispDate[0:4]), int(dispDate[5:7]), int(dispDate[8:10])
+                ).strftime("%A")
+            except Exception:
+                photoWeekday = ""
+            dateLine = dispDate + ((" " + dispTime) if dispTime else "")
+            if photoWeekday:
+                dateLine = photoWeekday + ", " + dateLine
 
             labelCaption = QLabel()
             labelCaption.setTextFormat(Qt.RichText)
@@ -470,7 +485,7 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
                 '<span style="font-size: 1.1em; font-weight: bold;">' + s["commonName"] + "</span><br>"
                 "<i>" + s["scientificName"] + "</i><br><br>" +
                 s["location"] + "<br>" +
-                photoWeekday + ", " + s["date"] + " " + s["time"] + "<br><br>" +
+                dateLine + "<br><br>" +
                 "Rating: " + p["rating"]
             )
             labelCaption.setStyleSheet("QLabel { background-color: #343333; color: silver; padding: 3px; }")

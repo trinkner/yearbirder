@@ -1,5 +1,7 @@
 import form_RecordingEnlargement
-from code_ManageRecordings import SpectrogramLabel, PcmAudioPlayer
+from code_ManageRecordings import SpectrogramLabel   # UI widget stays in its module
+from code_Audio import PcmAudioPlayer
+import code_Audio
 import code_Stylesheet
 import code_ThumbnailCache
 
@@ -31,11 +33,10 @@ def build_ribbon_cache(wav_path):
     data, fs, n_frames = _load_audio_data(wav_path)
     if data is None or not fs:
         return False
-    duration = n_frames / fs
-    img, _bbox = _render_slice_qimage(
-        data, fs, 0.0, duration, ribbon=True,
-        fig_px_wide=_RIBBON_CACHE_WIDTH,
-        freq_min=0, freq_max=fs // 2, contrast_pct=0)
+    # Lightweight numpy renderer (no matplotlib Figure/Axes/Agg) — the ribbon is
+    # axis-less, so this is ~4x faster than the Agg path and visually identical.
+    img = code_Audio.render_ribbon_qimage(
+        data, fs, n_frames, _RIBBON_CACHE_WIDTH, 700, contrast_pct=0)
     if img is None or img.isNull():
         return False
     gray = img.convertToFormat(QImage.Format_Grayscale8)
@@ -47,7 +48,6 @@ import datetime
 import math
 import os
 import time
-import wave
 
 import numpy as np
 from matplotlib.figure import Figure
@@ -84,30 +84,10 @@ _CENTERING_OVERSPEED = 1.5
 def _load_audio_data(wav_path):
     """Read a WAV file into a float32 mono numpy array.
 
-    Returns (data, sample_rate, n_frames) or (None, 0, 0) on error.
+    Returns (data, sample_rate, n_frames) or (None, 0, 0) on error.  Delegates to
+    code_Audio so WAV sample-format handling lives in exactly one place.
     """
-    try:
-        with wave.open(wav_path, 'r') as wf:
-            n_ch = wf.getnchannels()
-            fs = wf.getframerate()
-            n_frames = wf.getnframes()
-            sw = wf.getsampwidth()
-            raw = wf.readframes(n_frames)
-    except Exception:
-        return None, 0, 0
-
-    if sw == 1:
-        data = np.frombuffer(raw, dtype=np.uint8).astype(np.float32)
-        data = (data - 128.0) / 128.0
-    elif sw == 4:
-        data = np.frombuffer(raw, dtype=np.int32).astype(np.float32) / 2147483648.0
-    else:
-        data = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
-
-    if n_ch > 1:
-        data = data[::n_ch]
-
-    return data, fs, n_frames
+    return code_Audio.decode_wav_float_mono(wav_path)
 
 
 # ---------------------------------------------------------------------------
@@ -1093,7 +1073,9 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
         self._playBtn.setFixedWidth(70)
         self._playBtn.setFixedHeight(30)
         self._playBtn.setStyleSheet(
-            "QPushButton { color: #4f8ef7; } QPushButton:pressed { color: white; }")
+            "QPushButton { background: #4f8ef7; color: white; border: none; border-radius: 6px; }"
+            "QPushButton:hover { background: #6ba0f9; }"
+            "QPushButton:pressed { background: #3f78d8; }")
         self._playBtn.clicked.connect(self._onPlayClicked)
         ctrl.addWidget(self._playBtn)
 
@@ -1893,8 +1875,14 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
         common = s.get("commonName", "")
         scientific = s.get("scientificName", "")
         location = s.get("location", "")
-        date = s.get("date", "")
-        time_str = s.get("time", "")
+
+        rec = self._audioRecord or {}
+        # Prefer the recording's true (embedded) creation date/time; fall back to
+        # the checklist date/time when the file carries no metadata.
+        if rec.get("metaDate"):
+            date, time_str = rec["metaDate"], rec.get("metaTime", "")
+        else:
+            date, time_str = s.get("date", ""), s.get("time", "")
 
         try:
             weekday = datetime.datetime(
@@ -1903,27 +1891,27 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
         except Exception:
             weekday = ""
 
-        rec = self._audioRecord or {}
         duration = rec.get("duration", "")
         sample_rate = rec.get("sampleRate", "")
+        bit_depth = rec.get("bitDepth", "")
         rating = rec.get("rating", "0")
         filename = (os.path.basename(self._wavPath)
                     .replace('_', '_​')
                     .replace('-', '-​')
                     .replace('.', '.​'))
 
-        try:
-            with wave.open(self._wavPath, 'rb') as _wf:
-                _ch = _wf.getnchannels()
-            channels_str = "Mono" if _ch == 1 else "Stereo" if _ch == 2 else f"{_ch} channels"
-        except Exception:
-            channels_str = ""
+        # Channels from the catalog (already "Mono"/"Stereo"); the stdlib wave
+        # module can't read 32-bit-float or FLAC files, so reading the file here
+        # would show nothing for exactly the high-res recordings we care about.
+        channels_str = rec.get("channels", "")
 
         info = f"\n\n{location}\n{weekday}{date}\n{time_str}\n"
         if duration:
             info += f"\nDuration: {duration}"
         if sample_rate:
             info += f"\n{sample_rate}"
+        if bit_depth:
+            info += f"\n{bit_depth}"
         if channels_str:
             info += f"\n{channels_str}"
         info += f"\n\n{filename}\n\n"

@@ -3,6 +3,7 @@ import form_ManagePhotos
 import code_Filter
 import code_Stylesheet
 import code_ThumbnailCache
+import code_ChecklistTree
 import os
 
 import piexif
@@ -45,8 +46,20 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QFileDialog,
     QStyledItemDelegate,
+    QCheckBox,
     )
-    
+
+
+# Colours for the assignment labels.  A field's value is shown green only while
+# it still equals the value auto-derived from the photo's metadata / filename;
+# once the user overrides it via the tree (or it was never auto-derived) it is
+# shown in the neutral text colour.
+_FIELD_NAME_COLOR = "#8b8fa8"          # muted label ("Date", "Location", …)
+_MATCH_COLOR      = "#4CAF50"          # green  – value came from metadata/filename
+_VALUE_COLOR      = "#e2e4ec"          # neutral – manually chosen / not auto-derived
+_SKIPPED_COLOR    = "#6b6e7e"          # muted value when the row is skipped
+# Species sentinel that savePhotoSettings treats as "do not attach" ("**").
+_SKIP_SENTINEL = "** (skipped) **"
 
 
 class GreenMatchDelegate(QStyledItemDelegate):
@@ -142,6 +155,8 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         self.btnSavePhotoSettings.clicked.connect(self.savePhotoSettings)
         self.btnCancel.clicked.connect(self.closeWindow)
         self.metaDataByRow = {}
+        # Per-row widget references for the label/Select/Skip panel.
+        self._rowLabels = {}
         self.setAttribute(Qt.WA_DeleteOnClose)
         self.photosAlreadyInDb = True
         self._changesSaved = False
@@ -180,12 +195,13 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
                 not self._changesSaved and
                 not self.photosAlreadyInDb and
                 self.metaDataByRow):
-            reply = QMessageBox.question(
+            reply = code_Stylesheet.question(
                 self, "Unsaved Photos",
                 "Your photo information has not been saved to a catalog.\n\n"
                 "Close anyway and discard your work?",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No,
+                yes_text="Close and discard", no_text="Keep working",
             )
             if reply == QMessageBox.StandardButton.No:
                 event.ignore()
@@ -368,161 +384,35 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
 
         self.gridPhotos.addWidget(container, row, 1)
 
-        # create combo boxes for details
-        # add connection for when user changes a combo box
-        cboLocation = QComboBox()
-        cboLocation.currentIndexChanged.connect(partial( self.cboLocationChanged, row))
-        
-        cboDate = QComboBox()
-        cboDate.currentIndexChanged.connect(partial( self.cboDateChanged, row))
-        
-        cboTime = QComboBox()
-        cboTime.currentIndexChanged.connect(partial( self.cboTimeChanged, row))
-            
-        cboCommonName = QComboBox()
-        cboCommonName.currentIndexChanged.connect(partial( self.cboCommonNameChanged, row))
-        
-        cboRating = QComboBox()
-        cboRating.addItems(["Not Rated", "1", "2", "3", "4", "5"])
-        cboRating.currentIndexChanged.connect(partial( self.cboRatingChanged, row))  
-              
-        # set stylesheet for cbo boxes
-        for c in [cboLocation, cboDate, cboTime, cboCommonName, cboRating]:
-            self.removeHighlight(c)   
-
-        # date-first cascade: use data pre-computed by the worker thread
-        cboDate.addItems(comboData["allDates"])
-        if photoDate != "":
-            index = cboDate.findText(photoDate)
-            if index >= 0:
-                cboDate.setCurrentIndex(index)
-
-        cboLocation.addItems(comboData["locationsByDate"])
-        if photoLocation != "":
-            index = cboLocation.findText(photoLocation)
-            if index >= 0:
-                cboLocation.setCurrentIndex(index)
-
-        cboTime.addItems(comboData["timesByDateAndLocation"])
-        if photoTime != "":
-            index = cboTime.findText(photoTime)
-            if index >= 0:
-                cboTime.setCurrentIndex(index)
-
-        cboCommonName.addItem("Do not add photo to catalog")
-        cboCommonName.addItems(comboData["speciesByChecklist"])
-        if photoCommonName != "":
-            index = cboCommonName.findText(photoCommonName)
-            if index >= 0:
-                cboCommonName.setCurrentIndex(index)
-
-        # assign names to combo boxes for future access
-        cboLocation.setObjectName("cboLocation" + str(row))
-        cboDate.setObjectName("cboDate" + str(row))
-        cboTime.setObjectName("cboTime" + str(row))
-        cboCommonName.setObjectName("cboCommonName" + str(row))
-        cboRating.setObjectName("cboRating" + str(row))
-
-        # When adding new photos, highlight date/location/time in green when all three
-        # EXIF values exactly match a checklist entry. Green is removed naturally if the
-        # user changes any combo (highlightWidget/removeHighlight both call setStyleSheet).
-        if not self.photosAlreadyInDb:
-            all_three_match = (
-                photoMatchData.get("dateMatchFound", False) and
-                photoMatchData.get("timeMatchFound", False) and
-                bool(photoLocation)
-            )
-            if all_three_match:
-                for combo, match_text in (
-                    (cboDate, photoDate),
-                    (cboLocation, photoLocation),
-                    (cboTime, photoTime),
-                ):
-                    combo.setStyleSheet("QComboBox { color: #4CAF50; }")
-                    combo.view().setItemDelegate(GreenMatchDelegate(match_text, combo))
-
-        lblFileName = QLabel()
-        lblFileName.setText("File: " + os.path.basename(photoData["fileName"]))
-
-        lblFileDate = QLabel()
-        if photoData["date"] == "Date unknown":
-            lblFileDate.setText("No date stored in photo.")
-            lblFileDate.setStyleSheet("color: red;")
-        else:
-            lblFileDate.setText("Date: " + photoData["date"])
-
-        lblFileTime = QLabel()
-        if photoData["time"] == "Time unknown":
-            lblFileTime.setText("No time stored in photo.")
-            lblFileTime.setStyleSheet("color: red;")
-        else:
-            lblFileTime.setText("Time: " + photoData["time"])
-
-        dateRow = QHBoxLayout()
-        dateRow.addWidget(lblFileDate)
-        if not photoMatchData.get("dateMatchFound", True) and photoData["date"] not in ("", "Date unknown"):
-            lblDateWarn = QLabel("Photo's date does not match a checklist")
-            lblDateWarn.setStyleSheet("color: red;")
-            dateRow.addWidget(lblDateWarn)
-        dateRow.addStretch()
-
-        timeRow = QHBoxLayout()
-        timeRow.addWidget(lblFileTime)
-        if (photoMatchData.get("dateMatchFound", True) and
-                not photoMatchData.get("timeMatchFound", True) and
-                photoData["time"] not in ("", "Time unknown")):
-            lblTimeWarn = QLabel("Photo's time does not match a checklist")
-            lblTimeWarn.setStyleSheet("color: yellow;")
-            timeRow.addWidget(lblTimeWarn)
-        timeRow.addStretch()
-
-        # add combo boxes to the layout in second column (date-first order)
-        detailsLayout.addWidget(lblFileName)
-        detailsLayout.addLayout(dateRow)
-        detailsLayout.addLayout(timeRow)
-        lblCboDate = QLabel("Date")
-        _f = QFont(); _f.setBold(True); lblCboDate.setFont(_f)
-        detailsLayout.addWidget(lblCboDate)
-        detailsLayout.addWidget(cboDate)
-        lblCboLocation = QLabel("Location")
-        _f = QFont(); _f.setBold(True); lblCboLocation.setFont(_f)
-        detailsLayout.addWidget(lblCboLocation)
-        detailsLayout.addWidget(cboLocation)
-        lblCboTime = QLabel("Time")
-        _f = QFont(); _f.setBold(True); lblCboTime.setFont(_f)
-        detailsLayout.addWidget(lblCboTime)
-        detailsLayout.addWidget(cboTime)
-        lblCboSpecies = QLabel("Species")
-        _f = QFont(); _f.setBold(True); lblCboSpecies.setFont(_f)
-        detailsLayout.addWidget(lblCboSpecies)
-        detailsLayout.addWidget(cboCommonName)
-        lblCboRating = QLabel("Rating")
-        _f = QFont(); _f.setBold(True); lblCboRating.setFont(_f)
-        detailsLayout.addWidget(lblCboRating)
-        detailsLayout.addWidget(cboRating)
-
-        # create and add resent button
-        btnReset = QPushButton()
-        btnReset.setText("Reset")
-        btnReset.clicked.connect(partial( self.btnResetClicked, row))
-        detailsLayout.addWidget(btnReset)
-
-        # save meta data for future use when user clicks cbo boxes
+        # Seed this row's working metadata, then build the colour-coded label /
+        # Select / Skip panel from it.  Date, location, time and species are now
+        # shown as labels and edited via the checklist tree picker.
         thisPhotoMetaData = {}
         thisPhotoMetaData["location"] = photoLocation
         thisPhotoMetaData["date"] = photoDate
-        thisPhotoMetaData["time"] = cboTime.currentText()
+        thisPhotoMetaData["time"] = photoTime
         thisPhotoMetaData["commonName"] = photoCommonName
         thisPhotoMetaData["photoData"] = photoData
-        thisPhotoMetaData["rating"] = thisPhotoMetaData["photoData"]["rating"]
+        thisPhotoMetaData["rating"] = photoData["rating"]
         thisPhotoMetaData["cascadeMode"] = "date_first"
-
+        thisPhotoMetaData["selectedCommonName"] = photoCommonName
+        thisPhotoMetaData["skip"] = False
+        thisPhotoMetaData["newLocation"] = photoLocation
+        thisPhotoMetaData["newDate"] = photoDate
+        thisPhotoMetaData["newTime"] = photoTime
+        thisPhotoMetaData["newCommonName"] = photoCommonName
+        # Auto-derived baseline: a field shows green only while it still equals
+        # this metadata/filename-derived value.
+        thisPhotoMetaData["autoDate"] = photoDate
+        thisPhotoMetaData["autoLocation"] = photoLocation
+        thisPhotoMetaData["autoTime"] = photoTime
+        thisPhotoMetaData["autoSpecies"] = photoCommonName
+        thisPhotoMetaData["autoGreen"] = self._computeAutoGreen(photoMatchData)
         self.metaDataByRow[row] = thisPhotoMetaData
-        
-        # initialize the "new" data so that there are values there, even if they're not really new
-        # user can change the cbo boxes later, which will also change the "new" data 
+
+        self._buildDetailsPanel(row, detailsLayout, photoData, isExisting=False)
         self.saveNewMetaData(row)
-                                                            
+
         self.fillingCombos = False
                 
                                   
@@ -564,13 +454,13 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
                 buttonPhoto.setMinimumHeight(330)
                 buttonPhoto.setMinimumWidth(500)
                 
-                # read EXIF once; share it with thumbnail, getPhotoData, and matchPhoto
+                # read EXIF once; share it with thumbnail and getPhotoData.
+                # (Existing rows use the stored sighting, so no matchPhoto here.)
                 try:
                     exif_dict = piexif.load(p["fileName"])
                 except Exception:
                     exif_dict = {}
-                photoData      = self.mdiParent.db.getPhotoData(p["fileName"], exif_dict)
-                photoMatchData = self.mdiParent.db.matchPhoto(p["fileName"], exif_dict)
+                photoData = self.mdiParent.db.getPhotoData(p["fileName"], exif_dict)
 
                 # get thumbnail from file to display
                 pixMap = self.GetPixmapForThumbnail(p["fileName"], exif_dict)
@@ -593,154 +483,9 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
                 detailsLayout.setAlignment(Qt.AlignTop)
                 self.gridPhotos.addWidget(container, row, 1)
 
-                # create combo boxes for details
-                # add connection for when user changes a combo box
-                cboLocation = QComboBox()
-                cboLocation.currentIndexChanged.connect(partial( self.cboLocationChanged, row))
-                
-                cboDate = QComboBox()
-                cboDate.currentIndexChanged.connect(partial( self.cboDateChanged, row))
-                
-                cboTime = QComboBox()
-                cboTime.currentIndexChanged.connect(partial( self.cboTimeChanged, row))
-                    
-                cboCommonName = QComboBox()
-                cboCommonName.currentIndexChanged.connect(partial( self.cboCommonNameChanged, row))
-                
-                cboRating = QComboBox()
-                cboRating.addItems(["Not Rated", "1", "2", "3", "4", "5"])
-                cboRating.currentIndexChanged.connect(partial( self.cboRatingChanged, row))                  
-
-                # set stylesheet for cmbo boxes
-                for c in [cboLocation, cboDate, cboTime, cboCommonName, cboRating]:
-                    self.removeHighlight(c)      
-
-                # fill location combo box with all locations in db
-                locations = self.mdiParent.db.locationList
-                cboLocation.addItems(locations)
-                
-                # set location combo box to the photo's location
-                index = cboLocation.findText(s["location"])
-                if index >= 0:
-                    cboLocation.setCurrentIndex(index)
-                    
-                # fill date combo box with all dates associated with selected location
-                filterForThisPhoto = code_Filter.Filter()
-                filterForThisPhoto.setLocationName(s["location"])
-                filterForThisPhoto.setLocationType("Location")
-                dates = self.mdiParent.db.GetDates(filterForThisPhoto)
-                cboDate.addItems(dates)
-                
-                # set date  combo box to the photo's associated date
-                index = cboDate.findText(s["date"])
-                if index >= 0:
-                    cboDate.setCurrentIndex(index)              
-                    
-                # fill time combo box with all times associated with selected location and date
-                filterForThisPhoto.setStartDate(s["date"])
-                filterForThisPhoto.setEndDate(s["date"])
-                startTimes = self.mdiParent.db.GetStartTimes(filterForThisPhoto)
-                cboTime.addItems(startTimes)
-                
-                # set time combo box to the photo's associated checklist time
-                index = cboTime.findText(s["time"])
-                if index >= 0:
-                    cboTime.setCurrentIndex(index)                              
-                                        
-                # get common names from checklist associated with photo
-                filterForThisPhoto.setChecklistID(s["checklistID"])
-                commonNames = self.mdiParent.db.GetSpecies(filterForThisPhoto)
-                
-                cboCommonName.addItem("Remove photo from catalog")
-                cboCommonName.addItems(commonNames)  
-                
-                # set combo box to common name
-                index = cboCommonName.findText(s["commonName"])
-                if index >= 0:
-                    cboCommonName.setCurrentIndex(index)   
-
-                # set combo box to rating value
-                try:
-                    index = max(0, min(5, int(p["rating"])))
-                except (TypeError, ValueError):
-                    index = 0
-                cboRating.setCurrentIndex(index)
-                    
-                # assign names to combo boxes for future access
-                cboLocation.setObjectName("cboLocation" + str(row))
-                cboDate.setObjectName("cboDate" + str(row))
-                cboTime.setObjectName("cboTime" + str(row))
-                cboCommonName.setObjectName("cboCommonName" + str(row))
-                cboRating.setObjectName("cboRating" + str(row))
-                
-                # filename / EXIF date / EXIF time labels with discrepancy warnings
-                lblFileName = QLabel("File: " + os.path.basename(p["fileName"]))
-
-                lblFileDate = QLabel()
-                if photoData["date"] == "Date unknown":
-                    lblFileDate.setText("No date stored in photo.")
-                    lblFileDate.setStyleSheet("color: red;")
-                else:
-                    lblFileDate.setText("Date: " + photoData["date"])
-
-                lblFileTime = QLabel()
-                if photoData["time"] == "Time unknown":
-                    lblFileTime.setText("No time stored in photo.")
-                    lblFileTime.setStyleSheet("color: red;")
-                else:
-                    lblFileTime.setText("Time: " + photoData["time"])
-
-                dateRow = QHBoxLayout()
-                dateRow.addWidget(lblFileDate)
-                if not photoMatchData.get("dateMatchFound", True) and photoData["date"] not in ("", "Date unknown"):
-                    lblDateWarn = QLabel("Photo's date does not match a checklist")
-                    lblDateWarn.setStyleSheet("color: red;")
-                    dateRow.addWidget(lblDateWarn)
-                dateRow.addStretch()
-
-                timeRow = QHBoxLayout()
-                timeRow.addWidget(lblFileTime)
-                if (photoMatchData.get("dateMatchFound", True) and
-                        not photoMatchData.get("timeMatchFound", True) and
-                        photoData["time"] not in ("", "Time unknown")):
-                    lblTimeWarn = QLabel("Photo's time does not match a checklist")
-                    lblTimeWarn.setStyleSheet("color: yellow;")
-                    timeRow.addWidget(lblTimeWarn)
-                timeRow.addStretch()
-
-                detailsLayout.addWidget(lblFileName)
-                detailsLayout.addLayout(dateRow)
-                detailsLayout.addLayout(timeRow)
-
-                # add combo boxes to the layout in second column
-                lblCboDate = QLabel("Date")
-                _f = QFont(); _f.setBold(True); lblCboDate.setFont(_f)
-                detailsLayout.addWidget(lblCboDate)
-                detailsLayout.addWidget(cboDate)
-                lblCboLocation = QLabel("Location")
-                _f = QFont(); _f.setBold(True); lblCboLocation.setFont(_f)
-                detailsLayout.addWidget(lblCboLocation)
-                detailsLayout.addWidget(cboLocation)
-                lblCboTime = QLabel("Time")
-                _f = QFont(); _f.setBold(True); lblCboTime.setFont(_f)
-                detailsLayout.addWidget(lblCboTime)
-                detailsLayout.addWidget(cboTime)
-                lblCboSpecies = QLabel("Species")
-                _f = QFont(); _f.setBold(True); lblCboSpecies.setFont(_f)
-                detailsLayout.addWidget(lblCboSpecies)
-                detailsLayout.addWidget(cboCommonName)
-                lblCboRating = QLabel("Rating")
-                _f = QFont(); _f.setBold(True); lblCboRating.setFont(_f)
-                detailsLayout.addWidget(lblCboRating)
-                detailsLayout.addWidget(cboRating)
-                
-                # create and add resent button
-                btnReset = QPushButton()
-                btnReset.setText("Reset")
-                btnReset.clicked.connect(partial( self.btnResetClicked, row))
-                detailsLayout.addWidget(btnReset)
-                                
-                # save meta data for future use when user clicks cbo boxes
+                # Existing-photo rows already hold a confirmed assignment, so
+                # every field is a direct match.  Seed metadata and build the
+                # colour-coded label / Select / Skip panel.
                 thisPhotoMetaData = {}
                 thisPhotoMetaData["location"] = s["location"]
                 thisPhotoMetaData["date"] = s["date"]
@@ -749,12 +494,26 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
                 thisPhotoMetaData["photoData"] = p
                 thisPhotoMetaData["rating"] = p["rating"]
                 thisPhotoMetaData["cascadeMode"] = "location_first"
-
+                thisPhotoMetaData["selectedCommonName"] = s["commonName"]
+                thisPhotoMetaData["skip"] = False
+                thisPhotoMetaData["newLocation"] = s["location"]
+                thisPhotoMetaData["newDate"] = s["date"]
+                thisPhotoMetaData["newTime"] = s["time"]
+                thisPhotoMetaData["newCommonName"] = s["commonName"]
+                # The stored assignment is the auto-derived baseline; every
+                # field is green until the user overrides it via the tree.
+                thisPhotoMetaData["autoDate"] = s["date"]
+                thisPhotoMetaData["autoLocation"] = s["location"]
+                thisPhotoMetaData["autoTime"] = s["time"]
+                thisPhotoMetaData["autoSpecies"] = s["commonName"]
+                thisPhotoMetaData["autoGreen"] = {"date": True, "location": True,
+                                                  "time": True, "species": True}
                 self.metaDataByRow[row] = thisPhotoMetaData
 
-                # initialize the "new" data so that there are values there, even if they're not really new
-                # user can change the cbo boxes later, which will also change the "new" data 
-                self.saveNewMetaData(row)      
+                # Pass the EXIF photoData (not the catalog dict p) so the
+                # "Photographed" line can show the capture date/time.
+                self._buildDetailsPanel(row, detailsLayout, photoData, isExisting=True)
+                self.saveNewMetaData(row)
                 
                 row += 1
                 self.mdiParent.progressOverlay.setPhotoValue(row)
@@ -776,6 +535,12 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
 
 
     def GetPixmapForThumbnail(self, photoFile, exif_dict=None):
+
+        # Fast path: reuse the on-disk thumbnail (the same 500x330 image the
+        # Photos browser caches) and skip decoding the JPEG entirely.
+        cached = code_ThumbnailCache.load(photoFile)
+        if cached is not None and not cached.isNull():
+            return QPixmap.fromImage(cached)
 
         # use provided exif_dict (pre-loaded by caller) or load from file
         if exif_dict is None:
@@ -821,405 +586,265 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
             pm = pm.scaledToHeight(330)
         else:
             pm = pm.scaledToWidth(500)
+        # Cache the freshly-decoded thumbnail so the next open is a fast hit.
+        code_ThumbnailCache.store(photoFile, pm.toImage())
         return pm
 
 
-    def cboLocationChanged(self, row, _index=None):
-        
-        if self.fillingCombos == False:
-            self.fillingCombos = True
-    
-            # get cboLocationChanged widget from the row that was clicked                
-            container = self.gridPhotos.itemAtPosition(row, 1).widget()
-            for w in container.children():
-                if "cboLocation" in w.objectName():
-                    cboLocation = w
-                
-            originalLocation = self.metaDataByRow[row]["location"]                
-            
-            if cboLocation.currentText() == originalLocation:
-                self.removeHighlight(cboLocation)
-            else:
-                self.highlightWidget(cboLocation)
+    def _computeAutoGreen(self, md):
+        """Which fields were confirmed directly from the photo's metadata /
+        filename.  Only these are eligible to show green (and only while the
+        user hasn't overridden them).  A best-guess fallback is not "gleaned"
+        and stays neutral.
 
-            cascadeMode = self.metaDataByRow[row].get("cascadeMode", "location_first")
-            if cascadeMode == "location_first":
-                self.setCboDate(row)
+        date     – the EXIF date matched a checklist date
+        time     – the EXIF time matched a checklist time exactly
+        location – confirmed only when the exact checklist (date+time) matched
+        species  – a species was recognised in the filename
+        """
+        dmf = md.get("dateMatchFound", False)
+        tmf = md.get("timeMatchFound", False)
+        return {
+            "date":     dmf,
+            "time":     tmf,
+            "location": tmf,
+            "species":  bool(md.get("photoCommonName", "")),
+        }
 
-            self.setCboTime(row)
+    def _fieldGreen(self, md, field):
+        """A field shows green only if it was auto-derived AND its current value
+        still equals that auto-derived value (i.e. the user hasn't changed it)."""
+        if not md.get("autoGreen", {}).get(field, False):
+            return False
+        current = {
+            "date":     md.get("newDate", ""),
+            "location": md.get("newLocation", ""),
+            "time":     md.get("newTime", ""),
+            "species":  md.get("selectedCommonName", ""),
+        }[field]
+        auto = {
+            "date":     md.get("autoDate", ""),
+            "location": md.get("autoLocation", ""),
+            "time":     md.get("autoTime", ""),
+            "species":  md.get("autoSpecies", ""),
+        }[field]
+        return current == auto
 
-            self.setCboCommonName(row)
-                        
-            self.saveNewMetaData(row)
+    def _fieldHtml(self, name, value, green, skipped):
+        if skipped:
+            valColor = _SKIPPED_COLOR
+        elif green:
+            valColor = _MATCH_COLOR
+        else:
+            valColor = _VALUE_COLOR
+        return ('<span style="color:%s">%s</span>&nbsp;&nbsp;'
+                '<span style="color:%s; font-weight:600">%s</span>'
+                % (_FIELD_NAME_COLOR, name, valColor, value))
 
-            self.fillingCombos = False
+    def _buildDetailsPanel(self, row, detailsLayout, photoData, isExisting):
+        """Minimalist row panel: filename, four colour-coded assignment labels,
+        and a right-hand Select / Skip / Rating / Reset column.  Date, location,
+        time and species are chosen via the checklist tree picker."""
+        lbls = {}
+        self._rowLabels[row] = lbls
 
+        bodyRow = QHBoxLayout()
+        bodyRow.setSpacing(14)
 
-    def cboDateChanged(self, row, _index=None):
-        
-        if self.fillingCombos is False:
+        # Left column: filename on top (level with the Select button), then the
+        # four colour-coded assignment labels.
+        leftCol = QVBoxLayout()
+        leftCol.setSpacing(4)
+        lblFileName = QLabel(os.path.basename(photoData["fileName"]))
+        lblFileName.setStyleSheet("color: %s;" % _FIELD_NAME_COLOR)
+        lblFileName.setWordWrap(True)
+        leftCol.addWidget(lblFileName)
 
-            self.fillingCombos = True
-            
-            # get cboLocationChanged widget from the row that was clicked                
-            container = self.gridPhotos.itemAtPosition(row, 1).widget()
-            for w in container.children():
-                if "cboDate" in w.objectName():
-                    cboDate = w            
-            
-            originalDate = self.metaDataByRow[row]["date"]                
-            
-            if cboDate.currentText() == originalDate:
-                self.removeHighlight(cboDate)
-            else:
-                self.highlightWidget(cboDate)
+        # The photo's own EXIF capture date/time, shown so the user can judge how
+        # to assign it.
+        exifDate = photoData.get("date", "")
+        exifTime = photoData.get("time", "")
+        if exifDate and exifDate != "Date unknown":
+            metaStr = "Photographed %s" % exifDate
+            if exifTime and exifTime != "Time unknown":
+                metaStr += " %s" % exifTime
+        else:
+            metaStr = "Photo date unknown"
+        lblMeta = QLabel(metaStr)
+        lblMeta.setStyleSheet("color: %s;" % _FIELD_NAME_COLOR)
+        leftCol.addWidget(lblMeta)
+        leftCol.addSpacing(10)   # line feed after the metadata line
 
-            cascadeMode = self.metaDataByRow[row].get("cascadeMode", "location_first")
-            if cascadeMode == "date_first":
-                self.setCboLocationByDate(row)
+        for key in ("date", "location", "time", "species"):
+            lbl = QLabel()
+            lbl.setTextFormat(Qt.TextFormat.RichText)
+            lbls[key] = lbl
+            leftCol.addWidget(lbl)
+        leftCol.addStretch()
+        bodyRow.addLayout(leftCol, 1)
 
-            self.setCboTime(row)
+        # Right column, top-to-bottom: Select (aligned with the filename),
+        # Reset, the Rating label/combo, then the Remove/Skip checkbox — with a
+        # few pixels of breathing room between each control.
+        controlsCol = QVBoxLayout()
+        controlsCol.setSpacing(8)
 
-            self.setCboCommonName(row)
-            
-            self.saveNewMetaData(row)                         
-            
-            self.fillingCombos = False
+        # Pin every control to one explicit font so the combo text can't end up a
+        # different size from the buttons (they otherwise resolve fonts via
+        # different inheritance paths).
+        _panelFont = QFont("", getattr(self.mdiParent, "fontSize", 11))
 
+        btnSelect = QPushButton("Select")
+        btnSelect.setFont(_panelFont)
+        btnSelect.clicked.connect(partial(self._openSelectTree, row))
+        controlsCol.addWidget(btnSelect)
 
-    def cboTimeChanged(self, row, _index=None):
+        btnReset = QPushButton("Reset")
+        btnReset.setFont(_panelFont)
+        btnReset.clicked.connect(partial(self.btnResetClicked, row))
+        controlsCol.addWidget(btnReset)
 
-        if self.fillingCombos is False:
-            
-            self.fillingCombos = True
+        cboRating = QComboBox()
+        cboRating.addItems(["Not Rated", "1", "2", "3", "4", "5"])
+        cboRating.setObjectName("cboRating" + str(row))
+        cboRating.setFont(_panelFont)
+        # Centre the displayed text: a non-editable combo's closed text is drawn
+        # left-aligned by the style, so use a read-only, centred line edit for the
+        # display and centre the popup items too.
+        cboRating.setEditable(True)
+        cboRating.lineEdit().setReadOnly(True)
+        cboRating.lineEdit().setAlignment(Qt.AlignCenter)
+        cboRating.lineEdit().setFocusPolicy(Qt.NoFocus)
+        cboRating.lineEdit().setFont(_panelFont)
+        # Left padding offsets the dropdown arrow on the right so the text sits
+        # centred under the full control rather than the area left of the arrow.
+        cboRating.lineEdit().setStyleSheet(
+            "QLineEdit { background: transparent; border: none; padding-left: 30px; }")
+        for _i in range(cboRating.count()):
+            cboRating.setItemData(_i, Qt.AlignCenter, Qt.TextAlignmentRole)
+        try:
+            cboRating.setCurrentIndex(max(0, min(5, int(self.metaDataByRow[row]["rating"]))))
+        except (TypeError, ValueError):
+            cboRating.setCurrentIndex(0)
+        cboRating.currentIndexChanged.connect(partial(self.cboRatingChanged, row))
+        lbls["rating"] = cboRating
+        # Added directly to the column so it spans the full button width.
+        controlsCol.addWidget(cboRating)
 
-            # get cboLocationChanged widget from the row that was clicked                
-            container = self.gridPhotos.itemAtPosition(row, 1).widget()
-            for w in container.children():
-                if "cboTime" in w.objectName():
-                    cboTime = w            
-            
-            originalTime = self.metaDataByRow[row]["time"]                
-#             
-            if cboTime.currentText() == originalTime:
-                self.removeHighlight(cboTime)
-            else:
-                self.highlightWidget(cboTime) 
-                                    
-            self.setCboCommonName(row)
-            
-            self.saveNewMetaData(row)            
-            
-            self.fillingCombos = False
+        chkSkip = QCheckBox("Remove" if isExisting else "Skip")
+        chkSkip.setFont(_panelFont)
+        chkSkip.toggled.connect(partial(self._toggleSkip, row))
+        lbls["skip"] = chkSkip
+        controlsCol.addWidget(chkSkip)
 
+        controlsCol.addStretch()
+        # Hold the control column to a fixed width wide enough that "Not Rated"
+        # plus the dropdown arrow and centring padding fit without clipping.
+        controlsWidget = QWidget()
+        controlsWidget.setLayout(controlsCol)
+        controlsWidget.setFixedWidth(160)
+        bodyRow.addWidget(controlsWidget)
 
-    def cboCommonNameChanged(self, row, _index=None):
+        detailsLayout.addLayout(bodyRow)
+        self._refreshRowLabels(row)
 
-        if self.fillingCombos is False:
-                    
-            # get cboCommonName widget from the row that was clicked                
-            container = self.gridPhotos.itemAtPosition(row, 1).widget()
-            for w in container.children():
-                if "cboCommonName" in w.objectName():
-                    cboCommonName = w
-            
-            originalCommonName = self.metaDataByRow[row]["commonName"]
-            
-            if cboCommonName.currentText() == originalCommonName:
-                self.removeHighlight(cboCommonName)
-            else:
-                self.highlightWidget(cboCommonName)
-            
-            self.saveNewMetaData(row)
+    def _refreshRowLabels(self, row):
+        md = self.metaDataByRow[row]
+        lbls = self._rowLabels.get(row)
+        if not lbls:
+            return
+        skipped = md.get("skip", False)
+        date = md.get("newDate") or "\u2014"
+        loc  = md.get("newLocation") or "\u2014"
+        tm   = md.get("newTime") or "\u2014"
+        lbls["date"].setText(self._fieldHtml("Date", date, self._fieldGreen(md, "date"), skipped))
+        lbls["location"].setText(self._fieldHtml("Location", loc, self._fieldGreen(md, "location"), skipped))
+        lbls["time"].setText(self._fieldHtml("Time", tm, self._fieldGreen(md, "time"), skipped))
+        if skipped:
+            note = "Will be removed" if self.photosAlreadyInDb else "Will be skipped"
+            lbls["species"].setText(self._fieldHtml("Species", note, False, True))
+        elif md.get("selectedCommonName"):
+            lbls["species"].setText(self._fieldHtml(
+                "Species", md["selectedCommonName"], self._fieldGreen(md, "species"), False))
+        else:
+            lbls["species"].setText(
+                '<span style="color:%s">Species not yet selected</span>' % _FIELD_NAME_COLOR)
 
+    def _openSelectTree(self, row):
+        md = self.metaDataByRow[row]
+        dlg = code_ChecklistTree.ChecklistTreeDialog(self.mdiParent.db, self)
+        dlg.expand_to(md.get("newDate", ""), md.get("newLocation", ""),
+                      md.get("newTime", ""), md.get("selectedCommonName", ""))
+        if dlg.exec() and dlg.result:
+            self._applyTreeResult(row, dlg.result)
+
+    def _applyTreeResult(self, row, result):
+        md = self.metaDataByRow[row]
+        md["newDate"] = result["date"]
+        md["newLocation"] = result["location"]
+        md["newTime"] = result["time"]
+        md["selectedCommonName"] = result["species"]
+        md["newCommonName"] = result["species"]
+        md["skip"] = False
+        # Greenness is derived by comparing each field to its auto baseline, so
+        # any field the tree changed automatically drops to the neutral colour.
+        chk = self._rowLabels.get(row, {}).get("skip")
+        if chk is not None:
+            chk.blockSignals(True)
+            chk.setChecked(False)
+            chk.blockSignals(False)
+        self._refreshRowLabels(row)
+        self.saveNewMetaData(row)
+
+    def _toggleSkip(self, row, checked):
+        md = self.metaDataByRow[row]
+        md["skip"] = checked
+        if checked:
+            md["newCommonName"] = _SKIP_SENTINEL
+        else:
+            md["newCommonName"] = md.get("selectedCommonName", "")
+        self._refreshRowLabels(row)
+        self.saveNewMetaData(row)
 
     def cboRatingChanged(self, row, _index=None):
+        if self.fillingCombos:
+            return
+        self.saveNewMetaData(row)
 
-        if self.fillingCombos is False:
-                    
-            # get cboCommonName widget from the row that was clicked                
-            container = self.gridPhotos.itemAtPosition(row, 1).widget()
-            for w in container.children():
-                if "cboRating" in w.objectName():
-                    cboRating = w
-            
-            originalRating = self.metaDataByRow[row]["rating"]
-            
-            if cboRating.currentText() == originalRating:
-                self.removeHighlight(cboRating)
-            else:
-                self.highlightWidget(cboRating)
-            
-            self.saveNewMetaData(row)
-                            
-
-    def setCboDate(self, row):
-        
-        # get cboLocationChanged widget from the row that was clicked                
-        container = self.gridPhotos.itemAtPosition(row, 1).widget()
-        for w in container.children():
-            if "cboLocation" in w.objectName():
-                cboLocation = w
-            if "cboDate" in w.objectName():
-                cboDate = w
-                                
-        originalDate = self.metaDataByRow[row]["date"]
-        
-        currentlyDisplayedDate = cboDate.currentText()
-                    
-        # fill date combo box with all dates associated with selected location
-        filterForThisPhoto = code_Filter.Filter()
-        filterForThisPhoto.setLocationName(cboLocation.currentText())
-        filterForThisPhoto.setLocationType("Location")
-        dates = self.mdiParent.db.GetDates(filterForThisPhoto)
-        cboDate.clear()
-        cboDate.addItems(dates)
-        
-        # set date combo box to the photo's associated date
-        index = cboDate.findText(currentlyDisplayedDate)
-        if index >= 0:
-            cboDate.setCurrentIndex(index)
-
-        # if currentlyDisplayedDate didn't match, try the original
-        else:
-            index = cboDate.findText(originalDate)
-            if index >= 0:
-                cboDate.setCurrentIndex(index)
-
-        if cboDate.currentText() == originalDate:
-            self.removeHighlight(cboDate)
-        else:
-            self.highlightWidget(cboDate)
-
-
-    def setCboLocationByDate(self, row):
-
-        container = self.gridPhotos.itemAtPosition(row, 1).widget()
-        for w in container.children():
-            if "cboDate" in w.objectName():
-                cboDate = w
-            if "cboLocation" in w.objectName():
-                cboLocation = w
-
-        originalLocation = self.metaDataByRow[row]["location"]
-        currentlyDisplayedLocation = cboLocation.currentText()
-
-        # get locations visited on the selected date
-        filterForThisPhoto = code_Filter.Filter()
-        filterForThisPhoto.setStartDate(cboDate.currentText())
-        filterForThisPhoto.setEndDate(cboDate.currentText())
-        locations = self.mdiParent.db.GetLocations(filterForThisPhoto)
-        cboLocation.clear()
-        cboLocation.addItems(locations)
-
-        # try to keep the currently displayed location if it's valid for the new date
-        index = cboLocation.findText(currentlyDisplayedLocation)
-        if index >= 0:
-            cboLocation.setCurrentIndex(index)
-
-        if cboLocation.currentText() == originalLocation:
-            self.removeHighlight(cboLocation)
-        else:
-            self.highlightWidget(cboLocation)
-
-
-    def setCboTime(self, row):
-        
-        # get cboLocationChanged widget from the row that was clicked                
-        container = self.gridPhotos.itemAtPosition(row, 1).widget()
-        for w in container.children():
-            if "cboLocation" in w.objectName():
-                cboLocation = w
-            if "cboDate" in w.objectName():
-                cboDate = w
-            if "cboTime" in w.objectName():
-                cboTime = w
-
-        originalTime = self.metaDataByRow[row]["time"]
-        
-        currentlyDisplayedTime = cboTime.currentText()
-                    
-        # fill date combo box with all dates associated with selected location
-        filterForThisPhoto = code_Filter.Filter()
-        filterForThisPhoto.setLocationName(cboLocation.currentText())
-        filterForThisPhoto.setLocationType("Location")
-        filterForThisPhoto.setStartDate(cboDate.currentText())
-        filterForThisPhoto.setEndDate(cboDate.currentText())
-        times = self.mdiParent.db.GetStartTimes(filterForThisPhoto)
-        cboTime.clear()
-        cboTime.addItems(times)
-        
-        # set date  combo box to the photo's associated date
-        index = cboTime.findText(currentlyDisplayedTime)
-        if index >= 0:
-            cboTime.setCurrentIndex(index)
-             
-        if cboTime.currentText() == originalTime:
-            self.removeHighlight(cboTime)
-        else:
-            self.highlightWidget(cboTime)         
-
-
-    def setCboCommonName(self, row):
-        
-        # get widgets from the row that was clicked                
-        container = self.gridPhotos.itemAtPosition(row, 1).widget()
-        for w in container.children():
-            if "cboLocation" in w.objectName():
-                cboLocation = w
-            if "cboDate" in w.objectName():
-                cboDate = w
-            if "cboTime" in w.objectName():
-                cboTime = w
-            if "cboCommonName" in w.objectName():
-                cboCommonName = w
-    
-        originalCommonName = self.metaDataByRow[row]["commonName"]                  
-    
-        currentlyDisplayedCommonName = cboCommonName.currentText() 
-        
-        # fill time combo box with all times associated with selected location and date
-        filterForThisPhoto = code_Filter.Filter()
-        filterForThisPhoto.setLocationName(cboLocation.currentText())
-        filterForThisPhoto.setLocationType("Location")
-        filterForThisPhoto.setStartDate(cboDate.currentText())
-        filterForThisPhoto.setEndDate(cboDate.currentText())
-        filterForThisPhoto.setTime(cboTime.currentText())
-        commonNames = self.mdiParent.db.GetSpecies(filterForThisPhoto)
-        cboCommonName.clear()
-        if self.photosAlreadyInDb:
-            cboCommonName.addItem("Remove photo from catalog")
-        else:
-            cboCommonName.addItem("Do not add photo to catalog")
-        cboCommonName.addItems(commonNames)
-        
-        # try to set combo box to the currentlyDisplayedCommonName
-        index = cboCommonName.findText(currentlyDisplayedCommonName)
-        if index >= 0:
-            cboCommonName.setCurrentIndex(index)
-
-        # if currentlyDisplayedCommonName failed, try
-        # looking for the oringalCommonName
-        else:
-            index = cboCommonName.findText(originalCommonName)
-            if index >= 0:
-                cboCommonName.setCurrentIndex(index)
-                
-        # if set to Do not add photo to catalog, try to set it to the original
-        if cboCommonName.currentText() == "Do not add photo to catalog":
-            index = cboCommonName.findText(originalCommonName)
-            if index >= 0:
-                cboCommonName.setCurrentIndex(index)
-# 
-        # set highlighting if commonName is different from the original
-        if cboCommonName.currentText() == originalCommonName:
-            self.removeHighlight(cboCommonName)
-        else:
-            self.highlightWidget(cboCommonName) 
-                        
-            
     def saveNewMetaData(self, row):
-        
-        # get metadata from widgets from row in question
-        container = self.gridPhotos.itemAtPosition(row, 1).widget()
-        for w in container.children():
-            if "cboLocation" in w.objectName():
-                self.metaDataByRow[row]["newLocation"] = w.currentText()
-            if "cboDate" in w.objectName():
-                self.metaDataByRow[row]["newDate"] = w.currentText()
-            if "cboTime" in w.objectName():
-                self.metaDataByRow[row]["newTime"] = w.currentText()
-            if "cboCommonName" in w.objectName():
-                self.metaDataByRow[row]["newCommonName"] = w.currentText()
-            if "cboRating" in w.objectName():
-                self.metaDataByRow[row]["newRating"] = str(w.currentIndex())      
-                
-           
-    def btnResetClicked(self, row):
-        
-        self.fillingCombos = True
-        
-        # get widgets from the row that was clicked                
-        container = self.gridPhotos.itemAtPosition(row, 1).widget()
-        for w in container.children():
-            if "cboLocation" in w.objectName():
-                cboLocation = w
-            if "cboDate" in w.objectName():
-                cboDate = w
-            if "cboTime" in w.objectName():
-                cboTime = w
-            if "cboCommonName" in w.objectName():
-                cboCommonName = w
-            if "cboRating" in w.objectName():
-                cboRating = w
-                
-        originalLocation = self.metaDataByRow[row]["location"]
-        originalDate = self.metaDataByRow[row]["date"]
-        originalTime = self.metaDataByRow[row]["time"]
-        originalCommonName = self.metaDataByRow[row]["commonName"] 
-        originalRating = self.metaDataByRow[row]["rating"]                 
-
-        # set the locations cbo box to original location
-        index = cboLocation.findText(originalLocation)
-        cboLocation.setCurrentIndex(index)        
-            
-        # fill date combo box with all dates associated with selected location
-        filterForThisPhoto = code_Filter.Filter()
-        filterForThisPhoto.setLocationName(cboLocation.currentText())
-        filterForThisPhoto.setLocationType("Location")
-        dates = self.mdiParent.db.GetDates(filterForThisPhoto)
-        cboDate.clear()
-        cboDate.addItems(dates)
-        
-        # set the date cbo box to original date
-        index = cboDate.findText(originalDate)
-        cboDate.setCurrentIndex(index)         
-
-        # fill time combo box with all times associated with selected location and date
-        filterForThisPhoto = code_Filter.Filter()
-        filterForThisPhoto.setLocationName(cboLocation.currentText())
-        filterForThisPhoto.setLocationType("Location")
-        filterForThisPhoto.setStartDate(originalDate)
-        filterForThisPhoto.setEndDate(originalDate)
-        times = self.mdiParent.db.GetStartTimes(filterForThisPhoto)
-        cboTime.clear()
-        cboTime.addItems(times)
-        
-        # set the time cbo box to original time
-        index = cboTime.findText(originalTime)
-        cboTime.setCurrentIndex(index)  
-        
-        # fill commonName combo box with all names associated with selected location, date and time
-        filterForThisPhoto = code_Filter.Filter()
-        filterForThisPhoto.setLocationName(cboLocation.currentText())
-        filterForThisPhoto.setLocationType("Location")
-        filterForThisPhoto.setStartDate(originalDate)
-        filterForThisPhoto.setEndDate(originalDate)
-        filterForThisPhoto.setTime(originalTime)
-        commonNames = self.mdiParent.db.GetSpecies(filterForThisPhoto)
-        cboCommonName.clear()
-        if self.photosAlreadyInDb:
-            cboCommonName.addItem("Remove photo from catalog")
+        md = self.metaDataByRow[row]
+        md.setdefault("newLocation", md["location"])
+        md.setdefault("newDate", md["date"])
+        md.setdefault("newTime", md["time"])
+        md.setdefault("newCommonName", md["commonName"])
+        cbo = self._rowLabels.get(row, {}).get("rating")
+        if cbo is not None:
+            md["newRating"] = str(cbo.currentIndex())
         else:
-            cboCommonName.addItem("Do not add photo to catalog")
-        cboCommonName.addItems(commonNames)
-        
-        # set the time cbo box to original time
-        index = cboCommonName.findText(originalCommonName)
-        cboCommonName.setCurrentIndex(index)  
-        
-        # set the rating cbo to the original rating
-        index = int(originalRating)
-        cboRating.setCurrentIndex(index)
-                   
-#         # turn off highlighting for all cbo boxes
-        self.removeHighlight(cboLocation)
-        self.removeHighlight(cboDate)
-        self.removeHighlight(cboTime)
-        self.removeHighlight(cboCommonName)
-        self.removeHighlight(cboRating)
-         
-        self.fillingCombos = False
+            md.setdefault("newRating", str(md.get("rating", "0")))
+
+    def btnResetClicked(self, row):
+        md = self.metaDataByRow[row]
+        md["newLocation"] = md["location"]
+        md["newDate"] = md["date"]
+        md["newTime"] = md["time"]
+        md["selectedCommonName"] = md["commonName"]
+        md["newCommonName"] = md["commonName"]
+        md["skip"] = False
+        lbls = self._rowLabels.get(row, {})
+        chk = lbls.get("skip")
+        if chk is not None:
+            chk.blockSignals(True)
+            chk.setChecked(False)
+            chk.blockSignals(False)
+        cbo = lbls.get("rating")
+        if cbo is not None:
+            try:
+                cbo.setCurrentIndex(max(0, min(5, int(md["rating"]))))
+            except (TypeError, ValueError):
+                cbo.setCurrentIndex(0)
+        self._refreshRowLabels(row)
+        self.saveNewMetaData(row)
 
 
     def savePhotoSettings(self):
@@ -1420,6 +1045,7 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
                 item.widget().setParent(None)
         self.gridPhotos.setRowMinimumHeight(row, 0)
         del self.metaDataByRow[row]
+        self._rowLabels.pop(row, None)
 
 
     def closeWindow(self):

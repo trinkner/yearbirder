@@ -2,7 +2,10 @@ import sys
 import os
 import tempfile
 from PySide6.QtGui import QColor, QPainter, QPixmap
-from PySide6.QtWidgets import QProxyStyle, QStyle, QMenu, QMessageBox
+from PySide6.QtWidgets import (
+    QProxyStyle, QStyle, QMenu, QMessageBox,
+    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+)
 from PySide6.QtCore import Qt, QRect, QEvent
 
 
@@ -473,10 +476,8 @@ def mediaFilterConflict(parent):
     return "cancel"
 
 
-def question(parent, title, text,
-             buttons=QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-             default=QMessageBox.StandardButton.No):
-    """QMessageBox.question replacement with a blue question-mark icon."""
+def _blue_question_pixmap():
+    """The app's blue circle "?" dialog icon (shared by question/choose)."""
     px = QPixmap(48, 48)
     px.fill(Qt.GlobalColor.transparent)
     painter = QPainter(px)
@@ -491,11 +492,72 @@ def question(parent, title, text,
     painter.setPen(QColor("#ffffff"))
     painter.drawText(px.rect(), Qt.AlignmentFlag.AlignCenter, "?")
     painter.end()
+    return px
 
+
+def choose(parent, title, text, labels):
+    """Blue question-mark dialog with arbitrary buttons shown in exactly the
+    given left-to-right order.
+
+    Implemented as a custom QDialog because QMessageBox reorders its buttons by
+    role on macOS.  Each button is sized to fit its full caption (no truncation).
+    Esc / window-close returns None; otherwise the clicked caption is returned."""
+    dlg = QDialog(parent)
+    dlg.setWindowTitle(title)
+    result = {"value": None}
+
+    outer = QVBoxLayout(dlg)
+    outer.setContentsMargins(24, 20, 24, 16)
+    outer.setSpacing(18)
+
+    # Icon + message
+    top = QHBoxLayout()
+    top.setSpacing(16)
+    icon = QLabel()
+    icon.setPixmap(_blue_question_pixmap())
+    top.addWidget(icon, 0, Qt.AlignmentFlag.AlignTop)
+    msg = QLabel(text)
+    msg.setWordWrap(True)
+    top.addWidget(msg, 1)
+    outer.addLayout(top)
+
+    # Buttons in the exact order supplied, right-aligned as a group.
+    btnRow = QHBoxLayout()
+    btnRow.setSpacing(10)
+    btnRow.addStretch()
+    for lbl in labels:
+        b = QPushButton(lbl)
+        b.setMinimumWidth(b.fontMetrics().horizontalAdvance(lbl) + 40)
+        b.clicked.connect(
+            lambda _checked=False, _lbl=lbl: (result.update(value=_lbl), dlg.accept()))
+        btnRow.addWidget(b)
+    outer.addLayout(btnRow)
+
+    dlg.exec()
+    return result["value"]
+
+
+def question(parent, title, text,
+             buttons=QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+             default=QMessageBox.StandardButton.No,
+             yes_text=None, no_text=None):
+    """QMessageBox.question replacement with a blue question-mark icon.
+
+    ``yes_text`` / ``no_text`` relabel the Yes / No buttons while keeping their
+    standard-button return values, so callers still compare against
+    QMessageBox.StandardButton.Yes / .No."""
     msg = QMessageBox(parent)
     msg.setWindowTitle(title)
     msg.setText(text)
-    msg.setIconPixmap(px)
+    msg.setIconPixmap(_blue_question_pixmap())
     msg.setStandardButtons(buttons)
     msg.setDefaultButton(default)
+    if yes_text is not None:
+        b = msg.button(QMessageBox.StandardButton.Yes)
+        if b is not None:
+            b.setText(yes_text)
+    if no_text is not None:
+        b = msg.button(QMessageBox.StandardButton.No)
+        if b is not None:
+            b.setText(no_text)
     return msg.exec()
