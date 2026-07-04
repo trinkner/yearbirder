@@ -105,6 +105,7 @@ class Ui_frmRenameMedia(object):
         # Shorten location names checkbox
         self.chkShortenLocation = QtWidgets.QCheckBox(self.frmOptions)
         self.chkShortenLocation.setObjectName("chkShortenLocation")
+        self.chkShortenLocation.setChecked(True)
         self.frmOptionsLayout.addWidget(self.chkShortenLocation)
 
         self.mainLayout.addWidget(self.frmOptions)

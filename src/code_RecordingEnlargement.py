@@ -45,6 +45,7 @@ def build_ribbon_cache(wav_path):
     return True
 
 import datetime
+import gc
 import math
 import os
 import time
@@ -1176,11 +1177,16 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
 
         # 16ms (~60fps) timer interpolates cursor position between real polls
         # so the red line and viewport scroll smoothly rather than in 100ms jumps.
+        # PreciseTimer stops macOS from coalescing/delaying it for power saving —
+        # coarse-timer jitter presents frames at uneven intervals, which reads as
+        # a faint scroll stutter when zoomed in.
         self._cursorTimer = QTimer(self)
+        self._cursorTimer.setTimerType(Qt.TimerType.PreciseTimer)
         self._cursorTimer.setInterval(16)
         self._cursorTimer.timeout.connect(self._updateCursor)
         self._lastRealPosSec = 0.0  # player position at last 100ms poll
         self._lastPollTime   = None  # time.perf_counter() at last poll
+        self._gcWasEnabled   = None  # GC state saved while playback pauses it
 
         # Single-shot debounce for slider drags (avoids rendering on every step).
         self._debounce = QTimer(self)
@@ -1202,6 +1208,7 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
         self._updateTimer.stop()
         self._cursorTimer.stop()
         self._debounce.stop()
+        self._pausePlaybackGC(False)   # restore GC if closed mid-playback
         self._player.stop()
         if self._zoomToken:
             self._zoomToken[0] = True
@@ -1670,6 +1677,25 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
         self._lastCursorPosSec = pos_sec
         self._lastPollTime     = time.perf_counter()
 
+    def _pausePlaybackGC(self, pause):
+        """Pause the cyclic GC while the spectrogram is scrolling.
+
+        Playback allocates steadily (per-frame paint objects + the audio-feed
+        byte slices), so the collector's gen-2 scan fires every few seconds and
+        stalls the main thread for a few ms — one dropped frame, seen as an
+        intermittent scroll hitch. Ordinary non-cyclic garbage is still freed
+        immediately by refcounting, so memory doesn't grow over a clip. Re-enable
+        (and sweep once) when scrolling stops."""
+        if pause:
+            if self._gcWasEnabled is None:
+                self._gcWasEnabled = gc.isenabled()
+                gc.disable()
+        elif self._gcWasEnabled is not None:
+            if self._gcWasEnabled:
+                gc.enable()
+            self._gcWasEnabled = None
+            gc.collect()
+
     def _onPlaybackStateChanged(self, state):
         if state == QMediaPlayer.PlaybackState.PlayingState:
             self._playBtn.setText("Pause")
@@ -1679,10 +1705,12 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
             self._anchorPlayback(self._player.position() / 1000.0)
             self._updateTimer.start(100)
             self._cursorTimer.start()
+            self._pausePlaybackGC(True)
         else:
             self._playBtn.setText("Play")
             self._updateTimer.stop()
             self._cursorTimer.stop()
+            self._pausePlaybackGC(False)
 
     def _onMediaStatusChanged(self, status):
         _ready = (QMediaPlayer.MediaStatus.LoadedMedia,
@@ -1696,6 +1724,7 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
             self._playBtn.setText("Play")
             self._updateTimer.stop()
             self._cursorTimer.stop()
+            self._pausePlaybackGC(False)
             self._centering = False
             self._centeringDir = None
             # Leave the cursor and viewport at the end of the recording rather

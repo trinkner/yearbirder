@@ -18,6 +18,14 @@ else:
 os.makedirs(_mpl_cache, exist_ok=True)
 os.environ["MPLCONFIGDIR"] = _mpl_cache
 
+# Use the native macOS multimedia backend (AVFoundation / Core Audio) instead of
+# Qt's default FFmpeg backend.  The FFmpeg backend's QAudioSink crackles on macOS
+# with our continuous pull device and ignores setBufferSize; the native backend
+# plays cleanly and is what the persistent-sink player (PcmAudioPlayer) targets.
+# Must be set before QtMultimedia is loaded.
+if sys.platform == "darwin":
+    os.environ.setdefault("QT_MEDIA_BACKEND", "darwin")
+
 # On Windows the embedded Chromium (QWebEngineView) cannot verify tile-server
 # SSL certificates inside a PyInstaller bundle, causing map tiles to silently
 # fail. This flag must be set before QApplication is created.

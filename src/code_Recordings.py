@@ -2,6 +2,7 @@ import form_Recordings
 from code_ManageRecordings import SpectrogramLabel   # UI widget stays in its module
 from code_Audio import (
     build_spectrogram_pixmap as _build_spectrogram_pixmap,
+    paint_spectro_axes as _paint_spectro_axes,
     PcmAudioPlayer,
     SPECTRO_AX_BBOX,
 )
@@ -54,15 +55,21 @@ class threadLoadSpectrogram(QThread):
             # spectroCache, checked before a file is queued here).
             img = code_ThumbnailCache.load(audioFile, "spectro_thumb")
             if img is not None and not img.isNull():
+                # Cached image already has the axes baked in.
                 pixmap = QPixmap.fromImage(img)
                 ax_bbox = SPECTRO_AX_BBOX
+                duration, sr, axesPending = 0, 0, False
             else:
-                # Tier 3: render the spectrogram, then cache it.
-                pixmap, _duration, _sr, ax_bbox = _build_spectrogram_pixmap(audioFile)
-                if pixmap is not None and not pixmap.isNull():
-                    code_ThumbnailCache.store(audioFile, pixmap.toImage(), "spectro_thumb")
+                # Tier 3: render the spectrogram WITHOUT axis text off-thread —
+                # QFont/drawText is not thread-safe on macOS (it corrupts glyph
+                # metrics app-wide). The GUI thread composites the kHz/sec axes
+                # and caches the result in _drainResultQueue.
+                pixmap, duration, sr, ax_bbox = _build_spectrogram_pixmap(
+                    audioFile, draw_axis_text=False)
+                axesPending = pixmap is not None and not pixmap.isNull()
 
-            self.resultQueue.put((row, audioFile, pixmap, ax_bbox))
+            self.resultQueue.put(
+                (row, audioFile, pixmap, ax_bbox, duration, sr, axesPending))
             self.workQueue.task_done()
 
         self.sigThreadFinished.emit()
@@ -589,7 +596,8 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
 
         while True:
             try:
-                row, audioFile, pixmap, ax_bbox = self.resultQueue.get_nowait()
+                (row, audioFile, pixmap, ax_bbox,
+                 duration, sr, axesPending) = self.resultQueue.get_nowait()
             except queue.Empty:
                 break
 
@@ -597,6 +605,12 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
                 continue
 
             if pixmap and not pixmap.isNull():
+                # Composite the kHz/sec axes here on the GUI thread (the worker
+                # rendered the spectrogram text-free), then cache the finished image.
+                if axesPending:
+                    _paint_spectro_axes(pixmap, duration, sr)
+                    code_ThumbnailCache.store(
+                        audioFile, pixmap.toImage(), "spectro_thumb")
                 self.spectroCache[audioFile] = (pixmap, ax_bbox)
                 lbl = self._spectroLabels.get(row)
                 if lbl:

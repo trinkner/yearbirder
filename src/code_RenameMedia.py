@@ -163,16 +163,16 @@ class RenameMedia(QMdiSubWindow, form_RenameMedia.Ui_frmRenameMedia):
 
         # Defaults: Date | Time | Species (common) | Location
         self.cboSlot1.setCurrentIndex(_SLOT_OPTIONS.index("Date: YYYY-MM-DD"))
-        self.cboSlot2.setCurrentIndex(_SLOT_OPTIONS.index("Time: HH-MM-SS"))
+        self.cboSlot2.setCurrentIndex(_SLOT_OPTIONS.index("Time: HHMMSS"))
         self.cboSlot3.setCurrentIndex(_SLOT_OPTIONS.index("Species: Common Name"))
         self.cboSlot4.setCurrentIndex(_SLOT_OPTIONS.index("Location"))
 
         # Wire signals
         for n in range(1, 5):
             getattr(self, f"cboSlot{n}").currentIndexChanged.connect(
-                self._updateProposedNames)
-        self.chkShortenLocation.stateChanged.connect(self._updateProposedNames)
-        self.chkRemoveSpaces.stateChanged.connect(self._updateProposedNames)
+                self._onNameOptionChanged)
+        self.chkShortenLocation.stateChanged.connect(self._onNameOptionChanged)
+        self.chkRemoveSpaces.stateChanged.connect(self._onNameOptionChanged)
         self.btnSelectAll.clicked.connect(self._selectAll)
         self.btnSelectNone.clicked.connect(self._selectNone)
         self.btnSelectWav.clicked.connect(lambda: self._selectByExtension({".wav"}))
@@ -329,11 +329,7 @@ class RenameMedia(QMdiSubWindow, form_RenameMedia.Ui_frmRenameMedia):
             row_index += 1
 
         # O(1) path -> row index for _rowDataForTableRow (avoids O(n^2) rescans).
-        self._rowByPath = {}
-        for rd in self._rows:
-            fn = (rd["recording"]["fileName"] if rd["mediaType"] == "recording"
-                  else rd["photo"]["fileName"]) or ""
-            self._rowByPath[unicodedata.normalize("NFC", fn)] = rd
+        self._rebuildRowIndex()
 
         self.tblPhotos.setSortingEnabled(True)
         self._updateProposedNames()
@@ -586,6 +582,13 @@ class RenameMedia(QMdiSubWindow, form_RenameMedia.Ui_frmRenameMedia):
         return base
 
 
+    def _onNameOptionChanged(self):
+        """A naming option changed: clear the post-rename 'Done' freeze so
+        already-renamed rows recompute a fresh proposed name (against their new
+        current filename) and can be renamed again — allowing unlimited rounds."""
+        self._frozen_paths = set()
+        self._updateProposedNames()
+
     def _updateProposedNames(self):
         """Recompute all proposed names and update the Status column."""
         if not self._rows:
@@ -788,6 +791,16 @@ class RenameMedia(QMdiSubWindow, form_RenameMedia.Ui_frmRenameMedia):
         sample = (base + ext) if base else "—"
         self.lblSample.setText(f"Sample: {sample}")
 
+
+    def _rebuildRowIndex(self):
+        """(Re)build the NFC-path → row-record index used by _rowDataForTableRow.
+        Must be rebuilt after a rename because each record's fileName is updated
+        in place to the new path, so the old keys would no longer match."""
+        self._rowByPath = {}
+        for rd in self._rows:
+            fn = (rd["recording"]["fileName"] if rd["mediaType"] == "recording"
+                  else rd["photo"]["fileName"]) or ""
+            self._rowByPath[unicodedata.normalize("NFC", fn)] = rd
 
     def _rowDataForTableRow(self, table_row):
         """Map a (possibly sorted) table row back to its _rows entry.
@@ -1093,6 +1106,10 @@ class RenameMedia(QMdiSubWindow, form_RenameMedia.Ui_frmRenameMedia):
         # ── Final compact ─────────────────────────────────────────────────────
         if succeeded > 0:
             db.compactJsonlFile()
+
+        # Re-key the row index to the new paths so a later option change can find
+        # each renamed row's data and recompute a fresh proposed name.
+        self._rebuildRowIndex()
 
         # ── Refresh proposed names for any remaining unprocessed rows ─────────
         # _updateProposedNames() re-enables sorting via its own finally block,

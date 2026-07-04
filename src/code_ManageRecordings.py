@@ -45,6 +45,7 @@ from code_Audio import (
     SPECTRO_AX_BBOX,
     render_spectrogram_qimage as _render_spectrogram_qimage,
     build_spectrogram_pixmap as _build_spectrogram_pixmap,
+    paint_spectro_axes as _paint_spectro_axes,
     decode_wav_pcm16 as _decode_wav_pcm16,
 )
 
@@ -235,12 +236,16 @@ class threadGetAudioData(QThread):
             # store, so re-opening this window is fast.
             img = code_ThumbnailCache.load(file, "spectro_thumb")
             if img is not None and not img.isNull():
+                # Cached image already has the axes baked in.
                 pixmap = QPixmap.fromImage(img)
                 ax_bbox = SPECTRO_AX_BBOX
+                _dur, _fs, axesPending = 0, 0, False
             else:
-                pixmap, _dur, _fs, ax_bbox = _build_spectrogram_pixmap(file)
-                if pixmap is not None and not pixmap.isNull():
-                    code_ThumbnailCache.store(file, pixmap.toImage(), "spectro_thumb")
+                # Render text-free off-thread (QFont/drawText is not thread-safe
+                # on macOS); the GUI thread composites the axes and caches below.
+                pixmap, _dur, _fs, ax_bbox = _build_spectrogram_pixmap(
+                    file, draw_axis_text=False)
+                axesPending = pixmap is not None and not pixmap.isNull()
             recordingData = self.parent.mdiParent.db.getRecordingData(file)
 
             if mode == "new":
@@ -270,6 +275,10 @@ class threadGetAudioData(QThread):
             entry["audioMatchData"] = audioMatchData
             entry["pixmap"] = pixmap
             entry["ax_bbox"] = ax_bbox
+            entry["axesPending"] = axesPending
+            entry["duration"] = _dur
+            entry["sampleRate"] = _fs
+            entry["file"] = file
             entry["comboData"] = comboData
             entry["cascadeMode"] = cascadeMode
             entry["allSightings"] = allSightings
@@ -588,6 +597,15 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
                 entry = self.resultQueue.get_nowait()
             except queue.Empty:
                 break
+            # Composite the kHz/sec axes on the GUI thread (the worker rendered
+            # the spectrogram text-free — QFont/drawText is not thread-safe on
+            # macOS), then cache the finished image.
+            _pm = entry.get("pixmap")
+            if entry.get("axesPending") and _pm and not _pm.isNull():
+                _paint_spectro_axes(_pm, entry.get("duration", 0),
+                                    entry.get("sampleRate", 0))
+                code_ThumbnailCache.store(
+                    entry.get("file", ""), _pm.toImage(), "spectro_thumb")
             self.insertAudioIntoTable(
                 entry["row"],
                 entry["recordingData"],

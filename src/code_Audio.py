@@ -33,7 +33,7 @@ except Exception:
     _HAVE_SOXR = False
 
 from PySide6.QtGui import QImage, QPixmap, QPainter, QPen, QColor, QFont
-from PySide6.QtCore import Signal, QObject, QIODevice, Qt, QRectF
+from PySide6.QtCore import Signal, QObject, QIODevice, QTimer, Qt, QRectF
 from PySide6.QtMultimedia import (
     QMediaPlayer, QAudioFormat, QAudioSink, QMediaDevices,
 )
@@ -247,14 +247,21 @@ def render_ribbon_qimage(data, fs, n_frames, width, height, contrast_pct=0):
                       Qt.TransformationMode.SmoothTransformation)
 
 
-def render_spectrogram_qimage(wav_path, max_freq=10000):
+def render_spectrogram_qimage(wav_path, max_freq=10000, draw_axis_text=True):
     """Render the browser/manage thumbnail spectrogram for wav_path.
 
     Returns (QImage, duration_secs, sample_rate, ax_bbox) where ax_bbox is the
     constant SPECTRO_AX_BBOX.  Returns (None, 0, 0, None) on error.  The
     spectrogram itself is produced by the lightweight numpy renderer and composed
-    into a 500x290 image with light Hz/sec axes; QImage-only, so it is safe to
-    call off the GUI thread.
+    into a 500x290 image.
+
+    draw_axis_text: when True the kHz/sec tick marks and labels are drawn here.
+    The label drawing uses QFont/drawText, which touches macOS's CoreText font
+    engine — NOT safe to do off the GUI thread (concurrent use corrupts glyph
+    metrics app-wide, producing "stretched" text in windows opened afterwards).
+    Off-thread callers (the browser/manage worker threads) MUST pass False and
+    call paint_spectro_axes() on the result from the GUI thread instead.  The
+    spectrogram + spine drawn here use no fonts, so they are safe off-thread.
     """
     data, fs, n_frames = decode_wav_float_mono(wav_path)
     if data is None:
@@ -293,6 +300,17 @@ def render_spectrogram_qimage(wav_path, max_freq=10000):
     p.setPen(QPen(QColor(_SPINE_COLOR), 1))
     p.drawRect(rect)
 
+    if draw_axis_text:
+        _draw_spectro_axes(p, L, R, T, B, fmax, duration)
+    p.end()
+
+    return img, duration, fs, SPECTRO_AX_BBOX
+
+
+def _draw_spectro_axes(p, L, R, T, B, fmax, duration):
+    """Draw the kHz/sec tick marks and labels onto an open QPainter.
+
+    Uses QFont/drawText — GUI-thread only (see render_spectrogram_qimage)."""
     p.setFont(QFont("", 7))
     tick_pen = QPen(QColor(_AXIS_COLOR), 1)
     aR = Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
@@ -303,14 +321,14 @@ def render_spectrogram_qimage(wav_path, max_freq=10000):
     ty = max(3, round((B - T) / 45.0))
     tx = max(3, round((R - L) / 45.0))
 
-    # Y axis — Hz
+    # Y axis — kHz (ticks computed in Hz, labelled in kHz)
     for hz in _nice_ticks(0, fmax, ty):
         if hz > fmax:
             continue
         y = B - (hz / fmax) * (B - T) if fmax else B
         p.setPen(tick_pen)
         p.drawLine(int(L - 3), int(y), int(L), int(y))
-        p.drawText(QRectF(0, y - 7, L - 5, 14), aR, _fmt_tick(hz))
+        p.drawText(QRectF(0, y - 7, L - 5, 14), aR, _fmt_tick(hz / 1000.0))
 
     # X axis — sec
     for s in _nice_ticks(0, duration, tx):
@@ -327,17 +345,33 @@ def render_spectrogram_qimage(wav_path, max_freq=10000):
     p.save()
     p.translate(9, (T + B) / 2.0)
     p.rotate(-90)
-    p.drawText(QRectF(-30, -8, 60, 14), aC, "Hz")
+    p.drawText(QRectF(-30, -8, 60, 14), aC, "kHz")
     p.restore()
+
+
+def paint_spectro_axes(paint_device, duration, fs, max_freq=10000):
+    """GUI-thread composite: draw the kHz/sec axes onto an already-rendered
+    500x290 spectrogram (QPixmap or QImage) that was produced off-thread with
+    draw_axis_text=False.  MUST run on the GUI thread — see render_spectrogram_qimage.
+    """
+    W, H = paint_device.width(), paint_device.height()
+    x0, x1, y0f, y1f = SPECTRO_AX_BBOX
+    L, R = x0 * W, x1 * W
+    T, B = (1.0 - y1f) * H, (1.0 - y0f) * H
+    fmax = min(max_freq, fs // 2) if fs else 0
+    p = QPainter(paint_device)
+    _draw_spectro_axes(p, L, R, T, B, fmax, duration)
     p.end()
 
-    return img, duration, fs, SPECTRO_AX_BBOX
 
-
-def build_spectrogram_pixmap(wav_path, max_freq=10000):
+def build_spectrogram_pixmap(wav_path, max_freq=10000, draw_axis_text=True):
     """QPixmap wrapper around render_spectrogram_qimage for GUI-thread/QThread
-    callers that display the result.  Returns (QPixmap, dur, fs, ax_bbox)."""
-    img, duration, fs, ax_bbox = render_spectrogram_qimage(wav_path, max_freq)
+    callers that display the result.  Returns (QPixmap, dur, fs, ax_bbox).
+
+    Off-thread callers pass draw_axis_text=False and later call paint_spectro_axes
+    on the returned pixmap from the GUI thread."""
+    img, duration, fs, ax_bbox = render_spectrogram_qimage(
+        wav_path, max_freq, draw_axis_text=draw_axis_text)
     if img is None or img.isNull():
         return None, duration, fs, ax_bbox
     return QPixmap.fromImage(img), duration, fs, ax_bbox
@@ -347,106 +381,36 @@ def build_spectrogram_pixmap(wav_path, max_freq=10000):
 # Playback engine
 # ---------------------------------------------------------------------------
 
-class _PcmStreamDevice(QIODevice):
-    """Endless pull source for a continuously-running QAudioSink.
-
-    Returns real PCM (advancing an internal byte cursor) while ``_playing`` is
-    set, and silence otherwise — so the sink is never starved and the audio
-    output device stays running.  Keeping the device running is what avoids the
-    per-start mute/spin-up latency that a stop/start (or suspend/resume) of the
-    sink incurs on macOS Core Audio.
-    """
-
-    finished = Signal()
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self._data       = b''
-        self._cursor     = 0       # byte offset of next real sample to emit
-        self._frame      = 2       # bytes per audio frame (channels * 2)
-        self._playing    = False
-        self._emittedEnd = False
-
-    def loadData(self, data, frame_bytes):
-        self._data       = data
-        self._frame      = max(1, int(frame_bytes))
-        self._cursor     = 0
-        self._emittedEnd = False
-
-    def lengthBytes(self):
-        return len(self._data)
-
-    def cursorBytes(self):
-        return self._cursor
-
-    def setPlaying(self, playing):
-        self._playing = bool(playing)
-
-    def seekBytes(self, off):
-        off = max(0, min(int(off), len(self._data)))
-        off -= off % self._frame
-        self._cursor = off
-        self._emittedEnd = False
-
-    # QIODevice overrides ------------------------------------------------
-    def isSequential(self):
-        return True
-
-    def bytesAvailable(self):
-        # Endless source: always advertise a healthy chunk so the sink pulls.
-        return (1 << 20) + super().bytesAvailable()
-
-    def readData(self, maxlen):
-        n = int(maxlen)
-        n -= n % self._frame
-        if n <= 0:
-            n = self._frame
-        if self._playing and self._cursor < len(self._data):
-            end   = min(self._cursor + n, len(self._data))
-            chunk = self._data[self._cursor:end]
-            self._cursor = end
-            if self._cursor >= len(self._data) and not self._emittedEnd:
-                self._emittedEnd = True
-                self.finished.emit()
-            if len(chunk) < n:                 # pad final partial frame run
-                chunk = chunk + b'\x00' * (n - len(chunk))
-            return bytes(chunk)
-        # Paused, stopped, or past end → silence keeps the device warm.
-        return b'\x00' * n
-
-    def writeData(self, data):
-        return 0
-
-
 class PcmAudioPlayer(QObject):
-    """Low-latency WAV player built on a continuously-running QAudioSink.
+    """WAV player built on a push-mode QAudioSink kept continuously warm.
 
-    QMediaPlayer's macOS/AVFoundation backend re-primes its audio renderer on
-    every ``setSource()`` (0-7 s of silent-but-advancing output).  Creating a
-    fresh QAudioSink per play has the same problem: starting a Core Audio output
-    unit incurs a variable 0-7 s spin-up/mute the *first* time it runs.
+    Two things must both hold to play cleanly on macOS (incl. Bluetooth):
 
-    This player therefore creates **one** QAudioSink **once, at construction**,
-    and never re-creates it — so the audio device is warmed as soon as the owning
-    window opens, long before the user presses Play.  It is fed by an endless
-    :class:`_PcmStreamDevice` that emits silence when not playing, so the unit
-    never stops either.  Loading a new file just swaps the device's PCM data;
-    play/pause/seek only flip a flag or move a byte cursor.  Because the sink is
-    fixed-format, every file is decoded/resampled to that one output format.
+    * **No Python in the real-time path.**  A Python QIODevice ``readData`` used
+      to *pull*-feed the sink takes the GIL on every fill and crackles under any
+      GUI/thread contention.  Here the sink is opened in *push* mode: it reads
+      its own buffer natively; we only *write* into it, decoupled from the
+      real-time callback by the buffer.
 
-    The public API mirrors the subset of QMediaPlayer used by the Recordings
-    browser and Enlargement window, reusing QMediaPlayer's own enum values so
-    the callers' comparisons and signal handlers are unchanged.
+    * **The device never idles.**  Starting an idle Core Audio / Bluetooth output
+      unit costs ~1 s.  So the sink is started once and a small timer keeps it
+      fed forever — real audio while playing, silence otherwise — so Play is
+      instant (no per-play spin-up).
+
+    The whole file is decoded (and resampled to the device's preferred format)
+    up front into ``_pcm``.  The public API mirrors the subset of QMediaPlayer
+    used by the Recordings browser and Enlargement window.
     """
 
     playbackStateChanged = Signal(object)
     mediaStatusChanged   = Signal(object)
 
-    # Sink buffer: small enough that the leading silence drains quickly when
-    # play() flips the device to real audio (this sets the residual latency),
-    # large enough to avoid underruns from the Python pull callback.
-    _BUFFER_SECONDS = 0.05
     _OUT_CH = 2                       # fixed output channel count
+    # Sink buffer / write-ahead runway.  Small enough that the leading latency
+    # (buffered silence draining before the first real sample) is negligible,
+    # large enough that the feed timer can miss a tick without starving.
+    _BUFFER_SECONDS = 0.1
+    _FEED_MS = 10
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -454,22 +418,29 @@ class PcmAudioPlayer(QObject):
         self._hasMedia    = False
         self._state       = QMediaPlayer.PlaybackState.StoppedState
         self._currentPath = None
+        self._pcm         = b''       # decoded interleaved PCM for the current file
+        self._posBytes    = 0         # next real-audio byte to write to the sink
+        self._floorBytes  = 0         # reported position never dips below the last
+                                      # play/seek point (avoids a backward hop while
+                                      # the pre-buffered silence drains)
+        self._playing     = False     # feeding real audio (vs keep-alive silence)
+        self._io          = None      # the sink's push endpoint
+        self._silence     = b'\x00' * 8192
 
         self._buildSink()
 
-        # Rebuild the sink only when the output device itself changes (rare and
-        # user-initiated — switching headphones, changing the device's rate).
-        # A one-off spin-up there is acceptable; file-to-file switches never
-        # rebuild, preserving the zero-latency guarantee.
+        # Keep the sink fed forever so the output device never idles.
+        self._feedTimer = QTimer(self)
+        self._feedTimer.setInterval(self._FEED_MS)
+        self._feedTimer.timeout.connect(self._feed)
+        self._feedTimer.start()
+
         self._mediaDevices = QMediaDevices(self)
         self._mediaDevices.audioOutputsChanged.connect(self._onDeviceChanged)
 
     def _buildSink(self):
-        """Create the persistent device + QAudioSink for the current default
-        output.  Output format is 32-bit float at the device's preferred sample
-        rate (so the OS does no further rate conversion); falls back to Int16 if
-        the device doesn't support float.  Starts the sink silent so Core Audio
-        is warm before the first Play."""
+        """Create and start (push mode) the QAudioSink for the default output.
+        32-bit float at the device's preferred sample rate; Int16 fallback."""
         dev  = QMediaDevices.defaultAudioOutput()
         self._deviceId = dev.id()
         pref = dev.preferredFormat()
@@ -486,16 +457,31 @@ class PcmAudioPlayer(QObject):
             self._sampleFmt, self._bytesPerSample = "int16", 2
         self._bytesPerFrame = self._bytesPerSample * self._OUT_CH
 
-        self._device = _PcmStreamDevice(self)
-        self._device.loadData(b'', self._bytesPerFrame)
-        self._device.finished.connect(self._onFinished)
-        self._device.open(QIODevice.OpenModeFlag.ReadOnly)
-
         self._sink = QAudioSink(dev, fmt, self)
         buf = int(self._outFs * self._bytesPerFrame * self._BUFFER_SECONDS)
         if buf > 0:
             self._sink.setBufferSize(buf)
-        self._sink.start(self._device)
+        self._io = self._sink.start()           # push mode: device stays active
+
+    def _feed(self):
+        """Top up the sink's buffer: real audio while playing, else silence."""
+        io = self._io
+        if io is None or self._bytesPerFrame <= 0:
+            return
+        free = self._sink.bytesFree()
+        free -= free % self._bytesPerFrame
+        while free > 0:
+            if self._playing and self._posBytes >= len(self._pcm):
+                self._finishPlayback()          # all audio written → stop feeding it
+            if self._playing:
+                chunk = self._pcm[self._posBytes:self._posBytes + free]
+                self._posBytes += len(chunk)
+            else:
+                chunk = self._silence[:min(free, len(self._silence))]
+            if not chunk:
+                break
+            io.write(chunk)
+            free -= len(chunk)
 
     # ── source ──────────────────────────────────────────────────────────
     def setSourceWav(self, wav_path):
@@ -510,11 +496,11 @@ class PcmAudioPlayer(QObject):
             self.mediaStatusChanged.emit(QMediaPlayer.MediaStatus.InvalidMedia)
             return False
         pcm, _fs, _ch, dur_ms = decoded
+        self._playing    = False            # sink keeps running silence; no restart
+        self._pcm        = pcm
         self._durationMs = dur_ms
         self._hasMedia   = True
-        # Swap data in the already-running device; the sink is untouched.
-        self._device.setPlaying(False)
-        self._device.loadData(pcm, self._bytesPerFrame)
+        self._posBytes   = 0
         self._setState(QMediaPlayer.PlaybackState.StoppedState)
         self.mediaStatusChanged.emit(QMediaPlayer.MediaStatus.LoadedMedia)
         return True
@@ -528,29 +514,37 @@ class PcmAudioPlayer(QObject):
     def play(self):
         if not self._hasMedia:
             return
-        if self._device.cursorBytes() >= self._device.lengthBytes():
-            self._device.seekBytes(0)          # at end → restart from start
-        self._device.setPlaying(True)
+        if self._posBytes >= len(self._pcm):
+            self._posBytes = 0                  # at end → from the start
+        self._floorBytes = self._posBytes       # start exactly where the cursor is
+        self._playing = True
         self._setState(QMediaPlayer.PlaybackState.PlayingState)
 
     def pause(self):
         if self._state == QMediaPlayer.PlaybackState.PlayingState:
-            self._device.setPlaying(False)
+            self._posBytes = self._playedBytes()   # resume from what's been heard
+            self._playing = False
             self._setState(QMediaPlayer.PlaybackState.PausedState)
 
     def stop(self):
-        self._device.setPlaying(False)
-        self._device.seekBytes(0)
+        self._playing = False
+        self._posBytes = 0
         self._setState(QMediaPlayer.PlaybackState.StoppedState)
 
     def setPosition(self, ms):
         ms = max(0, min(int(ms), self._durationMs))
-        self._device.seekBytes(int(ms * self._outFs / 1000) * self._bytesPerFrame)
+        self._posBytes = self._bytesForMs(ms)   # feed continues from here
+        self._floorBytes = self._posBytes       # cursor holds here until sound catches up
 
     # ── queries ─────────────────────────────────────────────────────────
     def position(self):
-        ms = int(self._device.cursorBytes() / self._bytesPerFrame / self._outFs * 1000)
-        return min(ms, self._durationMs)
+        if self._state == QMediaPlayer.PlaybackState.PlayingState:
+            pb = max(self._floorBytes, self._playedBytes())   # never hop backward
+        else:
+            pb = self._posBytes
+        ms = int(pb / self._bytesPerFrame / self._outFs * 1000) \
+            if self._bytesPerFrame and self._outFs else 0
+        return max(0, min(ms, self._durationMs))
 
     def duration(self):
         return self._durationMs
@@ -559,6 +553,26 @@ class PcmAudioPlayer(QObject):
         return self._state
 
     # ── internals ───────────────────────────────────────────────────────
+    def _bytesForMs(self, ms):
+        b = int(ms * self._outFs / 1000) * self._bytesPerFrame
+        n = len(self._pcm)
+        return max(0, min(b, n - (n % self._bytesPerFrame) if self._bytesPerFrame else n))
+
+    def _playedBytes(self):
+        """Real-audio bytes actually played = written minus what's still queued
+        in the sink's buffer (which, during playback, is all real audio)."""
+        try:
+            queued = max(0, self._sink.bufferSize() - self._sink.bytesFree())
+        except Exception:
+            queued = 0
+        return max(0, min(self._posBytes - queued, len(self._pcm)))
+
+    def _finishPlayback(self):
+        self._playing = False
+        self._posBytes = 0
+        self._setState(QMediaPlayer.PlaybackState.StoppedState)
+        self.mediaStatusChanged.emit(QMediaPlayer.MediaStatus.EndOfMedia)
+
     def _setState(self, state):
         if state != self._state:
             self._state = state
@@ -578,23 +592,17 @@ class PcmAudioPlayer(QObject):
         wasPlaying = (self._state == QMediaPlayer.PlaybackState.PlayingState)
         path       = self._currentPath
 
+        self._io = None
+        self._playing = False
         try:
             self._sink.stop()
         except Exception:
             pass
         self._sink.deleteLater()
-        self._device.deleteLater()
 
-        self._buildSink()
+        self._buildSink()                   # new sink + push endpoint
         if path:
             if self.setSourceWav(path):     # re-decodes to the new output format
                 self.setPosition(pos)
                 if wasPlaying:
                     self.play()
-
-    def _onFinished(self):
-        # Reached the end of the clip while playing (queued from the pull thread).
-        self._device.setPlaying(False)
-        self._device.seekBytes(0)
-        self._setState(QMediaPlayer.PlaybackState.StoppedState)
-        self.mediaStatusChanged.emit(QMediaPlayer.MediaStatus.EndOfMedia)
