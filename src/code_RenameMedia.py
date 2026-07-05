@@ -1,5 +1,6 @@
 # import project files
 import form_RenameMedia
+from code_Stylesheet import YBFont
 import code_Filter
 import code_Stylesheet
 import code_ThumbnailCache
@@ -1171,7 +1172,7 @@ class RenameMedia(QMdiSubWindow, form_RenameMedia.Ui_frmRenameMedia):
 
         for w in self.children():
             try:
-                w.setFont(QFont("", fontSize))
+                w.setFont(QFont(YBFont, fontSize))
             except Exception:
                 pass
 

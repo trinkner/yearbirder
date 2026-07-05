@@ -162,6 +162,14 @@ class AppStyle(QProxyStyle):
             painter.restore()
 
 
+# UI font family — single source of truth for every QFont() in the app.
+# Empty string means "let Qt pick the system default", which is correct on macOS
+# (San Francisco) and Linux.  On Windows an empty family resolves to the legacy
+# bitmap font "MS Sans Serif", which DirectWrite cannot load (it spams
+# CreateFontFaceFromHDC errors and renders an ugly fallback), so we name the real
+# Windows UI font explicitly.  Use as QFont(YBFont, pointSize).
+YBFont = "Segoe UI" if sys.platform == "win32" else ""
+
 # Chart colour palette — single source of truth for code_Graphs.py and code_Web.py
 CHART_PRIMARY   = "#4f8ef7"   # thematic blue — standard-filter charts
 CHART_SECONDARY = "#28384c"   # dark muted blue — repeat / extension bars
@@ -206,6 +214,21 @@ stylesheetBase = """
     }
     QPushButton:hover { background: #363a4f; }
     QPushButton:pressed { background: #4f8ef7; color: white; }
+
+    /* Species chip pills (SpeciesTagStrip in Manage Recordings).  Styled here
+       rather than with per-widget setStyleSheet: per-widget sheets force a
+       fresh style object + repolish per chip piece (~13ms per row). */
+    QWidget#speciesChip { background-color: #4a86c8; border-radius: 8px; }
+    QWidget#speciesChip[skipped="true"] { background-color: #6b6e7e; }
+    QWidget#speciesChip QLabel { color: white; background: transparent; border: none; }
+    QPushButton#chipRemoveBtn {
+        color: white; font-weight: bold;
+        min-width: 0px; padding: 0px;
+        background: transparent; border: none;
+    }
+    QPushButton#chipRemoveBtn:hover {
+        background: rgba(255,255,255,40); border-radius: 9px;
+    }
 
     QComboBox {
         background: #2b2d38;

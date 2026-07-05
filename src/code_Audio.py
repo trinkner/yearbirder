@@ -19,6 +19,7 @@
 # QtMultimedia into the database module.
 
 import math
+from code_Stylesheet import YBFont
 
 import numpy as np
 import soundfile as sf
@@ -149,7 +150,16 @@ def decode_wav_pcm16(wav_path, normalize=True, target_fs=None, target_channels=N
 # Fixed data rectangle (x0, x1, y0, y1, figure-fraction, origin bottom-left) for
 # the thumbnail — the spectrogram is drawn into this rect, with axes around it.
 # Constant, so the cached image needs no per-file bbox metadata.
-SPECTRO_AX_BBOX = (0.13, 0.98, 0.15, 0.95)
+# Rendered thumbnail size — kept equal to code_ThumbnailCache.THUMB_DISPLAY_SIZE
+# (the on-screen size in the recordings views) so the cached image is shown 1:1
+# with no scaling at paint time.  This is a leaf module, so the value is
+# duplicated here rather than imported from the cache; change both together
+# (and bump code_ThumbnailCache.SPECTRO_THUMB_VARIANT).
+SPECTRO_THUMB_W, SPECTRO_THUMB_H = 333, 220
+
+# Margins sized for the axis labels at the size above.
+SPECTRO_AX_BBOX = (0.13, 0.98, 0.14, 0.95)
+_AXIS_FONT_PT = 9    # readable at the 333x220 display size without dominating it
 
 _AXIS_COLOR  = "#444444"
 _SPINE_COLOR = "#aaaaaa"
@@ -253,7 +263,7 @@ def render_spectrogram_qimage(wav_path, max_freq=10000, draw_axis_text=True):
     Returns (QImage, duration_secs, sample_rate, ax_bbox) where ax_bbox is the
     constant SPECTRO_AX_BBOX.  Returns (None, 0, 0, None) on error.  The
     spectrogram itself is produced by the lightweight numpy renderer and composed
-    into a 500x290 image.
+    into a SPECTRO_THUMB_W x SPECTRO_THUMB_H image (the exact display size).
 
     draw_axis_text: when True the kHz/sec tick marks and labels are drawn here.
     The label drawing uses QFont/drawText, which touches macOS's CoreText font
@@ -283,7 +293,7 @@ def render_spectrogram_qimage(wav_path, max_freq=10000, draw_axis_text=True):
     if spec_img is None:
         return None, duration, fs, None
 
-    W, H = 500, 290
+    W, H = SPECTRO_THUMB_W, SPECTRO_THUMB_H
     x0, x1, y0f, y1f = SPECTRO_AX_BBOX                 # figure-fraction, bottom-origin
     L, R = x0 * W, x1 * W
     T, B = (1.0 - y1f) * H, (1.0 - y0f) * H            # top-origin pixels
@@ -310,16 +320,21 @@ def render_spectrogram_qimage(wav_path, max_freq=10000, draw_axis_text=True):
 def _draw_spectro_axes(p, L, R, T, B, fmax, duration):
     """Draw the kHz/sec tick marks and labels onto an open QPainter.
 
-    Uses QFont/drawText — GUI-thread only (see render_spectrogram_qimage)."""
-    p.setFont(QFont("", 7))
+    Uses QFont/drawText — GUI-thread only (see render_spectrogram_qimage).
+    Label boxes and tick density derive from the font metrics, so the axis
+    font size can change without re-tuning pixel offsets."""
+    p.setFont(QFont(YBFont, _AXIS_FONT_PT))
+    fm = p.fontMetrics()
+    lh = fm.height()                              # one label line
+    xw = fm.horizontalAdvance("00.0") + 10        # generous x-label box
     tick_pen = QPen(QColor(_AXIS_COLOR), 1)
     aR = Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
     aHT = Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop
     aC = Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter
 
-    # ~1 tick per 45 px on each axis, matching matplotlib's auto density.
-    ty = max(3, round((B - T) / 45.0))
-    tx = max(3, round((R - L) / 45.0))
+    # Tick density scales with the label size so labels never collide.
+    ty = max(2, round((B - T) / (lh * 2.0)))
+    tx = max(2, round((R - L) / (xw * 1.6)))
 
     # Y axis — kHz (ticks computed in Hz, labelled in kHz)
     for hz in _nice_ticks(0, fmax, ty):
@@ -328,7 +343,7 @@ def _draw_spectro_axes(p, L, R, T, B, fmax, duration):
         y = B - (hz / fmax) * (B - T) if fmax else B
         p.setPen(tick_pen)
         p.drawLine(int(L - 3), int(y), int(L), int(y))
-        p.drawText(QRectF(0, y - 7, L - 5, 14), aR, _fmt_tick(hz / 1000.0))
+        p.drawText(QRectF(0, y - lh / 2.0, L - 5, lh), aR, _fmt_tick(hz / 1000.0))
 
     # X axis — sec
     for s in _nice_ticks(0, duration, tx):
@@ -337,21 +352,21 @@ def _draw_spectro_axes(p, L, R, T, B, fmax, duration):
         x = L + (s / duration) * (R - L) if duration else L
         p.setPen(tick_pen)
         p.drawLine(int(x), int(B), int(x), int(B + 3))
-        p.drawText(QRectF(x - 20, B + 4, 40, 12), aHT, _fmt_tick(s))
+        p.drawText(QRectF(x - xw / 2.0, B + 4, xw, lh), aHT, _fmt_tick(s))
 
     # Axis titles
     p.setPen(tick_pen)
-    p.drawText(QRectF(L, B + 15, R - L, 12), aHT, "sec")
+    p.drawText(QRectF(L, B + 4 + lh, R - L, lh), aHT, "sec")
     p.save()
-    p.translate(9, (T + B) / 2.0)
+    p.translate(lh * 0.75, (T + B) / 2.0)
     p.rotate(-90)
-    p.drawText(QRectF(-30, -8, 60, 14), aC, "kHz")
+    p.drawText(QRectF(-40, -lh / 2.0, 80, lh), aC, "kHz")
     p.restore()
 
 
 def paint_spectro_axes(paint_device, duration, fs, max_freq=10000):
     """GUI-thread composite: draw the kHz/sec axes onto an already-rendered
-    500x290 spectrogram (QPixmap or QImage) that was produced off-thread with
+    thumbnail spectrogram (QPixmap or QImage) that was produced off-thread with
     draw_axis_text=False.  MUST run on the GUI thread — see render_spectrogram_qimage.
     """
     W, H = paint_device.width(), paint_device.height()

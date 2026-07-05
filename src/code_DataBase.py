@@ -956,16 +956,21 @@ class DataBase():
         return(photoData)
 
 
-    def getComboDataForPhoto(self, photoMatchData):
+    def getComboDataForPhoto(self, photoMatchData, allDates=None):
         """Pre-compute all combo box data for a photo so worker threads can do
-        this work in parallel rather than blocking the main thread."""
+        this work in parallel rather than blocking the main thread.
+
+        allDates (the unfiltered date list for the date combo) is identical for
+        every photo and scans the whole database to build — callers processing
+        many photos should compute it once and pass it in."""
 
         photoDate = photoMatchData["photoDate"]
         photoLocation = photoMatchData["photoLocation"]
         photoTime = photoMatchData["photoTime"]
 
         # all dates in db (for the date combo box)
-        allDates = self.GetDates(code_Filter.Filter())
+        if allDates is None:
+            allDates = self.GetDates(code_Filter.Filter())
 
         # locations visited on the matched date
         locationsByDate = []
@@ -1249,13 +1254,18 @@ class DataBase():
             "timeMatchFound": timeMatchFound,
         }
 
-    def getComboDataForAudio(self, audioMatchData):
-        """Pre-compute combo box data for a new recording file (date-first cascade)."""
+    def getComboDataForAudio(self, audioMatchData, allDates=None):
+        """Pre-compute combo box data for a new recording file (date-first cascade).
+
+        allDates (the unfiltered date list) is identical for every recording
+        and scans the whole database to build — callers processing many files
+        should compute it once and pass it in."""
         recordingDate = audioMatchData.get("recordingDate", "")
         recordingLocation = audioMatchData.get("recordingLocation", "")
         recordingTime = audioMatchData.get("recordingTime", "")
 
-        allDates = self.GetDates(code_Filter.Filter())
+        if allDates is None:
+            allDates = self.GetDates(code_Filter.Filter())
 
         locationsByDate = []
         if recordingDate:

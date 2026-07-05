@@ -3,6 +3,7 @@ import code_Filter
 
 from math import floor
 import os
+import sys
 import datetime
 
 try:
@@ -58,6 +59,7 @@ def _tiebreak_species(tied_names, date, species_date_photos, want_latest):
 class Stats(QMdiSubWindow, form_Stats.Ui_frmStats):
 
     resized = Signal()
+    contentReady = Signal()   # report loaded and window sized to fit it
 
     def __init__(self):
         super(self.__class__, self).__init__()
@@ -88,7 +90,14 @@ class Stats(QMdiSubWindow, form_Stats.Ui_frmStats):
         scaleFactor  = self.mdiParent.scaleFactor
         has_photos   = getattr(self, "_has_photos", False)
         windowWidth  = int((1000 if has_photos else 640) * scaleFactor)
-        windowHeight = int(760 * scaleFactor)
+        # Windows renders the report taller (Segoe UI metrics), so the window
+        # is fitted to the measured content height after the page loads
+        # (_fitToContent).  Start ABOVE the real need on purpose: the fit can
+        # only shrink the window then, and the pre-fit layout never contains a
+        # scrollbar — Chromium's last hidden frame is what shows at reveal, so
+        # a scrollbar in it would briefly flash on screen before the renderer
+        # catches up.
+        windowHeight = int((830 if sys.platform == "win32" else 760) * scaleFactor)
         self.resize(windowWidth, windowHeight)
 
 
@@ -106,6 +115,12 @@ class Stats(QMdiSubWindow, form_Stats.Ui_frmStats):
         # This defers the expensive QtWebEngineProcess startup until the
         # Stats window is actually populated, keeping app launch fast.
         if self.webView is None:
+            # Size the window to its final dimensions BEFORE creating the view:
+            # Chromium lays the page out at the view's creation size, and while
+            # the window is hidden later resizes may never reach the renderer —
+            # a view created at the small Designer default gets a narrow,
+            # extra-tall layout that poisons _fitToContent's measurement.
+            self.scaleMe()
             self.webView = QWebEngineView(self)
             self.webView.setObjectName("webView")
             self.webView.page().setBackgroundColor(QColor("#1e1f26"))
@@ -114,10 +129,78 @@ class Stats(QMdiSubWindow, form_Stats.Ui_frmStats):
             windowWidth  = self.frameGeometry().width()
             windowHeight = self.frameGeometry().height()
             self.webView.setGeometry(5, 27, windowWidth - 10, windowHeight - 35)
+            self.webView.loadFinished.connect(self._fitToContent)
 
         self.setWindowTitle(filter.buildWindowTitle("Statistics", self.mdiParent.db))
         self.webView.setHtml(self._generateHtml(self._stats, self._has_photos, dark=True))
         return True
+
+
+    def _fitToContent(self, ok=True):
+        """Resize the window so the whole report fits without a scrollbar.
+
+        The report's rendered height varies with platform font metrics — the
+        Windows Segoe UI layout runs taller than the macOS one the 760px
+        design height was tuned for, and a fixed bump wasn't reliable either.
+        So on Windows, measure the report's actual height in the page and
+        size the window to it, capped to the MDI area.  Emits contentReady
+        when finished so a caller can reveal a hidden window only once it has
+        its final size (no visible resize jerk).
+
+        Two measurement subtleties: documentElement.scrollHeight is useless
+        here (it never reports less than the viewport, so the window could
+        only ever ratchet taller — measure the .grid element instead), and at
+        loadFinished the renderer may still be laid out at a stale window
+        size (scaleMe's resize propagates to Chromium asynchronously), so
+        measure → resize → re-measure until the height converges.
+        """
+        if not ok or sys.platform != "win32" or self.webView is None:
+            self.contentReady.emit()
+            return
+        self._fitAttempts = 0
+        self._measureContent()
+
+
+    def _measureContent(self):
+        js = ("(function(){"
+              "var g = document.querySelector('.grid');"
+              "if (!g) return 0;"
+              "return Math.ceil(g.getBoundingClientRect().bottom"
+              "                 + window.scrollY);"
+              "})()")
+        self.webView.page().runJavaScript(js, self._applyFit)
+
+
+    def _applyFit(self, gridBottom):
+        try:
+            gridBottom = int(gridBottom)
+        except (TypeError, ValueError):
+            gridBottom = 0
+        if gridBottom <= 0:
+            self.contentReady.emit()
+            return
+
+        # grid bottom + 20px body margin below it, then the webView chrome:
+        # view occupies (5, 27, w-10, h-35), i.e. 27px above it, 8px below.
+        target = gridBottom + 20 + 35 + 2
+        try:
+            mdiHeight = self.mdiParent.mdiArea.height()
+        except Exception:
+            self.contentReady.emit()
+            return
+        target = max(400, min(target, mdiHeight - 10))
+
+        if abs(target - self.height()) <= 4 or self._fitAttempts >= 3:
+            self.contentReady.emit()
+            return
+
+        self._fitAttempts += 1
+        self.resize(self.width(), target)
+        # keep the window vertically centered in the MDI area
+        self.move(self.x(), max(0, (mdiHeight - target) // 2))
+        # the layout we measured may have been for a stale window size —
+        # measure again and correct until stable
+        self._measureContent()
 
 
     def handlePhotoDeletion(self, filename):
@@ -619,6 +702,22 @@ class Stats(QMdiSubWindow, form_Stats.Ui_frmStats):
         if col3:
             col3 = col3.format(photo_catalog_note=photo_catalog_note)
 
+        # Fixed pixel width for the on-screen (dark) report.  While the Stats
+        # window is hidden, Chromium lays the page out with an unreliable
+        # viewport (widget sizes/resizes don't reach the renderer), so a fluid
+        # layout can be measured in a squeezed, extra-tall state.  With a fixed
+        # width matching the webView's final size, the layout — and therefore
+        # the height _fitToContent measures — is viewport-independent.  The
+        # light (PDF) variant keeps a fluid width for the print engine.
+        body_width_css = ""
+        if dark:
+            try:
+                sf = float(self.mdiParent.scaleFactor)
+            except (AttributeError, TypeError, ValueError):
+                sf = 1.0
+            view_w = int((1000 if has_photos else 640) * sf) - 10
+            body_width_css = f"width: {view_w - 40}px;"
+
         return f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8">
 <style>
@@ -627,6 +726,7 @@ class Stats(QMdiSubWindow, form_Stats.Ui_frmStats):
     color: {text};
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     margin: 20px;
+    {body_width_css}
   }}
   .grid {{
     display: grid;

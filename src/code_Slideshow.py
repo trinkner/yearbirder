@@ -1,4 +1,5 @@
 import os
+from code_Stylesheet import YBFont
 
 from PySide6.QtWidgets import (
     QDialog, QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
@@ -219,13 +220,13 @@ class SlideshowWindow(QWidget):
             detail_y  = top_pad + name_h - 7   # pull detail 7px closer to name
             detail_h  = BAR_H - detail_y
 
-            f1 = QFont("", 20, QFont.Weight.Bold)
+            f1 = QFont(YBFont, 20, QFont.Weight.Bold)
             painter.setFont(f1)
             painter.setPen(QColor("white"))
             painter.drawText(QRect(0, photo_area_h + top_pad, w, name_h),
                              Qt.AlignmentFlag.AlignCenter, species)
 
-            f2 = QFont("", 13)
+            f2 = QFont(YBFont, 13)
             painter.setFont(f2)
             painter.setPen(QColor(190, 190, 190))
             parts  = [p for p in (date, location, counter) if p]

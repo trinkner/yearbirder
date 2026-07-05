@@ -2,6 +2,7 @@
 
 # import the GUI forms that we create with Qt Creator
 import code_DataBase
+from code_Stylesheet import YBFont
 import code_BigReport
 import code_Stats
 import code_Filter
@@ -522,6 +523,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.actionBigReport:      QIcon(QPixmap(":/icon_tripreport_white.png")),
             self.actionStats:          QIcon(QPixmap(":/icon_datetotals_white.png")),
             self.actionPhotos:         QIcon(QPixmap(":/icon_camera_white.png")),
+            self.actionRecordingsToolbar: QIcon(QPixmap(":/icon_microphone_white.png")),
             self.actionFind:           QIcon(QPixmap(":/icon_find_white.png")),
             self.actionClearAllFilters:QIcon(QPixmap(":/icon_filter_white.png")),
         }
@@ -598,8 +600,10 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionCreatePDF.triggered.connect(self.CreatePDF)
         self.actionFamilies.triggered.connect(self.CreateFamilyPieChart)
         self.actionPhotos.triggered.connect(self.createPhotosReport)
+        self.actionRecordingsToolbar.triggered.connect(self.createRecordingsBrowser)
         self.actionPhotosByFilter.triggered.connect(self.createPhotosReport)
         self.actionSpeciesGallery.triggered.connect(self.createSpeciesGallery)
+        self.actionPhotosSpeciesGallery.triggered.connect(self.createPhotosBySpeciesBarChart)
         self.actionBigReport.triggered.connect(self.CreateBigReport)
         self.actionStats.triggered.connect(self.CreateStats)
         self.actionLocation.triggered.connect(self.CreateLocationReport)
@@ -679,7 +683,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionPhotoBar.triggered.connect(self.CreatePhotoBarChart)
         self.actionPhotoAccumulation.triggered.connect(self.CreatePhotoAccumulationChart)
         self.actionCumulativePhotos.triggered.connect(self.CreateCumulativePhotosChart)
-        self.actionRecordingsSpeciesGallery.triggered.connect(self.createRecordingsSpeciesGallery)
+        self.actionRecordingsSpeciesGallery.triggered.connect(self.createRecordingsBySpeciesBarChart)
         self.actionGeolocatedRecordings.triggered.connect(self.createGeolocatedRecordingsMap)
         self.actionAnimatedRecordingSequenceMap.triggered.connect(self.createAnimatedRecordingSequenceMap)
         self.actionYTDRecordings.triggered.connect(self.CreateYTDRecordings)
@@ -873,12 +877,15 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.setStyleSheet(code_Stylesheet.stylesheetBase)
         self.mdiArea.setBackground(code_Stylesheet.mdiAreaColor)
 
-        self.showMaximized()
         self.ScaleDisplay()
 
         self.progressOverlay = _ProgressOverlay(self)
-
-        self.processPreferences()
+        # The window is shown (showMaximized) and the eBird file is loaded
+        # (processPreferences) from main() AFTER the event loop starts — not here.
+        # Running that heavy synchronous load inside __init__, before app.exec(),
+        # made the maximized window briefly drop and re-assert on Windows (a
+        # "flash of the desktop").  Deferring it lets the window fully realise
+        # under the running event loop first.
 
         self.subWindowFocusOrder = []
         self._windowBeingClosed = None
@@ -959,6 +966,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         has_catalog = self.db.photoDataFileOpenFlag
         self.menuPhotos.menuAction().setVisible(has_catalog and self.db.hasPhotos())
         self.menuRecordings.menuAction().setVisible(has_catalog and self.db.hasRecordings())
+        # Toolbar Recordings button tracks the same condition as the menu.
+        self.actionRecordingsToolbar.setVisible(has_catalog and self.db.hasRecordings())
 
     def finishedProcessingPreferences(self):
         self.updateMyLocationButtons()
@@ -1010,14 +1019,14 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.fontSize = floor(11 * self.scaleFactor)
         MainWindow.fontSize = self.fontSize
         MainWindow.scaleFactor = self.scaleFactor
-        MainWindow.rowHeight = int(QFontMetrics(QFont("", MainWindow.fontSize)).boundingRect("2222-22-22").height() * 1.1)
+        MainWindow.rowHeight = int(QFontMetrics(QFont(YBFont, MainWindow.fontSize)).boundingRect("2222-22-22").height() * 1.1)
         
-        self.menuBar.setFont(QFont("", self.fontSize))
+        self.menuBar.setFont(QFont(YBFont, self.fontSize))
         for _menu in self.menuBar.findChildren(QMenu):
-            _menu.setFont(QFont("", self.fontSize))
+            _menu.setFont(QFont(YBFont, self.fontSize))
                         
         for a in self.toolBar.actions():
-            a.setFont(QFont("", self.fontSize))                    
+            a.setFont(QFont(YBFont, self.fontSize))                    
                 
         # scale the standard and photo filter docks
 
@@ -1040,19 +1049,21 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         for w in filterFrameChildren:
 
             if w.objectName()[0:3] == "cbo":
-                w.setFont(QFont("", self.fontSize))
+                # Height is deliberately NOT forced: the app stylesheet's
+                # QComboBox padding/min-height is the single sizing authority.
+                # The old 2×-line-height minimums (a vestige of the abandoned
+                # font-size slider) ballooned combos on Windows, where Segoe UI
+                # line metrics run much taller than the macOS system font.
+                w.setFont(QFont(YBFont, self.fontSize))
                 metrics = w.fontMetrics()
                 cboText = w.currentText()
                 if cboText == "":
                     cboText = "Dummy Text"
                 itemTextWidth = metrics.boundingRect(cboText).width()
-                itemTextHeight = metrics.height()  # full line height; independent of current text content
                 w.setMinimumWidth(floor(1.1 * itemTextWidth))
-                w.setMinimumHeight(floor(2 * itemTextHeight))
-                w.setMaximumHeight(16777215)  # QWIDGETSIZE_MAX — unconstrained
 
             if w.objectName()[0:3] == "lbl":
-                _boldFont = QFont("", self.fontSize)
+                _boldFont = QFont(YBFont, self.fontSize)
                 _boldFont.setBold(True)
                 w.setFont(_boldFont)
                 metrics = w.fontMetrics()
@@ -1065,7 +1076,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 w.resize(itemTextHeight, itemTextWidth)
 
             if w.objectName()[0:3] == "cal":
-                w.setFont(QFont("", self.fontSize))
+                w.setFont(QFont(YBFont, self.fontSize))
                 metrics = w.fontMetrics()
                 startDate = (
                             str(self.calStartDate.date().year())
@@ -1093,10 +1104,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.frmRecordingsSampleRateRange,
             ):
             w.setMinimumWidth(floor(2 * itemTextWidth))
-            w.setMinimumHeight(floor(2 * itemTextHeight))
-            w.setMaximumHeight(16777215)  # QWIDGETSIZE_MAX — unconstrained
 
-            
+
         self.scrMediaFilter.setMinimumHeight(0)
         self.scrMediaFilter.setMinimumWidth(int(2.5 * itemTextWidth))
         self.scrFilter.setMinimumWidth(int(2.5 * itemTextWidth))
@@ -1104,7 +1113,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         # Scale section header labels (excluded from filterFrameChildren to avoid
         # polluting itemTextWidth; scaled explicitly here instead).
         # Arrow rendered at 2x label size via inline HTML span.
-        _sectionFont = QFont("", self.fontSize)
+        _sectionFont = QFont(YBFont, self.fontSize)
         _sectionFont.setBold(True)
         _arrowPt = self.fontSize * 2
         self.lblPhotoSection.setFont(_sectionFont)
@@ -1420,9 +1429,19 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
             self.mdiArea.addSubWindow(sub)
             self.PositionChildWindow(sub, self)
-            sub.show()
 
-            QApplication.processEvents()
+            # Keep the window HIDDEN while its rows build: inserting hundreds
+            # of rows into a visible grid forces a relayout+repaint of the
+            # whole grid per row (O(N²) for large imports); built hidden it is
+            # a single layout pass at reveal.  The main window's gated progress
+            # overlay provides feedback whenever the load runs long.
+            def _revealManagePhotos():
+                sub.show()
+                self.mdiArea.setActiveSubWindow(sub)
+                sub.raise_()
+                sub.setFocus()
+            sub.contentReady.connect(_revealManagePhotos)
+
             QTimer.singleShot(20, lambda: sub.FillPhotosByFiles(unmatched_photos))
         else:
             QMessageBox.information(
@@ -1468,8 +1487,16 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             sub.resizeMe()
             self.mdiArea.addSubWindow(sub)
             self.PositionChildWindow(sub, self)
-            sub.show()
-            QApplication.processEvents()
+
+            # Keep the window HIDDEN while its rows build (see addPhotos); the
+            # gated overlay provides feedback whenever the load runs long.
+            def _revealManageRecordings():
+                sub.show()
+                self.mdiArea.setActiveSubWindow(sub)
+                sub.raise_()
+                sub.setFocus()
+            sub.contentReady.connect(_revealManageRecordings)
+
             QTimer.singleShot(20, lambda: sub.FillRecordingsByFiles(new_files))
         else:
             QMessageBox.information(
@@ -1618,35 +1645,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.cboStartRatingRange.setCurrentIndex(0)
         self.cboEndRatingRange.setCurrentIndex(0)
 
-        # Adding items via addItem() triggers Qt layout updates that can override
-        # the size constraints set by ScaleDisplay().  Re-apply them now so these
-        # comboboxes stay the same height as the rest of the filter.
-        cboHeight = floor(2 * QFontMetrics(QFont("", self.fontSize)).height())
-
-        for w in (
-            self.cboCamera,
-            self.cboLens,
-            self.cboStartShutterSpeedRange,
-            self.cboEndShutterSpeedRange,
-            self.cboStartApertureRange,
-            self.cboEndApertureRange,
-            self.cboStartIsoRange,
-            self.cboEndIsoRange,
-            self.cboStartFocalLengthRange,
-            self.cboEndFocalLengthRange,
-            ):
-            w.setMinimumHeight(cboHeight)
-            w.setMaximumHeight(16777215)  # QWIDGETSIZE_MAX — unconstrained
-
-        for w in (
-            self.frmShutterSpeedRange,
-            self.frmApertureRange,
-            self.frmIsoRange,
-            self.frmFocalLengthRange,
-            ):
-            w.setMinimumHeight(cboHeight)
-            w.setMaximumHeight(16777215)  # QWIDGETSIZE_MAX — unconstrained
-
 
     def fillRecordingsComboBoxes(self):
         # Populate only the catalog-derived comboboxes (duration, sample rate,
@@ -1681,7 +1679,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self._recordingsBitDepthLayout.removeWidget(chk)
             chk.deleteLater()
         self._bitDepthChecks = []
-        chkFont = QFont("", self.fontSize)
+        chkFont = QFont(YBFont, self.fontSize)
         for depth in self.db.bitDepthList:
             chk = QCheckBox(depth, self.frmRecordingsBitDepth)
             chk.setFont(chkFont)
@@ -1702,25 +1700,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.unhighlightFilterElement(self.cboRecordingsDevice)
         self.cboRecordingsDevice.setVisible(bool(self.db.deviceList))
         self.lblRecordingsDevice.setVisible(bool(self.db.deviceList))
-
-        cboHeight = floor(2 * QFontMetrics(QFont("", self.fontSize)).height())
-        for w in (
-            self.cboStartRecordingsRatingRange,
-            self.cboEndRecordingsRatingRange,
-            self.cboSpeciesHasRecording,
-            self.cboChannels,
-            self.cboStartRecordingsDurationRange,
-            self.cboEndRecordingsDurationRange,
-            self.cboStartRecordingsSampleRateRange,
-            self.cboEndRecordingsSampleRateRange,
-            self.cboRecordingsDevice,
-            ):
-            w.setMinimumHeight(cboHeight)
-            w.setMaximumHeight(16777215)
-        for w in (self.frmRecordingsRatingRange, self.frmRecordingsDurationRange,
-                  self.frmRecordingsSampleRateRange):
-            w.setMinimumHeight(cboHeight)
-            w.setMaximumHeight(16777215)
 
 
     def _togglePhotoSection(self):
@@ -1821,7 +1800,20 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
         self.mdiArea.addSubWindow(sub)
         self.PositionChildWindow(sub,  self)
-        sub.show()
+
+        # Keep the window HIDDEN while the grid builds (see addPhotos): on a
+        # visible window every processEvents during the build re-lays-out and
+        # repaints the growing grid, and each arriving thumbnail repaints its
+        # cell.  The gated overlay provides progress; reveal fully built.
+        # (contentReady also fires after re-sorts, hence the isVisible guard.)
+        def _revealPhotos():
+            if sub.isVisible():
+                return
+            sub.show()
+            self.mdiArea.setActiveSubWindow(sub)
+            sub.raise_()
+            sub.setFocus()
+        sub.contentReady.connect(_revealPhotos)
 
         if sub.FillPhotos(filter) is False:
 
@@ -2098,20 +2090,29 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 )
                 return
 
-        # create new Date Totals child window
+        # create new Manage Photos child window
         sub = code_ManagePhotos.ManagePhotos()
 
-        # save the MDI window as the parent for future use in the child        
-        sub.mdiParent = self 
-        
+        # save the MDI window as the parent for future use in the child
+        sub.mdiParent = self
+
         # call the child's routine to fill it with data
         if sub.FillPhotosByFilter(self.GetPhotoFilter()) is True:
 
-            # add and position the child to our MDI area
+            # add and position the child to our MDI area, but keep it HIDDEN
+            # until its rows have built (see addPhotos): the workers load
+            # thumbnails in parallel and contentReady fires when done, with
+            # the gated progress overlay providing feedback for slow loads.
             self.mdiArea.addSubWindow(sub)
             self.PositionChildWindow(sub,  self)
-            sub.show()            
-        
+
+            def _revealManagePhotos():
+                sub.show()
+                self.mdiArea.setActiveSubWindow(sub)
+                sub.raise_()
+                sub.setFocus()
+            sub.contentReady.connect(_revealManagePhotos)
+
         else:
 
             # abort since filter found no sightings for child
@@ -2130,7 +2131,16 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         if sub.FillRecordingsByFilter(self.GetRecordingsFilter()) is True:
             self.mdiArea.addSubWindow(sub)
             self.PositionChildWindow(sub, self)
-            sub.show()
+
+            # Keep the window HIDDEN while its rows build (see addPhotos); the
+            # gated overlay provides feedback whenever the load runs long.
+            def _revealManageRecordings():
+                sub.show()
+                self.mdiArea.setActiveSubWindow(sub)
+                sub.raise_()
+                sub.setFocus()
+            sub.contentReady.connect(_revealManageRecordings)
+
         else:
             self.CreateMessageNoResults()
             sub.close()
@@ -2918,21 +2928,33 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
         if sub.FillStats(code_Filter.Filter()) is True:
             self.mdiArea.addSubWindow(sub)
-            sub.show()
+            # Size and position while still HIDDEN.
             sub.scaleMe()
-            # center in the MDI area
             mdi_w = self.mdiArea.width()
             mdi_h = self.mdiArea.height()
             x = max(0, (mdi_w - sub.width()) // 2)
             y = max(0, (mdi_h - sub.height()) // 2)
             sub.move(x, y)
-            # Defer activation so any signals fired by photo loading
-            # (e.g. fillPhotoComboBoxes) don't re-raise another window on top.
-            QTimer.singleShot(0, lambda: (
-                self.mdiArea.setActiveSubWindow(sub),
-                sub.raise_(),
-                sub.setFocus(),
-            ))
+
+            # Reveal the window ONLY once its QWebEngineView has painted its dark
+            # content AND the window has been sized to fit it (contentReady, see
+            # Stats._fitToContent).  On Windows a QWebEngineView flashes a white
+            # frame while Chromium initialises; keeping the whole window hidden
+            # until then means that white init happens off-screen, so the user
+            # never sees it.  QTimer fallback in case the load never finishes.
+            def _revealStats(*_):
+                if sub.isVisible():
+                    return
+                # re-center: the fit may have changed the height set above
+                x = max(0, (self.mdiArea.width() - sub.width()) // 2)
+                y = max(0, (self.mdiArea.height() - sub.height()) // 2)
+                sub.move(x, y)
+                sub.show()
+                self.mdiArea.setActiveSubWindow(sub)
+                sub.raise_()
+                sub.setFocus()
+            sub.contentReady.connect(_revealStats)
+            QTimer.singleShot(2500, _revealStats)
         else:
             sub.close()
 
@@ -3654,7 +3676,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoResults()
             sub.close()
 
-    def createRecordingsSpeciesGallery(self):
+    def createRecordingsBySpeciesBarChart(self):
         if MainWindow.db.eBirdFileOpenFlag is not True:
             self.CreateMessageNoFile()
             return
@@ -3662,6 +3684,21 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         sub = code_Web.Web()
         sub.mdiParent = self
         if sub.loadAudioSpeciesGallery(filter) is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+
+    def createPhotosBySpeciesBarChart(self):
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+        filter = self.GetPhotoFilter()
+        sub = code_Web.Web()
+        sub.mdiParent = self
+        if sub.loadPhotoSpeciesGallery(filter) is True:
             self.mdiArea.addSubWindow(sub)
             self.PositionChildWindow(sub, self)
             sub.show()
@@ -4844,6 +4881,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionClose.setVisible(False)
         self.menuPhotos.menuAction().setVisible(False)
         self.menuRecordings.menuAction().setVisible(False)
+        self.actionRecordingsToolbar.setVisible(False)
         self._hidePhotoCatalogMenuItems()
 
 

@@ -1,5 +1,6 @@
 # import the GUI forms that we create with Qt Creator
 import form_Preferences
+from code_Stylesheet import YBFont
 
 from PySide6.QtGui import QFont
 
@@ -125,7 +126,7 @@ class Preferences(QMdiSubWindow, form_Preferences.Ui_frmPreferences):
             self.tabWidget,
         ]):
             try:
-                w.setFont(QFont("", fontSize))
+                w.setFont(QFont(YBFont, fontSize))
             except:
                 pass
 

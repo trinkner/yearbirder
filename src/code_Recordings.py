@@ -1,4 +1,5 @@
 import form_Recordings
+from code_Stylesheet import YBFont
 from code_ManageRecordings import SpectrogramLabel   # UI widget stays in its module
 from code_Audio import (
     build_spectrogram_pixmap as _build_spectrogram_pixmap,
@@ -53,7 +54,8 @@ class threadLoadSpectrogram(QThread):
 
             # Tier 2: on-disk spectrogram cache (tier 1 is the in-memory
             # spectroCache, checked before a file is queued here).
-            img = code_ThumbnailCache.load(audioFile, "spectro_thumb")
+            img = code_ThumbnailCache.load(audioFile, "spectro_thumb",
+                                           code_ThumbnailCache.SPECTRO_THUMB_VARIANT)
             if img is not None and not img.isNull():
                 # Cached image already has the axes baked in.
                 pixmap = QPixmap.fromImage(img)
@@ -206,23 +208,23 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
         scaleFactor = self.mdiParent.scaleFactor
         for w in self.children():
             try:
-                w.setFont(QFont("", fontSize))
+                w.setFont(QFont(YBFont, fontSize))
             except Exception:
                 pass
-        self.lblLocation.setFont(QFont("", floor(fontSize * 1.4)))
+        self.lblLocation.setFont(QFont(YBFont, floor(fontSize * 1.4)))
         self.lblLocation.setStyleSheet("QLabel { font: bold }")
-        self.lblDateRange.setFont(QFont("", floor(fontSize * 1.2)))
+        self.lblDateRange.setFont(QFont(YBFont, floor(fontSize * 1.2)))
         self.lblDateRange.setStyleSheet("QLabel { font: bold }")
-        self.lblDetails.setFont(QFont("", floor(fontSize * 1.2)))
+        self.lblDetails.setFont(QFont(YBFont, floor(fontSize * 1.2)))
         self.lblDetails.setStyleSheet("QLabel { font: bold }")
-        self.lblSpecies.setFont(QFont("", fontSize))
-        self.lblSortBy.setFont(QFont("", fontSize))
-        self.rdoSortSpecies.setFont(QFont("", fontSize))
-        self.rdoSortDate.setFont(QFont("", fontSize))
-        self.rdoSortRating.setFont(QFont("", fontSize))
-        self.rdoSortTaxonomy.setFont(QFont("", fontSize))
+        self.lblSpecies.setFont(QFont(YBFont, fontSize))
+        self.lblSortBy.setFont(QFont(YBFont, fontSize))
+        self.rdoSortSpecies.setFont(QFont(YBFont, fontSize))
+        self.rdoSortDate.setFont(QFont(YBFont, fontSize))
+        self.rdoSortRating.setFont(QFont(YBFont, fontSize))
+        self.rdoSortTaxonomy.setFont(QFont(YBFont, fontSize))
         for c in self.layLists.findChildren(QLabel):
-            c.setFont(QFont("", fontSize))
+            c.setFont(QFont(YBFont, fontSize))
         windowWidth = int(800 * scaleFactor)
         if len(self.audioList) == 1:
             windowHeight = int(400 * scaleFactor)
@@ -470,8 +472,9 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
             fileName = a.get("fileName", "")
 
             # ── Col 0: spectrogram + scrubber ──────────────────────────────────
+            # Same display geometry as the Photos browser thumbnails.
             visContainer = QWidget()
-            visContainer.setFixedWidth(500)
+            visContainer.setFixedWidth(code_ThumbnailCache.THUMB_DISPLAY_SIZE.width())
             visLayout = QVBoxLayout(visContainer)
             visLayout.setContentsMargins(0, 0, 0, 0)
             visLayout.setSpacing(2)
@@ -545,8 +548,11 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
 
             # One container widget per row in a QVBoxLayout (avoids the grid's
             # ~524k-px height cap that squashed rows past ~1,600 recordings).
+            # Row height = photo-thumbnail height + the Play/scrubber strip
+            # (28px + 2px spacing) beneath the spectrogram.
             rowWidget = QWidget()
-            rowWidget.setMinimumHeight(330)
+            rowWidget.setMinimumHeight(
+                code_ThumbnailCache.THUMB_DISPLAY_SIZE.height() + 30)
             rowLayout = QHBoxLayout(rowWidget)
             rowLayout.setContentsMargins(0, 0, 0, 0)
             rowLayout.setSpacing(2)
@@ -610,7 +616,8 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
                 if axesPending:
                     _paint_spectro_axes(pixmap, duration, sr)
                     code_ThumbnailCache.store(
-                        audioFile, pixmap.toImage(), "spectro_thumb")
+                        audioFile, pixmap.toImage(), "spectro_thumb",
+                        code_ThumbnailCache.SPECTRO_THUMB_VARIANT)
                 self.spectroCache[audioFile] = (pixmap, ax_bbox)
                 lbl = self._spectroLabels.get(row)
                 if lbl:

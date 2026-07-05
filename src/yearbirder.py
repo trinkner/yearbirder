@@ -44,6 +44,7 @@ from PySide6.QtWidgets import (
     )
 
 from PySide6.QtGui import QFont, QPalette, QColor
+from PySide6.QtCore import QTimer, Qt
 
 
 def _force_macos_dark_appearance():
@@ -83,7 +84,128 @@ def _force_macos_dark_appearance():
         pass
 
 
+def _install_webengine_scrollbar_style():
+    """Give every web view dark scrollbars matching the app theme (Windows only).
+
+    Chromium draws native scrollbars for page content: auto-hiding dark overlay
+    ones on macOS, but classic opaque white ones on Windows — glaring inside the
+    dark web-based windows (Statistics, Recordings by Species, maps, ...).  The
+    many HTML templates across the app don't each need ::-webkit-scrollbar rules:
+    a QWebEngineScript on the default profile injects one <style> into every
+    page any view loads.  Kept off macOS so its overlay scrollbars stay native
+    (styling ::-webkit-scrollbar would make them permanently visible).
+    """
+    if sys.platform != "win32":
+        return
+    try:
+        from PySide6.QtWebEngineCore import QWebEngineProfile, QWebEngineScript
+        css = (
+            "::-webkit-scrollbar { width:12px; height:12px; background:transparent; }"
+            "::-webkit-scrollbar-thumb { background:#4a4e5e; border-radius:6px; }"
+            "::-webkit-scrollbar-thumb:hover { background:#636878; }"
+            "::-webkit-scrollbar-corner { background:transparent; }"
+        )
+        js = (
+            "(function() {"
+            "  var s = document.createElement('style');"
+            "  s.textContent = '%s';"
+            "  (document.head || document.documentElement).appendChild(s);"
+            "})();" % css
+        )
+        script = QWebEngineScript()
+        script.setName("yearbirderScrollbars")
+        script.setSourceCode(js)
+        script.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentReady)
+        script.setWorldId(QWebEngineScript.ScriptWorldId.ApplicationWorld)
+        script.setRunsOnSubFrames(True)
+        QWebEngineProfile.defaultProfile().scripts().insert(script)
+    except Exception:
+        pass
+
+
+def _warm_up_webengine(form):
+    """Create the process's first QWebEngineView while the main window is still
+    hidden (Windows only).
+
+    Embedding the first web view switches the top-level window from raster to
+    GPU composition, and Qt destroys and recreates the native window to make
+    that switch.  When it happens while the window is visible — the Stats
+    report auto-opening after the data load — the app momentarily vanishes to
+    the desktop with a white flash (AA_ShareOpenGLContexts alone did not
+    prevent this; the recreation is about the window's surface type, not GL
+    context sharing).  A tiny web view parented to the not-yet-shown main
+    window forces the one-time switch to happen while nothing is on screen.
+
+    The view must be a CHILD of the main window: an earlier warm-up attempt
+    with a top-level web view made things worse (top-level web views flash
+    white on Windows even when never shown).  Chromium starting at launch
+    costs nothing extra here — the Stats window (a web view) auto-opens right
+    after the data load anyway.
+    """
+    if sys.platform != "win32":
+        return
+    try:
+        from PySide6.QtWebEngineWidgets import QWebEngineView
+        view = QWebEngineView(form)
+        view.setFixedSize(1, 1)
+        view.move(-10, -10)   # clipped away inside the parent
+        view.setHtml("")      # force page/render-widget creation now
+        form._webengineWarmup = view  # keep alive for the app's lifetime
+    except Exception:
+        pass
+
+
+def _prepare_windows_first_frame(form):
+    """Make the very first frame Windows shows for the main window dark.
+
+    On Windows the native top-level window becomes visible before Qt paints
+    into it: the title bar is drawn by DWM in the system (light) theme, and the
+    client area is filled with the window class's background brush — which is
+    white — producing a brief white flash at launch before the dark palette
+    takes over.  Neither is controllable from Qt's paint pipeline, so fix both
+    at the Win32 level before the window is shown:
+
+    - DWMWA_USE_IMMERSIVE_DARK_MODE → dark title bar from the first frame
+      (attribute 20 on Windows 10 20H1+, 19 on older 1809+ builds).
+    - GCLP_HBRBACKGROUND → dark class background brush, so the pre-first-paint
+      fill matches the app background (#2b2d38) instead of white.  Qt shares
+      one window class across all its top-level windows, so this also covers
+      any later native windows in the process.
+    """
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+        hwnd = int(form.winId())  # forces native window creation now
+
+        value = ctypes.c_int(1)
+        for attr in (20, 19):
+            if ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                    ctypes.c_void_p(hwnd), attr,
+                    ctypes.byref(value), ctypes.sizeof(value)) == 0:
+                break
+
+        user32 = ctypes.windll.user32
+        user32.SetClassLongPtrW.restype = ctypes.c_void_p
+        user32.SetClassLongPtrW.argtypes = [ctypes.c_void_p, ctypes.c_int,
+                                            ctypes.c_void_p]
+        GCLP_HBRBACKGROUND = -10
+        # COLORREF is 0x00BBGGRR: #2b2d38 → 0x00382D2B
+        brush = ctypes.windll.gdi32.CreateSolidBrush(0x00382D2B)
+        user32.SetClassLongPtrW(ctypes.c_void_p(hwnd), GCLP_HBRBACKGROUND,
+                                ctypes.c_void_p(brush))
+    except Exception:
+        pass
+
+
 def main():
+    # QtWebEngine's documented requirement: OpenGL context sharing must be
+    # enabled BEFORE the QApplication is created so web views can share GL
+    # resources with Qt's rendering.  (Note: this alone does NOT prevent the
+    # Windows window-recreation flash when the first web view is embedded —
+    # that is handled by _warm_up_webengine below.)
+    QApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
+
     app = QApplication(sys.argv)
 
     # Stable app name → stable per-platform cache/data locations
@@ -94,6 +216,14 @@ def main():
 
     font = app.font()
     font.setPointSize(10)
+    # On Windows the stock default family resolves to the legacy "MS Sans Serif"
+    # bitmap font, which DirectWrite cannot load — it spams CreateFontFaceFromHDC
+    # errors and forces an ugly fallback (and is why QFont("") looked wrong on
+    # Windows).  Use the real Windows UI font, and redirect any lingering
+    # MS Sans Serif request (e.g. from empty-family QFont("")) to it.
+    if sys.platform == "win32":
+        font.setFamily("Segoe UI")
+        QFont.insertSubstitution("MS Sans Serif", "Segoe UI")
     app.setFont(font)
 
     palette = app.palette()
@@ -125,10 +255,43 @@ def main():
     app.setStyleSheet(code_Stylesheet.stylesheetBase)
     _force_macos_dark_appearance()
 
-    form = code_MainWindow.MainWindow()
-    form.show()
+    _install_webengine_scrollbar_style()
 
-    # form.processPreferences()
+    form = code_MainWindow.MainWindow()
+    _warm_up_webengine(form)          # raster→GPU window switch while hidden
+    _prepare_windows_first_frame(form)
+
+    # Show the window exactly once, then load the eBird file only after the event
+    # loop is running, so the maximized window is fully realised before the heavy
+    # synchronous load.  Doing the load inside __init__ (before app.exec) made
+    # the window drop and re-assert on Windows — a desktop flash.  The progress
+    # overlay is a child of the now-visible window, so it still shows during the
+    # load.
+    if sys.platform == "win32":
+        # The native window's initial (white) surface reaches the screen before
+        # Qt's first paint.  DWM cloaking could not stop it — the cloak sticks to
+        # one HWND, and Qt may recreate the native window during show (the
+        # raster→GPU switch from the WebEngine warm-up), silently shedding it.
+        # Window opacity lives in Qt's own window state and is re-applied to any
+        # recreated native window, so it survives that.  Show fully transparent,
+        # give the event loop a moment to expose the window, force a paint so
+        # the surface provably holds the dark UI, then reveal and start the
+        # load.  The reveal is in a finally so the window can never stay
+        # invisible.
+        form.setWindowOpacity(0.0)
+        form.showMaximized()
+
+        def _revealThenLoad():
+            try:
+                form.repaint()
+            finally:
+                form.setWindowOpacity(1.0)
+            QTimer.singleShot(0, form.processPreferences)
+
+        QTimer.singleShot(50, _revealThenLoad)
+    else:
+        form.showMaximized()
+        QTimer.singleShot(0, form.processPreferences)
 
     app.exec()
 

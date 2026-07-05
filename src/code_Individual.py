@@ -1,5 +1,6 @@
 # import the GUI forms that we create with Qt Creator
 import form_Individual
+from code_Stylesheet import YBFont
 import code_Filter 
 import code_Lists 
 import code_Location 
@@ -887,16 +888,16 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
         #scale the font for all widgets in window
         for w in self.children():
             try:
-                w.setFont(QFont("", fontSize))
+                w.setFont(QFont(YBFont, fontSize))
             except:
                 pass 
         
-        baseFont = QFont(QFont("", fontSize))
-        commonFont = QFont(QFont("", floor(fontSize * 1.4)))
+        baseFont = QFont(QFont(YBFont, fontSize))
+        commonFont = QFont(QFont(YBFont, floor(fontSize * 1.4)))
         commonFont.setBold(True)
-        scientificFont=  QFont(QFont("", floor(fontSize * 1.2)))
+        scientificFont=  QFont(QFont(YBFont, floor(fontSize * 1.2)))
         scientificFont.setItalic(True)
-        detailFont = QFont("", fontSize + 1)
+        detailFont = QFont(YBFont, fontSize + 1)
         self.lblCommonName.setFont(commonFont)
         self.lblScientificName.setFont(scientificFont)
         self.lblOrderName.setFont(detailFont)

@@ -27,7 +27,8 @@ from matplotlib.figure import Figure
 # App colour palette (matches code_Stylesheet.py)
 from code_Stylesheet import (CHART_PRIMARY, CHART_SECONDARY,
                              PHOTO_PRIMARY, PHOTO_SECONDARY,
-                             RECORDINGS_PRIMARY, RECORDINGS_SECONDARY)
+                             RECORDINGS_PRIMARY, RECORDINGS_SECONDARY,
+                             YBFont)
 _BG_COLOR     = "#1e1f26"
 _AXES_COLOR   = "#252730"
 _TEXT_COLOR   = "#e2e4ec"
@@ -187,15 +188,15 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
 
         for w in self.children():
             try:
-                w.setFont(QFont("", fontSize))
+                w.setFont(QFont(YBFont, fontSize))
             except Exception:
                 pass
 
-        self.lblLocation.setFont(QFont("", floor(fontSize * 1.4)))
+        self.lblLocation.setFont(QFont(YBFont, floor(fontSize * 1.4)))
         self.lblLocation.setStyleSheet("QLabel { font: bold }")
-        self.lblDateRange.setFont(QFont("", floor(fontSize * 1.2)))
+        self.lblDateRange.setFont(QFont(YBFont, floor(fontSize * 1.2)))
         self.lblDateRange.setStyleSheet("QLabel { font: bold }")
-        self.lblDetails.setFont(QFont("", floor(fontSize * 1.2)))
+        self.lblDetails.setFont(QFont(YBFont, floor(fontSize * 1.2)))
         self.lblDetails.setStyleSheet("QLabel { font: bold }")
 
         windowWidth  = int(800 * scaleFactor)
@@ -3838,7 +3839,8 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         fig = Figure(facecolor=_BG_COLOR)
         ax  = fig.add_subplot(111, facecolor=_BG_COLOR)
 
-        # Build a colour cycle — blue/teal for standard charts, amber/gold for photo charts
+        # Build a colour cycle — blue/teal for standard charts, amber/gold for
+        # photo charts, green for recording charts (matches the thematic accents)
         n = len(families)
         colors = []
         if self._bar_color == PHOTO_PRIMARY:
@@ -3846,6 +3848,12 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
                 hue = (0.12 + i * 0.10 / max(n, 1)) % 1.0   # sweep golden yellow → yellow-green
                 sat = 0.60 + 0.25 * (i % 2)
                 val = 0.60 + 0.25 * ((i // 2) % 2)
+                colors.append(colorsys.hsv_to_rgb(hue, sat, val))
+        elif self._bar_color == RECORDINGS_PRIMARY:
+            for i in range(n):
+                hue = (0.32 + i * 0.13 / max(n, 1)) % 1.0   # sweep green → teal-green
+                sat = 0.55 + 0.25 * (i % 2)
+                val = 0.55 + 0.25 * ((i // 2) % 2)
                 colors.append(colorsys.hsv_to_rgb(hue, sat, val))
         else:
             for i in range(n):

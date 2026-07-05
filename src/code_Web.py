@@ -11,7 +11,7 @@ try:
 except ImportError:
     _SSL_CTX = ssl.create_default_context()
 
-from code_Stylesheet import CHART_PRIMARY
+from code_Stylesheet import CHART_PRIMARY, PHOTO_PRIMARY, RECORDINGS_PRIMARY
 
 # import the GUI forms that we create with Qt Creator
 import form_Web
@@ -341,6 +341,35 @@ class _AudioGalleryBridge(QObject):
         main.PositionChildWindow(sub, self._web)
         sub.show()
         sub.FillRecordings(new_filter)
+
+
+class _PhotoGalleryBridge(QObject):
+    """JS→Python bridge for the Photo Species Gallery.
+
+    Clicking a species row calls speciesClicked(species) which opens
+    the photo browser filtered to that species.
+    """
+
+    def __init__(self, web_window, base_filter):
+        super().__init__()
+        self._web    = web_window
+        self._filter = base_filter
+
+    @Slot(str)
+    def speciesClicked(self, species):
+        import code_Photos
+        from copy import deepcopy
+        new_filter = deepcopy(self._filter)
+        new_filter.setSpeciesName(species)
+        main = self._web.mdiParent
+        if not main.db.GetSightingsWithPhotos(new_filter):
+            return
+        sub = code_Photos.Photos()
+        sub.mdiParent = main
+        main.mdiArea.addSubWindow(sub)
+        main.PositionChildWindow(sub, self._web)
+        sub.show()
+        sub.FillPhotos(new_filter)
 
 
 class GeolocatedRecordingsBridge(QObject):
@@ -3067,7 +3096,7 @@ document.addEventListener("DOMContentLoaded", function() {{
     var tipDiv = document.createElement('div');
     tipDiv.style.cssText = (
         'position:fixed; display:none; pointer-events:none; z-index:9999;' +
-        'background:#252730; color:#e2e4ec; border:2px solid {CHART_PRIMARY};' +
+        'background:#252730; color:#e2e4ec; border:2px solid {PHOTO_PRIMARY};' +
         'border-radius:8px; padding:10px 12px; font-family:sans-serif;' +
         'box-shadow:0 4px 20px rgba(0,0,0,0.55);'
     );
@@ -3329,7 +3358,7 @@ document.addEventListener("DOMContentLoaded", function() {{
             '<div style="opacity:1; width:160px; display:flex; flex-direction:column;' +
                 'align-items:center; cursor:pointer; transition:opacity 0.2s;">' +
                 '<div style="width:160px; background:#252730;' +
-                    'border:2px solid {CHART_PRIMARY}; border-radius:6px;' +
+                    'border:2px solid {PHOTO_PRIMARY}; border-radius:6px;' +
                     'overflow:hidden; box-shadow:0 3px 10px rgba(0,0,0,0.55);' +
                     'font-family:sans-serif; line-height:1.3;">' +
                     '<img src="' + p.img + '" ' +
@@ -3346,7 +3375,7 @@ document.addEventListener("DOMContentLoaded", function() {{
                 '<div style="width:0; height:0;' +
                      'border-left:10px solid transparent;' +
                      'border-right:10px solid transparent;' +
-                     'border-top:12px solid {CHART_PRIMARY};' +
+                     'border-top:12px solid {PHOTO_PRIMARY};' +
                      'margin-top:-1px;"></div>' +
             '</div>'
         );
@@ -3475,7 +3504,7 @@ document.addEventListener("DOMContentLoaded", function() {{
         photos.forEach(function(p) {{
             var dot = L.circleMarker([p.lat, p.lon], {{
                 radius:      6,
-                fillColor:   '{CHART_PRIMARY}',
+                fillColor:   '{PHOTO_PRIMARY}',
                 color:       '#ffffff',
                 weight:      1.5,
                 opacity:     0,
@@ -3585,7 +3614,7 @@ document.addEventListener("DOMContentLoaded", function() {{
     var tipDiv = document.createElement('div');
     tipDiv.style.cssText = (
         'position:fixed; display:none; pointer-events:none; z-index:9999;' +
-        'background:#252730; color:#e2e4ec; border:2px solid {CHART_PRIMARY};' +
+        'background:#252730; color:#e2e4ec; border:2px solid {RECORDINGS_PRIMARY};' +
         'border-radius:8px; padding:10px 12px; font-family:sans-serif;' +
         'box-shadow:0 4px 20px rgba(0,0,0,0.55);'
     );
@@ -3867,7 +3896,7 @@ document.addEventListener("DOMContentLoaded", function() {{
         if (!map) {{ setTimeout(init, 150); return; }}
         recs.forEach(function(r) {{
             var dot = L.circleMarker([r.lat, r.lon], {{
-                radius: 6, fillColor: '{CHART_PRIMARY}',
+                radius: 6, fillColor: '{RECORDINGS_PRIMARY}',
                 color: '#ffffff', weight: 1.5, opacity: 0, fillOpacity: 0,
             }});
             dot.on('click', function() {{
@@ -3930,8 +3959,11 @@ document.addEventListener("DOMContentLoaded", function() {{
 
         species_order.sort(key=lambda sp: species_taxo[sp])
 
-        rows_data = [{"species": sp, "count": species_count[sp]}
-                     for sp in species_order]
+        # rank = 1-based taxonomic position; travels with the species so the
+        # "#" column stays meaningful (and sortable back to taxonomic order)
+        # regardless of the active sort.
+        rows_data = [{"species": sp, "count": species_count[sp], "rank": i + 1}
+                     for i, sp in enumerate(species_order)]
         rows_js = json.dumps(rows_data, ensure_ascii=False)
 
         channel = QWebChannel(self.webView.page())
@@ -3963,7 +3995,12 @@ document.addEventListener("DOMContentLoaded", function() {{
   td {{ padding:7px 14px; border-bottom:1px solid #2a2b35; }}
   td.num {{ text-align:right; color:{CHART_PRIMARY}; font-variant-numeric:tabular-nums; }}
   td.bar-cell {{ width:180px; padding-right:14px; }}
-  .bar {{ height:10px; background:{CHART_PRIMARY}; border-radius:3px; min-width:2px; }}
+  .bar {{ height:10px; background:{RECORDINGS_PRIMARY}; border-radius:3px; min-width:2px; }}
+  th.sortable {{ cursor:pointer; user-select:none; }}
+  th.sortable:hover {{ color:#c3c6d4; }}
+  th.num-h {{ text-align:right; }}
+  th.prop-h {{ width:180px; }}
+  th .arr {{ font-size:9px; margin-left:5px; color:{CHART_PRIMARY}; }}
 </style>
 </head><body>
 <div id="header">
@@ -3972,7 +4009,10 @@ document.addEventListener("DOMContentLoaded", function() {{
 </div>
 <table>
   <thead><tr>
-    <th>#</th><th>Species</th><th style="text-align:right">Recordings</th><th>Proportion</th>
+    <th class="sortable" data-key="rank">Tax<span class="arr"></span></th>
+    <th class="sortable" data-key="species">Species<span class="arr"></span></th>
+    <th class="sortable num-h" data-key="count">Recordings<span class="arr"></span></th>
+    <th class="prop-h"></th>
   </tr></thead>
   <tbody id="tbody"></tbody>
 </table>
@@ -3984,29 +4024,246 @@ new QWebChannel(qt.webChannelTransport, function(ch) {{
 var rows = {rows_js};
 var maxCount = Math.max.apply(null, rows.map(function(r) {{ return r.count; }}));
 var tbody = document.getElementById('tbody');
-rows.forEach(function(r, i) {{
-  var tr = document.createElement('tr');
-  tr.className = 'sp-row';
-  var pct = maxCount > 0 ? (r.count / maxCount * 170) : 0;
-  tr.innerHTML = (
-    '<td>' + (i + 1) + '</td>' +
-    '<td>' + r.species + '</td>' +
-    '<td class="num">' + r.count + '</td>' +
-    '<td class="bar-cell"><div class="bar" style="width:' + Math.round(pct) + 'px"></div></td>'
-  );
-  tr.addEventListener('click', function() {{
-    if (window.galleryBridge) window.galleryBridge.speciesClicked(r.species);
+var sortKey = 'rank', sortDir = 1;   // 1 = ascending, -1 = descending
+
+function render(data) {{
+  tbody.innerHTML = '';
+  data.forEach(function(r) {{
+    var tr = document.createElement('tr');
+    tr.className = 'sp-row';
+    var pct = maxCount > 0 ? (r.count / maxCount * 170) : 0;
+    tr.innerHTML = (
+      '<td>' + r.rank + '</td>' +
+      '<td>' + r.species + '</td>' +
+      '<td class="num">' + r.count + '</td>' +
+      '<td class="bar-cell"><div class="bar" style="width:' + Math.round(pct) + 'px"></div></td>'
+    );
+    tr.addEventListener('click', function() {{
+      if (window.galleryBridge) window.galleryBridge.speciesClicked(r.species);
+    }});
+    tbody.appendChild(tr);
   }});
-  tbody.appendChild(tr);
-}});
+}}
+
+function updateArrows() {{
+  var ths = document.querySelectorAll('th.sortable');
+  for (var i = 0; i < ths.length; i++) {{
+    var span = ths[i].querySelector('.arr');
+    span.textContent = (ths[i].getAttribute('data-key') === sortKey)
+      ? (sortDir === 1 ? '▲' : '▼') : '';
+  }}
+}}
+
+function applySort() {{
+  var data = rows.slice();
+  data.sort(function(a, b) {{
+    if (sortKey === 'species') return a.species.localeCompare(b.species) * sortDir;
+    return (a[sortKey] - b[sortKey]) * sortDir;
+  }});
+  render(data);
+  updateArrows();
+}}
+
+var headers = document.querySelectorAll('th.sortable');
+for (var h = 0; h < headers.length; h++) {{
+  headers[h].addEventListener('click', function() {{
+    var key = this.getAttribute('data-key');
+    if (key === sortKey) {{
+      sortDir = -sortDir;
+    }} else {{
+      sortKey = key;
+      sortDir = (key === 'count') ? -1 : 1;   // numbers most-first by default
+    }}
+    applySort();
+  }});
+}}
+
+applySort();
 </script>
 </body></html>"""
 
         self._galleryBridge = _AudioGalleryBridge(self, filter)
         channel.registerObject("galleryBridge", self._galleryBridge)
 
+        # Paint the page's backing store in the theme colour so there is no
+        # white flash before the HTML renders (matches the <body> background).
+        from PySide6.QtGui import QColor
+        self.webView.page().setBackgroundColor(QColor("#1e1f26"))
         self.webView.setHtml(html)
         self._buildFilterTitle(filter, "Recordings by Species",
+                               count=total_species, countUnit="Species")
+        return True
+
+
+    def loadPhotoSpeciesGallery(self, filter):
+        """HTML table of species with photos, in taxonomic order.
+
+        Clicking a species row opens the photo browser filtered to that species.
+        """
+        from copy import deepcopy
+        import json
+
+        self.title = "Photos by Species"
+        self.filter = deepcopy(filter)
+
+        photoSightings = self.mdiParent.db.GetSightingsWithPhotos(filter)
+        if not photoSightings:
+            return False
+
+        # Count photos per species (applying the per-photo filter so the counts
+        # match the browser), preserving taxonomic order.
+        species_order = []
+        species_count = {}
+        species_taxo  = {}
+        for s in photoSightings:
+            n = sum(1 for p in s.get("photos", [])
+                    if self.mdiParent.db.TestIndividualPhoto(p, filter))
+            if n == 0:
+                continue
+            sp = s["commonName"]
+            if sp not in species_count:
+                species_order.append(sp)
+                species_count[sp] = 0
+                species_taxo[sp]  = float(s.get("taxonomicOrder", 0))
+            species_count[sp] += n
+
+        if not species_order:
+            return False
+
+        species_order.sort(key=lambda sp: species_taxo[sp])
+
+        # rank = 1-based taxonomic position; travels with the species so the
+        # "Tax" column stays meaningful (and sortable back to taxonomic order)
+        # regardless of the active sort.
+        rows_data = [{"species": sp, "count": species_count[sp], "rank": i + 1}
+                     for i, sp in enumerate(species_order)]
+        rows_js = json.dumps(rows_data, ensure_ascii=False)
+
+        channel = QWebChannel(self.webView.page())
+        self.webView.page().setWebChannel(channel)
+
+        qwc_file = QFile(":/qtwebchannel/qwebchannel.js")
+        qwc_file.open(QIODevice.OpenModeFlag.ReadOnly)
+        qwc_js = bytes(qwc_file.readAll()).decode("utf-8")
+        qwc_file.close()
+
+        total_photos  = sum(species_count.values())
+        total_species = len(species_order)
+
+        html = f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>
+  body {{ margin:0; padding:0; background:#1e1f26; color:#e2e4ec;
+          font-family:sans-serif; font-size:13px; }}
+  #header {{ padding:10px 14px 8px; background:#252730;
+             border-bottom:1px solid #333; display:flex; align-items:baseline; gap:16px; }}
+  #header h2 {{ margin:0; font-size:15px; font-weight:600; }}
+  #header .sub {{ font-size:12px; color:#8b8fa8; }}
+  table {{ width:100%; border-collapse:collapse; }}
+  th {{ position:sticky; top:0; background:#252730; padding:6px 14px;
+        text-align:left; font-size:11px; color:#8b8fa8; letter-spacing:0.05em;
+        text-transform:uppercase; border-bottom:1px solid #333; }}
+  tr.sp-row {{ cursor:pointer; }}
+  tr.sp-row:hover td {{ background:#2e3040; }}
+  td {{ padding:7px 14px; border-bottom:1px solid #2a2b35; }}
+  td.num {{ text-align:right; color:{CHART_PRIMARY}; font-variant-numeric:tabular-nums; }}
+  td.bar-cell {{ width:180px; padding-right:14px; }}
+  .bar {{ height:10px; background:{PHOTO_PRIMARY}; border-radius:3px; min-width:2px; }}
+  th.sortable {{ cursor:pointer; user-select:none; }}
+  th.sortable:hover {{ color:#c3c6d4; }}
+  th.num-h {{ text-align:right; }}
+  th.prop-h {{ width:180px; }}
+  th .arr {{ font-size:9px; margin-left:5px; color:{CHART_PRIMARY}; }}
+</style>
+</head><body>
+<div id="header">
+  <h2>Photos by Species</h2>
+  <span class="sub">{total_species} species &nbsp;·&nbsp; {total_photos} photos</span>
+</div>
+<table>
+  <thead><tr>
+    <th class="sortable" data-key="rank">Tax<span class="arr"></span></th>
+    <th class="sortable" data-key="species">Species<span class="arr"></span></th>
+    <th class="sortable num-h" data-key="count">Photos<span class="arr"></span></th>
+    <th class="prop-h"></th>
+  </tr></thead>
+  <tbody id="tbody"></tbody>
+</table>
+<script>
+{qwc_js}
+new QWebChannel(qt.webChannelTransport, function(ch) {{
+    window.galleryBridge = ch.objects.galleryBridge;
+}});
+var rows = {rows_js};
+var maxCount = Math.max.apply(null, rows.map(function(r) {{ return r.count; }}));
+var tbody = document.getElementById('tbody');
+var sortKey = 'rank', sortDir = 1;   // 1 = ascending, -1 = descending
+
+function render(data) {{
+  tbody.innerHTML = '';
+  data.forEach(function(r) {{
+    var tr = document.createElement('tr');
+    tr.className = 'sp-row';
+    var pct = maxCount > 0 ? (r.count / maxCount * 170) : 0;
+    tr.innerHTML = (
+      '<td>' + r.rank + '</td>' +
+      '<td>' + r.species + '</td>' +
+      '<td class="num">' + r.count + '</td>' +
+      '<td class="bar-cell"><div class="bar" style="width:' + Math.round(pct) + 'px"></div></td>'
+    );
+    tr.addEventListener('click', function() {{
+      if (window.galleryBridge) window.galleryBridge.speciesClicked(r.species);
+    }});
+    tbody.appendChild(tr);
+  }});
+}}
+
+function updateArrows() {{
+  var ths = document.querySelectorAll('th.sortable');
+  for (var i = 0; i < ths.length; i++) {{
+    var span = ths[i].querySelector('.arr');
+    span.textContent = (ths[i].getAttribute('data-key') === sortKey)
+      ? (sortDir === 1 ? '▲' : '▼') : '';
+  }}
+}}
+
+function applySort() {{
+  var data = rows.slice();
+  data.sort(function(a, b) {{
+    if (sortKey === 'species') return a.species.localeCompare(b.species) * sortDir;
+    return (a[sortKey] - b[sortKey]) * sortDir;
+  }});
+  render(data);
+  updateArrows();
+}}
+
+var headers = document.querySelectorAll('th.sortable');
+for (var h = 0; h < headers.length; h++) {{
+  headers[h].addEventListener('click', function() {{
+    var key = this.getAttribute('data-key');
+    if (key === sortKey) {{
+      sortDir = -sortDir;
+    }} else {{
+      sortKey = key;
+      sortDir = (key === 'count') ? -1 : 1;   // numbers most-first by default
+    }}
+    applySort();
+  }});
+}}
+
+applySort();
+</script>
+</body></html>"""
+
+        self._galleryBridge = _PhotoGalleryBridge(self, filter)
+        channel.registerObject("galleryBridge", self._galleryBridge)
+
+        # Paint the page's backing store in the theme colour so there is no
+        # white flash before the HTML renders (matches the <body> background).
+        from PySide6.QtGui import QColor
+        self.webView.page().setBackgroundColor(QColor("#1e1f26"))
+        self.webView.setHtml(html)
+        self._buildFilterTitle(filter, "Photos by Species",
                                count=total_species, countUnit="Species")
         return True
 

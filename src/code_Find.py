@@ -1,5 +1,6 @@
 # import project files
 import form_Find
+from code_Stylesheet import YBFont
 import code_Lists
 
 from PySide6.QtGui import (
@@ -115,7 +116,7 @@ class Find(QMdiSubWindow, form_Find.Ui_frmFind):
             self.chkSpeciesComments,
             self.chkChecklistComments
             ]):
-            c.setFont(QFont("", fontSize))  
+            c.setFont(QFont(YBFont, fontSize))  
             c.resize(c.x(), textHeight * 1.1)
 
         scaleFactor = self.mdiParent.scaleFactor
@@ -123,7 +124,7 @@ class Find(QMdiSubWindow, form_Find.Ui_frmFind):
         windowHeight = 300 * scaleFactor            
         self.resize(windowWidth, windowHeight)
 
-        baseFont = QFont(QFont("", fontSize))
+        baseFont = QFont(QFont(YBFont, fontSize))
         self.lblFind.setFont(baseFont)
         self.lblWhatToSearch.setFont(baseFont)
         self.txtFind.setFont(baseFont)

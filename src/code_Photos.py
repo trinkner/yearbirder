@@ -1,5 +1,6 @@
 # import project files
 import form_Photos
+from code_Stylesheet import YBFont
 import code_Enlargement
 import code_ThumbnailCache
 
@@ -16,12 +17,10 @@ from PySide6.QtGui import (
     QPixmap,
     QFont,
     QIcon,
-    QImageReader,
     )
 
 from PySide6.QtCore import (
     Signal,
-    QSize,
     Qt,
     QThread,
     QTimer,
@@ -97,6 +96,7 @@ class Photos(QMdiSubWindow, form_Photos.Ui_frmPhotos):
     # create "resized" as a signal that the window can emit
     # we respond to this signal with the form's resizeMe method below
     resized = Signal()
+    contentReady = Signal()   # grid built and thumbnails applied — reveal OK
 
     def __init__(self):
         super(self.__class__, self).__init__()
@@ -202,7 +202,7 @@ class Photos(QMdiSubWindow, form_Photos.Ui_frmPhotos):
         fontSize = self.mdiParent.fontSize
         scaleFactor = self.mdiParent.scaleFactor
 
-        self.lblLocation.setFont(QFont("", fontSize))
+        self.lblLocation.setFont(QFont(YBFont, fontSize))
         metrics = self.lblLocation.fontMetrics()
         cboText = self.lblLocation.text()
         if cboText == "":
@@ -212,25 +212,25 @@ class Photos(QMdiSubWindow, form_Photos.Ui_frmPhotos):
         #scale the font for all widgets in window
         for w in self.children():
             try:
-                w.setFont(QFont("", fontSize))
+                w.setFont(QFont(YBFont, fontSize))
             except:
                 pass
 
-        self.lblLocation.setFont(QFont("", floor(fontSize * 1.4 )))
+        self.lblLocation.setFont(QFont(YBFont, floor(fontSize * 1.4 )))
         self.lblLocation.setStyleSheet("QLabel { font: bold }");
-        self.lblDateRange.setFont(QFont("", floor(fontSize * 1.2 )))
+        self.lblDateRange.setFont(QFont(YBFont, floor(fontSize * 1.2 )))
         self.lblDateRange.setStyleSheet("QLabel { font: bold }");
-        self.lblDetails.setFont(QFont("", floor(fontSize * 1.2 )))
+        self.lblDetails.setFont(QFont(YBFont, floor(fontSize * 1.2 )))
         self.lblDetails.setStyleSheet("QLabel { font: bold }");
-        self.lblSpecies.setFont(QFont("", fontSize))
-        self.lblSortBy.setFont(QFont("", fontSize))
-        self.rdoSortSpecies.setFont(QFont("", fontSize))
-        self.rdoSortDate.setFont(QFont("", fontSize))
-        self.rdoSortRating.setFont(QFont("", fontSize))
-        self.rdoSortTaxonomy.setFont(QFont("", fontSize))
+        self.lblSpecies.setFont(QFont(YBFont, fontSize))
+        self.lblSortBy.setFont(QFont(YBFont, fontSize))
+        self.rdoSortSpecies.setFont(QFont(YBFont, fontSize))
+        self.rdoSortDate.setFont(QFont(YBFont, fontSize))
+        self.rdoSortRating.setFont(QFont(YBFont, fontSize))
+        self.rdoSortTaxonomy.setFont(QFont(YBFont, fontSize))
 
         for c in self.layLists.findChildren(QLabel):
-            c.setFont(QFont("", fontSize))
+            c.setFont(QFont(YBFont, fontSize))
 
         windowWidth =  int(800  * scaleFactor)
         if len(self.photoList) == 1:
@@ -452,8 +452,8 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
                 QApplication.processEvents()   # lay out new cells + let the drain fill them
 
             buttonPhoto = QLabel()
-            buttonPhoto.setFixedWidth(500)
-            buttonPhoto.setMinimumHeight(330)
+            buttonPhoto.setFixedWidth(code_ThumbnailCache.THUMB_DISPLAY_SIZE.width())
+            buttonPhoto.setMinimumHeight(code_ThumbnailCache.THUMB_DISPLAY_SIZE.height())
             buttonPhoto.setAlignment(Qt.AlignCenter)
             buttonPhoto.setStyleSheet("QLabel{ background-color: #343333; }")
             buttonPhoto.setCursor(Qt.PointingHandCursor)
@@ -493,7 +493,7 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
             # One container widget per row in a QVBoxLayout (avoids the grid's
             # ~524k-px height cap that squashed rows past ~1,600 photos).
             rowWidget = QWidget()
-            rowWidget.setMinimumHeight(330)
+            rowWidget.setMinimumHeight(code_ThumbnailCache.THUMB_DISPLAY_SIZE.height())
             rowLayout = QHBoxLayout(rowWidget)
             rowLayout.setContentsMargins(0, 0, 0, 0)
             rowLayout.setSpacing(2)
@@ -519,18 +519,20 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
         for _ in range(nThreads):
             self.workQueue.put(None)
 
-        # Final layout pass, then apply any cached thumbnails not yet shown —
-        # including ones decoded before their cell had a real geometry.
-        QApplication.processEvents()
+        # Apply any cached thumbnails not yet shown.  Scale to the fixed
+        # display size, NOT btn.size(): the window is hidden and unlaid-out
+        # during the build, so cell geometry is not valid yet.
         for row, (p, s) in enumerate(self.photoList):
             if p["fileName"] in self.pixmapCache:
                 btn = self._photoButtons.get(row)
-                if btn and btn.height() > 0:
+                if btn:
                     cur = btn.pixmap()
                     if cur is None or cur.isNull():   # skip cells the drain already filled
                         pm = self.pixmapCache[p["fileName"]]
                         if not pm.isNull():
-                            btn.setPixmap(pm.scaled(btn.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                            btn.setPixmap(pm.scaled(
+                                code_ThumbnailCache.THUMB_DISPLAY_SIZE,
+                                Qt.KeepAspectRatio, Qt.SmoothTransformation))
 
         self.scrollArea.verticalScrollBar().setValue(0)
 
@@ -579,8 +581,10 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
             else:
                 self.pixmapCache[photoFile] = pm
                 btn = self._photoButtons.get(row)
-                if btn and btn.height() > 0:
-                    btn.setPixmap(pm.scaled(btn.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                if btn:
+                    btn.setPixmap(pm.scaled(
+                        code_ThumbnailCache.THUMB_DISPLAY_SIZE,
+                        Qt.KeepAspectRatio, Qt.SmoothTransformation))
 
             self._loadedCount += 1
 
@@ -611,6 +615,7 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
         self.mdiParent.progressOverlay.hide()
         self.scrollArea.verticalScrollBar().setValue(0)
         self._sorting = False
+        self.contentReady.emit()
 
         if self._missingPhotoSpecies:
             n = len(self._missingPhotoSpecies)
@@ -627,25 +632,6 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
                 "These files may have been moved or deleted outside of Yearbirder.",
                 QMessageBox.StandardButton.Ok,
             )
-
-
-    def GetPixmapForThumbnail(self, photoFile):
-        """Synchronous fallback — returns a pixmap from cache or reads from disk.
-        Used by code_Enlargement and any other callers that need a pixmap on demand."""
-
-        if photoFile in self.pixmapCache:
-            return self.pixmapCache[photoFile]
-
-        reader = QImageReader(photoFile)
-        reader.setAutoTransform(True)
-        imgSize = reader.size()
-        if imgSize.isValid():
-            imgSize.scale(QSize(500, 330), Qt.KeepAspectRatio)
-            reader.setScaledSize(imgSize)
-        pm = QPixmap.fromImage(reader.read())
-        if not pm.isNull():
-            self.pixmapCache[photoFile] = pm
-        return pm
 
 
     def _photoClicked(self, row, event):

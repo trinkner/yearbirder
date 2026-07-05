@@ -22,6 +22,20 @@ _RIBBON_CACHE_WIDTH = 16000
 # the variant invalidates older contrast-50 ribbons without a full cache bump.
 _RIBBON_VARIANT = "{}_c0".format(_RIBBON_CACHE_WIDTH)
 
+# Per-file auto-contrast: pick the initial Contrast so each file's noise floor
+# clips to white regardless of its absolute level (some files render overly
+# white, others overly gray at a fixed default).  The base grayscale maps noise
+# floor -> white, signal -> black; setting the white point at the INK percentile
+# keeps the darkest ~15% (signal) as ink and clips the brighter floor to white.
+# Band-limited to the bird-relevant range so wind / handling rumble in the lowest
+# octaves doesn't bias the floor estimate.
+_AUTO_CONTRAST_BAND_LO_HZ = 500.0
+_AUTO_CONTRAST_BAND_HI_HZ = 10000.0
+_AUTO_CONTRAST_INK_PCTILE = 15
+_AUTO_CONTRAST_SCALE = 0.75  # dial the full-strength default back 25% (less white)
+_AUTO_CONTRAST_MIN = 18      # clamp so the auto value never goes flat or extreme
+_AUTO_CONTRAST_MAX = 70
+
 
 def build_ribbon_cache(wav_path):
     """Render and persist the deterministic ribbon base (grayscale PNG).
@@ -969,6 +983,7 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
 
         # Contrast state: fraction (×100) of dB range clipped from the low end, 0–80
         self._contrastPct = 50
+        self._autoContrastPct = 50  # per-file suggestion, computed once the base loads
 
         # Fit Hz toggle state
         self._fitHzActive = False
@@ -1343,6 +1358,7 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
             self._ribbonBaseImage = img.convertToFormat(QImage.Format_Grayscale8)
             self._ribbonFreqBottom = self._ribbonRenderFreqBottom
             self._ribbonFreqTop = self._ribbonRenderFreqTop
+            self._seedAutoContrast()
             self._applyContrast()
             self._applyYFreqCrop()
             self._updateViewport()
@@ -1388,6 +1404,7 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
             self._ribbonBaseImage = pixmap.toImage().convertToFormat(QImage.Format_Grayscale8)
             self._ribbonFreqBottom = self._ribbonRenderFreqBottom
             self._ribbonFreqTop = self._ribbonRenderFreqTop
+            self._seedAutoContrast()
             self._applyContrast()
             self._applyYFreqCrop()
             self._updateViewport()               # push current viewport fracs
@@ -1519,6 +1536,56 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
             (self._freqViewBottom - self._ribbonFreqBottom) / span,
             (self._freqViewTop - self._ribbonFreqBottom) / span,
         )
+
+    def _computeAutoContrast(self):
+        """Suggest an initial Contrast (0-100) from the base ribbon's grayscale.
+
+        The base maps noise floor -> white, signal -> black.  We put the white
+        point at the INK percentile of the band-limited grayscale, so the
+        darkest ~15% (the signal) stays as ink and the brighter floor clips to
+        white.  Because c = 100*(1 - I_white/255) and I_white adapts per file,
+        quiet clean files get gentle contrast while files with a high/loud floor
+        get more — self-normalizing the "overly white vs overly gray" look.
+        Returns an int, or None if the base isn't available yet."""
+        base = self._ribbonBaseImage
+        if base is None or base.isNull():
+            return None
+        w, h, bpl = base.width(), base.height(), base.bytesPerLine()
+        if w <= 0 or h <= 0:
+            return None
+        arr = np.frombuffer(base.constBits(), np.uint8).reshape(h, bpl)[:, :w]
+
+        # Restrict to the bird-relevant band (top row = Nyquist, bottom = 0 Hz)
+        # so low-frequency wind / handling rumble doesn't bias the floor estimate.
+        nyq = float(self._maxFreq) if self._maxFreq else (
+            self._fs / 2.0 if self._fs else 0.0)
+        band = arr
+        if nyq > _AUTO_CONTRAST_BAND_LO_HZ:
+            hi = min(_AUTO_CONTRAST_BAND_HI_HZ, nyq)
+            lo = min(_AUTO_CONTRAST_BAND_LO_HZ, hi)
+            r_top = max(0, min(h - 1, int(round(h * (1.0 - hi / nyq)))))
+            r_bot = max(r_top + 1, min(h, int(round(h * (1.0 - lo / nyq)))))
+            sub = arr[r_top:r_bot, ::4]     # column-subsample for speed
+            if sub.size:
+                band = sub
+
+        i_white = float(np.percentile(band, _AUTO_CONTRAST_INK_PCTILE))
+        # Full-strength value (capped), then dialed back for a less-white default.
+        c = min(_AUTO_CONTRAST_MAX, 100.0 * (1.0 - i_white / 255.0))
+        c *= _AUTO_CONTRAST_SCALE
+        return int(round(max(_AUTO_CONTRAST_MIN, min(_AUTO_CONTRAST_MAX, c))))
+
+    def _seedAutoContrast(self):
+        """Set this file's initial contrast from the base ribbon (once, at open).
+        Stored in _autoContrastPct so future resets can return to it."""
+        c = self._computeAutoContrast()
+        if c is None:
+            return
+        self._autoContrastPct = c
+        self._contrastPct = c
+        self._contrastSlider.blockSignals(True)
+        self._contrastSlider.setValue(c)
+        self._contrastSlider.blockSignals(False)
 
     def _applyContrast(self):
         """Apply the current contrast as a live grayscale levels remap of the
@@ -1933,6 +2000,7 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
         # module can't read 32-bit-float or FLAC files, so reading the file here
         # would show nothing for exactly the high-res recordings we care about.
         channels_str = rec.get("channels", "")
+        device = rec.get("device", "")
 
         info = f"\n\n{location}\n{weekday}{date}\n{time_str}\n"
         if duration:
@@ -1943,6 +2011,8 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
             info += f"\n{bit_depth}"
         if channels_str:
             info += f"\n{channels_str}"
+        if device:
+            info += f"\n{device}"
         info += f"\n\n{filename}\n\n"
 
         self._detailsCommonName.setText("\n" + common)

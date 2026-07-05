@@ -680,21 +680,33 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
         # setWindowFlags) and causes a fatal crash via sendPostedEvents.
         #
         # Operation order is chosen to minimise visible intermediate states:
-        # entering — child maximises first (image already fills MDI area), then
-        # chrome hides and the main window expands to screen.
+        # entering — ALL rearranging (chrome hides, child maximise, frameless)
+        # happens first, the layout is settled synchronously, and the image is
+        # fitted BEFORE showFullScreen(), so the native zoom animation carries
+        # one finished dark frame with the centred image instead of a
+        # half-arranged one that snaps into place as the animation lands.
         # exiting  — chrome restores first, then main window shrinks, then child
         # returns to normal so the image never appears to "float" frameless.
 
         mainWindow = self.mdiParent.mdiParent
 
         if not mainWindow.isFullScreen():
-            self.showMaximized()
-            self.setWindowFlags(Qt.FramelessWindowHint)
             mainWindow.dckFilter.setVisible(False)
             mainWindow.dckMediaFilter.setVisible(False)
             mainWindow.menuBar.setVisible(False)
             mainWindow.toolBar.setVisible(False)
             mainWindow.statusBar.setVisible(False)
+            self.showMaximized()
+            self.setWindowFlags(Qt.FramelessWindowHint)
+            # Settle the pending relayout NOW so the child/view geometry is
+            # final, then compose the frame the animation will carry.
+            # (A full-screen "cover" window masking the native transition was
+            # tried here and removed — it added MORE visible stages, not
+            # fewer.  The residual artifacts — the menu bar going black and a
+            # title-bar-height sliver of desktop — are macOS's own
+            # enter-full-screen mechanics and are not controllable from Qt.)
+            mainWindow.layout().activate()
+            self.fitEnlargement()
             mainWindow.showFullScreen()
 
         else:
@@ -819,12 +831,13 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
         except:
             photoExifISO = ""
         
-        # get pixel dimensions
-
-        from PySide6.QtGui import QImage
-        qimg = QImage(currentPhoto)
-        if not qimg.isNull():
-            photoDimensions = f"{qimg.width()} x {qimg.height()}"
+        # get pixel dimensions from the already-loaded full-resolution pixmap
+        # (setCameraDetails always runs right after pixmapEnlargement is set
+        # for this same file — re-decoding the JPEG just for its dimensions
+        # doubled the decode cost of every photo navigation)
+        if not self.pixmapEnlargement.isNull():
+            photoDimensions = (f"{self.pixmapEnlargement.width()} x "
+                               f"{self.pixmapEnlargement.height()}")
         else:
             photoDimensions = ""
 

@@ -1,5 +1,6 @@
 # import GUI form for this class
 import form_LocationTotals
+from code_Stylesheet import YBFont
 # import pandas
 # import folium
 # import json
@@ -679,18 +680,18 @@ class LocationTotals(QMdiSubWindow, form_LocationTotals.Ui_frmLocationTotals):
         #scale the font for all widgets in window
         for w in self.scrollAreaWidgetContents.children():
             try:
-                w.setFont(QFont("", fontSize))
+                w.setFont(QFont(YBFont, fontSize))
             except:
                 pass 
 
-        self.lblLocation.setFont(QFont("", floor(fontSize * 1.4 )))
+        self.lblLocation.setFont(QFont(YBFont, floor(fontSize * 1.4 )))
         self.lblLocation.setStyleSheet("QLabel { font: bold }");
-        self.lblDateRange.setFont(QFont("", floor(fontSize * 1.2 )))
+        self.lblDateRange.setFont(QFont(YBFont, floor(fontSize * 1.2 )))
         self.lblDateRange.setStyleSheet("QLabel { font: bold }");
-        self.lblDetails.setFont(QFont("", floor(fontSize * 1.2 )))
+        self.lblDetails.setFont(QFont(YBFont, floor(fontSize * 1.2 )))
         self.lblDetails.setStyleSheet("QLabel { font: bold }");
 
-        metrics = QFontMetrics(QFont("", fontSize))
+        metrics = QFontMetrics(QFont(YBFont, fontSize))
         rowHeight = self.mdiParent.rowHeight
         # Room for the sort-indicator arrow plus cell padding; the extra
         # scrollbar allowance gives every title clear separation from its arrow.

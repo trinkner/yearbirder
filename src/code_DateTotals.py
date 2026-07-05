@@ -1,5 +1,6 @@
 # import GUI form for this class
 import form_DateTotals
+from code_Stylesheet import YBFont
 
 # import classes from other project files
 import code_Filter
@@ -584,18 +585,18 @@ class DateTotals(QMdiSubWindow, form_DateTotals.Ui_frmDateTotals):
         #scale the font for all widgets in window
         for w in self.layLists.children():
             try:
-                w.setFont(QFont("", fontSize))
+                w.setFont(QFont(YBFont, fontSize))
             except:
                 pass 
 
-        self.lblLocation.setFont(QFont("", floor(fontSize * 1.4 )))
+        self.lblLocation.setFont(QFont(YBFont, floor(fontSize * 1.4 )))
         self.lblLocation.setStyleSheet("QLabel { font: bold }");
-        self.lblDateRange.setFont(QFont("", floor(fontSize * 1.2 )))
+        self.lblDateRange.setFont(QFont(YBFont, floor(fontSize * 1.2 )))
         self.lblDateRange.setStyleSheet("QLabel { font: bold }");
-        self.lblDetails.setFont(QFont("", floor(fontSize * 1.2 )))
+        self.lblDetails.setFont(QFont(YBFont, floor(fontSize * 1.2 )))
         self.lblDetails.setStyleSheet("QLabel { font: bold }");
 
-        metrics = QFontMetrics(QFont("", fontSize))
+        metrics = QFontMetrics(QFont(YBFont, fontSize))
         rowHeight = self.mdiParent.rowHeight
         # horizontalAdvance is more accurate than boundingRect for laid-out text.
         # Reserve room for the sort-indicator arrow plus cell padding so the

@@ -1,5 +1,6 @@
 # import the GUI forms that we create with Qt Creator
 import form_Location
+from code_Stylesheet import YBFont
 
 # import classes from other project files
 import code_Filter
@@ -651,12 +652,12 @@ class Location(QMdiSubWindow, form_Location.Ui_frmLocation):
         #scale the font for all widgets in window
         for w in self.children():
             try:
-                w.setFont(QFont("", fontSize))
+                w.setFont(QFont(YBFont, fontSize))
             except:
                 pass 
         
-        baseFont = QFont(QFont("", floor(fontSize * 1.2)))
-        locationFont = QFont(QFont("", floor(fontSize * 1.4)))
+        baseFont = QFont(QFont(YBFont, floor(fontSize * 1.2)))
+        locationFont = QFont(QFont(YBFont, floor(fontSize * 1.4)))
         locationFont.setBold(True)
         self.lblLocation.setFont(locationFont)
         self.lblFirstVisited.setFont(baseFont)
@@ -664,7 +665,7 @@ class Location(QMdiSubWindow, form_Location.Ui_frmLocation):
         self.lblLocationHierarchy.setFont(baseFont)
 
         header = self.tblSpecies.horizontalHeader()
-        metrics = QFontMetrics(QFont("", fontSize))
+        metrics = QFontMetrics(QFont(YBFont, fontSize))
 
         dateTextWidth = int(metrics.boundingRect("2222-22-22").width())
         rowHeight = self.mdiParent.rowHeight

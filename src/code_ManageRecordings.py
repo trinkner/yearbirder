@@ -1,10 +1,13 @@
 import form_ManageRecordings
+from code_Stylesheet import YBFont
 import code_Filter
 import code_Stylesheet
 import code_ThumbnailCache
 import code_ChecklistTree
 import os
 import queue
+import threading
+import time
 from functools import partial
 from collections import defaultdict
 
@@ -19,7 +22,7 @@ from PySide6.QtCore import (
 from PySide6.QtWidgets import (
     QMdiSubWindow, QPushButton, QApplication, QWidget, QLabel,
     QComboBox, QHBoxLayout, QVBoxLayout, QMessageBox, QFileDialog,
-    QSlider, QCheckBox,
+    QSlider, QCheckBox, QSizePolicy,
 )
 from PySide6.QtMultimedia import (
     QMediaPlayer, QAudioFormat, QAudioSink, QMediaDevices,
@@ -33,6 +36,15 @@ _FIELD_NAME_COLOR = "#8b8fa8"          # muted label ("Date", "Location", …)
 _MATCH_COLOR      = "#4CAF50"          # green  – value came from metadata/filename
 _VALUE_COLOR      = "#e2e4ec"          # neutral – manually chosen / not auto-derived
 _SKIPPED_COLOR    = "#6b6e7e"          # muted value when the row is skipped
+
+
+def _wrappable(text):
+    """Insert zero-width break opportunities after separator characters.
+    Word wrap can only break at whitespace, so an underscore-joined filename
+    is one unbreakable word — the label's MINIMUM width becomes the full text
+    width, overflowing the window and pushing the controls column past the
+    right edge."""
+    return "".join(c + "\u200b" if c in "_-." else c for c in text)
 
 
 # ── Audio decode / spectrogram rendering / playback ──────────────────────────
@@ -68,8 +80,10 @@ class SpectrogramLabel(QWidget):
         self._ax_bbox = (0.0, 1.0, 0.0, 1.0)  # full-area fallback
         self._fraction = None   # 0.0–1.0; None hides the line
         self._error_text = ""
-        self.setMinimumWidth(500)
-        self.setMinimumHeight(290)
+        # Same display geometry as the Manage Photos thumbnails; the rendered
+        # spectrogram pixmap is scaled down to fit in paintEvent.
+        self.setMinimumWidth(code_ThumbnailCache.THUMB_DISPLAY_SIZE.width())
+        self.setMinimumHeight(code_ThumbnailCache.THUMB_DISPLAY_SIZE.height())
 
     def setPixmap(self, pixmap, ax_bbox=None):
         self._pixmap = pixmap
@@ -175,32 +189,45 @@ class SpeciesTagStrip(QWidget):
             item = self._layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
+            elif item.layout():
+                while item.layout().count():
+                    sub = item.layout().takeAt(0)
+                    if sub.widget():
+                        sub.widget().deleteLater()
         for name in self._species:
-            self._layout.addWidget(self._makeChip(name))
+            # Trailing stretch keeps each pill at exactly its content width no
+            # matter how wide the column is — all leftover width lands in the
+            # stretch, outside the blue pill.
+            row = QHBoxLayout()
+            row.setContentsMargins(0, 0, 0, 0)
+            row.addWidget(self._makeChip(name))
+            row.addStretch()
+            self._layout.addLayout(row)
         self.setVisible(bool(self._species))
 
     def _makeChip(self, name):
+        # All styling comes from the app stylesheet (#speciesChip /
+        # #chipRemoveBtn rules, incl. the skipped-grey variant via the
+        # "skipped" property and the min-width/padding zeroing that keeps the
+        # × button at its true 18px).  Per-widget setStyleSheet calls here
+        # cost ~13ms per row — a fresh style object + repolish per piece.
         chip = QWidget()
+        chip.setObjectName("speciesChip")
+        chip.setAttribute(Qt.WA_StyledBackground, True)
+        chip.setProperty("skipped", self._skipped)
         chipLayout = QHBoxLayout(chip)
-        chipLayout.setContentsMargins(8, 3, 4, 3)
-        chipLayout.setSpacing(4)
+        chipLayout.setContentsMargins(8, 3, 5, 3)
+        chipLayout.setSpacing(8)
         label = QLabel(name)
-        label.setStyleSheet("color: white; background: transparent; border: none;")
         removeBtn = QPushButton("×")
+        removeBtn.setObjectName("chipRemoveBtn")
         removeBtn.setFixedSize(18, 18)
         removeBtn.setFlat(True)
-        removeBtn.setStyleSheet(
-            "QPushButton { color: white; font-weight: bold; "
-            "background: transparent; border: none; }"
-            "QPushButton:hover { background: rgba(255,255,255,40); border-radius: 9px; }"
-        )
         removeBtn.clicked.connect(partial(self.removeSpecies, name))
         chipLayout.addWidget(label)
-        chipLayout.addStretch()
         chipLayout.addWidget(removeBtn)
-        bg = _SKIPPED_COLOR if self._skipped else "#4a86c8"
-        chip.setStyleSheet(
-            "QWidget { background-color: %s; border-radius: 8px; }" % bg)
+        # Hug the species name instead of stretching across the whole column
+        chip.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
         return chip
 
 
@@ -234,7 +261,8 @@ class threadGetAudioData(QThread):
             # Reuse the on-disk spectrogram cache (the same "spectro_thumb"
             # image the Recordings browser caches); render only on a miss, then
             # store, so re-opening this window is fast.
-            img = code_ThumbnailCache.load(file, "spectro_thumb")
+            img = code_ThumbnailCache.load(file, "spectro_thumb",
+                                           code_ThumbnailCache.SPECTRO_THUMB_VARIANT)
             if img is not None and not img.isNull():
                 # Cached image already has the axes baked in.
                 pixmap = QPixmap.fromImage(img)
@@ -250,7 +278,20 @@ class threadGetAudioData(QThread):
 
             if mode == "new":
                 audioMatchData = self.parent.mdiParent.db.matchRecording(file)
-                comboData = self.parent.mdiParent.db.getComboDataForAudio(audioMatchData)
+                # Recordings from the same checklist share identical combo
+                # data — memoize by (date, location, time), and use the
+                # caller-precomputed allDates: these pure-Python database
+                # scans are serialized by the GIL regardless of thread count.
+                key = (audioMatchData.get("recordingDate", ""),
+                       audioMatchData.get("recordingLocation", ""),
+                       audioMatchData.get("recordingTime", ""))
+                with self.parent._comboCacheLock:
+                    comboData = self.parent._comboCache.get(key)
+                if comboData is None:
+                    comboData = self.parent.mdiParent.db.getComboDataForAudio(
+                        audioMatchData, allDates=self.parent._allDates)
+                    with self.parent._comboCacheLock:
+                        self.parent._comboCache[key] = comboData
                 cascadeMode = "date_first"
                 allSightings = None
             else:
@@ -292,6 +333,7 @@ class threadGetAudioData(QThread):
 class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordings):
 
     resized = Signal()
+    contentReady = Signal()   # all rows built — a hidden window can be revealed
 
     def __init__(self):
         super(self.__class__, self).__init__()
@@ -318,6 +360,10 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         self._loadedCount = 0
         self._totalFiles = 0
         self._threadsToStart = 0
+        # Shared combo-data memo for the worker threads (see threadGetAudioData.run)
+        self._comboCache = {}
+        self._comboCacheLock = threading.Lock()
+        self._allDates = None
 
         for _ in range(self.threadCount):
             t = threadGetAudioData()
@@ -406,13 +452,15 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         scaleFactor = self.mdiParent.scaleFactor
         for w in self.children():
             try:
-                w.setFont(QFont("", fontSize))
+                w.setFont(QFont(YBFont, fontSize))
             except Exception:
                 pass
         for c in self.layLists.children():
             if "QLabel" in str(c):
-                c.setFont(QFont("", fontSize))
-        windowWidth = int(1200 * scaleFactor)
+                c.setFont(QFont(YBFont, fontSize))
+        # Same width as Manage Photos: display thumbnail + text column + fixed
+        # controls column, plus a little breathing room.
+        windowWidth = int(1045 * scaleFactor)
         windowHeight = int(800 * scaleFactor)
         self.resize(windowWidth, windowHeight)
 
@@ -449,17 +497,25 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         self._activeRow = row
         # PCM is decoded synchronously and playback starts immediately.
         if self._player.setSourceWav(filePath):
+            # Honor a scrub position set before this row was first played:
+            # the slider may have been dragged while the row was inactive.
+            sld = self._sliders.get(row)
+            if sld and sld.value() > 0 and self._player.duration() > 0:
+                self._player.setPosition(
+                    int(sld.value() / 1000.0 * self._player.duration()))
             self._player.play()
 
     def _onSliderMoved(self, row, value):
-        """User dragged the scrubber; seek player and update the cursor line."""
+        """User dragged the scrubber; show the cursor line, and seek if this
+        row is the one loaded in the player.  On a not-yet-played row the
+        line still tracks the drag, and the position is honored when Play
+        first loads the row (_btnPlayClicked)."""
+        lbl = self._spectroLabels.get(row)
+        if lbl:
+            lbl.setFraction(value / 1000.0)
         if self._activeRow == row and self._player.duration() > 0:
             pos_ms = int(value / 1000.0 * self._player.duration())
             self._player.setPosition(pos_ms)
-        if self._activeRow == row:
-            lbl = self._spectroLabels.get(row)
-            if lbl:
-                lbl.setFraction(value / 1000.0)
 
     def _onPlaybackStateChanged(self, state):
         btn = self._playBtns.get(self._activeRow)
@@ -513,7 +569,6 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         allowed = []
         row = 0
         for f in files:
-            QApplication.processEvents()
             if os.path.splitext(f)[1].lower() == ".wav":
                 allowed.append({"row": row, "file": f, "mode": "new"})
                 row += 1
@@ -521,6 +576,12 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         if not allowed:
             QApplication.restoreOverrideCursor()
             return
+
+        # The full date list is identical for every recording; compute it once
+        # here instead of once per file inside getComboDataForAudio (a whole-
+        # database scan that the GIL serializes across the worker threads).
+        self._allDates = self.mdiParent.db.GetDates(code_Filter.Filter())
+        self._comboCache.clear()
 
         for item in allowed:
             self.workQueue.put(item)
@@ -530,9 +591,13 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         self._threadsToStart = min(self.threadCount, len(allowed))
         self.threadsRemaining = self._threadsToStart
 
-        self.mdiParent.lblStatusBarMessage.setVisible(True)
-        self.mdiParent.lblStatusBarMessage.setText("Loading recording files...")
-        QApplication.processEvents()
+        # Gated main-window progress overlay, as in Manage Photos: it only
+        # becomes visible if the load runs longer than the gate, so small
+        # batches never flash a progress bar.
+        overlay = self.mdiParent.progressOverlay
+        overlay.armGate(1000)
+        overlay.showForRecordings()
+        overlay.startLoading(self._totalFiles)
 
         QTimer.singleShot(0, self._startThreads)
 
@@ -570,9 +635,12 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         self._threadsToStart = min(self.threadCount, row)
         self.threadsRemaining = self._threadsToStart
 
-        self.mdiParent.lblStatusBarMessage.setVisible(True)
-        self.mdiParent.lblStatusBarMessage.setText("Loading recording files...")
-        QApplication.processEvents()
+        # Gated overlay, as in Manage Photos (existing recordings need no
+        # combo-data precompute — their assignment is already known).
+        overlay = self.mdiParent.progressOverlay
+        overlay.armGate(1000)
+        overlay.showForRecordings()
+        overlay.startLoading(self._totalFiles)
 
         self.audioAlreadyInDb = True
         self.fillingCombos = False
@@ -592,7 +660,15 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
 
     def _drainResultQueue(self):
         prevCount = self._loadedCount
-        while True:
+        # Time-budgeted drain (see Manage Photos): workers can outpace the
+        # main-thread row building, so an unbounded drain would block the
+        # event loop until every row was built — beachball, and the progress
+        # bar's first paint would be the finished count.  200ms chunks: long
+        # enough that the between-chunk event-loop overhead is negligible,
+        # short enough that the overlay stays live (~5 updates/s) and the app
+        # never looks hung.
+        deadline = time.monotonic() + 0.200
+        while time.monotonic() < deadline:
             try:
                 entry = self.resultQueue.get_nowait()
             except queue.Empty:
@@ -605,7 +681,8 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
                 _paint_spectro_axes(_pm, entry.get("duration", 0),
                                     entry.get("sampleRate", 0))
                 code_ThumbnailCache.store(
-                    entry.get("file", ""), _pm.toImage(), "spectro_thumb")
+                    entry.get("file", ""), _pm.toImage(), "spectro_thumb",
+                    code_ThumbnailCache.SPECTRO_THUMB_VARIANT)
             self.insertAudioIntoTable(
                 entry["row"],
                 entry["recordingData"],
@@ -618,20 +695,32 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
             )
             self._loadedCount += 1
 
-        if self._loadedCount > 0 and (
-                self._loadedCount // 5 > prevCount // 5 or prevCount == 0):
-            self.mdiParent.lblStatusBarMessage.setText(
-                f"Loading recordings: {self._loadedCount} of {self._totalFiles}...")
+        if self._loadedCount > prevCount:
+            self.mdiParent.progressOverlay.setPhotoValue(self._loadedCount)
 
         if self.threadsRemaining == 0 and self.resultQueue.empty():
             self._drainTimer.stop()
             self._finishLoading()
+        elif not self.resultQueue.empty():
+            # Results are already waiting: continue on the next event-loop
+            # pass (paints still get through) rather than idling until the
+            # next 50ms tick — with quick rows that idle time would dominate
+            # the load.  The periodic timer stays as the backstop while the
+            # workers are still producing.
+            QTimer.singleShot(0, self._drainResultQueue)
 
     def _finishLoading(self):
+        # Run once: the periodic timer and the singleShot continuations can
+        # both deliver a final "queue empty" drain pass, and contentReady must
+        # not re-fire (it re-shows the window — or worse, fires on a deleted
+        # one).
+        if getattr(self, "_loadFinished", False):
+            return
+        self._loadFinished = True
         self.scrollArea.verticalScrollBar().setValue(0)
-        self.mdiParent.lblStatusBarMessage.setText("")
-        self.mdiParent.lblStatusBarMessage.setVisible(False)
+        self.mdiParent.progressOverlay.hide()
         QApplication.restoreOverrideCursor()
+        self.contentReady.emit()
 
     def threadFinished(self):
         self.threadsRemaining -= 1
@@ -643,7 +732,10 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
     def insertAudioIntoTable(self, row, recordingData, audioMatchData, pixmap,
                              comboData, cascadeMode="date_first", ax_bbox=None,
                              allSightings=None):
-        QApplication.processEvents()
+        # No processEvents here: on a visible window it forced a relayout and
+        # repaint of the whole growing grid for every row.  The window stays
+        # hidden until contentReady, and the time-budgeted drain keeps the
+        # event loop responsive between batches.
         self.fillingCombos = True
 
         recordingLocation = audioMatchData.get("recordingLocation", "")
@@ -685,6 +777,12 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         scrubLayout.addWidget(scrubber)
         visLayout.addWidget(scrubRow)
 
+        # Pin the spectro/play column to the shared thumbnail width and give
+        # the details column all the stretch — otherwise the grid splits any
+        # extra window width between the columns and the spectrogram (which
+        # has only a minimum size) widens with the window.
+        visContainer.setFixedWidth(code_ThumbnailCache.THUMB_DISPLAY_SIZE.width())
+        self.gridAudio.setColumnStretch(1, 1)
         self.gridAudio.addWidget(visContainer, row, 0)
 
         self._filePaths[row] = recordingData["fileName"]
@@ -701,12 +799,15 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
             self._durations_ms[row] = 0
 
         # ---- Column 1: metadata and combos ----
+        # Built DETACHED and inserted into the live grid only when complete
+        # (below): adding the empty container first made every subsequent
+        # widget insertion propagate styles/fonts through the live hierarchy,
+        # one widget at a time (~7ms per row).
         container = QWidget()
         container.setObjectName("container" + str(row))
         detailsLayout = QVBoxLayout(container)
         detailsLayout.setObjectName("layout" + str(row))
         detailsLayout.setAlignment(Qt.AlignTop)
-        self.gridAudio.addWidget(container, row, 1)
 
         # Seed this row's working metadata, then build the colour-coded label /
         # Select / Skip panel.  Date, location and time are shown as labels; the
@@ -744,6 +845,8 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
 
         self.metaDataByRow[row] = thisAudioMetaData
         self._buildDetailsPanel(row, detailsLayout, recordingData, isExisting)
+        # panel complete — one insertion, one style/font propagation pass
+        self.gridAudio.addWidget(container, row, 1)
         self.saveNewMetaData(row)
         self.fillingCombos = False
 
@@ -801,7 +904,7 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         leftCol = QVBoxLayout()
         leftCol.setSpacing(4)
 
-        lblFileName = QLabel(os.path.basename(recordingData["fileName"]))
+        lblFileName = QLabel(_wrappable(os.path.basename(recordingData["fileName"])))
         lblFileName.setStyleSheet("color: %s;" % _FIELD_NAME_COLOR)
         # Wrap the (often long) filename so it can't force the whole right-hand
         # section wider than the window and truncate the buttons.
@@ -820,21 +923,29 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
             metaStr = "Recording date unknown"
         lblMeta = QLabel(metaStr)
         lblMeta.setStyleSheet("color: %s;" % _FIELD_NAME_COLOR)
+        lblMeta.setWordWrap(True)
         leftCol.addWidget(lblMeta)
         leftCol.addSpacing(10)   # line feed after the metadata line
 
         for key in ("date", "location", "time"):
             lbl = QLabel()
             lbl.setTextFormat(Qt.TextFormat.RichText)
+            lbl.setWordWrap(True)
             lbls[key] = lbl
             leftCol.addWidget(lbl)
 
         speciesHeader = QLabel()
         speciesHeader.setTextFormat(Qt.TextFormat.RichText)
+        speciesHeader.setWordWrap(True)
         lbls["speciesHeader"] = speciesHeader
         leftCol.addWidget(speciesHeader)
 
-        tagStrip = SpeciesTagStrip()
+
+        # Parent the strip at construction: _rebuild() calls setVisible(True),
+        # and showing a PARENTLESS widget creates a native top-level window
+        # (~8ms) that must then be torn down when the row assembly reparents
+        # it (~5ms more) — measured as the bulk of the per-row build cost.
+        tagStrip = SpeciesTagStrip(detailsLayout.parentWidget())
         tagStrip.setObjectName("tagStrip" + str(row))
         tagStrip.setSpeciesList(list(self.metaDataByRow[row]["commonNames"]))
         tagStrip.speciesChanged.connect(partial(self._onSpeciesChanged, row))
@@ -844,12 +955,13 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         leftCol.addStretch()
         bodyRow.addLayout(leftCol, 1)
 
+
         # Right column, top-to-bottom: Select, Reset, Rating combo, Skip/Remove.
         # Held to a fixed, narrow width so the buttons always render in full.
         # Pin every control to one explicit font so the combo text can't end up
         # a different size from the buttons (they otherwise resolve fonts via
         # different inheritance paths).
-        _panelFont = QFont("", getattr(self.mdiParent, "fontSize", 11))
+        _panelFont = QFont(YBFont, getattr(self.mdiParent, "fontSize", 11))
         controlsCol = QVBoxLayout()
         controlsCol.setContentsMargins(0, 0, 0, 0)
         controlsCol.setSpacing(8)
@@ -863,6 +975,7 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         btnReset.setFont(_panelFont)
         btnReset.clicked.connect(partial(self.btnResetClicked, row))
         controlsCol.addWidget(btnReset)
+
 
         cboRating = QComboBox()
         cboRating.addItems(["Not Rated", "1", "2", "3", "4", "5"])
@@ -887,6 +1000,7 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         cboRating.currentIndexChanged.connect(partial(self.cboRatingChanged, row))
         lbls["rating"] = cboRating
         controlsCol.addWidget(cboRating)
+
 
         chkSkip = QCheckBox("Remove" if isExisting else "Skip")
         chkSkip.setFont(_panelFont)

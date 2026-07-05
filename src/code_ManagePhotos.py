@@ -1,5 +1,6 @@
 # import project files
 import form_ManagePhotos
+from code_Stylesheet import YBFont
 import code_Filter
 import code_Stylesheet
 import code_ThumbnailCache
@@ -9,7 +10,10 @@ import os
 import piexif
 
 # import basic Python libraries
+import bisect
 import queue
+import threading
+import time
 from functools import partial
 
 from collections import defaultdict
@@ -18,8 +22,6 @@ from PySide6.QtGui import (
     QPixmap,
     QFont,
     QIcon,
-    QImage,
-    QTransform,
     QCursor,
     QPalette,
     QColor,
@@ -60,6 +62,21 @@ _VALUE_COLOR      = "#e2e4ec"          # neutral – manually chosen / not auto-
 _SKIPPED_COLOR    = "#6b6e7e"          # muted value when the row is skipped
 # Species sentinel that savePhotoSettings treats as "do not attach" ("**").
 _SKIP_SENTINEL = "** (skipped) **"
+
+
+def _wrappable(text):
+    """Insert zero-width break opportunities after separator characters.
+    Word wrap can only break at whitespace, so an underscore-joined filename
+    is one unbreakable word — the label's MINIMUM width becomes the full text
+    width, overflowing the window and pushing the controls column past the
+    right edge."""
+    return "".join(c + "\u200b" if c in "_-." else c for c in text)
+
+# Displayed thumbnail size, shared with the Photos browser: the cached image is
+# 500x330 (code_ThumbnailCache.THUMB_SIZE); both views show it smaller so more
+# rows fit vertically.
+_THUMB_DISPLAY_W = code_ThumbnailCache.THUMB_DISPLAY_SIZE.width()
+_THUMB_DISPLAY_H = code_ThumbnailCache.THUMB_DISPLAY_SIZE.height()
 
 
 class GreenMatchDelegate(QStyledItemDelegate):
@@ -109,25 +126,55 @@ class threadGetPhotoData(QThread):
             row = item[0]
             file = item[1]
 
-            # read EXIF once and share it across all three functions
+            # read EXIF once and share it across the metadata functions
             try:
                 exif_dict = piexif.load(file)
             except:
                 exif_dict = {}
 
             photoData = self.parent.mdiParent.db.getPhotoData(file, exif_dict)
-            photoMatchData = self.parent.mdiParent.db.matchPhoto(file, exif_dict)
-            pixMap = self.parent.GetPixmapForThumbnail(file, exif_dict)
 
-            # pre-compute combo box data here in the worker thread so the
-            # main thread can populate widgets without querying the database
-            comboData = self.parent.mdiParent.db.getComboDataForPhoto(photoMatchData)
+            if self.parent.photosAlreadyInDb:
+                # Catalog photos already carry their assignment (the stored
+                # sighting, stashed in the parent's _rowContext), so no
+                # matchPhoto / combo-data work — just the EXIF display data
+                # and the thumbnail.
+                thisPhotoDataEntry = defaultdict()
+                thisPhotoDataEntry["row"] = row
+                thisPhotoDataEntry["photoData"] = photoData
+                thisPhotoDataEntry["image"] = self.parent.GetImageForThumbnail(file)
+                self.resultQueue.put(thisPhotoDataEntry)
+                self.workQueue.task_done()
+                continue
+
+            photoMatchData = self.parent.mdiParent.db.matchPhoto(file, exif_dict)
+            # QImage only in worker threads — QPixmap is a GUI-thread-only
+            # class; the main thread converts when it builds the row.
+            image = self.parent.GetImageForThumbnail(file)
+
+            # Pre-compute combo box data in the worker thread so the main
+            # thread can populate widgets without querying the database.
+            # Photos from the same checklist share identical combo data, so
+            # memoize by (date, location, time) — a typical bulk import spans
+            # hundreds of photos but only a handful of checklists, and these
+            # pure-Python database scans are serialized by the GIL regardless
+            # of the thread count.
+            key = (photoMatchData["photoDate"],
+                   photoMatchData["photoLocation"],
+                   photoMatchData["photoTime"])
+            with self.parent._comboCacheLock:
+                comboData = self.parent._comboCache.get(key)
+            if comboData is None:
+                comboData = self.parent.mdiParent.db.getComboDataForPhoto(
+                    photoMatchData, allDates=self.parent._allDates)
+                with self.parent._comboCacheLock:
+                    self.parent._comboCache[key] = comboData
 
             thisPhotoDataEntry = defaultdict()
             thisPhotoDataEntry["row"] = row
             thisPhotoDataEntry["photoData"] = photoData
             thisPhotoDataEntry["photoMatchData"] = photoMatchData
-            thisPhotoDataEntry["pixMap"] = pixMap
+            thisPhotoDataEntry["image"] = image
             thisPhotoDataEntry["comboData"] = comboData
 
             self.resultQueue.put(thisPhotoDataEntry)
@@ -142,8 +189,9 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
     # create "resized" as a signal that the window can emit
     # we respond to this signal with the form's resizeMe method below
     resized = Signal()
-    
-    
+    contentReady = Signal()   # all rows built — a hidden window can be revealed
+
+
     def __init__(self):
         super(self.__class__, self).__init__()
         self.setupUi(self)
@@ -171,6 +219,23 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         self._loadedCount = 0
         self._totalFiles = 0
         self._threadsToStart = 0
+        # Shared combo-data memo for the worker threads (see threadGetPhotoData.run)
+        self._comboCache = {}
+        self._comboCacheLock = threading.Lock()
+        self._allDates = None
+        # row -> (sighting, photo dict) for the catalog (by-filter) path
+        self._rowContext = {}
+
+        # One container widget per row in a QVBoxLayout — same fix as the
+        # Photos browser: QGridLayout tops out around ~524k px of total
+        # height, so past ~1,500 rows it silently compresses them (squished
+        # thumbnails).  The Designer grid (gridPhotos) is left unused.
+        self.rowsLayout = QVBoxLayout()
+        self.rowsLayout.setContentsMargins(0, 0, 0, 0)
+        self.rowsLayout.setSpacing(4)
+        self.verticalLayout_3.addLayout(self.rowsLayout)
+        self._rowWidgets = {}
+        self._rowOrder = []   # sorted row numbers currently in rowsLayout
 
         for _ in range(self.threadCount):
             t = threadGetPhotoData()
@@ -247,15 +312,18 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         #scale the font for all widgets in window
         for w in self.children():
             try:
-                w.setFont(QFont("", fontSize))
+                w.setFont(QFont(YBFont, fontSize))
             except:
                 pass
                         
         for c in self.layLists.children():
             if "QLabel" in str(c):
-                c.setFont(QFont("", fontSize))
+                c.setFont(QFont(YBFont, fontSize))
          
-        windowWidth =  int(1200  * scaleFactor)
+        # Thumbnail (333) + text column + fixed controls column (160), plus a
+        # little breathing room: wide enough that filenames rarely wrap,
+        # without a band of blank space between the file info and the buttons.
+        windowWidth =  int(1045  * scaleFactor)
         windowHeight = int(800 * scaleFactor)
         self.resize(windowWidth, windowHeight)
 
@@ -271,22 +339,26 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         # we'll be adding these files to the db once the user provides the meta data for them
         allowedPhotoFiles = []
         
-        # remove non-image files from the list 
-        row = 0       
+        # remove non-image files from the list
+        row = 0
         for fileName in files:
-            
-            QApplication.processEvents()
-                        
+
             # get file extension to process only jpg and tiff image files
             photoFileExtension = os.path.splitext(fileName)[1]
-            
+
             # only process jpg and tiff files
             if photoFileExtension.lower() in [".jpg", ".jpeg", ".tif", "tiff"]:
-                
+
                 allowedPhotoFiles.append([row, fileName])
-            
+
             row += 1
-        
+
+        # The full date list is identical for every photo; compute it once here
+        # instead of once per photo inside getComboDataForPhoto (a whole-database
+        # scan that the GIL serializes across the worker threads).
+        self._allDates = self.mdiParent.db.GetDates(code_Filter.Filter())
+        self._comboCache.clear()
+
         # fill the shared work queue; threads pull jobs from it dynamically
         # so no thread sits idle while others still have work
         for item in allowedPhotoFiles:
@@ -297,9 +369,13 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         self._threadsToStart = min(self.threadCount, len(allowedPhotoFiles))
         self.threadsRemaining = self._threadsToStart
 
-        self.mdiParent.lblStatusBarMessage.setVisible(True)
-        self.mdiParent.lblStatusBarMessage.setText("Loading photos...")
-        QApplication.processEvents()
+        # Gated main-window progress overlay, as in the Photos browser: it only
+        # becomes visible if the load runs longer than the gate, so small
+        # batches never flash a progress bar.
+        overlay = self.mdiParent.progressOverlay
+        overlay.armGate(1000)
+        overlay.showForPhotos()
+        overlay.startLoading(self._totalFiles)
 
         # Defer thread start until the event loop regains control so the UI
         # is fully laid out before loading begins.
@@ -314,45 +390,101 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
     def _drainResultQueue(self):
         prevCount = self._loadedCount
 
-        while True:
+        # Time-budgeted drain: with warm caches the workers produce results
+        # faster than the main thread can build rows, so an unbounded drain
+        # never sees an empty queue — this one callback would then block the
+        # event loop until EVERY row was built (beachball; the progress bar's
+        # first paint would be the finished count).  200ms chunks: long
+        # enough that the between-chunk event-loop overhead is negligible,
+        # short enough that the overlay stays live (~5 updates/s) and the app
+        # never looks hung.
+        deadline = time.monotonic() + 0.200
+        while time.monotonic() < deadline:
             try:
                 entry = self.resultQueue.get_nowait()
             except queue.Empty:
                 break
 
-            self.insertPhotoIntoTable(
-                entry["row"],
-                entry["photoData"],
-                entry["photoMatchData"],
-                entry["pixMap"],
-                entry["comboData"],
-            )
+            if self.photosAlreadyInDb:
+                self.insertExistingPhotoIntoTable(
+                    entry["row"],
+                    entry["photoData"],
+                    QPixmap.fromImage(entry["image"]),
+                )
+            else:
+                self.insertPhotoIntoTable(
+                    entry["row"],
+                    entry["photoData"],
+                    entry["photoMatchData"],
+                    QPixmap.fromImage(entry["image"]),
+                    entry["comboData"],
+                )
             self._loadedCount += 1
 
-        if self._loadedCount > 0 and (
-                self._loadedCount // 10 > prevCount // 10 or prevCount == 0):
-            self.mdiParent.lblStatusBarMessage.setText(
-                f"Loading photos: {self._loadedCount} of {self._totalFiles}...")
+        if self._loadedCount > prevCount:
+            self.mdiParent.progressOverlay.setPhotoValue(self._loadedCount)
 
         if self.threadsRemaining == 0 and self.resultQueue.empty():
             self._drainTimer.stop()
             self._finishLoading()
+        elif not self.resultQueue.empty():
+            # Results are already waiting: continue on the next event-loop
+            # pass (paints still get through) rather than idling until the
+            # next 50ms tick — that idle time otherwise dominates the load.
+            # The periodic timer stays as the backstop while the workers are
+            # still producing.
+            QTimer.singleShot(0, self._drainResultQueue)
 
     def _finishLoading(self):
+        # Run once: the periodic timer and the singleShot continuations can
+        # both deliver a final "queue empty" drain pass, and contentReady must
+        # not re-fire (it re-shows the window — or worse, fires on a deleted
+        # one).
+        if getattr(self, "_loadFinished", False):
+            return
+        self._loadFinished = True
+        # The reveal (contentReady → show) blocks for a few seconds on large
+        # sets while Qt lays out and polishes the whole never-shown widget
+        # tree.  A "Building the display…" overlay phase was tried here and
+        # removed: the block freezes all painting (including the overlay's
+        # busy animation), so it read as a hang — a short gap after the
+        # progress bar completes is the better experience.
         self.scrollArea.verticalScrollBar().setValue(0)
-        self.mdiParent.lblStatusBarMessage.setText("")
-        self.mdiParent.lblStatusBarMessage.setVisible(False)
+        self.mdiParent.progressOverlay.hide()
         QApplication.restoreOverrideCursor()
+        self.contentReady.emit()
 
     def threadFinished(self):
         self.threadsRemaining -= 1
               
                                 
                                  
+    def _addRowWidget(self, row, buttonPhoto, container):
+        """Wrap one photo row (thumbnail + details) in a container widget and
+        insert it into rowsLayout at its ordered position.  Worker results
+        arrive out of order, and a QVBoxLayout (unlike the old grid) has no
+        row indices of its own, so the position is found by bisecting the
+        sorted list of rows already present."""
+        rowWidget = QWidget()
+        rowWidget.setMinimumHeight(_THUMB_DISPLAY_H)
+        rowLayout = QHBoxLayout(rowWidget)
+        rowLayout.setContentsMargins(0, 0, 0, 0)
+        rowLayout.setSpacing(2)
+        rowLayout.addWidget(buttonPhoto)
+        rowLayout.addWidget(container, 1)   # details absorb the extra width
+
+        pos = bisect.bisect_left(self._rowOrder, row)
+        self._rowOrder.insert(pos, row)
+        self.rowsLayout.insertWidget(pos, rowWidget)
+        self._rowWidgets[row] = rowWidget
+
+
     def insertPhotoIntoTable(self, row, photoData, photoMatchData, pixMap, comboData):
 
-        QApplication.processEvents()
-                    
+        # No processEvents here: on a visible window it forced a full relayout
+        # and repaint of the whole growing grid for EVERY row (O(N²) for large
+        # imports).  The window stays hidden until contentReady, and the 50ms
+        # drain timer keeps the event loop responsive between batches.
         self.fillingCombos = True
                                                                     
         photoLocation = photoMatchData["photoLocation"]
@@ -362,27 +494,26 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
                             
         # p is a filename. Use it to add the image to the label as a pixmap
         buttonPhoto = QPushButton()
-        buttonPhoto.setMinimumHeight(330)
-        buttonPhoto.setMinimumWidth(500)
-                
+        buttonPhoto.setMinimumHeight(_THUMB_DISPLAY_H)
+        # Fixed (not minimum) width pins the thumbnail column: any extra
+        # window width goes to the details column, as in Manage Recordings.
+        buttonPhoto.setFixedWidth(_THUMB_DISPLAY_W)
+
         buttonPhoto.setIcon(QIcon(pixMap))
-        
-        # size to 500x330
-        buttonPhoto.setIconSize(QSize(500,330))    
+
+        buttonPhoto.setIconSize(QSize(_THUMB_DISPLAY_W, _THUMB_DISPLAY_H))
         buttonPhoto.setStyleSheet("QPushButton {background-color: #343333; border: 0px}")
 
-        # display thumbnail to new row in grid
-        self.gridPhotos.addWidget(buttonPhoto, row, 0)  
-        
         # set up layout in second column of row to house combo boxes
         # give each object a name according to the row so we can access them later
+        # (built DETACHED; inserted into the live layout only when complete —
+        # inserting first makes every subsequent widget insertion propagate
+        # styles/fonts through the live hierarchy one widget at a time)
         container = QWidget()
         container.setObjectName("container" + str(row))
         detailsLayout = QVBoxLayout(container)
-        detailsLayout.setObjectName("layout" + str(row)) 
+        detailsLayout.setObjectName("layout" + str(row))
         detailsLayout.setAlignment(Qt.AlignTop)
-
-        self.gridPhotos.addWidget(container, row, 1)
 
         # Seed this row's working metadata, then build the colour-coded label /
         # Select / Skip panel from it.  Date, location, time and species are now
@@ -411,184 +542,148 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         self.metaDataByRow[row] = thisPhotoMetaData
 
         self._buildDetailsPanel(row, detailsLayout, photoData, isExisting=False)
+        # panel complete — insert thumbnail + details as one ordered row
+        self._addRowWidget(row, buttonPhoto, container)
         self.saveNewMetaData(row)
 
         self.fillingCombos = False
-                
-                                  
-    def FillPhotosByFilter(self, filter): 
-        
-        # it's tempting to think that we could use the insertPhotoIntoTable routine,
-        # but we can't here, because if we're filling photos by filter, we already know
-        # each photo's meta data.  The insertPhotoIntoTable routine tries to guess the
-        # location, time, species, etc. from the photo file's embedded meta data.
 
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
-        
+
+    def FillPhotosByFilter(self, filter):
+
+        # These photos already carry a confirmed assignment (their stored
+        # sighting), so the workers skip matchPhoto and combo data (see
+        # threadGetPhotoData.run); the sighting context for each row is
+        # stashed in _rowContext for the drain to use when building the row.
+        # Rows build asynchronously into the (still hidden) window;
+        # contentReady fires when it can be revealed.
+
         self.scaleMe()
         self.resizeMe()
-        
-        self.fillingCombos = True
-        
+
         # save the filter settings passed to this routine to the form itself for future use
         self.filter = filter
-        
+
         photoSightings = self.mdiParent.db.GetSightingsWithPhotos(filter)
 
         if len(photoSightings) == 0:
             return False
-        
-        row = 0
 
-        photoCount = sum(len(s["photos"]) for s in photoSightings)
-
-        self.mdiParent.progressOverlay.showForPhotos()
-        self.mdiParent.progressOverlay.startLoading(photoCount)
-        QApplication.processEvents()
-
-        for s in photoSightings:
-            for p in s["photos"]:
-                
-                # p is a filename. Use it to add the image to the label as a pixmap
-                buttonPhoto = QPushButton()
-                buttonPhoto.setMinimumHeight(330)
-                buttonPhoto.setMinimumWidth(500)
-                
-                # read EXIF once; share it with thumbnail and getPhotoData.
-                # (Existing rows use the stored sighting, so no matchPhoto here.)
-                try:
-                    exif_dict = piexif.load(p["fileName"])
-                except Exception:
-                    exif_dict = {}
-                photoData = self.mdiParent.db.getPhotoData(p["fileName"], exif_dict)
-
-                # get thumbnail from file to display
-                pixMap = self.GetPixmapForThumbnail(p["fileName"], exif_dict)
-                
-                buttonPhoto.setIcon(QIcon(pixMap))
-                
-                # size to 500x330
-                buttonPhoto.setIconSize(QSize(500,330))    
-                buttonPhoto.setStyleSheet("QPushButton {background-color: #343333; border: 0px}")
-
-                # display thumbnail to new row in grid
-                self.gridPhotos.addWidget(buttonPhoto, row, 0)  
-                
-                # set up layout in second column of row to house combo boxes
-                # give each object a name according to the row so we can access them later
-                container = QWidget()
-                container.setObjectName("container" + str(row))
-                detailsLayout = QVBoxLayout(container)
-                detailsLayout.setObjectName("layout" + str(row)) 
-                detailsLayout.setAlignment(Qt.AlignTop)
-                self.gridPhotos.addWidget(container, row, 1)
-
-                # Existing-photo rows already hold a confirmed assignment, so
-                # every field is a direct match.  Seed metadata and build the
-                # colour-coded label / Select / Skip panel.
-                thisPhotoMetaData = {}
-                thisPhotoMetaData["location"] = s["location"]
-                thisPhotoMetaData["date"] = s["date"]
-                thisPhotoMetaData["time"] = s["time"]
-                thisPhotoMetaData["commonName"] = s["commonName"]
-                thisPhotoMetaData["photoData"] = p
-                thisPhotoMetaData["rating"] = p["rating"]
-                thisPhotoMetaData["cascadeMode"] = "location_first"
-                thisPhotoMetaData["selectedCommonName"] = s["commonName"]
-                thisPhotoMetaData["skip"] = False
-                thisPhotoMetaData["newLocation"] = s["location"]
-                thisPhotoMetaData["newDate"] = s["date"]
-                thisPhotoMetaData["newTime"] = s["time"]
-                thisPhotoMetaData["newCommonName"] = s["commonName"]
-                # The stored assignment is the auto-derived baseline; every
-                # field is green until the user overrides it via the tree.
-                thisPhotoMetaData["autoDate"] = s["date"]
-                thisPhotoMetaData["autoLocation"] = s["location"]
-                thisPhotoMetaData["autoTime"] = s["time"]
-                thisPhotoMetaData["autoSpecies"] = s["commonName"]
-                thisPhotoMetaData["autoGreen"] = {"date": True, "location": True,
-                                                  "time": True, "species": True}
-                self.metaDataByRow[row] = thisPhotoMetaData
-
-                # Pass the EXIF photoData (not the catalog dict p) so the
-                # "Photographed" line can show the capture date/time.
-                self._buildDetailsPanel(row, detailsLayout, photoData, isExisting=True)
-                self.saveNewMetaData(row)
-                
-                row += 1
-                self.mdiParent.progressOverlay.setPhotoValue(row)
-                QApplication.processEvents()
-
-        self.mdiParent.progressOverlay.hide()
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
 
         icon = QIcon()
         icon.addPixmap(QPixmap(":/icon_camera_white.png"), QIcon.Normal, QIcon.Off)
-        self.setWindowIcon(icon) 
+        self.setWindowIcon(icon)
         self.setWindowTitle("Manage Photos")
-        
-        self.fillingCombos = False
-        
-        QApplication.restoreOverrideCursor()         
-                    
+
+        # one job per photo; workers pull from the shared queue dynamically
+        row = 0
+        for s in photoSightings:
+            for p in s["photos"]:
+                self._rowContext[row] = (s, p)
+                self.workQueue.put([row, p["fileName"]])
+                row += 1
+
+        self._totalFiles = row
+        self._loadedCount = 0
+        self._threadsToStart = min(self.threadCount, self._totalFiles)
+        self.threadsRemaining = self._threadsToStart
+
+        # Gated main-window progress overlay, as in the Photos browser: it only
+        # becomes visible if the load runs longer than the gate, so small
+        # sets never flash a progress bar.
+        overlay = self.mdiParent.progressOverlay
+        overlay.armGate(1000)
+        overlay.showForPhotos()
+        overlay.startLoading(self._totalFiles)
+
+        QTimer.singleShot(0, self._startThreads)
+
         # tell MainWindow that we succeeded filling the list
         return(True)
 
 
-    def GetPixmapForThumbnail(self, photoFile, exif_dict=None):
+    def insertExistingPhotoIntoTable(self, row, photoData, pixMap):
+        """Build one row for a photo already in the catalog.  Its assignment is
+        known from the stored sighting (stashed in _rowContext), so every field
+        is a direct match — no guessing and no combo data."""
 
-        # Fast path: reuse the on-disk thumbnail (the same 500x330 image the
-        # Photos browser caches) and skip decoding the JPEG entirely.
+        self.fillingCombos = True
+
+        s, p = self._rowContext[row]
+
+        buttonPhoto = QPushButton()
+        buttonPhoto.setMinimumHeight(_THUMB_DISPLAY_H)
+        # Fixed width pins the thumbnail column (see insertPhotoIntoTable)
+        buttonPhoto.setFixedWidth(_THUMB_DISPLAY_W)
+        buttonPhoto.setIcon(QIcon(pixMap))
+        buttonPhoto.setIconSize(QSize(_THUMB_DISPLAY_W, _THUMB_DISPLAY_H))
+        buttonPhoto.setStyleSheet("QPushButton {background-color: #343333; border: 0px}")
+
+        # set up layout in second column of row to house combo boxes
+        # give each object a name according to the row so we can access them later
+        container = QWidget()
+        container.setObjectName("container" + str(row))
+        detailsLayout = QVBoxLayout(container)
+        detailsLayout.setObjectName("layout" + str(row))
+        detailsLayout.setAlignment(Qt.AlignTop)
+
+        # Existing-photo rows already hold a confirmed assignment, so
+        # every field is a direct match.  Seed metadata and build the
+        # colour-coded label / Select / Skip panel.
+        thisPhotoMetaData = {}
+        thisPhotoMetaData["location"] = s["location"]
+        thisPhotoMetaData["date"] = s["date"]
+        thisPhotoMetaData["time"] = s["time"]
+        thisPhotoMetaData["commonName"] = s["commonName"]
+        thisPhotoMetaData["photoData"] = p
+        thisPhotoMetaData["rating"] = p["rating"]
+        thisPhotoMetaData["cascadeMode"] = "location_first"
+        thisPhotoMetaData["selectedCommonName"] = s["commonName"]
+        thisPhotoMetaData["skip"] = False
+        thisPhotoMetaData["newLocation"] = s["location"]
+        thisPhotoMetaData["newDate"] = s["date"]
+        thisPhotoMetaData["newTime"] = s["time"]
+        thisPhotoMetaData["newCommonName"] = s["commonName"]
+        # The stored assignment is the auto-derived baseline; every
+        # field is green until the user overrides it via the tree.
+        thisPhotoMetaData["autoDate"] = s["date"]
+        thisPhotoMetaData["autoLocation"] = s["location"]
+        thisPhotoMetaData["autoTime"] = s["time"]
+        thisPhotoMetaData["autoSpecies"] = s["commonName"]
+        thisPhotoMetaData["autoGreen"] = {"date": True, "location": True,
+                                          "time": True, "species": True}
+        self.metaDataByRow[row] = thisPhotoMetaData
+
+        # Pass the EXIF photoData (not the catalog dict p) so the
+        # "Photographed" line can show the capture date/time.
+        self._buildDetailsPanel(row, detailsLayout, photoData, isExisting=True)
+        # panel complete — insert thumbnail + details as one ordered row
+        self._addRowWidget(row, buttonPhoto, container)
+        self.saveNewMetaData(row)
+
+        self.fillingCombos = False
+
+
+    def GetImageForThumbnail(self, photoFile):
+        """Return a 500x330-bounded, EXIF-oriented QImage thumbnail.
+
+        Thread-safe (QImage only — QPixmap must stay on the GUI thread).
+        Fast path is the on-disk thumbnail cache shared with the Photos
+        browser; on a miss, decode through the cache module's scaled decode
+        (large JPEGs are never fully decoded) and store the result, priming
+        the browser's cache for later.  The old code preferred the tiny EXIF
+        embedded thumbnail here and upscaled it to 500px — fast, but blurry,
+        and it poisoned the shared cache with that blurry image.
+        """
         cached = code_ThumbnailCache.load(photoFile)
         if cached is not None and not cached.isNull():
-            return QPixmap.fromImage(cached)
+            return cached
 
-        # use provided exif_dict (pre-loaded by caller) or load from file
-        if exif_dict is None:
-            try:
-                exif_dict = piexif.load(photoFile)
-            except:
-                exif_dict = {}
-
-        try:
-            pmOrientation = int(exif_dict["0th"][piexif.ImageIFD.Orientation])
-        except:
-            pmOrientation = 1
-
-        try:
-            thumbimg = exif_dict["thumbnail"]
-        except:
-            thumbimg = None
-
-        if thumbimg is None:
-            qimage = QImage(photoFile)
-        else:
-            qimage = QImage()
-            qimage.loadFromData(thumbimg, format='JPG')
-        if pmOrientation == 2: qimage = qimage.mirrored(True,  False)
-        if pmOrientation == 3: qimage = qimage.transformed(QTransform().rotate(180))
-        if pmOrientation == 4: qimage = qimage.mirrored(False,  True)
-        if pmOrientation == 5: 
-            qimage = qimage.mirrored(True,  False)
-            qimage = qimage.transformed(QTransform().rotate(270))
-        if pmOrientation == 6: qimage = qimage.transformed(QTransform().rotate(90))
-        if pmOrientation == 7:          
-            qimage = qimage.mirrored(True,  False)
-            qimage = qimage.transformed(QTransform().rotate(90))
-        if pmOrientation == 8: qimage = qimage.transformed(QTransform().rotate(270))
-        
-        pm = QPixmap()
-        pm.convertFromImage(qimage)
-
-        if pm.isNull():
-            return pm
-
-        if pm.height() > pm.width():
-            pm = pm.scaledToHeight(330)
-        else:
-            pm = pm.scaledToWidth(500)
-        # Cache the freshly-decoded thumbnail so the next open is a fast hit.
-        code_ThumbnailCache.store(photoFile, pm.toImage())
-        return pm
+        image = code_ThumbnailCache.decode_thumbnail(photoFile)
+        if not image.isNull():
+            code_ThumbnailCache.store(photoFile, image)
+        return image
 
 
     def _computeAutoGreen(self, md):
@@ -655,7 +750,7 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         # four colour-coded assignment labels.
         leftCol = QVBoxLayout()
         leftCol.setSpacing(4)
-        lblFileName = QLabel(os.path.basename(photoData["fileName"]))
+        lblFileName = QLabel(_wrappable(os.path.basename(photoData["fileName"])))
         lblFileName.setStyleSheet("color: %s;" % _FIELD_NAME_COLOR)
         lblFileName.setWordWrap(True)
         leftCol.addWidget(lblFileName)
@@ -672,12 +767,14 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
             metaStr = "Photo date unknown"
         lblMeta = QLabel(metaStr)
         lblMeta.setStyleSheet("color: %s;" % _FIELD_NAME_COLOR)
+        lblMeta.setWordWrap(True)
         leftCol.addWidget(lblMeta)
         leftCol.addSpacing(10)   # line feed after the metadata line
 
         for key in ("date", "location", "time", "species"):
             lbl = QLabel()
             lbl.setTextFormat(Qt.TextFormat.RichText)
+            lbl.setWordWrap(True)
             lbls[key] = lbl
             leftCol.addWidget(lbl)
         leftCol.addStretch()
@@ -692,7 +789,7 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         # Pin every control to one explicit font so the combo text can't end up a
         # different size from the buttons (they otherwise resolve fonts via
         # different inheritance paths).
-        _panelFont = QFont("", getattr(self.mdiParent, "fontSize", 11))
+        _panelFont = QFont(YBFont, getattr(self.mdiParent, "fontSize", 11))
 
         btnSelect = QPushButton("Select")
         btnSelect.setFont(_panelFont)
@@ -909,8 +1006,10 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         # Collect files successfully added so their thumbnails can be cached.
         added_photo_files = set()
 
-        # call database function to remove modified photos from db
-        for r in range(self.gridPhotos.rowCount()):
+        # call database function to remove modified photos from db.
+        # Iterate the metadata dict (not layout row counts): rows deleted via
+        # handlePhotoDeletion leave gaps in the numbering.
+        for r in sorted(self.metaDataByRow):
 
             # check if we're processing photos new to the db or ones already in the db
             if self.photosAlreadyInDb is True:
@@ -1039,11 +1138,11 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
                     if meta["photoData"]["fileName"] == filename), None)
         if row is None:
             return
-        for col in (0, 1):
-            item = self.gridPhotos.itemAtPosition(row, col)
-            if item and item.widget():
-                item.widget().setParent(None)
-        self.gridPhotos.setRowMinimumHeight(row, 0)
+        rowWidget = self._rowWidgets.pop(row, None)
+        if rowWidget is not None:
+            self._rowOrder.remove(row)
+            self.rowsLayout.removeWidget(rowWidget)
+            rowWidget.deleteLater()
         del self.metaDataByRow[row]
         self._rowLabels.pop(row, None)
 

@@ -20,7 +20,7 @@ import os
 import shutil
 import tempfile
 
-from PySide6.QtCore import QStandardPaths, QSize, Qt
+from PySide6.QtCore import QStandardPaths, QSize, Qt, QBuffer, QIODevice
 from PySide6.QtGui import QImageReader, QImageWriter
 
 # Bump the version subdir whenever any cached artifact's spec changes — old
@@ -29,6 +29,15 @@ _CACHE_VERSION = "v2"
 _CACHE_SUBDIR  = "thumbs"
 _DEFAULT_CAP_BYTES = 1024 * 1024 * 1024  # ~1 GB (spectro ribbons are ~0.4-3 MB each)
 THUMB_SIZE = QSize(500, 330)             # target photo-thumbnail bounding box
+# On-screen thumbnail geometry shared by the Photos browser and Manage Photos
+# (the cached image stays THUMB_SIZE; views scale it down for display).
+THUMB_DISPLAY_SIZE = QSize(333, 220)
+# Spectro thumbnails, by contrast, are RENDERED at the display size (see
+# code_Audio.SPECTRO_THUMB_W/H — kept equal to THUMB_DISPLAY_SIZE) so no
+# scaling happens at paint time.  Bump this variant whenever the rendered
+# artifact changes (size, axis font); old-variant files just stop being
+# found and age out via enforce_cap().
+SPECTRO_THUMB_VARIANT = "333x220-ax9"
 
 # Each cached artifact is identified by a "kind".  Photos use lossy JPEG; the
 # grayscale spectrograms use lossless PNG (JPEG would smear the fine frequency
@@ -85,7 +94,7 @@ def build_spectro(wav_path):
     img, _dur, _sr, _bbox = code_Audio.render_spectrogram_qimage(wav_path)
     if img is None or img.isNull():
         return False
-    store(wav_path, img, "spectro_thumb")
+    store(wav_path, img, "spectro_thumb", SPECTRO_THUMB_VARIANT)
     return True
 
 
@@ -151,7 +160,7 @@ def prebuild_async(photo_paths=(), recording_paths=()):
                     if load(path, "photo") is None:
                         build(path)
                 else:
-                    if load(path, "spectro_thumb") is None:
+                    if load(path, "spectro_thumb", SPECTRO_THUMB_VARIANT) is None:
                         build_spectro(path)
                     if cre is not None and load(
                             path, "spectro_ribbon",
@@ -230,7 +239,8 @@ def _all_kind_variants():
     """Every (kind, variant) artifact identity a media file might have cached.
     The ribbon's variant lives in code_RecordingEnlargement; imported lazily so
     this module has no hard dependency on it."""
-    pairs = [("photo", ""), ("spectro_thumb", ""), ("spectro_overview", "")]
+    pairs = [("photo", ""), ("spectro_thumb", SPECTRO_THUMB_VARIANT),
+             ("spectro_overview", "")]
     try:
         import code_RecordingEnlargement as cre
         pairs.append(("spectro_ribbon", cre._RIBBON_VARIANT))
@@ -315,26 +325,39 @@ def store(source_path, qimage, kind="photo", variant=""):
         return
     _ext, fmt, quality = _KIND_FMT[kind]
     d = os.path.dirname(cp)
-    try:
-        fd, tmp = tempfile.mkstemp(suffix=".tmp", dir=d)
-        os.close(fd)
-    except OSError:
-        return
-    writer = QImageWriter(tmp, fmt)
+
+    # Encode into memory first, then write the bytes with a plain file handle we
+    # close before renaming.  QImageWriter given a *path* keeps that file open for
+    # its lifetime; on Windows you cannot rename/delete an open file, so a
+    # write-then-os.replace(tmp, cp) fails with a sharing violation (POSIX allows
+    # it, which is why this only broke on Windows — leaving orphaned .tmp files
+    # and an ever-missing cache).  Encoding to a QBuffer avoids any OS handle.
+    buf = QBuffer()
+    buf.open(QIODevice.OpenModeFlag.WriteOnly)
+    writer = QImageWriter(buf, fmt)
     if quality >= 0:
         writer.setQuality(quality)
     elif fmt == b"png":
         writer.setCompression(_PNG_COMPRESSION)   # lossless; faster encode
-    if writer.write(qimage):
+    ok = writer.write(qimage)
+    buf.close()
+    if not ok:
+        return
+
+    data = bytes(buf.data())
+    try:
+        fd, tmp = tempfile.mkstemp(suffix=".tmp", dir=d)
+    except OSError:
+        return
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+        os.replace(tmp, cp)   # atomic on POSIX and Windows; tmp handle is closed
+    except OSError:
         try:
-            os.replace(tmp, cp)   # atomic on POSIX and Windows
-            return
+            os.remove(tmp)
         except OSError:
             pass
-    try:
-        os.remove(tmp)
-    except OSError:
-        pass
 
 
 def enforce_cap(max_bytes=_DEFAULT_CAP_BYTES):

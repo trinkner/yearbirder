@@ -1,5 +1,6 @@
 # import the GUI forms that we create with Qt Creator
 import form_Families
+from code_Stylesheet import YBFont
 
 import code_Filter
 import code_Lists
@@ -413,18 +414,18 @@ class Families(QMdiSubWindow, form_Families.Ui_frmFamilies):
         #scale the font for all widgets in window
         for w in self.children():
             try:
-                w.setFont(QFont("", fontSize))
+                w.setFont(QFont(YBFont, fontSize))
             except:
                 pass 
 
-        self.lblLocation.setFont(QFont("", floor(fontSize * 1.4 )))
+        self.lblLocation.setFont(QFont(YBFont, floor(fontSize * 1.4 )))
         self.lblLocation.setStyleSheet("QLabel { font: bold }");
-        self.lblDateRange.setFont(QFont("", floor(fontSize * 1.2 )))
+        self.lblDateRange.setFont(QFont(YBFont, floor(fontSize * 1.2 )))
         self.lblDateRange.setStyleSheet("QLabel { font: bold }");
-        self.lblDetails.setFont(QFont("", floor(fontSize * 1.2 )))
+        self.lblDetails.setFont(QFont(YBFont, floor(fontSize * 1.2 )))
         self.lblDetails.setStyleSheet("QLabel { font: bold }");
 
-        metrics = QFontMetrics(QFont("", fontSize))
+        metrics = QFontMetrics(QFont(YBFont, fontSize))
         rowHeight = self.mdiParent.rowHeight
         textWidth = int(metrics.boundingRect("Rank").width())
 
