@@ -215,6 +215,62 @@ stylesheetBase = """
     QPushButton:hover { background: #363a4f; }
     QPushButton:pressed { background: #4f8ef7; color: white; }
 
+    /* Shared media-card background for the four media views (Browse + Manage,
+       Photos + Recordings).  A NEUTRAL gray, deliberately outside the blue
+       ramp, so photo colour judgement isn't skewed by a tinted surround; the
+       same gray the Enlargement windows already use.  Styled here via object
+       names — per-widget setStyleSheet in row builders costs milliseconds
+       per row. */
+    QWidget#mediaCard { background-color: #343333; border-radius: 6px; }
+    /* The global "QWidget { background: #1e1f26 }" rule above makes every
+       plain child paint an opaque background ON TOP of the card, hiding it.
+       Scoped transparency lets the card show through: labels, checkboxes and
+       sliders inside a card, plain container widgets tagged #cardTransparent,
+       and the species tag strip.  Real controls (buttons, combos) keep their
+       own styled backgrounds. */
+    QWidget#mediaCard QLabel { background: transparent; color: #c1c1c1; }
+    QWidget#mediaCard QCheckBox { background: transparent; color: #c1c1c1; }
+    QWidget#mediaCard QSlider { background: transparent; }
+    QWidget#cardTransparent { background: transparent; }
+    SpeciesTagStrip { background: transparent; }
+    QLabel#mediaCaption { background: transparent; color: silver; padding: 3px; }
+
+    /* Controls sitting ON a card must be lighter than the card to read as
+       raised — the global button fill (#2b2d38) is darker than the card, which
+       inverted the elevation and made buttons look recessed.  These ID-scoped
+       rules outrank the global :hover/:pressed/:focus states, so those are
+       restated here; the chip × and the photo-thumbnail button must stay
+       transparent and are exempted at higher specificity. */
+    QWidget#mediaCard QPushButton {
+        background: #42454f;
+        border: 1px solid #565a6a;
+    }
+    QWidget#mediaCard QPushButton:hover { background: #4d5160; }
+    QWidget#mediaCard QPushButton:pressed { background: #4f8ef7; color: white; }
+    QWidget#mediaCard QComboBox {
+        background: #42454f;
+        border: 1px solid #565a6a;
+    }
+    QWidget#mediaCard QComboBox:hover { border-color: #4f8ef7; }
+    QWidget#mediaCard QComboBox:focus,
+    QWidget#mediaCard QComboBox:on {
+        background: #4d5160;
+        border: 1px solid #4f8ef7;
+    }
+    QWidget#mediaCard QPushButton#chipRemoveBtn {
+        background: transparent; border: none;
+    }
+    QWidget#mediaCard QPushButton#chipRemoveBtn:hover {
+        background: rgba(255,255,255,40); border-radius: 9px;
+    }
+    QWidget#mediaCard QPushButton#mediaThumbBtn {
+        background: transparent; border: none;
+    }
+    QPushButton#mediaThumbBtn {
+        background-color: transparent; border: none;
+        padding: 0px; min-width: 0px;
+    }
+
     /* Species chip pills (SpeciesTagStrip in Manage Recordings).  Styled here
        rather than with per-widget setStyleSheet: per-widget sheets force a
        fresh style object + repolish per chip piece (~13ms per row). */

@@ -32,9 +32,9 @@ from PySide6.QtMultimedia import (
 # Colours for the assignment labels.  A field's value is shown green only while
 # it still equals the value auto-derived from the recording's metadata/filename;
 # once the user overrides it via the tree it reverts to the neutral text colour.
-_FIELD_NAME_COLOR = "#8b8fa8"          # muted label ("Date", "Location", …)
+_FIELD_NAME_COLOR = "#c1c1c1"          # matches the Browse windows' card text
 _MATCH_COLOR      = "#4CAF50"          # green  – value came from metadata/filename
-_VALUE_COLOR      = "#e2e4ec"          # neutral – manually chosen / not auto-derived
+_VALUE_COLOR      = "#c1c1c1"          # neutral – manually chosen / not auto-derived
 _SKIPPED_COLOR    = "#6b6e7e"          # muted value when the row is skipped
 
 
@@ -80,10 +80,12 @@ class SpectrogramLabel(QWidget):
         self._ax_bbox = (0.0, 1.0, 0.0, 1.0)  # full-area fallback
         self._fraction = None   # 0.0–1.0; None hides the line
         self._error_text = ""
-        # Same display geometry as the Manage Photos thumbnails; the rendered
-        # spectrogram pixmap is scaled down to fit in paintEvent.
+        # Same display geometry as the Manage Photos thumbnails.  FIXED height:
+        # the spectrogram is rendered at exactly this size, and without a
+        # maximum the widget stretched with spare row height, which let the
+        # Play/scrubber strip drift over the spectrogram's white area.
         self.setMinimumWidth(code_ThumbnailCache.THUMB_DISPLAY_SIZE.width())
-        self.setMinimumHeight(code_ThumbnailCache.THUMB_DISPLAY_SIZE.height())
+        self.setFixedHeight(code_ThumbnailCache.THUMB_DISPLAY_SIZE.height())
 
     def setPixmap(self, pixmap, ax_bbox=None):
         self._pixmap = pixmap
@@ -352,6 +354,11 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         self._changesSaved = False
         self._skipCloseGuard = False
 
+        # Card gutters: frame the media-card rows with the window background
+        # (the other three media views do the same on their rowsLayout).
+        self.gridAudio.setContentsMargins(8, 6, 8, 6)
+        self.gridAudio.setVerticalSpacing(6)
+
         self.threadCount = min(os.cpu_count() or 4, 8)
         self.workQueue = queue.Queue()
         self.resultQueue = queue.Queue()
@@ -393,7 +400,7 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         self._updateTimer.timeout.connect(self._updateScrubber)
 
         icon = QIcon()
-        icon.addPixmap(QPixmap(":/icon_bird_white.png"), QIcon.Normal, QIcon.Off)
+        icon.addPixmap(QPixmap(":/icon_microphone_white.png"), QIcon.Normal, QIcon.Off)
         self.setWindowIcon(icon)
 
     # ------------------------------------------------------------------
@@ -646,10 +653,6 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         self.fillingCombos = False
         self.setWindowTitle("Manage Recordings")
 
-        icon = QIcon()
-        icon.addPixmap(QPixmap(":/icon_bird_white.png"), QIcon.Normal, QIcon.Off)
-        self.setWindowIcon(icon)
-
         QTimer.singleShot(0, self._startThreads)
         return True
 
@@ -745,6 +748,7 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
 
         # ---- Column 0: spectrogram + scrubber ----
         visContainer = QWidget()
+        visContainer.setObjectName("cardTransparent")
         visLayout = QVBoxLayout(visContainer)
         visLayout.setContentsMargins(0, 0, 0, 0)
         visLayout.setSpacing(2)
@@ -756,6 +760,7 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         visLayout.addWidget(spectroLabel)
 
         scrubRow = QWidget()
+        scrubRow.setObjectName("cardTransparent")
         scrubLayout = QHBoxLayout(scrubRow)
         scrubLayout.setContentsMargins(2, 0, 2, 0)
         scrubLayout.setSpacing(4)
@@ -776,14 +781,11 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         scrubLayout.addWidget(playBtn)
         scrubLayout.addWidget(scrubber)
         visLayout.addWidget(scrubRow)
+        visLayout.addStretch(1)   # keep the strip snug under the spectro
 
-        # Pin the spectro/play column to the shared thumbnail width and give
-        # the details column all the stretch — otherwise the grid splits any
-        # extra window width between the columns and the spectrogram (which
-        # has only a minimum size) widens with the window.
+        # Pin the spectro/play column to the shared thumbnail width; the
+        # details column absorbs all extra width via the row layout below.
         visContainer.setFixedWidth(code_ThumbnailCache.THUMB_DISPLAY_SIZE.width())
-        self.gridAudio.setColumnStretch(1, 1)
-        self.gridAudio.addWidget(visContainer, row, 0)
 
         self._filePaths[row] = recordingData["fileName"]
         dur_str = recordingData.get("duration", "")
@@ -804,7 +806,7 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         # widget insertion propagate styles/fonts through the live hierarchy,
         # one widget at a time (~7ms per row).
         container = QWidget()
-        container.setObjectName("container" + str(row))
+        container.setObjectName("cardTransparent")
         detailsLayout = QVBoxLayout(container)
         detailsLayout.setObjectName("layout" + str(row))
         detailsLayout.setAlignment(Qt.AlignTop)
@@ -845,8 +847,20 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
 
         self.metaDataByRow[row] = thisAudioMetaData
         self._buildDetailsPanel(row, detailsLayout, recordingData, isExisting)
-        # panel complete — one insertion, one style/font propagation pass
-        self.gridAudio.addWidget(container, row, 1)
+
+        # Panel complete — assemble spectro + details as ONE card row spanning
+        # both grid columns (shared media-card background, matching the other
+        # media views), inserted in a single style/font propagation pass.
+        rowWidget = QWidget()
+        rowWidget.setObjectName("mediaCard")
+        rowWidget.setAttribute(Qt.WA_StyledBackground, True)
+        rowLayout = QHBoxLayout(rowWidget)
+        rowLayout.setContentsMargins(6, 6, 6, 6)   # inset content off the rounded corners
+        rowLayout.setSpacing(2)
+        rowLayout.addWidget(visContainer)
+        rowLayout.addWidget(container, 1)   # details absorb the extra width
+        self.gridAudio.addWidget(rowWidget, row, 0, 1, 2)
+
         self.saveNewMetaData(row)
         self.fillingCombos = False
 
@@ -1010,6 +1024,7 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
 
         controlsCol.addStretch()
         controlsWidget = QWidget()
+        controlsWidget.setObjectName("cardTransparent")
         controlsWidget.setLayout(controlsCol)
         # Wide enough that "Not Rated" plus the dropdown arrow plus the centring
         # padding all fit without clipping the leading letter.
@@ -1201,9 +1216,8 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         # Collect files successfully added so their spectrograms can be cached.
         added_recording_files = set()
 
-        for r in range(self.gridAudio.rowCount()):
-            if r not in self.metaDataByRow:
-                continue
+        # Iterate the metadata dict directly (not layout row counts)
+        for r in sorted(self.metaDataByRow):
             meta = self.metaDataByRow[r]
 
             if self.audioAlreadyInDb:

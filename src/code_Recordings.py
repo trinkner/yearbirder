@@ -97,8 +97,8 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
         # is left unused.
         self.gridAudio.setContentsMargins(0, 0, 0, 0)
         self.rowsLayout = QVBoxLayout()
-        self.rowsLayout.setContentsMargins(0, 0, 0, 0)
-        self.rowsLayout.setSpacing(2)
+        self.rowsLayout.setContentsMargins(8, 6, 8, 6)   # gutters frame the cards
+        self.rowsLayout.setSpacing(6)
         self.verticalLayout_3.addLayout(self.rowsLayout)
         self.verticalLayout_3.addStretch(1)
         self._abort = False
@@ -193,7 +193,7 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
         if not self.audioList:
             self.close()
             return
-        self.SortAndDisplayRecordings()
+        self._buildRows()
 
     def resizeMe(self):
         windowWidth = self.width() - 10
@@ -415,10 +415,10 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
                     self.mdiParent.progressOverlay.hide()
                     return False
 
-        self.SortAndDisplayRecordings()
+        self._buildRows()
 
         icon = QIcon()
-        icon.addPixmap(QPixmap(":/icon_bird_white.png"), QIcon.Normal, QIcon.Off)
+        icon.addPixmap(QPixmap(":/icon_microphone_white.png"), QIcon.Normal, QIcon.Off)
         self.setWindowIcon(icon)
 
         if not self.audioList:
@@ -427,10 +427,40 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
 
         return True
 
+    def _sortAudioList(self):
+        """Sort audioList by the checked radio; returns the permutation
+        (new position -> old index) so row widgets and bookkeeping can
+        follow the data."""
+        idx = range(len(self.audioList))
+        if self.rdoSortSpecies.isChecked():
+            order = sorted(idx, key=lambda i: self.audioList[i][1]["commonName"])
+        elif self.rdoSortDate.isChecked():
+            order = sorted(idx, key=lambda i: (self.audioList[i][1]["date"]
+                                               + self.audioList[i][1]["time"]))
+        elif self.rdoSortRating.isChecked():
+            def _rating(i):
+                try:
+                    return float(self.audioList[i][0].get("rating") or 0)
+                except (ValueError, TypeError):
+                    return 0.0
+            order = sorted(idx, key=_rating, reverse=True)
+        elif self.rdoSortTaxonomy.isChecked():
+            order = sorted(idx, key=lambda i: (float(self.audioList[i][1]["taxonomicOrder"]),
+                                               self.audioList[i][1]["commonName"]))
+        else:
+            order = list(idx)
+        self.audioList = [self.audioList[i] for i in order]
+        return order
+
     def SortAndDisplayRecordings(self):
+        """Radio-button sort: reorder the EXISTING row widgets in place —
+        no rebuild, no spectrogram reloads (see SortAndDisplayPhotos)."""
         if not self.audioList:
             return
-        if self._sorting:
+        if self._sorting or self.threadsRemaining > 0:
+            return
+        if not self._rowWidgets:
+            self._buildRows()
             return
         self._sorting = True
 
@@ -439,21 +469,63 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
             self._player.stop()
         self._activeRow = None
 
+        order = self._sortAudioList()
+
+        # Detach every row item from the layout (the widgets survive), then
+        # re-insert them in the new order and remap the row-indexed
+        # bookkeeping.  Handlers carry baked-in row numbers: the spectro
+        # click is a plain attribute (reassigned); Play/scrubber are signal
+        # connections (disconnected and reconnected at the new index).
+        while self.rowsLayout.count():
+            self.rowsLayout.takeAt(0)
+        newRows, newSpectros, newBtns, newSliders, newPaths = {}, {}, {}, {}, {}
+        for new_row, old_row in enumerate(order):
+            w = self._rowWidgets.get(old_row)
+            if w is None:
+                continue
+            self.rowsLayout.addWidget(w)
+            newRows[new_row] = w
+            lbl = self._spectroLabels.get(old_row)
+            if lbl is not None:
+                lbl.mousePressEvent = partial(self._spectroClicked, new_row)
+                newSpectros[new_row] = lbl
+            btn = self._playBtns.get(old_row)
+            if btn is not None:
+                btn.clicked.disconnect()
+                btn.clicked.connect(partial(self._btnPlayClicked, new_row))
+                newBtns[new_row] = btn
+            sld = self._sliders.get(old_row)
+            if sld is not None:
+                sld.sliderMoved.disconnect()
+                sld.sliderMoved.connect(partial(self._onSliderMoved, new_row))
+                newSliders[new_row] = sld
+            if old_row in self._filePaths:
+                newPaths[new_row] = self._filePaths[old_row]
+        self._rowWidgets = newRows
+        self._spectroLabels = newSpectros
+        self._playBtns = newBtns
+        self._sliders = newSliders
+        self._filePaths = newPaths
+        self.scrollArea.verticalScrollBar().setValue(0)
+        self._sorting = False
+
+    def _buildRows(self):
+        """Full grid build (initial fill / after a deletion): sort, then
+        create every row and stream the spectrograms in from the workers."""
+        if not self.audioList:
+            return
+        if self._sorting:
+            return
+        self._sorting = True
+
+        # Stop playback when rebuilding so scrubber state stays consistent.
+        if self._player.playbackState() != QMediaPlayer.PlaybackState.StoppedState:
+            self._player.stop()
+        self._activeRow = None
+
         QApplication.processEvents()
 
-        if self.rdoSortSpecies.isChecked():
-            self.audioList.sort(key=lambda x: x[1]["commonName"])
-        elif self.rdoSortDate.isChecked():
-            self.audioList.sort(key=lambda x: x[1]["date"] + x[1]["time"])
-        elif self.rdoSortRating.isChecked():
-            try:
-                self.audioList.sort(
-                    key=lambda x: float(x[0].get("rating") or 0), reverse=True)
-            except (ValueError, TypeError):
-                self.audioList.sort(key=lambda x: x[0].get("rating", ""), reverse=True)
-        elif self.rdoSortTaxonomy.isChecked():
-            self.audioList.sort(
-                key=lambda x: (float(x[1]["taxonomicOrder"]), x[1]["commonName"]))
+        self._sortAudioList()
 
         # Clear the existing rows
         for i in reversed(range(self.rowsLayout.count())):
@@ -474,6 +546,7 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
             # ── Col 0: spectrogram + scrubber ──────────────────────────────────
             # Same display geometry as the Photos browser thumbnails.
             visContainer = QWidget()
+            visContainer.setObjectName("cardTransparent")
             visContainer.setFixedWidth(code_ThumbnailCache.THUMB_DISPLAY_SIZE.width())
             visLayout = QVBoxLayout(visContainer)
             visLayout.setContentsMargins(0, 0, 0, 0)
@@ -485,6 +558,7 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
             visLayout.addWidget(spectroLabel)
 
             scrubRow = QWidget()
+            scrubRow.setObjectName("cardTransparent")
             scrubLayout = QHBoxLayout(scrubRow)
             scrubLayout.setContentsMargins(2, 0, 2, 0)
             scrubLayout.setSpacing(4)
@@ -505,6 +579,7 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
             scrubLayout.addWidget(playBtn)
             scrubLayout.addWidget(scrubber)
             visLayout.addWidget(scrubRow)
+            visLayout.addStretch(1)   # keep the strip snug under the spectro
 
             self._spectroLabels[row] = spectroLabel
             self._filePaths[row] = fileName
@@ -526,35 +601,38 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
             if weekday:
                 dateLine = weekday + ", " + dateLine
 
-            duration = a.get("duration", "")
             rating = a.get("rating", "0")
 
+            # No Duration line — the duration is visible on the spectrogram's
+            # time axis; the blank line matches the Photos browser caption.
             captionText = (
                 "<br><br>"
                 '<span style="font-size: 1.1em; font-weight: bold;">' + s["commonName"] + "</span><br>"
                 "<i>" + s["scientificName"] + "</i><br><br>"
                 + s["location"] + "<br>"
-                + dateLine
-                + ("<br>Duration: " + duration if duration else "")
-                + "<br>Rating: " + rating
+                + dateLine + "<br><br>"
+                + "Rating: " + rating
             )
 
             labelCaption = QLabel()
             labelCaption.setTextFormat(Qt.RichText)
             labelCaption.setAlignment(Qt.AlignTop | Qt.AlignLeft)
             labelCaption.setText(captionText)
-            labelCaption.setStyleSheet(
-                "QLabel { background-color: #343333; color: silver; padding: 3px; }")
+            labelCaption.setObjectName("mediaCaption")
 
             # One container widget per row in a QVBoxLayout (avoids the grid's
             # ~524k-px height cap that squashed rows past ~1,600 recordings).
             # Row height = photo-thumbnail height + the Play/scrubber strip
-            # (28px + 2px spacing) beneath the spectrogram.
+            # (28px + 2px spacing) + the card's 12px internal padding.  The
+            # row carries the shared media-card background; children are
+            # transparent.
             rowWidget = QWidget()
+            rowWidget.setObjectName("mediaCard")
+            rowWidget.setAttribute(Qt.WA_StyledBackground, True)
             rowWidget.setMinimumHeight(
-                code_ThumbnailCache.THUMB_DISPLAY_SIZE.height() + 30)
+                code_ThumbnailCache.THUMB_DISPLAY_SIZE.height() + 42)
             rowLayout = QHBoxLayout(rowWidget)
-            rowLayout.setContentsMargins(0, 0, 0, 0)
+            rowLayout.setContentsMargins(6, 6, 6, 6)   # inset content off the rounded corners
             rowLayout.setSpacing(2)
             rowLayout.addWidget(visContainer)
             rowLayout.addWidget(labelCaption, 1)   # caption absorbs the extra width

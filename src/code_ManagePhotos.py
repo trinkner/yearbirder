@@ -56,9 +56,9 @@ from PySide6.QtWidgets import (
 # it still equals the value auto-derived from the photo's metadata / filename;
 # once the user overrides it via the tree (or it was never auto-derived) it is
 # shown in the neutral text colour.
-_FIELD_NAME_COLOR = "#8b8fa8"          # muted label ("Date", "Location", …)
+_FIELD_NAME_COLOR = "#c1c1c1"          # matches the Browse windows' card text
 _MATCH_COLOR      = "#4CAF50"          # green  – value came from metadata/filename
-_VALUE_COLOR      = "#e2e4ec"          # neutral – manually chosen / not auto-derived
+_VALUE_COLOR      = "#c1c1c1"          # neutral – manually chosen / not auto-derived
 _SKIPPED_COLOR    = "#6b6e7e"          # muted value when the row is skipped
 # Species sentinel that savePhotoSettings treats as "do not attach" ("**").
 _SKIP_SENTINEL = "** (skipped) **"
@@ -231,8 +231,8 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         # height, so past ~1,500 rows it silently compresses them (squished
         # thumbnails).  The Designer grid (gridPhotos) is left unused.
         self.rowsLayout = QVBoxLayout()
-        self.rowsLayout.setContentsMargins(0, 0, 0, 0)
-        self.rowsLayout.setSpacing(4)
+        self.rowsLayout.setContentsMargins(8, 6, 8, 6)   # gutters frame the cards
+        self.rowsLayout.setSpacing(6)
         self.verticalLayout_3.addLayout(self.rowsLayout)
         self._rowWidgets = {}
         self._rowOrder = []   # sorted row numbers currently in rowsLayout
@@ -466,9 +466,13 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         row indices of its own, so the position is found by bisecting the
         sorted list of rows already present."""
         rowWidget = QWidget()
+        # Shared media-card background (see code_Stylesheet), matching the
+        # Browse views; children are transparent over it.
+        rowWidget.setObjectName("mediaCard")
+        rowWidget.setAttribute(Qt.WA_StyledBackground, True)
         rowWidget.setMinimumHeight(_THUMB_DISPLAY_H)
         rowLayout = QHBoxLayout(rowWidget)
-        rowLayout.setContentsMargins(0, 0, 0, 0)
+        rowLayout.setContentsMargins(6, 6, 6, 6)   # inset content off the rounded corners
         rowLayout.setSpacing(2)
         rowLayout.addWidget(buttonPhoto)
         rowLayout.addWidget(container, 1)   # details absorb the extra width
@@ -502,7 +506,7 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         buttonPhoto.setIcon(QIcon(pixMap))
 
         buttonPhoto.setIconSize(QSize(_THUMB_DISPLAY_W, _THUMB_DISPLAY_H))
-        buttonPhoto.setStyleSheet("QPushButton {background-color: #343333; border: 0px}")
+        buttonPhoto.setObjectName("mediaThumbBtn")   # styled via the app sheet
 
         # set up layout in second column of row to house combo boxes
         # give each object a name according to the row so we can access them later
@@ -510,7 +514,7 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         # inserting first makes every subsequent widget insertion propagate
         # styles/fonts through the live hierarchy one widget at a time)
         container = QWidget()
-        container.setObjectName("container" + str(row))
+        container.setObjectName("cardTransparent")
         detailsLayout = QVBoxLayout(container)
         detailsLayout.setObjectName("layout" + str(row))
         detailsLayout.setAlignment(Qt.AlignTop)
@@ -571,9 +575,6 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
 
         QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
 
-        icon = QIcon()
-        icon.addPixmap(QPixmap(":/icon_camera_white.png"), QIcon.Normal, QIcon.Off)
-        self.setWindowIcon(icon)
         self.setWindowTitle("Manage Photos")
 
         # one job per photo; workers pull from the shared queue dynamically
@@ -618,12 +619,12 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         buttonPhoto.setFixedWidth(_THUMB_DISPLAY_W)
         buttonPhoto.setIcon(QIcon(pixMap))
         buttonPhoto.setIconSize(QSize(_THUMB_DISPLAY_W, _THUMB_DISPLAY_H))
-        buttonPhoto.setStyleSheet("QPushButton {background-color: #343333; border: 0px}")
+        buttonPhoto.setObjectName("mediaThumbBtn")   # styled via the app sheet
 
         # set up layout in second column of row to house combo boxes
         # give each object a name according to the row so we can access them later
         container = QWidget()
-        container.setObjectName("container" + str(row))
+        container.setObjectName("cardTransparent")
         detailsLayout = QVBoxLayout(container)
         detailsLayout.setObjectName("layout" + str(row))
         detailsLayout.setAlignment(Qt.AlignTop)
@@ -838,6 +839,7 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         # Hold the control column to a fixed width wide enough that "Not Rated"
         # plus the dropdown arrow and centring padding fit without clipping.
         controlsWidget = QWidget()
+        controlsWidget.setObjectName("cardTransparent")
         controlsWidget.setLayout(controlsCol)
         controlsWidget.setFixedWidth(160)
         bodyRow.addWidget(controlsWidget)

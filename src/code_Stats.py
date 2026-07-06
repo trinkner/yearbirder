@@ -65,6 +65,9 @@ class Stats(QMdiSubWindow, form_Stats.Ui_frmStats):
         super(self.__class__, self).__init__()
         self.setupUi(self)
         self.setAttribute(Qt.WA_DeleteOnClose, True)
+        icon = QIcon()
+        icon.addPixmap(QPixmap(":/icon_statistics_white.png"), QIcon.Normal, QIcon.Off)
+        self.setWindowIcon(icon)
         self.mdiParent = ""
         self.filter = code_Filter.Filter()
         self._stats = {}

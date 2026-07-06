@@ -116,8 +116,8 @@ class Photos(QMdiSubWindow, form_Photos.Ui_frmPhotos):
         # gridPhotos is left unused.
         self.gridPhotos.setContentsMargins(0, 0, 0, 0)
         self.rowsLayout = QVBoxLayout()
-        self.rowsLayout.setContentsMargins(0, 0, 0, 0)
-        self.rowsLayout.setSpacing(4)
+        self.rowsLayout.setContentsMargins(8, 6, 8, 6)   # gutters frame the cards
+        self.rowsLayout.setSpacing(6)
         self.verticalLayout_3.addLayout(self.rowsLayout)
         self.verticalLayout_3.addStretch(1)
         self._rowWidgets = {}
@@ -373,7 +373,7 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
         self.setWindowTitle(filter.buildWindowTitle("Photos", self.mdiParent.db, count=photoCount, countUnit="Photos"))
 
         # Sort and populate the grid (shows its own "Preparing photos…" progress)
-        self.SortAndDisplayPhotos()
+        self._buildRows()
 
         icon = QIcon()
         icon.addPixmap(QPixmap(":/icon_camera_white.png"), QIcon.Normal, QIcon.Off)
@@ -392,8 +392,75 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
         return(True)
 
 
-    def SortAndDisplayPhotos(self):
+    def _sortPhotoList(self):
+        """Sort photoList by the checked radio; returns the permutation
+        (new position -> old index) so row widgets and bookkeeping can
+        follow the data."""
+        idx = range(len(self.photoList))
+        if self.rdoSortSpecies.isChecked():
+            order = sorted(idx, key=lambda i: self.photoList[i][1]["commonName"])
+        elif self.rdoSortDate.isChecked():
+            order = sorted(idx, key=lambda i: (self.photoList[i][1]["date"]
+                                               + self.photoList[i][1]["time"]))
+        elif self.rdoSortRating.isChecked():
+            def _rating(i):
+                try:
+                    return float(self.photoList[i][0]["rating"] or 0)
+                except (ValueError, TypeError):
+                    return 0.0
+            order = sorted(idx, key=_rating, reverse=True)
+        elif self.rdoSortTaxonomy.isChecked():
+            order = sorted(idx, key=lambda i: (float(self.photoList[i][1]["taxonomicOrder"]),
+                                               self.photoList[i][1]["commonName"]))
+        else:
+            order = list(idx)
+        self.photoList = [self.photoList[i] for i in order]
+        return order
 
+    def SortAndDisplayPhotos(self):
+        """Radio-button sort: reorder the EXISTING row widgets in place.
+
+        Every row already holds its data and thumbnail, so a sort is just a
+        permutation — no rebuild, no thumbnail reloads, no overlay.  Refused
+        while the initial load is running (in-flight worker results are
+        addressed to the old row numbers); falls back to a full build if the
+        rows don't exist yet."""
+        if not self.photoList:
+            return
+        if self._sorting or self._building or self.threadsRemaining > 0:
+            return
+        if not self._rowWidgets:
+            self._buildRows()
+            return
+        self._sorting = True
+
+        order = self._sortPhotoList()
+
+        # Detach every row item from the layout (the widgets survive), then
+        # re-insert them in the new order and remap the row-indexed
+        # bookkeeping.  The click handlers carry baked-in row numbers, so
+        # they are rebound to the rows' new positions.
+        while self.rowsLayout.count():
+            self.rowsLayout.takeAt(0)
+        newButtons, newRows = {}, {}
+        for new_row, old_row in enumerate(order):
+            w = self._rowWidgets.get(old_row)
+            if w is None:
+                continue
+            self.rowsLayout.addWidget(w)
+            newRows[new_row] = w
+            btn = self._photoButtons.get(old_row)
+            if btn is not None:
+                btn.mousePressEvent = partial(self._photoClicked, new_row)
+                newButtons[new_row] = btn
+        self._rowWidgets = newRows
+        self._photoButtons = newButtons
+        self.scrollArea.verticalScrollBar().setValue(0)
+        self._sorting = False
+
+    def _buildRows(self):
+        """Full grid build (initial fill): sort, then create every row and
+        stream the thumbnails in from the worker pool."""
         if not self.photoList:
             return
 
@@ -404,18 +471,7 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
 
         QApplication.processEvents()
 
-        # sort based on the selected radio button
-        if self.rdoSortSpecies.isChecked():
-            self.photoList.sort(key=lambda x: x[1]["commonName"])
-        elif self.rdoSortDate.isChecked():
-            self.photoList.sort(key=lambda x: x[1]["date"] + x[1]["time"])
-        elif self.rdoSortRating.isChecked():
-            try:
-                self.photoList.sort(key=lambda x: float(x[0]["rating"]) if x[0]["rating"] else 0, reverse=True)
-            except (ValueError, TypeError):
-                self.photoList.sort(key=lambda x: x[0]["rating"], reverse=True)
-        elif self.rdoSortTaxonomy.isChecked():
-            self.photoList.sort(key=lambda x: (float(x[1]["taxonomicOrder"]), x[1]["commonName"]))
+        self._sortPhotoList()
 
         # clear the existing rows
         for i in reversed(range(self.rowsLayout.count())):
@@ -455,7 +511,6 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
             buttonPhoto.setFixedWidth(code_ThumbnailCache.THUMB_DISPLAY_SIZE.width())
             buttonPhoto.setMinimumHeight(code_ThumbnailCache.THUMB_DISPLAY_SIZE.height())
             buttonPhoto.setAlignment(Qt.AlignCenter)
-            buttonPhoto.setStyleSheet("QLabel{ background-color: #343333; }")
             buttonPhoto.setCursor(Qt.PointingHandCursor)
             buttonPhoto.mousePressEvent = partial(self._photoClicked, row)
 
@@ -488,14 +543,18 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
                 dateLine + "<br><br>" +
                 "Rating: " + p["rating"]
             )
-            labelCaption.setStyleSheet("QLabel { background-color: #343333; color: silver; padding: 3px; }")
+            labelCaption.setObjectName("mediaCaption")
 
             # One container widget per row in a QVBoxLayout (avoids the grid's
             # ~524k-px height cap that squashed rows past ~1,600 photos).
+            # The row carries the shared media-card background; children are
+            # transparent over it.
             rowWidget = QWidget()
+            rowWidget.setObjectName("mediaCard")
+            rowWidget.setAttribute(Qt.WA_StyledBackground, True)
             rowWidget.setMinimumHeight(code_ThumbnailCache.THUMB_DISPLAY_SIZE.height())
             rowLayout = QHBoxLayout(rowWidget)
-            rowLayout.setContentsMargins(0, 0, 0, 0)
+            rowLayout.setContentsMargins(6, 6, 6, 6)   # inset content off the rounded corners
             rowLayout.setSpacing(2)
             rowLayout.addWidget(buttonPhoto)
             rowLayout.addWidget(labelCaption, 1)   # caption absorbs the extra width
@@ -575,9 +634,9 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
                 if btn:
                     btn.setText(
                         f"File not found:\n{os.path.basename(photoFile)}")
+                    # note: btn is a QLabel; the card provides the background
                     btn.setStyleSheet(
-                        "QPushButton { background-color: #343333; border: 0px; "
-                        "color: #e2e4ec; font-size: 10pt; }")
+                        "QLabel { color: #e2e4ec; font-size: 10pt; }")
             else:
                 self.pixmapCache[photoFile] = pm
                 btn = self._photoButtons.get(row)
