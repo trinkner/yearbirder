@@ -2,6 +2,7 @@
 import os
 import re
 import csv
+import json
 import zipfile
 import io
 import sys
@@ -495,6 +496,9 @@ class DataBase():
         self.ebirdApiKey = ""
         self.myCounty = ""
         self.myPatch = ""
+        # hex(QAudioDevice.id()) -> {"ms": int, "name": str} — calibrated
+        # output-latency compensation per playback device (Preferences tab)
+        self.audioLatencyByDevice = {}
         self._countryLookup = {}   # shortCode -> longName, built by ReadCountryStateCodeFile
         self._stateLookup = {}     # shortCode -> longName, built by ReadCountryStateCodeFile
         self.monthNameDict = ({
@@ -4505,6 +4509,13 @@ class DataBase():
 
                 elif line.startswith("myPatch="):
                     self.myPatch = line[len("myPatch="):].strip()
+
+                elif line.startswith("audioLatencyByDevice="):
+                    try:
+                        self.audioLatencyByDevice = json.loads(
+                            line[len("audioLatencyByDevice="):].strip()) or {}
+                    except (ValueError, TypeError):
+                        self.audioLatencyByDevice = {}
                 
     
     def writePreferences(self):
@@ -4524,5 +4535,7 @@ class DataBase():
             f.write("ebirdApiKey=" + self.ebirdApiKey + "\n")
             f.write("myCounty=" + self.myCounty + "\n")
             f.write("myPatch=" + self.myPatch + "\n")
+            f.write("audioLatencyByDevice="
+                    + json.dumps(self.audioLatencyByDevice) + "\n")
         
             

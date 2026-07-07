@@ -286,14 +286,28 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
             self._player.setPosition(pos_ms)
             self._anchorPlayback(pos_ms / 1000.0)
 
-    def _anchorPlayback(self, pos_sec):
+    def _anchorPlayback(self, pos_sec, resetGate=True):
         """Reset the wall-clock interpolation anchor (seconds).
 
         The backend position() advances in coarse ~90 ms buffer steps; anchoring
         only at play and on seeks — rather than re-snapping to that staircase
-        every 100 ms poll — keeps the red cursor line sliding smoothly."""
+        every 100 ms poll — keeps the red cursor line sliding smoothly.
+
+        resetGate=True (play/seek callers) schedules a HOLD: the player floors
+        position at the seek point until the sound actually reaches the ears
+        (the calibrated output latency), so the interpolated cursor must wait
+        exactly that long before gliding — no drift-and-snap-back, and zero
+        wait on a zero-latency device."""
         self._lastRealPosSec = pos_sec
         self._lastPollTime   = time.perf_counter()
+        if resetGate:
+            self._holdUntilTime = (time.perf_counter()
+                                   + self._player.outputLatencyMs() / 1000.0)
+
+    def _interpPosSec(self):
+        """Wall-clock interpolated position, honoring the post-play/seek hold."""
+        base = max(self._lastPollTime, getattr(self, "_holdUntilTime", 0.0))
+        return self._lastRealPosSec + max(0.0, time.perf_counter() - base)
 
     def _onPlaybackStateChanged(self, state):
         btn = self._playBtns.get(self._activeRow)
@@ -346,12 +360,10 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
         pos_ms  = self._player.position()
         pos_sec = pos_ms / 1000.0
 
-        if self._lastPollTime is not None:
-            interp = self._lastRealPosSec + (time.perf_counter() - self._lastPollTime)
-            if abs(pos_sec - interp) > 0.25:
-                self._anchorPlayback(pos_sec)
-        else:
-            self._anchorPlayback(pos_sec)
+        if self._lastPollTime is None:
+            self._anchorPlayback(pos_sec, resetGate=False)
+        elif abs(pos_sec - self._interpPosSec()) > 0.25:
+            self._anchorPlayback(pos_sec, resetGate=False)
 
         sld = self._sliders.get(self._activeRow)
         if sld and not sld.isSliderDown():
@@ -365,7 +377,7 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
         dur = self._activeDuration
         if dur <= 0:
             return
-        pos_sec  = min(self._lastRealPosSec + (time.perf_counter() - self._lastPollTime), dur)
+        pos_sec = min(self._interpPosSec(), dur)
         lbl = self._spectroLabels.get(self._activeRow)
         if lbl:
             lbl.setFraction(pos_sec / dur)
@@ -435,8 +447,15 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
         if self.rdoSortSpecies.isChecked():
             order = sorted(idx, key=lambda i: self.audioList[i][1]["commonName"])
         elif self.rdoSortDate.isChecked():
-            order = sorted(idx, key=lambda i: (self.audioList[i][1]["date"]
-                                               + self.audioList[i][1]["time"]))
+            # Sort by the recording's own embedded datetime (what the caption
+            # shows), falling back to the checklist's date/time (see the
+            # Photos browser's _capture_dt for the rationale).
+            def _capture_dt(i):
+                a, s = self.audioList[i]
+                if a.get("metaDate"):
+                    return a["metaDate"] + " " + a.get("metaTime", "")
+                return s.get("date", "") + " " + s.get("time", "")
+            order = sorted(idx, key=_capture_dt)
         elif self.rdoSortRating.isChecked():
             def _rating(i):
                 try:
@@ -550,7 +569,7 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
             visContainer.setFixedWidth(code_ThumbnailCache.THUMB_DISPLAY_SIZE.width())
             visLayout = QVBoxLayout(visContainer)
             visLayout.setContentsMargins(0, 0, 0, 0)
-            visLayout.setSpacing(2)
+            visLayout.setSpacing(7)   # breathing room between spectro and Play strip
 
             spectroLabel = SpectrogramLabel()
             spectroLabel.setCursor(Qt.PointingHandCursor)
@@ -623,14 +642,14 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
             # One container widget per row in a QVBoxLayout (avoids the grid's
             # ~524k-px height cap that squashed rows past ~1,600 recordings).
             # Row height = photo-thumbnail height + the Play/scrubber strip
-            # (28px + 2px spacing) + the card's 12px internal padding.  The
+            # (28px + 7px spacing) + the card's 12px internal padding.  The
             # row carries the shared media-card background; children are
             # transparent.
             rowWidget = QWidget()
             rowWidget.setObjectName("mediaCard")
             rowWidget.setAttribute(Qt.WA_StyledBackground, True)
             rowWidget.setMinimumHeight(
-                code_ThumbnailCache.THUMB_DISPLAY_SIZE.height() + 42)
+                code_ThumbnailCache.THUMB_DISPLAY_SIZE.height() + 47)
             rowLayout = QHBoxLayout(rowWidget)
             rowLayout.setContentsMargins(6, 6, 6, 6)   # inset content off the rounded corners
             rowLayout.setSpacing(2)

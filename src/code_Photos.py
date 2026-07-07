@@ -400,8 +400,19 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
         if self.rdoSortSpecies.isChecked():
             order = sorted(idx, key=lambda i: self.photoList[i][1]["commonName"])
         elif self.rdoSortDate.isChecked():
-            order = sorted(idx, key=lambda i: (self.photoList[i][1]["date"]
-                                               + self.photoList[i][1]["time"]))
+            # Sort by the photo's own capture datetime (what the caption
+            # shows), not the checklist's start time — photos on the same
+            # checklist would otherwise all share one key and lose their
+            # within-checklist time order.  Normalised to "YYYY-MM-DD HH:MM"
+            # so EXIF-derived and checklist-fallback keys compare cleanly.
+            def _capture_dt(i):
+                p, s = self.photoList[i]
+                dt = p.get("exifDatetime") or ""
+                if len(dt) >= 16:
+                    return (dt[0:4] + "-" + dt[5:7] + "-" + dt[8:10]
+                            + " " + dt[11:16])
+                return s.get("date", "") + " " + s.get("time", "")
+            order = sorted(idx, key=_capture_dt)
         elif self.rdoSortRating.isChecked():
             def _rating(i):
                 try:

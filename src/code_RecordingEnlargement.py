@@ -1733,7 +1733,7 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
         self._zoomedWidget.setFraction(0.0)
         self._updateTimeLabel(0)
 
-    def _anchorPlayback(self, pos_sec):
+    def _anchorPlayback(self, pos_sec, resetGate=True):
         """Reset the wall-clock interpolation anchor to pos_sec (seconds).
 
         Cursor/viewport animation free-runs on the wall clock between anchors.
@@ -1743,6 +1743,18 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
         self._lastRealPosSec   = pos_sec
         self._lastCursorPosSec = pos_sec
         self._lastPollTime     = time.perf_counter()
+        # resetGate=True (play/seek): schedule a HOLD for the calibrated
+        # output latency — the player floors position at the seek point until
+        # the sound reaches the ears, so the interpolated cursor waits exactly
+        # that long before gliding (zero wait on a zero-latency device).
+        if resetGate:
+            self._holdUntilTime = (time.perf_counter()
+                                   + self._player.outputLatencyMs() / 1000.0)
+
+    def _interpPosSec(self):
+        """Wall-clock interpolated position, honoring the post-play/seek hold."""
+        base = max(self._lastPollTime, getattr(self, "_holdUntilTime", 0.0))
+        return self._lastRealPosSec + max(0.0, time.perf_counter() - base)
 
     def _pausePlaybackGC(self, pause):
         """Pause the cyclic GC while the spectrogram is scrolling.
@@ -1820,12 +1832,10 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
         pos_ms  = self._player.position()
         pos_sec = pos_ms / 1000.0
 
-        if self._lastPollTime is not None:
-            interp = self._lastRealPosSec + (time.perf_counter() - self._lastPollTime)
-            if abs(pos_sec - interp) > 0.25:
-                self._anchorPlayback(pos_sec)
-        else:
-            self._anchorPlayback(pos_sec)
+        if self._lastPollTime is None:
+            self._anchorPlayback(pos_sec, resetGate=False)
+        elif abs(pos_sec - self._interpPosSec()) > 0.25:
+            self._anchorPlayback(pos_sec, resetGate=False)
 
         self._updateTimeLabel(pos_ms)
 
@@ -1841,8 +1851,7 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
         if self._duration <= 0 or self._lastPollTime is None:
             return
 
-        elapsed = time.perf_counter() - self._lastPollTime
-        pos_sec = min(self._lastRealPosSec + elapsed, self._duration)
+        pos_sec = min(self._interpPosSec(), self._duration)
         # Prevent backward jumps: macOS AVFoundation sometimes returns a cached
         # backend position slightly behind the interpolated value; anchoring on
         # that stale value makes the viewport scroll backward on every 100ms poll,

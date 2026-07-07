@@ -918,6 +918,17 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
 
     def onSubWindowActivated(self, window):
+        # Property-tag the focused child so the stylesheet can draw its border
+        # brighter (QSS has no reliable :active state on QMdiSubWindow); the
+        # borders make overlapping dark windows visually separable.
+        for w in self.mdiArea.subWindowList():
+            is_active = (w is window)
+            if bool(w.property("activeWin")) != is_active:
+                w.setProperty("activeWin", is_active)
+                w.style().unpolish(w)
+                w.style().polish(w)
+                w.update()
+
         if window is None:
             return
         # Install our event filter the first time each subwindow is activated.
@@ -945,6 +956,11 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
         # Read preferences directly on the main thread
         self.db.readPreferences()
+
+        # Install the calibrated per-device output-latency map into the shared
+        # player class so every recordings window compensates its cursor.
+        import code_Audio
+        code_Audio.PcmAudioPlayer.setLatencyMap(self.db.audioLatencyByDevice)
 
         # If a startup folder is defined and valid, open it
         if self.db.startupFolder and os.path.isdir(self.db.startupFolder):
@@ -2954,7 +2970,11 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 sub.raise_()
                 sub.setFocus()
             sub.contentReady.connect(_revealStats)
-            QTimer.singleShot(2500, _revealStats)
+            # Fallback timer is BOUND TO sub (context-object overload): the
+            # window is WA_DeleteOnClose and can be destroyed before the timer
+            # fires (e.g. another file load closes existing Stats windows) —
+            # an unbound closure would then touch a deleted wrapper and raise.
+            QTimer.singleShot(2500, sub, _revealStats)
         else:
             sub.close()
 

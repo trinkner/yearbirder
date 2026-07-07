@@ -396,6 +396,17 @@ def build_spectrogram_pixmap(wav_path, max_freq=10000, draw_axis_text=True):
 # Playback engine
 # ---------------------------------------------------------------------------
 
+def current_output_key_and_name():
+    """(hex key, human name) of the system's current default audio output —
+    the identity used by the per-device latency map."""
+    dev = QMediaDevices.defaultAudioOutput()
+    try:
+        key = bytes(dev.id()).hex()
+    except Exception:
+        key = ""
+    return key, dev.description()
+
+
 class PcmAudioPlayer(QObject):
     """WAV player built on a push-mode QAudioSink kept continuously warm.
 
@@ -419,6 +430,32 @@ class PcmAudioPlayer(QObject):
 
     playbackStateChanged = Signal(object)
     mediaStatusChanged   = Signal(object)
+
+    # Per-device output-latency compensation in ms, keyed by the hex of
+    # QAudioDevice.id().  Bluetooth outputs add ~300-500ms downstream of
+    # anything Qt can see; subtracting a calibrated per-device offset keeps
+    # the displayed cursor aligned with what the user actually HEARS.
+    # Class-level so every player instance (browser, manage, enlargement,
+    # preferences calibration) shares one map; MainWindow loads it from the
+    # preferences file at startup and the Preferences Playback tab edits it.
+    _latencyByDevice = {}
+
+    @classmethod
+    def setLatencyMap(cls, mapping):
+        cls._latencyByDevice = dict(mapping or {})
+
+    def currentDeviceKey(self):
+        try:
+            return bytes(self._deviceId).hex()
+        except Exception:
+            return ""
+
+    def outputLatencyMs(self):
+        entry = self._latencyByDevice.get(self.currentDeviceKey())
+        try:
+            return int(entry.get("ms", 0)) if entry else 0
+        except (TypeError, ValueError, AttributeError):
+            return 0
 
     _OUT_CH = 2                       # fixed output channel count
     # Sink buffer / write-ahead runway.  Small enough that the leading latency
@@ -574,13 +611,17 @@ class PcmAudioPlayer(QObject):
         return max(0, min(b, n - (n % self._bytesPerFrame) if self._bytesPerFrame else n))
 
     def _playedBytes(self):
-        """Real-audio bytes actually played = written minus what's still queued
-        in the sink's buffer (which, during playback, is all real audio)."""
+        """Real-audio bytes actually HEARD = written, minus what's still queued
+        in the sink's buffer (which, during playback, is all real audio), minus
+        the calibrated per-device output latency (Bluetooth transit that Qt
+        cannot see).  Position, pause-resume and the cursor all derive from
+        this, so compensation applies everywhere at once."""
         try:
             queued = max(0, self._sink.bufferSize() - self._sink.bytesFree())
         except Exception:
             queued = 0
-        return max(0, min(self._posBytes - queued, len(self._pcm)))
+        latBytes = int(self._outFs * self.outputLatencyMs() / 1000) * self._bytesPerFrame
+        return max(0, min(self._posBytes - queued - latBytes, len(self._pcm)))
 
     def _finishPlayback(self):
         self._playing = False

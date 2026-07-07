@@ -190,6 +190,12 @@ stylesheetBase = """
         color: #e2e4ec;
     }
 
+    /* Hairline frame so overlapping dark child windows read as separate
+       surfaces; the focused window's border is clearly lighter (driven by
+       the activeWin property set in onSubWindowActivated). */
+    QMdiSubWindow { border: 1px solid #3f4254; }
+    QMdiSubWindow[activeWin="true"] { border: 1px solid #5a5f75; }
+
     QTabWidget::pane {
         border: 1px solid #3a3d4e;
         border-radius: 6px;

@@ -1,19 +1,41 @@
 # import the GUI forms that we create with Qt Creator
 import form_Preferences
 from code_Stylesheet import YBFont
+import code_Audio
 
 from PySide6.QtGui import QFont
 
-from PySide6.QtCore import Signal, Qt
+from PySide6.QtCore import Signal, Qt, QTimer
 
 from PySide6.QtWidgets import (
     QFileDialog,
+    QFrame,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
     QLineEdit,
     QMdiSubWindow,
     QMessageBox,
+    QPushButton,
+    QSlider,
+    QSpinBox,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
 )
+from PySide6.QtMultimedia import QMediaPlayer
 
+import math
 import os
+import struct
+import tempfile
+import wave
+
+# Calibration test-sound geometry
+_TICK_INTERVAL_MS = 600     # one tick / flash every 600 ms
+_TICK_WAV_SECONDS = 60      # test sound length; loops while calibrating
+_FLASH_MS = 90              # how long the visual flash stays lit
 
 
 class Preferences(QMdiSubWindow, form_Preferences.Ui_frmPreferences):
@@ -32,6 +54,7 @@ class Preferences(QMdiSubWindow, form_Preferences.Ui_frmPreferences):
         self.btnSelectPhotoDataFile.clicked.connect(self.selectPhotoDataFile)
         self.btnToggleApiKey.clicked.connect(self.toggleApiKeyVisibility)
         self.tabWidget.currentChanged.connect(self.tabChanged)
+        self._buildPlaybackTab()
 
     def fillPreferences(self):
         self.txtStartupFolder.setText(self.mdiParent.db.getStartupFolder())
@@ -90,6 +113,253 @@ class Preferences(QMdiSubWindow, form_Preferences.Ui_frmPreferences):
                     "Please open an eBird data file before setting My County or My Patch.",
                     QMessageBox.StandardButton.Ok,
                 )
+        if self.tabWidget.tabText(index) == "Playback":
+            self._refreshCurrentDevice()
+            self._refreshDeviceTable()
+            self._deviceTimer.start()
+        else:
+            self._deviceTimer.stop()
+            self._stopTick()
+
+    # ── Playback tab: per-device audio/cursor sync calibration ──────────
+    #
+    # Bluetooth outputs add ~300-500ms of latency downstream of anything Qt
+    # can see, so the playback cursor leads the heard audio.  The user aligns
+    # a repeating tick (played through the SAME warm-sink pipeline as real
+    # playback) with a visual flash driven by the same position() clock the
+    # spectrogram cursor uses; the resulting per-device offset is stored in
+    # preferences and applied by every recordings window.
+
+    def _buildPlaybackTab(self):
+        tab = QWidget()
+        lay = QVBoxLayout(tab)
+        lay.setSpacing(10)
+
+        self.lblCurrentDevice = QLabel("Current output device:  \u2014")
+        lay.addWidget(self.lblCurrentDevice)
+
+        calRow = QHBoxLayout()
+        self._flashBox = QFrame()
+        self._flashBox.setFixedSize(46, 46)
+        calRow.addWidget(self._flashBox)
+
+        self.btnTick = QPushButton("Start test sound")
+        self.btnTick.clicked.connect(self._toggleTick)
+        calRow.addWidget(self.btnTick)
+
+        self.sldLatency = QSlider(Qt.Orientation.Horizontal)
+        self.sldLatency.setRange(0, 600)
+        self.sldLatency.valueChanged.connect(self._latencySliderChanged)
+        calRow.addWidget(self.sldLatency, 1)
+
+        self.spnLatency = QSpinBox()
+        self.spnLatency.setRange(0, 600)
+        self.spnLatency.setSuffix(" ms")
+        self.spnLatency.valueChanged.connect(self._latencySpinChanged)
+        calRow.addWidget(self.spnLatency)
+
+        self.btnSaveLatency = QPushButton("Save for this device")
+        self.btnSaveLatency.clicked.connect(self._saveLatencyForDevice)
+        calRow.addWidget(self.btnSaveLatency)
+        lay.addLayout(calRow)
+
+        note = QLabel(
+            "Start the test sound, then drag the slider until the flash and the "
+            "tick feel simultaneous \u2014 the offset applies live while you drag. "
+            "Click \u201cSave for this device\u201d to remember it.  Wired speakers "
+            "usually need 0 ms; Bluetooth devices typically need 150\u2013500 ms."
+        )
+        note.setWordWrap(True)
+        lay.addWidget(note)
+
+        self.tblDevices = QTableWidget(0, 3)
+        self.tblDevices.setHorizontalHeaderLabels(["Device", "Offset", ""])
+        self.tblDevices.horizontalHeader().setSectionResizeMode(
+            0, QHeaderView.ResizeMode.Stretch)
+        self.tblDevices.verticalHeader().setVisible(False)
+        lay.addWidget(self.tblDevices, 1)
+
+        self.tabWidget.addTab(tab, "Playback")
+
+        self._tickPlayer = None
+        self._ticking = False
+        self._lastTickIdx = -1
+        self._currentKey = None
+        self._setFlash(False)
+        self._flashTimer = QTimer(self)
+        self._flashTimer.setInterval(16)
+        self._flashTimer.timeout.connect(self._pollFlash)
+        # Re-check the default output once a second while the tab is open, so
+        # switching devices in Control Center updates the tab live.
+        self._deviceTimer = QTimer(self)
+        self._deviceTimer.setInterval(1000)
+        self._deviceTimer.timeout.connect(self._refreshCurrentDevice)
+
+    def _latencyMap(self):
+        return self.mdiParent.db.audioLatencyByDevice
+
+    def _refreshCurrentDevice(self):
+        key, name = code_Audio.current_output_key_and_name()
+        if key == self._currentKey:
+            return
+        self._currentKey = key
+        self.lblCurrentDevice.setText("Current output device:  " + name)
+        entry = self._latencyMap().get(key)
+        try:
+            ms = int(entry.get("ms", 0)) if entry else 0
+        except (TypeError, ValueError):
+            ms = 0
+        for w in (self.sldLatency, self.spnLatency):
+            w.blockSignals(True)
+            w.setValue(ms)
+            w.blockSignals(False)
+
+    def _setFlash(self, on):
+        self._flashBox.setStyleSheet(
+            "QFrame { background-color: %s; border-radius: 8px; }"
+            % ("#4f8ef7" if on else "#252730"))
+
+    def _ensureTickWav(self):
+        """Generate (once) a WAV of sharp 1 kHz ticks at the calibration
+        interval; played through PcmAudioPlayer so the calibration measures
+        the exact same pipeline as real recordings playback."""
+        path = os.path.join(tempfile.gettempdir(), "yearbirder_calibration_tick.wav")
+        if os.path.isfile(path):
+            return path
+        fs = 44100
+        total = fs * _TICK_WAV_SECONDS
+        interval = int(fs * _TICK_INTERVAL_MS / 1000)
+        tick_len = int(fs * 0.04)
+        samples = bytearray(total * 2)
+        for start in range(0, total - tick_len, interval):
+            for i in range(tick_len):
+                amp = 0.75 * math.exp(-i / (tick_len / 5.0))
+                v = int(32767 * amp * math.sin(2 * math.pi * 1000 * i / fs))
+                struct.pack_into("<h", samples, (start + i) * 2, v)
+        with wave.open(path, "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(fs)
+            w.writeframes(bytes(samples))
+        return path
+
+    def _toggleTick(self):
+        if self._ticking:
+            self._stopTick()
+            return
+        if self._tickPlayer is None:
+            self._tickPlayer = code_Audio.PcmAudioPlayer(self)
+            self._tickPlayer.mediaStatusChanged.connect(self._tickStatus)
+        try:
+            ok = self._tickPlayer.setSourceWav(self._ensureTickWav())
+        except OSError:
+            ok = False
+        if not ok:
+            QMessageBox.warning(self, "Calibration",
+                                "Could not create the calibration test sound.")
+            return
+        self._ticking = True
+        self._lastTickIdx = -1
+        self._tickPlayer.play()
+        self._flashTimer.start()
+        self.btnTick.setText("Stop test sound")
+
+    def _stopTick(self):
+        if not getattr(self, "_ticking", False):
+            return
+        self._ticking = False
+        self._flashTimer.stop()
+        self._setFlash(False)
+        if self._tickPlayer is not None:
+            self._tickPlayer.stop()
+        self.btnTick.setText("Start test sound")
+
+    def _tickStatus(self, status):
+        # loop the test sound for as long as the user is calibrating
+        if self._ticking and status == QMediaPlayer.MediaStatus.EndOfMedia:
+            self._tickPlayer.play()
+
+    def _pollFlash(self):
+        """Flash when the COMPENSATED position crosses a tick boundary: when
+        the user has the slider right, flash and heard tick coincide."""
+        if not self._ticking or self._tickPlayer is None:
+            return
+        idx = self._tickPlayer.position() // _TICK_INTERVAL_MS
+        if idx != self._lastTickIdx:
+            self._lastTickIdx = idx
+            self._setFlash(True)
+            QTimer.singleShot(_FLASH_MS, self._flashBox,
+                              lambda: self._setFlash(False))
+
+    def _latencySliderChanged(self, v):
+        self.spnLatency.blockSignals(True)
+        self.spnLatency.setValue(v)
+        self.spnLatency.blockSignals(False)
+        self._applyLatencyLive(v)
+
+    def _latencySpinChanged(self, v):
+        self.sldLatency.blockSignals(True)
+        self.sldLatency.setValue(v)
+        self.sldLatency.blockSignals(False)
+        self._applyLatencyLive(v)
+
+    def _applyLatencyLive(self, ms):
+        key, name = code_Audio.current_output_key_and_name()
+        if not key:
+            return
+        self._latencyMap()[key] = {"ms": int(ms), "name": name}
+        code_Audio.PcmAudioPlayer.setLatencyMap(self._latencyMap())
+
+    def _saveLatencyForDevice(self):
+        self._applyLatencyLive(self.sldLatency.value())
+        self.mdiParent.db.writePreferences()
+        self._refreshDeviceTable()
+
+    def _refreshDeviceTable(self):
+        m = self._latencyMap()
+        self.tblDevices.setRowCount(0)
+        for key in sorted(m, key=lambda k: m[k].get("name", "")):
+            entry = m[key]
+            r = self.tblDevices.rowCount()
+            self.tblDevices.insertRow(r)
+            item = QTableWidgetItem(entry.get("name", key))
+            item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            self.tblDevices.setItem(r, 0, item)
+            spin = QSpinBox()
+            spin.setRange(0, 600)
+            spin.setSuffix(" ms")
+            spin.setValue(int(entry.get("ms", 0)))
+            spin.valueChanged.connect(lambda v, k=key: self._deviceTableEdited(k, v))
+            self.tblDevices.setCellWidget(r, 1, spin)
+            btn = QPushButton("Remove")
+            btn.clicked.connect(lambda _=False, k=key: self._removeDevice(k))
+            self.tblDevices.setCellWidget(r, 2, btn)
+
+    def _deviceTableEdited(self, key, ms):
+        m = self._latencyMap()
+        if key in m:
+            m[key]["ms"] = int(ms)
+            code_Audio.PcmAudioPlayer.setLatencyMap(m)
+            self.mdiParent.db.writePreferences()
+            if key == self._currentKey:
+                for w in (self.sldLatency, self.spnLatency):
+                    w.blockSignals(True)
+                    w.setValue(int(ms))
+                    w.blockSignals(False)
+
+    def _removeDevice(self, key):
+        self._latencyMap().pop(key, None)
+        code_Audio.PcmAudioPlayer.setLatencyMap(self._latencyMap())
+        self.mdiParent.db.writePreferences()
+        self._refreshDeviceTable()
+        if key == self._currentKey:
+            self._currentKey = None       # re-sync slider on next refresh
+            self._refreshCurrentDevice()
+
+    def closeEvent(self, event):
+        self._stopTick()
+        self._deviceTimer.stop()
+        super(self.__class__, self).closeEvent(event)
 
     def resizeEvent(self, event):
         self.resized.emit()
