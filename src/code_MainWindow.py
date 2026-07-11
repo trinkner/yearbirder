@@ -468,8 +468,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
     fontSize = 11
     scaleFactor = 1
     rowHeight = 16  # default; recomputed in ScaleDisplay() and __init__
-    versionNumber = "1.50"
-    versionDate = "May 22, 2026"
+    versionNumber = "2.01"
+    versionDate = "July 11, 2026"
     taxonomyYear = ""
 
     def __init__(self):
@@ -977,11 +977,14 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         """Show the Photos menu only when the open media catalog actually contains
         photos, and the Recordings menu only when it contains recordings.  Both
         hide when no catalog is open.  (File-menu items like Add photos / Add
-        recordings stay available whenever a catalog is open, so you can add the
-        first item of a kind.)"""
+        recordings stay available whenever an eBird data file is open, so you can
+        add the first item of a kind — but Manage recordings needs an existing
+        recording to manage, so it tracks the same condition as the Recordings
+        menu.)"""
         has_catalog = self.db.photoDataFileOpenFlag
         self.menuPhotos.menuAction().setVisible(has_catalog and self.db.hasPhotos())
         self.menuRecordings.menuAction().setVisible(has_catalog and self.db.hasRecordings())
+        self.actionManageRecordings.setVisible(has_catalog and self.db.hasRecordings())
         # Toolbar Recordings button tracks the same condition as the menu.
         self.actionRecordingsToolbar.setVisible(has_catalog and self.db.hasRecordings())
 
@@ -996,6 +999,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateSpeciesList()
             self.actionClose.setVisible(True)
             self.actionOpenPhotoSettings.setVisible(True)
+            self.actionAddPhotos.setVisible(True)
+            self.actionAddRecordings.setVisible(True)
+            self.actionRebuildThumbnailCache.setVisible(True)
             # Photos/Recordings menus appear only if the catalog has that media.
             self._updateMediaMenuVisibility()
 
@@ -1359,7 +1365,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionPhotos.setVisible(False)
         self.actionClosePhotoSettings.setVisible(False)
         self.actionSavePhotoSettings.setVisible(False)
-        self.menuFileCatalogSeparator.setVisible(False)
+        # menuFileCatalogSeparator stays visible: "Open media catalog..." is
+        # always shown, so the separator after it always has something to
+        # separate from "Add photos..." below it.
         self.actionEditPhotosByFilter.setVisible(False)
         self.actionUpdateEXIFDataForAllPhotos.setVisible(False)
         self.actionUpdateRecordingData.setVisible(False)
@@ -2538,6 +2546,15 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             for w in self.mdiArea.subWindowList():
                 if w is not child and w.isMaximized():
                     w.showNormal()
+                    # Qt's cached pre-maximize geometry can be stale (e.g. it
+                    # was captured before the window ever settled into its
+                    # content-driven size), which restores it to a startlingly
+                    # small size.  Recompute a correct size from its current
+                    # content instead of trusting that cache.  Not every
+                    # subwindow type implements scaleMe (e.g. RecordingEnlargement,
+                    # SpeciesGallery), so guard the call.
+                    if hasattr(w, "scaleMe"):
+                        w.scaleMe()
                     break
 
         # if creatingWindow is the maind MDI window, center the new child window
@@ -2606,6 +2623,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateSpeciesList()
             self.actionClose.setVisible(True)
             self.actionOpenPhotoSettings.setVisible(True)
+            self.actionAddPhotos.setVisible(True)
+            self.actionAddRecordings.setVisible(True)
+            self.actionRebuildThumbnailCache.setVisible(True)
 
             self._autoOpenDefaultCatalog()
 
@@ -4899,8 +4919,13 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.dckFilter.setVisible(False)
         self.dckMediaFilter.setVisible(False)
         self.actionClose.setVisible(False)
+        self.actionOpenPhotoSettings.setVisible(False)
+        self.actionAddPhotos.setVisible(False)
+        self.actionAddRecordings.setVisible(False)
+        self.actionRebuildThumbnailCache.setVisible(False)
         self.menuPhotos.menuAction().setVisible(False)
         self.menuRecordings.menuAction().setVisible(False)
+        self.actionManageRecordings.setVisible(False)
         self.actionRecordingsToolbar.setVisible(False)
         self._hidePhotoCatalogMenuItems()
 
@@ -5239,8 +5264,13 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.hideStandardFilter()
         self.hideMediaFilter()
         self.actionClose.setVisible(False)
+        self.actionOpenPhotoSettings.setVisible(False)
+        self.actionAddPhotos.setVisible(False)
+        self.actionAddRecordings.setVisible(False)
+        self.actionRebuildThumbnailCache.setVisible(False)
         self.menuPhotos.menuAction().setVisible(False)
         self.menuRecordings.menuAction().setVisible(False)
+        self.actionManageRecordings.setVisible(False)
         self._hidePhotoCatalogMenuItems()
         self.db.ClearDatabase()
 

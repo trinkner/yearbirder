@@ -3,7 +3,7 @@ import os
 import tempfile
 from PySide6.QtGui import QColor, QPainter, QPixmap
 from PySide6.QtWidgets import (
-    QProxyStyle, QStyle, QMenu, QMessageBox,
+    QProxyStyle, QStyle, QMenu, QMessageBox, QMdiSubWindow,
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
 )
 from PySide6.QtCore import Qt, QRect, QEvent
@@ -80,6 +80,21 @@ class AppStyle(QProxyStyle):
             painter.drawRect(option.rect.adjusted(0, 0, -1, -1))
             return
         super().drawPrimitive(element, option, painter, widget)
+
+        # Hairline frame on top of Fusion's native MDI frame (not a QSS
+        # border — see comment above QMdiSubWindow's stylesheet block for
+        # why) so overlapping dark child windows read as separate surfaces;
+        # the focused window's border is clearly lighter (driven by the
+        # activeWin property set in onSubWindowActivated).  option.rect here
+        # is the frame's true outer edge, matching where Fusion just painted,
+        # so the line traces the window with no gap at the corners.
+        if element == QStyle.PE_FrameWindow and isinstance(widget, QMdiSubWindow):
+            isActive = bool(widget.property("activeWin"))
+            painter.save()
+            painter.setPen(QColor("#5a5f75") if isActive else QColor("#3f4254"))
+            painter.setBrush(Qt.NoBrush)
+            painter.drawRect(option.rect.adjusted(0, 0, -1, -1))
+            painter.restore()
 
     def standardPixmap(self, standardPixmap, option=None, widget=None):
         if standardPixmap in (
@@ -190,11 +205,13 @@ stylesheetBase = """
         color: #e2e4ec;
     }
 
-    /* Hairline frame so overlapping dark child windows read as separate
-       surfaces; the focused window's border is clearly lighter (driven by
-       the activeWin property set in onSubWindowActivated). */
-    QMdiSubWindow { border: 1px solid #3f4254; }
-    QMdiSubWindow[activeWin="true"] { border: 1px solid #5a5f75; }
+    /* Deliberately no QSS "border" on QMdiSubWindow: it makes
+       QStyleSheetStyle substitute its own box-model frame for Fusion's
+       native PE_FrameWindow, which leaves the title bar inset ~4px from
+       that border (an invisible native resize margin Fusion always
+       reserves) — an unpainted gap at the top corners.  The hairline is
+       instead painted by AppStyle.drawPrimitive over the untouched native
+       frame, at the frame's true outer edge, so there's no mismatch. */
 
     QTabWidget::pane {
         border: 1px solid #3a3d4e;

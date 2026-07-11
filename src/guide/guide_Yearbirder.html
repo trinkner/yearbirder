@@ -117,7 +117,7 @@
 <div class="toc">
   <p class="toc-group">What's New</p>
   <ul>
-    <li><a href="#whats-new">What's New in v1.50</a></li>
+    <li><a href="#whats-new">What's New in v2.0</a></li>
   </ul>
   <p class="toc-group">Quick Start</p>
   <ul>
@@ -190,9 +190,11 @@
 <hr>
 
 <h1 class="group-heading">What's New</h1>
-<h2 id="whats-new">What's New in v1.50</h2>
+<h2 id="whats-new">What's New in v2.0</h2>
 <ul>
   <li><strong>Sound recordings</strong> — Yearbirder now manages your bird <strong>sound recordings</strong> alongside your photos. Add WAV recordings to your media catalog, browse them as spectrograms with built-in playback, and study any recording in a full-featured <strong>Recording Enlargement</strong> view with continuous zoom, frequency-range, and contrast controls. A new <strong>Recordings</strong> menu provides charts and reports that mirror the photo reports — a recordings species gallery, geolocated recordings, an animated recording sequence map, and growth/total charts. The Media Filter gains a Recordings section (rating, channels, duration, and has-recording). See <a href="#adding-recordings">Section 26 — Adding Recordings</a>, <a href="#recordings">Section 27 — Browsing and Playing Recordings</a>, <a href="#recording-enlargement">Section 28 — The Recording Enlargement View</a>, and <a href="#recordings-reports">Section 30 — Recordings Charts and Reports</a>.</li>
+  <li><strong>Notes on photos and recordings</strong> — Attach your own free-text notes to any photo or sound recording. Click the <strong>Notes</strong> field beneath the file name in the Enlargement or Recording Enlargement details pane (F9), or the <strong>Notes</strong> button in Manage Photos / Manage Recordings, to open a small text box and type whatever you like — a behavior note, a location detail, a reminder to revisit the shot. Notes are saved in your media catalog alongside the rating. See <a href="#enlargement-view">Section 22 — Working with the Enlargement View</a> and <a href="#recording-enlargement">Section 28 — The Recording Enlargement View</a>.</li>
+  <li><strong>Audio calibration for the spectrogram cursor</strong> — Bluetooth headphones and some audio interfaces add playback latency that Yearbirder can't detect on its own, which can make the red cursor in a recording's spectrogram drift ahead of what you actually hear. A new <strong>Audio Calibration</strong> tab in Preferences lets you measure and correct for this, per output device, with a simple tick-and-flash test. See <a href="#preferences">Section 39 — Saving Preferences</a>.</li>
   <li><strong>My County and My Patch quick-jump buttons</strong> — Two new optional buttons, <strong>My County</strong> and <strong>My Patch</strong>, appear at the top of the Sighting Filter when configured. Clicking either button instantly sets the filter to your saved county or regular birding location, including all levels of the location hierarchy above it (region, country, state). Configure these in <strong>Preferences → My Locations</strong>. See <a href="#standard-filter">Section 4 — The Sighting Filter</a> and <a href="#preferences">Section 39 — Saving Preferences</a>.</li>
   <li><strong>Community → Species List</strong> — The Regional Taxonomy report has been renamed to <strong>Species List</strong> and is now found at <strong>Community → Species List</strong>.</li>
   <li><strong>Species List in Community Sightings Explorer</strong> — The Community Sightings Explorer now includes a <strong>Species List</strong> button. Click it to open the eBird species checklist for the selected region, showing which species you have seen and photographed there. Seen and photo badges reflect your own sightings in the selected country or state; if you have no sightings there, no badges are shown.</li>
@@ -273,7 +275,7 @@
 <ul>
   <li>Click <strong>Locations</strong> to see all your sighting locations plotted on an interactive map.</li>
   <li>Click <strong>Date Totals</strong> to see which years, months, and individual dates you recorded the most species.</li>
-  <li>Click <strong>Photos</strong> (after setting up a media catalog — see <a href="#photo-settings-file">Section 20</a>) to browse your bird photos alongside their sighting data.</li>
+  <li>Optionally, add your bird photos and sound recordings to Yearbirder's media catalog (see <a href="#photo-settings-file">Section 20</a> and <a href="#adding-recordings">Section 26</a>) so you can browse photos and listen to recordings alongside their sighting data.</li>
 </ul>
 <p>You are up and running. Everything else in this guide describes these features in detail.</p>
 <p>Note that if some checklists include exotic species, the totals that Yearbirder calculates may not match the totals reported by eBird. The data file you download from eBird does not specify which sightings are exotics, so Yearbirder cannot exclude them from its totals.</p>
@@ -972,13 +974,17 @@
 <p>Press <strong>F10</strong> (or right-click → <strong>Full screen</strong>) to expand the Enlargement view to fill the entire screen, hiding the Yearbirder interface. Arrow keys still navigate between photos in full-screen mode, and you can still zoom and pan. Press <strong>F10</strong> again or <strong>Esc</strong> to return to the windowed view.</p>
 
 <h3>The details pane</h3>
-<p>Press <strong>F9</strong> (or right-click → <strong>Show details</strong>) to open the details pane along the bottom of the Enlargement view. The pane shows:</p>
+<p>Press <strong>F9</strong> (or right-click → <strong>Show details</strong>) to open the details pane along the side of the Enlargement view. The pane shows:</p>
 <ul>
   <li>The species common name and scientific name</li>
   <li>EXIF data: camera model, lens, shutter speed, aperture, focal length, and ISO</li>
+  <li>The file name, followed by your <strong>Notes</strong> for this photo (see below)</li>
   <li>Five clickable star buttons for rating the photo</li>
 </ul>
 <p>Press <strong>F9</strong> again to close the pane and reclaim the screen area for the photo.</p>
+
+<h3>Notes</h3>
+<p>Beneath the file name in the details pane is a <strong>Notes</strong> field, showing up to four lines of any note you have attached to the photo (with an ellipsis if it runs longer), or <em>"Click to add notes…"</em> if there isn't one yet. Click the field — whether it is empty or already has text — to open a small text box where you can type or edit a free-text note. Click <strong>OK</strong> to save it immediately to your media catalog, or <strong>Cancel</strong> to discard your edit. Notes have no fixed format — use them for anything you want to remember about the shot: behavior observed, a plumage detail, a reminder to look again at full resolution, and so on.</p>
 
 <h3>Rating photos</h3>
 <p>You can assign a 1–5 star rating from the Enlargement view in three ways:</p>
@@ -1052,7 +1058,8 @@
   <li><strong>Species</strong> — the species on the selected checklist to which this photo is attached. The available species update automatically when you change the time. To remove a photo from the catalog without deleting the file from disk, choose <strong>**Detach Photo**</strong> from this dropdown.</li>
   <li><strong>Rating</strong> — the photo's quality rating (Not Rated, or 1–5). See <a href="#rating-photos">Rating Your Photos</a> for other ways to set ratings.</li>
 </ul>
-<p>Any dropdown that differs from the photo's current saved value is highlighted. Click the <strong>Reset</strong> button on a row to revert all of that photo's dropdowns to their original values.</p>
+<p>Each row also has a <strong>Notes</strong> button, next to Reset. Click it to open a small text box and attach a free-text note to the photo — the same note field shown in the Enlargement view's details pane (see <a href="#enlargement-view">Section 22</a>).</p>
+<p>Any dropdown that differs from the photo's current saved value is highlighted. Click the <strong>Reset</strong> button on a row to revert all of that photo's dropdowns — including its note — to their original values.</p>
 
 <h3>Saving changes</h3>
 <p>Click <strong>OK</strong> to apply and save all changes across every photo shown in the window. Changes are written immediately to your media catalog. Click <strong>Cancel</strong> to close the window without saving.</p>
@@ -1162,6 +1169,9 @@
 <h3>Full-screen and navigation</h3>
 <p>Press <strong>F10</strong> (or use the right-click menu) to view the spectrogram full-screen. You can move between recordings without leaving the window, so you can compare several recordings of the same species in turn.</p>
 
+<h3>The details pane and Notes</h3>
+<p>Press <strong>F9</strong> to open the details pane, showing the species name, recording metadata (location, date, duration, sample rate, bit depth, channels, and recording device), the file name, and a <strong>Notes</strong> field beneath it. The Notes field shows up to four lines of any note attached to the recording (with an ellipsis if it runs longer), or <em>"Click to add notes…"</em> if there isn't one yet. Click the field to open a small text box, type your note, and click <strong>OK</strong> to save it immediately to your media catalog.</p>
+
 <hr>
 
 <h2 id="managing-recordings">29. Managing Your Recordings</h2>
@@ -1176,7 +1186,8 @@
   <li><strong>Species</strong> — the species on the selected checklist to which this recording is attached. The available species update automatically when you change the time. A single recording can be attached to more than one species — useful when a recording captures several birds. To remove a recording from the catalog without deleting the file from disk, detach it from the species.</li>
   <li><strong>Rating</strong> — the recording's quality rating (Not Rated, or 1–5).</li>
 </ul>
-<p>Any control that differs from the recording's current saved value is highlighted. Click the <strong>Reset</strong> button on a row to revert that recording's controls to their original values.</p>
+<p>Each row also has a <strong>Notes</strong> button, next to Reset. Click it to open a small text box and attach a free-text note to the recording — the same note field shown in the Recording Enlargement view's details pane (see <a href="#recording-enlargement">Section 28</a>).</p>
+<p>Any control that differs from the recording's current saved value is highlighted. Click the <strong>Reset</strong> button on a row to revert that recording's controls — including its note — to their original values.</p>
 
 <h3>Saving changes</h3>
 <p>Click <strong>OK</strong> to apply and save all changes across every recording shown in the window. Changes are written immediately to your media catalog. Click <strong>Cancel</strong> to close without saving. When you save, Yearbirder quietly updates its cached spectrograms for any new or changed recordings in the background, so they appear instantly the next time you browse them.</p>
@@ -1445,7 +1456,7 @@
 
 <h2 id="preferences">39. Saving Preferences</h2>
 
-<p>Click <strong>Yearbirder → Preferences</strong> on the menu bar to set your preferences. Settings are organized across three tabs:</p>
+<p>Click <strong>Yearbirder → Preferences</strong> on the menu bar to set your preferences. Settings are organized across four tabs:</p>
 
 <h3>Default Files</h3>
 <ul>
@@ -1465,6 +1476,17 @@
 <ul>
   <li><strong>eBird API Key</strong> — Your personal eBird API key, required for all Community menu reports (<a href="#regional-taxonomy">Species List</a>, Notable and All Community Sightings, Hotspot Map, and the Community Sightings Explorer). The key is stored locally and never shared. Get a free key at <a href="https://ebird.org/api/keygen">ebird.org/api/keygen</a>.</li>
 </ul>
+
+<h3>Audio Calibration</h3>
+<p>Bluetooth headphones and some audio interfaces add playback latency that Yearbirder has no way to measure on its own — the sound reaches your ears later than Yearbirder thinks it does, so the red cursor in a recording's spectrogram appears to run ahead of what you hear. This tab lets you correct for that, separately for each audio output device, with a short tick-and-flash test.</p>
+<ol>
+  <li>Select the output device you want to calibrate (shown at the top as <strong>Current audio device</strong> — switch devices on your computer to calibrate a different one).</li>
+  <li>Click <strong>Start Test</strong>. A tick plays on a loop while a box on screen flashes in time with it, driven by the same clock the spectrogram cursor uses.</li>
+  <li>Drag the slider (or type a value directly into the millisecond field) until the sound and the flash feel simultaneous. The offset applies live as you drag, so you can fine-tune by ear.</li>
+  <li>Click <strong>Save</strong> to store that offset for the current device.</li>
+  <li>Click <strong>Start Test</strong> again (it becomes <strong>Stop Test</strong> while running) to end the test tone.</li>
+</ol>
+<p>Wired speakers and headphones usually need an offset at or near 0&nbsp;ms; Bluetooth devices typically need somewhere in the range of 150–500&nbsp;ms. Every device you have calibrated appears in a table beneath the test controls, showing its saved offset (editable directly in the table) and a <strong>Remove</strong> button to delete that device's calibration. Once saved, a device's offset is applied automatically, in every Recording Enlargement window, whenever you play a recording through that device.</p>
 
 <hr>
 

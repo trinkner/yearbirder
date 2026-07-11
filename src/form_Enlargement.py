@@ -11,7 +11,9 @@ from PySide6 import QtCore, QtGui, QtWidgets
 class Ui_frmEnlargement(object):
     def setupUi(self, frmEnlargement):
         frmEnlargement.setObjectName("frmEnlargement")
-        frmEnlargement.resize(671, 505)
+        # Base (photo-viewing-area) width is 910 * 1.2 * 0.75 * 0.9 = 737; the
+        # details pane (297px, shown by default) is added on top, giving 1034 total.
+        frmEnlargement.resize(1034, 600)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Preferred, QtWidgets.QSizePolicy.Policy.Preferred)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)

@@ -35,6 +35,37 @@ WORK_DMG="/tmp/${DMG_NAME}.dmg"
 WORK_RW_DMG="/tmp/${DMG_NAME}_rw.dmg"
 DMG_STAGING="/tmp/${DMG_NAME}_dmg_staging"
 
+# codesign's --timestamp option calls out to Apple's timestamp authority over
+# the network on every invocation. A transient failure there (seen in
+# practice) used to kill the whole build with NO diagnostic, because
+# routine "replacing existing signature" notices were piped to /dev/null at
+# each call site — which silently swallowed the one failure that actually
+# mattered too, along with set -e aborting mid-loop with nothing printed.
+# codesign_retry() retries a transient failure a few times and only ever
+# prints codesign's output if every attempt still fails, so a real failure
+# is always visible and points at the exact file that failed.
+codesign_retry() {
+    local target="$1"; shift
+    local attempt out
+    for attempt in 1 2 3; do
+        if out=$(codesign --force --timestamp "$@" --sign "$SIGN_ID" "$target" 2>&1); then
+            return 0
+        fi
+        echo "  (codesign attempt $attempt/3 failed for $target, retrying...)"
+        sleep 3
+    done
+    echo "ERROR: codesign failed 3/3 attempts on: $target"
+    echo "$out"
+    exit 1
+}
+
+# Signing a leaf/framework/app inside the bundle always wants hardened
+# runtime + the shared entitlements; the DMG (step 10) does not, and calls
+# codesign_retry directly instead.
+sign_file() {
+    codesign_retry "$1" --options runtime --entitlements "$ENTS"
+}
+
 echo "=== Step 1: PyInstaller build ==="
 venv/bin/python3 -m PyInstaller Yearbirder.spec --noconfirm
 echo "Build complete."
@@ -56,6 +87,23 @@ for appname in Linguist Designer Assistant; do
     rm -rf "$WORK_APP/Contents/Frameworks/PySide6/${appname}__dot__app"
     rm -rf "$WORK_APP/Contents/Resources/PySide6/${appname}.app"
 done
+# Remove leftover CMake build objects shipped inside the PySide6 wheel's QML
+# plugin dirs (e.g. Qt/labs/assetdownloader/objects-RelWithDebInfo/*.o) — not
+# runtime files, and an unsigned .o inside the bundle fails whole-bundle
+# codesign ("code object is not signed at all").
+find "$WORK_APP/Contents/Frameworks" -type d -name "objects-*" -exec rm -rf {} + 2>/dev/null || true
+# PyInstaller mirrors QML/data files between Frameworks and Resources via
+# symlinks, so removing the objects-* dirs above can leave a dangling
+# Resources symlink pointing at a path that no longer exists. Prune those too.
+find "$WORK_APP" -type l | while read -r link; do
+    target=$(readlink "$link")
+    dir=$(dirname "$link")
+    [[ "$target" == /* ]] && resolved="$target" || resolved="$dir/$target"
+    # `|| true`: this is the loop body's last command, so under set -e a
+    # symlink that's simply fine (test is false, nothing to remove) must not
+    # be allowed to end the loop iteration on a nonzero status.
+    [ ! -e "$resolved" ] && rm -f "$link" || true
+done
 echo "Copy and cleanup done."
 
 echo ""
@@ -63,8 +111,7 @@ echo "=== Step 3: Sign (leaves → frameworks → app) ==="
 
 # 3a. All dylibs and .so extension modules
 find "$WORK_APP" -type f \( -name "*.dylib" -o -name "*.so" \) | while read f; do
-    codesign --force --options runtime --timestamp \
-        --entitlements "$ENTS" --sign "$SIGN_ID" "$f" 2>/dev/null
+    sign_file "$f"
 done
 echo "  3a: dylibs and .so files signed"
 
@@ -76,45 +123,34 @@ for dir in \
     "$WORK_APP/Contents/Frameworks/PySide6/Qt/libexec"; do
     find "$dir" -maxdepth 1 -type f | while read f; do
         if file "$f" | grep -q "Mach-O"; then
-            codesign --force --options runtime --timestamp \
-                --entitlements "$ENTS" --sign "$SIGN_ID" "$f" 2>/dev/null
+            sign_file "$f"
         fi
     done
 done
 echo "  3b: PySide6 plain executables signed"
 
 # 3c. Python.framework: binary first, then the framework bundle
-codesign --force --options runtime --timestamp \
-    --entitlements "$ENTS" --sign "$SIGN_ID" \
-    "$WORK_APP/Contents/Frameworks/Python.framework/Versions/3.14/Python"
-codesign --force --options runtime --timestamp \
-    --entitlements "$ENTS" --sign "$SIGN_ID" \
-    "$WORK_APP/Contents/Frameworks/Python.framework"
+sign_file "$WORK_APP/Contents/Frameworks/Python.framework/Versions/3.14/Python"
+sign_file "$WORK_APP/Contents/Frameworks/Python.framework"
 echo "  3c: Python.framework signed"
 
 # 3d. QtWebEngineCore: sign the binary and its nested QtWebEngineProcess.app before
 # signing the whole framework (the nested app must be signed as a unit)
 QTWE="$WORK_APP/Contents/Frameworks/PySide6/Qt/lib/QtWebEngineCore.framework"
-codesign --force --options runtime --timestamp \
-    --entitlements "$ENTS" --sign "$SIGN_ID" \
-    "$QTWE/Versions/A/QtWebEngineCore" 2>/dev/null
-codesign --force --options runtime --timestamp \
-    --entitlements "$ENTS" --sign "$SIGN_ID" \
-    "$QTWE/Versions/A/Helpers/QtWebEngineProcess.app" 2>/dev/null
+sign_file "$QTWE/Versions/A/QtWebEngineCore"
+sign_file "$QTWE/Versions/A/Helpers/QtWebEngineProcess.app"
 echo "  3d: QtWebEngineCore binary and nested app signed"
 
 # 3e. All Qt .framework bundles (sort by path length descending = deepest first)
 find "$WORK_APP/Contents/Frameworks" -name "*.framework" \
     -not -path "*/Python.framework*" | \
     awk '{ print length, $0 }' | sort -rn | awk '{print $2}' | while read f; do
-    codesign --force --options runtime --timestamp \
-        --entitlements "$ENTS" --sign "$SIGN_ID" "$f" 2>/dev/null
+    sign_file "$f"
 done
 echo "  3e: Qt frameworks signed"
 
 # 3f. Main app bundle (signs and seals everything including the main executable)
-codesign --force --options runtime --timestamp \
-    --entitlements "$ENTS" --sign "$SIGN_ID" "$WORK_APP"
+sign_file "$WORK_APP"
 echo "  3f: main app bundle signed"
 
 echo ""
@@ -219,7 +255,7 @@ echo "DMG created."
 
 echo ""
 echo "=== Step 10: Sign DMG ==="
-codesign --force --sign "$SIGN_ID" --timestamp "$WORK_DMG"
+codesign_retry "$WORK_DMG"
 codesign --verify --verbose "$WORK_DMG"
 echo "DMG signed."
 

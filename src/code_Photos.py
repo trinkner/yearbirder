@@ -2,6 +2,7 @@
 import form_Photos
 from code_Stylesheet import YBFont
 import code_Enlargement
+import code_Filter
 import code_ThumbnailCache
 
 import datetime
@@ -389,6 +390,39 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
             self.scaleMe()
 
         # tell MainWindow that we succeeded filling the list
+        return(True)
+
+    def FillSinglePhoto(self, photoData, sightingData):
+        """Show exactly one known photo, bypassing the normal filter-driven
+        query — used when launched from a Find Results hit on that photo's
+        Notes, where only the specific matched file (not its whole checklist)
+        should be shown."""
+        self.scaleMe()
+        self.resizeMe()
+        self._missingPhotoSpecies = set()
+
+        filter = code_Filter.Filter()
+        filter.setSpeciesName(sightingData["commonName"])
+        filter.setLocationName(sightingData["location"])
+        filter.setLocationType("Location")
+        filter.setStartDate(sightingData["date"])
+        filter.setEndDate(sightingData["date"])
+        self.filter = filter
+
+        self.photoList = [[photoData, sightingData]]
+
+        self.lblSpecies.setText("Species: 1. Photos: 1")
+        self.mdiParent.SetChildDetailsLabels(self, filter)
+        self.setWindowTitle(filter.buildWindowTitle("Photos", self.mdiParent.db, count=1, countUnit="Photos"))
+
+        self._buildRows()
+
+        icon = QIcon()
+        icon.addPixmap(QPixmap(":/icon_camera_white.png"), QIcon.Normal, QIcon.Off)
+        self.setWindowIcon(icon)
+
+        self.scaleMe()   # smaller window layout for a single photo, as FillPhotos does
+
         return(True)
 
 

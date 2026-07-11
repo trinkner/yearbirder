@@ -794,6 +794,8 @@ class DataBase():
             #   • Common name (alpha) (e.g. "greattit") — longest substr in alpha filename
             #   • Scientific name (alpha)               — longest substr in alpha filename
             # The species with the highest score (longest match, min 4 chars) wins.
+            # If none of the above find anything, _quickEntryCodeMatch() is tried
+            # as a last resort (see its docstring).
             photoCommonName = ""
             best_score = 0
 
@@ -823,7 +825,7 @@ class DataBase():
                     photoCommonName = pcn
 
             if best_score < 4:
-                photoCommonName = ""
+                photoCommonName = self._quickEntryCodeMatch(possibleCommonNames, filename_alnum)
 
         else:
             photoCommonName = ""
@@ -953,6 +955,7 @@ class DataBase():
         photoData["time"] = photoExifTime
         photoData["date"] = photoExifDate
         photoData["rating"] = "0"
+        photoData["notes"] = ""
         photoData["exifDatetime"] = exif_dt
         photoData["exifSubsec"] = exif_sub
         photoData["exifDateInvalid"] = exif_bad
@@ -1070,7 +1073,7 @@ class DataBase():
 
     def getRecordingData(self, fileName):
         """Return a dict of file-level audio metadata."""
-        recordingData = {"fileName": fileName, "rating": "0"}
+        recordingData = {"fileName": fileName, "rating": "0", "notes": ""}
 
         meta_date, meta_time = _read_wav_metadata_datetime(fileName)
         fn_date, fn_time = self._parseDateTimeFromFilename(fileName)
@@ -1247,7 +1250,7 @@ class DataBase():
                     best_score = score
                     recordingCommonName = pcn
             if best_score < 4:
-                recordingCommonName = ""
+                recordingCommonName = self._quickEntryCodeMatch(possibleNames, fn_alnum)
 
         return {
             "recordingLocation": recordingLocation,
@@ -1382,6 +1385,7 @@ class DataBase():
                             "ISO":         p["iso"],
                             "FocalLength": p["focalLength"],
                             "Rating":      p["rating"],
+                            "Notes":       p.get("notes", ""),
                         }
                         record.update(_photo_exif_fields(p))
                         f.write(json.dumps(record) + '\n')
@@ -1399,6 +1403,7 @@ class DataBase():
                             "Channels":    a.get("channels", ""),
                             "Device":      a.get("device", ""),
                             "Rating":      a.get("rating", "0"),
+                            "Notes":       a.get("notes", ""),
                         }
                         record.update(_recording_meta_fields(a))
                         f.write(json.dumps(record) + '\n')
@@ -1426,6 +1431,7 @@ class DataBase():
             "ISO":         photoData["iso"],
             "FocalLength": photoData["focalLength"],
             "Rating":      photoData["rating"],
+            "Notes":       photoData.get("notes", ""),
         }
         record.update(_photo_exif_fields(photoData))
         with open(self.photoDataFile, mode='a', encoding='utf-8') as f:
@@ -1498,6 +1504,7 @@ class DataBase():
             "Channels":    recordingData.get("channels", ""),
             "Device":      recordingData.get("device", ""),
             "Rating":      recordingData.get("rating", "0"),
+            "Notes":       recordingData.get("notes", ""),
         }
         record.update(_recording_meta_fields(recordingData))
         with open(self.photoDataFile, mode='a', encoding='utf-8') as f:
@@ -1553,6 +1560,7 @@ class DataBase():
                     photoData["focalLength"] = row["FocalLength"]
                     rating = row.get("Rating", "0")
                     photoData["rating"] = rating if rating in ["0","1","2","3","4","5"] else "0"
+                    photoData["notes"] = row.get("Notes", "")
                     if "ExifDateTime" in row:
                         photoData["exifDatetime"] = row.get("ExifDateTime") or None
                         photoData["exifSubsec"] = row.get("ExifSubSec") or None
@@ -1612,6 +1620,7 @@ class DataBase():
                 photoData["focalLength"] = row.get("FocalLength", "")
                 rating = row.get("Rating", "0")
                 photoData["rating"] = rating if rating in ["0","1","2","3","4","5"] else "0"
+                photoData["notes"] = row.get("Notes", "")
                 # Cached EXIF capture time (present only once gleaned); absent →
                 # Rename Media reads it on demand and caches it back.
                 if "ExifDateTime" in row:
@@ -1647,6 +1656,7 @@ class DataBase():
                 recordingData["device"] = dev_val
                 rating = row.get("Rating", "0")
                 recordingData["rating"] = rating if rating in ["0","1","2","3","4","5"] else "0"
+                recordingData["notes"] = row.get("Notes", "")
                 # Cached embedded date/time (present only once gleaned); absent →
                 # Rename Media reads it on demand and caches it back.
                 if "MetaDate" in row:
@@ -3887,6 +3897,11 @@ class DataBase():
         return(returnList)
 
     def GetFindResults(self, searchString, checkedBoxes):
+        # Every result is a 6-tuple: (category, checklistID, location, date,
+        # foundText, fileName).  fileName is only populated for a Photo/Recording
+        # Notes hit — it's how the Find Results grid knows which single media
+        # file to open (rather than the whole checklist) when that row is
+        # clicked; every other category leaves it "".
 
         foundSet = set()
         searchLower = searchString.lower()
@@ -3895,35 +3910,65 @@ class DataBase():
             for c in checkedBoxes:
                 if c == "chkCommonName":
                     if searchLower in s["commonName"].lower():
-                        foundSet.add(("Common Name", s["checklistID"], s["location"], s["date"], s["commonName"]))
+                        foundSet.add(("Common Name", s["checklistID"], s["location"], s["date"], s["commonName"], ""))
                 if c == "chkScientificName":
                     if searchLower in s["scientificName"].lower():
-                        foundSet.add(("Scientific Name", s["checklistID"], s["location"], s["date"], s["scientificName"]))
+                        foundSet.add(("Scientific Name", s["checklistID"], s["location"], s["date"], s["scientificName"], ""))
                 if c == "chkCountryName":
                     countryName = self.GetCountryName(s["country"])
                     if searchLower in countryName.lower():
-                        foundSet.add(("Country", s["checklistID"], s["location"], s["date"], countryName))
+                        foundSet.add(("Country", s["checklistID"], s["location"], s["date"], countryName, ""))
                 if c == "chkStateName":
                     stateName = self.GetStateName(s["state"])
                     if searchLower in stateName.lower():
-                        foundSet.add(("State", s["checklistID"], s["location"], s["date"], stateName))
+                        foundSet.add(("State", s["checklistID"], s["location"], s["date"], stateName, ""))
                 if c == "chkCountyName":
                     if searchLower in s["county"].lower():
-                        foundSet.add(("County", s["checklistID"], s["location"], s["date"], s["county"]))
+                        foundSet.add(("County", s["checklistID"], s["location"], s["date"], s["county"], ""))
                 if c == "chkLocationName":
                     if searchLower in s["location"].lower():
-                        foundSet.add(("Location", s["checklistID"], s["location"], s["date"], s["location"]))
+                        foundSet.add(("Location", s["checklistID"], s["location"], s["date"], s["location"], ""))
                 if c == "chkSpeciesComments":
                     if searchLower in s["speciesComments"].lower():
-                        foundSet.add(("Species Comments", s["checklistID"], s["location"], s["date"], s["speciesComments"]))
+                        foundSet.add(("Species Comments", s["checklistID"], s["location"], s["date"], s["speciesComments"], ""))
                 if c == "chkChecklistComments":
                     if searchLower in s["checklistComments"].lower():
-                        foundSet.add(("Checklist Comments", s["checklistID"], s["location"], s["date"], s["checklistComments"]))
+                        foundSet.add(("Checklist Comments", s["checklistID"], s["location"], s["date"], s["checklistComments"], ""))
+                if c == "chkPhotoNotes":
+                    for p in s.get("photos", []):
+                        notes = p.get("notes", "")
+                        if notes and searchLower in notes.lower():
+                            foundSet.add(("Photo Notes", s["checklistID"], s["location"], s["date"], notes, p["fileName"]))
+                if c == "chkRecordingNotes":
+                    for a in s.get("audio", []):
+                        notes = a.get("notes", "")
+                        if notes and searchLower in notes.lower():
+                            foundSet.add(("Recording Notes", s["checklistID"], s["location"], s["date"], notes, a["fileName"]))
 
         foundList = list(foundSet)
         foundList.sort()
 
         return(foundList)
+
+    def GetPhotoAndSightingByFileName(self, fileName):
+        """Look up the (photoData, sightingData) pair for a specific photo
+        file — used to open Browse Photos on exactly one photo, e.g. from a
+        Find Results hit on that photo's Notes."""
+        for s in self.sightingList:
+            for p in s.get("photos", []):
+                if p["fileName"] == fileName:
+                    return (p, s)
+        return (None, None)
+
+    def GetAudioAndSightingByFileName(self, fileName):
+        """Look up the (audioData, sightingData) pair for a specific recording
+        file — used to open Browse Recordings on exactly one recording, e.g.
+        from a Find Results hit on that recording's Notes."""
+        for s in self.sightingList:
+            for a in s.get("audio", []):
+                if a["fileName"] == fileName:
+                    return (a, s)
+        return (None, None)
 
     def GetLastDayOfMonth(self, month):
                 
@@ -4301,8 +4346,27 @@ class DataBase():
             quickEntryCode = wordList[0][0:1] + wordList[1][0:1] + wordList[2][0:1] + wordList[3][0:1]
                         
         return(quickEntryCode)
-    
-        
+
+    def _quickEntryCodeMatch(self, possibleNames, filename_alnum):
+        """Last-resort filename-matching fallback, tried only once the eBird
+        code / BBL code / common name / scientific name pass finds nothing:
+        some users type an intuitive-but-wrong 4-letter code instead of the
+        official BBL one (e.g. "BASW" for Barn Swallow instead of "BARS").
+        GetQuickEntryCode() generates that same intuitive code from the
+        species name. Since two species can generate the same code (Barn
+        Swallow and Bank Swallow both -> BASW), a match only counts if
+        exactly one checklist candidate's generated code is found in the
+        filename — if more than one matches, it's ambiguous and neither wins.
+        """
+        matches = []
+        for pcn in possibleNames:
+            quick = re.sub(r'[^a-z]', '', self.GetQuickEntryCode(pcn).lower())
+            if len(quick) == 4 and quick in filename_alnum:
+                matches.append(pcn)
+        if len(matches) == 1:
+            return matches[0]
+        return ""
+
     def GetBBLCode(self, species):
 
         thisScientificName = self.GetScientificName(species)

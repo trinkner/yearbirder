@@ -1005,7 +1005,8 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         R = 0
         for c in foundList:  
             typeItem = QTableWidgetItem()
-            typeItem.setData(Qt.UserRole, c[1])  #store checklistID for future retreaval                     
+            typeItem.setData(Qt.UserRole, c[1])  #store checklistID for future retreaval
+            typeItem.setData(Qt.UserRole + 1, c[5])  # media fileName (Photo/Recording Notes hits only)
             typeItem.setText(c[0])
             
             locationItem = QTableWidgetItem()
@@ -1232,6 +1233,35 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
                     sub = Lists()
                     sub.mdiParent = self.mdiParent
                     sub.FillChecklists(filter)
+
+        if self.listType == "Find Results":
+            category = self.tblList.item(currentRow, 0).text()
+            if category in ("Photo Notes", "Recording Notes"):
+                fileName = self.tblList.item(currentRow, 0).data(Qt.UserRole + 1)
+
+                if category == "Photo Notes":
+                    photoData, sightingData = self.mdiParent.db.GetPhotoAndSightingByFileName(fileName)
+                    if photoData is not None:
+                        import code_Photos
+                        sub = code_Photos.Photos()
+                        sub.mdiParent = self.mdiParent
+                        sub.FillSinglePhoto(photoData, sightingData)
+                        self.parent().parent().addSubWindow(sub)
+                        self.mdiParent.PositionChildWindow(sub, self)
+                        sub.show()
+                else:
+                    audioData, sightingData = self.mdiParent.db.GetAudioAndSightingByFileName(fileName)
+                    if audioData is not None:
+                        import code_Recordings
+                        sub = code_Recordings.Recordings()
+                        sub.mdiParent = self.mdiParent
+                        sub.FillSingleRecording(audioData, sightingData)
+                        self.parent().parent().addSubWindow(sub)
+                        self.mdiParent.PositionChildWindow(sub, self)
+                        sub.show()
+
+                QApplication.restoreOverrideCursor()
+                return
 
         if self.listType in ["Checklists", "Find Results"]:
 

@@ -5,6 +5,7 @@ import code_Filter
 import code_Stylesheet
 import code_ThumbnailCache
 import code_ChecklistTree
+import code_NotesDialog
 import os
 
 import piexif
@@ -49,6 +50,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QStyledItemDelegate,
     QCheckBox,
+    QDialog,
     )
 
 
@@ -60,6 +62,7 @@ _FIELD_NAME_COLOR = "#c1c1c1"          # matches the Browse windows' card text
 _MATCH_COLOR      = "#4CAF50"          # green  – value came from metadata/filename
 _VALUE_COLOR      = "#c1c1c1"          # neutral – manually chosen / not auto-derived
 _SKIPPED_COLOR    = "#6b6e7e"          # muted value when the row is skipped
+_NO_SPECIES_COLOR = "#E57373"          # red – flags a row that still needs a species picked
 # Species sentinel that savePhotoSettings treats as "do not attach" ("**").
 _SKIP_SENTINEL = "** (skipped) **"
 
@@ -529,6 +532,7 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         thisPhotoMetaData["commonName"] = photoCommonName
         thisPhotoMetaData["photoData"] = photoData
         thisPhotoMetaData["rating"] = photoData["rating"]
+        thisPhotoMetaData["notes"] = photoData.get("notes", "")
         thisPhotoMetaData["cascadeMode"] = "date_first"
         thisPhotoMetaData["selectedCommonName"] = photoCommonName
         thisPhotoMetaData["skip"] = False
@@ -639,6 +643,7 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         thisPhotoMetaData["commonName"] = s["commonName"]
         thisPhotoMetaData["photoData"] = p
         thisPhotoMetaData["rating"] = p["rating"]
+        thisPhotoMetaData["notes"] = p.get("notes", "")
         thisPhotoMetaData["cascadeMode"] = "location_first"
         thisPhotoMetaData["selectedCommonName"] = s["commonName"]
         thisPhotoMetaData["skip"] = False
@@ -802,6 +807,11 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         btnReset.clicked.connect(partial(self.btnResetClicked, row))
         controlsCol.addWidget(btnReset)
 
+        btnNotes = QPushButton("Notes")
+        btnNotes.setFont(_panelFont)
+        btnNotes.clicked.connect(partial(self._openNotesDialog, row))
+        controlsCol.addWidget(btnNotes)
+
         cboRating = QComboBox()
         cboRating.addItems(["Not Rated", "1", "2", "3", "4", "5"])
         cboRating.setObjectName("cboRating" + str(row))
@@ -867,7 +877,8 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
                 "Species", md["selectedCommonName"], self._fieldGreen(md, "species"), False))
         else:
             lbls["species"].setText(
-                '<span style="color:%s">Species not yet selected</span>' % _FIELD_NAME_COLOR)
+                '<span style="color:%s">Click Select to choose a species</span>'
+                % _NO_SPECIES_COLOR)
 
     def _openSelectTree(self, row):
         md = self.metaDataByRow[row]
@@ -876,6 +887,13 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
                       md.get("newTime", ""), md.get("selectedCommonName", ""))
         if dlg.exec() and dlg.result:
             self._applyTreeResult(row, dlg.result)
+
+    def _openNotesDialog(self, row):
+        md = self.metaDataByRow[row]
+        dlg = code_NotesDialog.NotesDialog(md.get("newNotes", md.get("notes", "")), self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            md["newNotes"] = dlg.result
+            self.saveNewMetaData(row)
 
     def _applyTreeResult(self, row, result):
         md = self.metaDataByRow[row]
@@ -916,6 +934,7 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         md.setdefault("newDate", md["date"])
         md.setdefault("newTime", md["time"])
         md.setdefault("newCommonName", md["commonName"])
+        md.setdefault("newNotes", md.get("notes", ""))
         cbo = self._rowLabels.get(row, {}).get("rating")
         if cbo is not None:
             md["newRating"] = str(cbo.currentIndex())
@@ -929,6 +948,7 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         md["newTime"] = md["time"]
         md["selectedCommonName"] = md["commonName"]
         md["newCommonName"] = md["commonName"]
+        md["newNotes"] = md.get("notes", "")
         md["skip"] = False
         lbls = self._rowLabels.get(row, {})
         chk = lbls.get("skip")
@@ -1028,8 +1048,10 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
                 if self.metaDataByRow[r]["commonName"] != self.metaDataByRow[r]["newCommonName"]:
                     metaDataChanged = True  
                 if self.metaDataByRow[r]["rating"] != self.metaDataByRow[r]["newRating"]:
-                    metaDataChanged = True 
-                        
+                    metaDataChanged = True
+                if self.metaDataByRow[r]["notes"] != self.metaDataByRow[r]["newNotes"]:
+                    metaDataChanged = True
+
                 if metaDataChanged is True:
                     # remove the photo from the database
                     self.mdiParent.db.removePhotoFromDatabase(
@@ -1060,6 +1082,7 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
                     filter.setSpeciesName(self.metaDataByRow[r]["newCommonName"])
                     
                     self.metaDataByRow[r]["photoData"]["rating"] = self.metaDataByRow[r]["newRating"]
+                    self.metaDataByRow[r]["photoData"]["notes"] = self.metaDataByRow[r]["newNotes"]
 
                     s = self.mdiParent.db.addPhotoToDatabase(filter, self.metaDataByRow[r]["photoData"])
                     if s:
@@ -1097,6 +1120,7 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
                     filter.setSpeciesName(self.metaDataByRow[r]["newCommonName"])
                     
                     self.metaDataByRow[r]["photoData"]["rating"] = self.metaDataByRow[r]["newRating"]
+                    self.metaDataByRow[r]["photoData"]["notes"] = self.metaDataByRow[r]["newNotes"]
 
                     s = self.mdiParent.db.addPhotoToDatabase(filter, self.metaDataByRow[r]["photoData"])
                     if s:

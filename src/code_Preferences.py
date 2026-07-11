@@ -8,6 +8,7 @@ from PySide6.QtGui import QFont
 from PySide6.QtCore import Signal, Qt, QTimer
 
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QFileDialog,
     QFrame,
     QHBoxLayout,
@@ -113,7 +114,7 @@ class Preferences(QMdiSubWindow, form_Preferences.Ui_frmPreferences):
                     "Please open an eBird data file before setting My County or My Patch.",
                     QMessageBox.StandardButton.Ok,
                 )
-        if self.tabWidget.tabText(index) == "Playback":
+        if self.tabWidget.tabText(index) == "Audio Calibration":
             self._refreshCurrentDevice()
             self._refreshDeviceTable()
             self._deviceTimer.start()
@@ -135,7 +136,7 @@ class Preferences(QMdiSubWindow, form_Preferences.Ui_frmPreferences):
         lay = QVBoxLayout(tab)
         lay.setSpacing(10)
 
-        self.lblCurrentDevice = QLabel("Current output device:  \u2014")
+        self.lblCurrentDevice = QLabel("Current audio device:  \u2014")
         lay.addWidget(self.lblCurrentDevice)
 
         calRow = QHBoxLayout()
@@ -143,7 +144,7 @@ class Preferences(QMdiSubWindow, form_Preferences.Ui_frmPreferences):
         self._flashBox.setFixedSize(46, 46)
         calRow.addWidget(self._flashBox)
 
-        self.btnTick = QPushButton("Start test sound")
+        self.btnTick = QPushButton("Start Test")
         self.btnTick.clicked.connect(self._toggleTick)
         calRow.addWidget(self.btnTick)
 
@@ -158,28 +159,31 @@ class Preferences(QMdiSubWindow, form_Preferences.Ui_frmPreferences):
         self.spnLatency.valueChanged.connect(self._latencySpinChanged)
         calRow.addWidget(self.spnLatency)
 
-        self.btnSaveLatency = QPushButton("Save for this device")
+        self.btnSaveLatency = QPushButton("Save")
         self.btnSaveLatency.clicked.connect(self._saveLatencyForDevice)
         calRow.addWidget(self.btnSaveLatency)
         lay.addLayout(calRow)
 
         note = QLabel(
-            "Start the test sound, then drag the slider until the flash and the "
-            "tick feel simultaneous \u2014 the offset applies live while you drag. "
-            "Click \u201cSave for this device\u201d to remember it.  Wired speakers "
-            "usually need 0 ms; Bluetooth devices typically need 150\u2013500 ms."
+            "To sync the spectrogram cursor to your audio device, start the "
+            "test and drag the slider so the sound and flash feel "
+            "simultaneous."
         )
         note.setWordWrap(True)
         lay.addWidget(note)
 
         self.tblDevices = QTableWidget(0, 3)
         self.tblDevices.setHorizontalHeaderLabels(["Device", "Offset", ""])
+        deviceHeaderItem = self.tblDevices.horizontalHeaderItem(0)
+        deviceHeaderItem.setTextAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         self.tblDevices.horizontalHeader().setSectionResizeMode(
             0, QHeaderView.ResizeMode.Stretch)
         self.tblDevices.verticalHeader().setVisible(False)
+        self.tblDevices.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+        self.tblDevices.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         lay.addWidget(self.tblDevices, 1)
 
-        self.tabWidget.addTab(tab, "Playback")
+        self.tabWidget.addTab(tab, "Audio Calibration")
 
         self._tickPlayer = None
         self._ticking = False
@@ -203,7 +207,7 @@ class Preferences(QMdiSubWindow, form_Preferences.Ui_frmPreferences):
         if key == self._currentKey:
             return
         self._currentKey = key
-        self.lblCurrentDevice.setText("Current output device:  " + name)
+        self.lblCurrentDevice.setText("Current audio device:  " + name)
         entry = self._latencyMap().get(key)
         try:
             ms = int(entry.get("ms", 0)) if entry else 0
@@ -262,7 +266,7 @@ class Preferences(QMdiSubWindow, form_Preferences.Ui_frmPreferences):
         self._lastTickIdx = -1
         self._tickPlayer.play()
         self._flashTimer.start()
-        self.btnTick.setText("Stop test sound")
+        self.btnTick.setText("Stop Test")
 
     def _stopTick(self):
         if not getattr(self, "_ticking", False):
@@ -272,7 +276,7 @@ class Preferences(QMdiSubWindow, form_Preferences.Ui_frmPreferences):
         self._setFlash(False)
         if self._tickPlayer is not None:
             self._tickPlayer.stop()
-        self.btnTick.setText("Start test sound")
+        self.btnTick.setText("Start Test")
 
     def _tickStatus(self, status):
         # loop the test sound for as long as the user is calibrating

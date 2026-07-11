@@ -4,6 +4,9 @@ from code_Audio import PcmAudioPlayer
 import code_Audio
 import code_Stylesheet
 import code_ThumbnailCache
+import code_NotesDialog
+
+_DETAILS_PANE_WIDTH = 297   # must match _detailsPane.setFixedWidth() below
 
 # The compact overview and the wide ribbon both render label-less (data fills
 # the whole figure), so their data rect is the full area — a constant, so the
@@ -73,7 +76,7 @@ from PySide6.QtCore import Signal, Qt, QThread, QTimer, QUrl, QSize, QRect, QRec
 from PySide6.QtWidgets import (
     QMdiSubWindow, QWidget, QLabel, QHBoxLayout, QVBoxLayout,
     QPushButton, QSlider, QApplication, QSizePolicy,
-    QMenu, QFrame, QGroupBox, QMessageBox,
+    QMenu, QFrame, QGroupBox, QMessageBox, QDialog,
 )
 from PySide6.QtMultimedia import QMediaPlayer  # enum constants reused by PcmAudioPlayer
 from functools import partial
@@ -1067,29 +1070,37 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
         ctrl.setSpacing(6)
         ctrl.setContentsMargins(_leftOffset, 0, 0, 0)
 
+        # The global QPushButton rule pads 12px each side, which is generous
+        # enough to leave little slack once the details pane (F9) eats 297px
+        # of window width — each of these three overrides its own padding
+        # tighter so the fixed width can shrink without clipping the widest
+        # label it ever shows ("Restore" / "Pause").
         self._autoRangeBtn = QPushButton("Fit Hz")
         self._autoRangeBtn.setFixedHeight(24)
         self._autoRangeBtn.setToolTip("Fit the frequency view to the active signal range")
         self._autoRangeBtn.setStyleSheet(
-            "QPushButton { color: #4f8ef7; } QPushButton:pressed { color: white; }")
+            "QPushButton { color: #4f8ef7; padding: 5px 8px; min-width: 45px; }"
+            "QPushButton:pressed { color: white; }")
         self._autoRangeBtn.clicked.connect(self._onAutoRange)
         ctrl.addWidget(self._autoRangeBtn)
 
         ctrl.addStretch()
 
         self._backToStartBtn = QPushButton("⏮")
-        self._backToStartBtn.setFixedSize(30, 30)
+        self._backToStartBtn.setFixedSize(22, 30)
         self._backToStartBtn.setToolTip("Back to start")
         self._backToStartBtn.setStyleSheet(
-            "QPushButton { color: #4f8ef7; font-size: 14px; } QPushButton:pressed { color: white; }")
+            "QPushButton { color: #4f8ef7; font-size: 14px; padding: 1px 3px; }"
+            "QPushButton:pressed { color: white; }")
         self._backToStartBtn.clicked.connect(self._onBackToStart)
         ctrl.addWidget(self._backToStartBtn)
 
         self._playBtn = QPushButton("Play")
-        self._playBtn.setFixedWidth(70)
+        self._playBtn.setFixedWidth(50)
         self._playBtn.setFixedHeight(30)
         self._playBtn.setStyleSheet(
-            "QPushButton { background: #4f8ef7; color: white; border: none; border-radius: 6px; }"
+            "QPushButton { background: #4f8ef7; color: white; border: none;"
+            " border-radius: 6px; padding: 4px 6px; }"
             "QPushButton:hover { background: #6ba0f9; }"
             "QPushButton:pressed { background: #3f78d8; }")
         self._playBtn.clicked.connect(self._onPlayClicked)
@@ -1127,7 +1138,7 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
         # ── Details pane (F9 side panel) ────────────────────────────────────
         self._detailsPane = QFrame()
         self._detailsPane.setFrameShape(QFrame.Shape.NoFrame)
-        self._detailsPane.setFixedWidth(340)
+        self._detailsPane.setFixedWidth(_DETAILS_PANE_WIDTH)
         self._detailsPane.setStyleSheet(
             "color: silver; background-color: #343333; border: none;")
 
@@ -1156,6 +1167,24 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
             "color: silver; background-color: #343333; padding: 3px;")
         _dpLayout.addWidget(self._detailsInfo)
 
+        # Notes — clickable label beneath the filename (in _detailsInfo); a
+        # click (anywhere, even when empty) opens the same plain-text popup
+        # used by Manage Recordings' Notes button.
+        self._detailsNotes = QLabel()
+        # Word wrap is off: elideToLines() already hard-breaks the text into
+        # exactly the lines that fit, using its own pixel measurement. Leaving
+        # Qt's automatic wrap on as well let it re-wrap a borderline line a
+        # second time (its internal text-layout width can differ from
+        # QFontMetrics.horizontalAdvance() by a few px), stranding the last
+        # word of that line alone on an extra line.
+        self._detailsNotes.setWordWrap(False)
+        self._detailsNotes.setStyleSheet(
+            "color: silver; background-color: #343333; padding: 3px;")
+        self._detailsNotes.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._detailsNotes.mousePressEvent = lambda event: self._openNotesDialog()
+        _dpLayout.addWidget(self._detailsNotes)
+        _dpLayout.addSpacing(10)   # line feed after the Notes field
+
         _starsGroup = QGroupBox()
         _starsGroup.setContentsMargins(0, 0, 0, 0)
         _starsGroup.setStyleSheet(
@@ -1170,13 +1199,20 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
             _btn = QPushButton()
             _btn.setIconSize(QSize(40, 40))
             _btn.setIcon(QIcon(QPixmap(":/icon_star_gray.png")))
-            _btn.setStyleSheet("QPushButton { background-color: #343333; border: none; }")
+            # Zero the global QPushButton rule's padding/min-width — otherwise
+            # each star's true footprint is that 60px floor plus 12px padding
+            # per side (~86px), not the 40px icon, and 5 of them overflow the
+            # details pane.
+            _btn.setStyleSheet(
+                "QPushButton { background-color: #343333; border: none; "
+                "padding: 0px; min-width: 0px; }")
             _btn.clicked.connect(partial(self._starClicked, _i))
             _starsLayout.addWidget(_btn)
             self._starBtns.append(_btn)
 
+        _dpLayout.addSpacing(10)   # line feed after the rating stars
         _dpLayout.addStretch()
-        self._detailsPane.setVisible(False)
+        self._detailsPane.setVisible(True)
         outerHBox.addWidget(self._detailsPane)
 
         # ── Player ──────────────────────────────────────────────────────────
@@ -2011,7 +2047,7 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
         channels_str = rec.get("channels", "")
         device = rec.get("device", "")
 
-        info = f"\n\n{location}\n{weekday}{date}\n{time_str}\n"
+        info = f"\n\n{location}\n{weekday}{date} {time_str}\n"
         if duration:
             info += f"\nDuration: {duration}"
         if sample_rate:
@@ -2022,11 +2058,12 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
             info += f"\n{channels_str}"
         if device:
             info += f"\n{device}"
-        info += f"\n\n{filename}\n\n"
+        info += f"\n\n{filename}\n"   # line feed between the file name and the Notes field
 
         self._detailsCommonName.setText("\n" + common)
         self._detailsScientificName.setText(scientific)
         self._detailsInfo.setText(info)
+        self._refreshNotesLabel()
 
         try:
             r = int(rating)
@@ -2037,7 +2074,24 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
             btn.setIcon(QIcon(QPixmap(icon_name)))
 
     def toggleDetails(self):
-        self._detailsPane.setVisible(not self._detailsPane.isVisible())
+        self._setDetailsPaneVisible(not self._detailsPane.isVisible())
+
+    def _setDetailsPaneVisible(self, visible):
+        """Show/hide _detailsPane. When the window isn't maximized, the pane
+        is added to (or removed from) the window's width so the spectrogram
+        area keeps its own width — rather than the pane eating into its
+        space. While maximized there's no extra screen space to grow into,
+        so it falls back to resizing the spectrogram area in place, as
+        before."""
+        if visible == self._detailsPane.isVisible():
+            return
+
+        if self.isMaximized():
+            self._detailsPane.setVisible(visible)
+        else:
+            delta = _DETAILS_PANE_WIDTH if visible else -_DETAILS_PANE_WIDTH
+            self._detailsPane.setVisible(visible)
+            self.resize(self.width() + delta, self.height())
 
     def showNextRecording(self):
         n = len(self._audioList)
@@ -2091,6 +2145,21 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
         if e.key() in (Qt.Key.Key_Left, Qt.Key.Key_PageUp):
             self.showPreviousRecording()
 
+        # Cmd/Ctrl+M and Cmd/Ctrl+S must work regardless of which MDI child
+        # has focus — mirrors the same handling in the photo Enlargement.
+        if e.modifiers() & Qt.KeyboardModifier.ControlModifier:
+            mw = self.mdiParent
+            if e.key() == Qt.Key.Key_M:
+                if mw.dckMediaFilter.isVisible():
+                    mw.hideMediaFilter()
+                else:
+                    mw.showMediaFilter()
+            elif e.key() == Qt.Key.Key_S:
+                if mw.dckFilter.isVisible():
+                    mw.hideStandardFilter()
+                else:
+                    mw.showStandardFilter()
+
     def toggleFullScreen(self):
         # Mirrors the photo Enlargement.  Called via QTimer.singleShot(0, ...)
         # so it runs after the triggering handler returns.  The recording
@@ -2129,7 +2198,7 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
             return
         self._audioRecord["rating"] = str(rating_int)
         self._setRecordingDetails()
-        self._detailsPane.setVisible(True)
+        self._setDetailsPaneVisible(True)
         db = self.mdiParent.db
         db.photosNeedSaving = True
         try:
@@ -2139,12 +2208,46 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
                 f"Rating saved in memory but could not be written to the media catalog:\n{exc}")
 
     # ------------------------------------------------------------------
+    # Notes
+    # ------------------------------------------------------------------
+
+    def _refreshNotesLabel(self):
+        notes = self._audioRecord.get("notes", "") if self._audioRecord else ""
+        metrics = self._detailsNotes.fontMetrics()
+        # Clear _dpLayout's 8px left+right content margins and this label's
+        # own 3px left+right CSS padding.
+        width = self._detailsPane.width() - 16 - 6
+        if not notes:
+            self._detailsNotes.setText('Notes: <i>Click to add notes…</i>')
+            return
+        self._detailsNotes.setText(code_NotesDialog.elideToLines("Notes: " + notes, metrics, width, 4))
+
+    def _openNotesDialog(self):
+        if self._audioRecord is None:
+            return
+        dlg = code_NotesDialog.NotesDialog(self._audioRecord.get("notes", ""), self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            self._audioRecord["notes"] = dlg.result
+            db = self.mdiParent.db
+            db.photosNeedSaving = True
+            try:
+                db.appendRecordingToJsonl(self._sighting, self._audioRecord)
+            except IOError as exc:
+                QMessageBox.warning(self, "Settings File Error",
+                    f"Notes saved in memory but could not be written to the media catalog:\n{exc}")
+            self._refreshNotesLabel()
+
+    # ------------------------------------------------------------------
     # Context menu
     # ------------------------------------------------------------------
 
     def _showContextMenu(self, global_pos):
         menu = QMenu(self)
         menu.setStyleSheet("color: silver; background-color: #343333;")
+
+        actionShowNextRecording = menu.addAction("Next recording (→)")
+        actionShowPreviousRecording = menu.addAction("Previous recording (←)")
+        menu.addSeparator()
 
         if self._detailsPane.isVisible():
             actionToggleDetails = menu.addAction("Hide details (F9)")
@@ -2170,7 +2273,11 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
 
         action = menu.exec(global_pos)
 
-        if action == actionToggleDetails:
+        if action == actionShowNextRecording:
+            self.showNextRecording()
+        elif action == actionShowPreviousRecording:
+            self.showPreviousRecording()
+        elif action == actionToggleDetails:
             self.toggleDetails()
         elif action == actionToggleFullScreen:
             QTimer.singleShot(0, self.toggleFullScreen)

@@ -1,6 +1,7 @@
 import form_Recordings
 from code_Stylesheet import YBFont
 from code_ManageRecordings import SpectrogramLabel   # UI widget stays in its module
+import code_Filter
 from code_Audio import (
     build_spectrogram_pixmap as _build_spectrogram_pixmap,
     paint_spectro_axes as _paint_spectro_axes,
@@ -436,6 +437,37 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
         if not self.audioList:
             self.mdiParent.progressOverlay.hide()
             self.close()
+
+        return True
+
+    def FillSingleRecording(self, audioData, sightingData):
+        """Show exactly one known recording, bypassing the normal
+        filter-driven query — used when launched from a Find Results hit on
+        that recording's Notes, where only the specific matched file (not its
+        whole checklist) should be shown."""
+        self.scaleMe()
+        self.resizeMe()
+
+        filter = code_Filter.Filter()
+        filter.setSpeciesName(sightingData["commonName"])
+        filter.setLocationName(sightingData["location"])
+        filter.setLocationType("Location")
+        filter.setStartDate(sightingData["date"])
+        filter.setEndDate(sightingData["date"])
+        self.filter = filter
+
+        self.lblSpecies.setText("Species: 1.  Recordings: 1")
+        self.mdiParent.SetChildDetailsLabels(self, filter)
+        self.setWindowTitle(filter.buildWindowTitle(
+            "Recordings", self.mdiParent.db, count=1, countUnit="Recordings"))
+
+        self.audioList = [[audioData, sightingData]]
+
+        self._buildRows()
+
+        icon = QIcon()
+        icon.addPixmap(QPixmap(":/icon_microphone_white.png"), QIcon.Normal, QIcon.Off)
+        self.setWindowIcon(icon)
 
         return True
 

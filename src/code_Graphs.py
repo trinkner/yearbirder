@@ -3918,6 +3918,13 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
                     else:
                         new_filter.setOrder(name)
                     self._spawn_photos_window(new_filter)
+                elif self._chart_type == "recordingspie":
+                    new_filter = copy.deepcopy(self.filter)
+                    if self.rdoPieFamily.isChecked():
+                        new_filter.setFamily(name)
+                    else:
+                        new_filter.setOrder(name)
+                    self._spawn_recordings_browser(new_filter)
                 else:
                     new_filter = copy.deepcopy(self.filter)
                     if self.rdoPieFamily.isChecked():

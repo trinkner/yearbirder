@@ -1,6 +1,7 @@
 import form_Enlargement
 import code_Filter
 import code_Stylesheet
+import code_NotesDialog
 import datetime
 import ntpath
 
@@ -39,11 +40,13 @@ from PySide6.QtWidgets import (
     QFrame,
     QVBoxLayout,
     QPushButton,
-    QWidget
+    QWidget,
+    QDialog
     )
 
 BLEND_DURATION = 300   # crossfade duration in ms
 BLEND_INTERVAL = 16    # timer tick in ms (~60 fps)
+DETAILS_PANE_WIDTH = 297   # must match detailsPane.setFixedWidth() below
    
 
 class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
@@ -247,7 +250,7 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
         
         self.detailsPane = QFrame()
         self.detailsPane.setFrameShape(QFrame.NoFrame)
-        self.detailsPane.setFixedWidth(340)
+        self.detailsPane.setFixedWidth(DETAILS_PANE_WIDTH)
         self.detailsPane.setLayout(self.detailsPaneLayout)
         self.detailsPane.setStyleSheet("color:silver; background-color: #343333; border: none;")
         
@@ -266,17 +269,40 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
         # create label for camera details text
         self.cameraDetails = QLabel()
         self.cameraDetails.setWordWrap(True)
-        self.cameraDetails.setStyleSheet("color:silver; background-color: #343333; padding: 3px")                
-        self.detailsPane.setVisible(False)
+        self.cameraDetails.setStyleSheet("color:silver; background-color: #343333; padding: 3px")
+        # Explicit (not auto-detected): the italic "f" in the exposure/aperture
+        # line is set via <i>, and Qt's rich-text sniff only looks for a tag
+        # before the first line break — which this text never has.
+        self.cameraDetails.setTextFormat(Qt.TextFormat.RichText)
         self.detailsPaneLayout.addWidget(self.cameraDetails)
-                
+
+        # Notes — clickable label beneath the filename (in cameraDetails); a
+        # click (anywhere, even when empty) opens the same plain-text popup
+        # used by Manage Photos' Notes button.
+        self.notesLabel = QLabel()
+        # Word wrap is off: elideToLines() already hard-breaks the text into
+        # exactly the lines that fit, using its own pixel measurement. Leaving
+        # Qt's automatic wrap on as well let it re-wrap a borderline line a
+        # second time (its internal text-layout width can differ from
+        # QFontMetrics.horizontalAdvance() by a few px), stranding the last
+        # word of that line alone on an extra line.
+        self.notesLabel.setWordWrap(False)
+        self.notesLabel.setStyleSheet("color:silver; background-color: #343333; padding: 3px")
+        self.notesLabel.setCursor(Qt.PointingHandCursor)
+        self.notesLabel.mousePressEvent = lambda event: self._openNotesDialog()
+        self.detailsPaneLayout.addWidget(self.notesLabel)
+        self.detailsPaneLayout.addSpacing(10)   # line feed after the Notes field
+
+        self.detailsPane.setVisible(True)
+
         # create horizontal layout to show rating stars
         self.horizontalGroupBox = QGroupBox()
         self.horizontalGroupBox.setContentsMargins(0, 0, 0, 0)
         self.horizontalGroupBox.setStyleSheet("QGroupBox { border: none; background-color: #343333; padding: 3px; }")
-                
+
         self.detailsPaneLayout.addWidget(self.horizontalGroupBox)
-        
+        self.detailsPaneLayout.addSpacing(10)   # line feed after the rating stars
+
         ratingLayout = QHBoxLayout()
         ratingLayout.setContentsMargins(0, 0, 0, 0)
         ratingLayout.setSpacing(0)
@@ -293,26 +319,32 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
         self.star4.setIconSize(QSize(40,40))    
         self.star5.setIconSize(QSize(40,40))    
         
+        # Zero the global QPushButton rule's padding/min-width — otherwise
+        # each star's true footprint is that 60px floor plus 12px padding
+        # per side (~86px), not the 40px icon, and 5 of them overflow the
+        # details pane.
+        _starStyle = ("QPushButton{ background-color: #343333; border:none; "
+                      "padding: 0px; min-width: 0px; }")
         self.star1.setStyleSheet("QPushButton:pressed{ background-color: #343333; }")
         self.star1.setStyleSheet("QPushButton:hover{ background-color: #343333; }")
         self.star1.setStyleSheet("QPushButton:flat{ background-color: #343333; }")
-        self.star1.setStyleSheet("QPushButton{ background-color: #343333; border:none }")        
+        self.star1.setStyleSheet(_starStyle)
         self.star2.setStyleSheet("QPushButton:pressed{ background-color: #343333; }")
         self.star2.setStyleSheet("QPushButton:hover{ background-color: #343333; }")
         self.star2.setStyleSheet("QPushButton:flat{ background-color: #343333; }")
-        self.star2.setStyleSheet("QPushButton{ background-color: #343333; border:none }")        
+        self.star2.setStyleSheet(_starStyle)
         self.star3.setStyleSheet("QPushButton:pressed{ background-color: #343333; }")
         self.star3.setStyleSheet("QPushButton:hover{ background-color: #343333; }")
         self.star3.setStyleSheet("QPushButton:flat{ background-color: #343333; }")
-        self.star3.setStyleSheet("QPushButton{ background-color: #343333; border:none }")        
+        self.star3.setStyleSheet(_starStyle)
         self.star4.setStyleSheet("QPushButton:pressed{ background-color: #343333; }")
         self.star4.setStyleSheet("QPushButton:hover{ background-color: #343333; }")
         self.star4.setStyleSheet("QPushButton:flat{ background-color: #343333; }")
-        self.star4.setStyleSheet("QPushButton{ background-color: #343333; border:none }")        
+        self.star4.setStyleSheet(_starStyle)
         self.star5.setStyleSheet("QPushButton:pressed{ background-color: #343333; }")
         self.star5.setStyleSheet("QPushButton:hover{ background-color: #343333; }")
         self.star5.setStyleSheet("QPushButton:flat{ background-color: #343333; }")
-        self.star5.setStyleSheet("QPushButton{ background-color: #343333; border:none }")        
+        self.star5.setStyleSheet(_starStyle)
         
         self.star1.setIcon(QIcon(QPixmap(":/icon_star.png")))
         self.star2.setIcon(QIcon(QPixmap(":/icon_star.png")))
@@ -429,7 +461,7 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
             self.photoList[self.currentIndex][0]["rating"] = "5"
             
         self.setCameraDetails()
-        self.detailsPane.setVisible(True)
+        self._setDetailsPaneVisible(True)
         db = self.mdiParent.mdiParent.db
         db.photosNeedSaving = True
         try:
@@ -438,7 +470,33 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
             QMessageBox.warning(self, "Settings File Error",
                 f"Rating saved in memory but could not be written to the media catalog:\n{exc}")
         self.viewEnlargement.setFocus()
-                                                
+
+
+    def _refreshNotesLabel(self):
+        notes = self.photoList[self.currentIndex][0].get("notes", "")
+        metrics = self.notesLabel.fontMetrics()
+        # detailsPaneLayout has zero content margins; clear this label's own
+        # 3px left+right CSS padding.
+        width = self.detailsPane.width() - 6
+        if not notes:
+            self.notesLabel.setText('Notes: <i>Click to add notes…</i>')
+            return
+        self.notesLabel.setText(code_NotesDialog.elideToLines("Notes: " + notes, metrics, width, 4))
+
+    def _openNotesDialog(self):
+        photoData = self.photoList[self.currentIndex][0]
+        dlg = code_NotesDialog.NotesDialog(photoData.get("notes", ""), self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            photoData["notes"] = dlg.result
+            db = self.mdiParent.mdiParent.db
+            db.photosNeedSaving = True
+            try:
+                db.appendPhotoToJsonl(self.photoList[self.currentIndex][1], photoData)
+            except IOError as exc:
+                QMessageBox.warning(self, "Settings File Error",
+                    f"Notes saved in memory but could not be written to the media catalog:\n{exc}")
+            self._refreshNotesLabel()
+
 
     def showPreviousPhoto(self):
         for i in range(self.currentIndex - 1, -1, -1):
@@ -555,14 +613,27 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
         
         
     def toggleCameraDetails(self):
-        
+
         # toggle visibility of cameraDetails
-        if self.detailsPane.isVisible():
-            self.detailsPane.setVisible(False)
+        self._setDetailsPaneVisible(not self.detailsPane.isVisible())
+
+    def _setDetailsPaneVisible(self, visible):
+        """Show/hide detailsPane. When the window isn't maximized, the pane is
+        added to (or removed from) the window's width so the photo area keeps
+        its own width — rather than the pane eating into the photo's space.
+        While maximized there's no extra screen space to grow into, so it
+        falls back to resizing the photo area in place, as before."""
+        if visible == self.detailsPane.isVisible():
+            return
+
+        if self.isMaximized():
+            self.detailsPane.setVisible(visible)
         else:
-            self.detailsPane.setVisible(True)
-            
-        QTimer.singleShot(10, self.fitEnlargement)   
+            delta = DETAILS_PANE_WIDTH if visible else -DETAILS_PANE_WIDTH
+            self.detailsPane.setVisible(visible)
+            self.resize(self.width() + delta, self.height())
+
+        QTimer.singleShot(10, self.fitEnlargement)
 
 
     def toggleHideCursor(self):
@@ -855,24 +926,24 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
 
 #         detailsText = photoCommonName + "\n"
 #         detailsText = photoScientificName + "\n"
-        detailsText = "\n\n" + photoLocation + "\n"
-        detailsText = detailsText + photoWeekday + photoExifDate + "\n"
-        detailsText = detailsText + photoExifTime + "\n"
-        detailsText = detailsText + "\n"
-        detailsText = detailsText + photoExifModel + "\n"
-        detailsText = detailsText + photoExifLensModel + "\n"
-        detailsText = detailsText + "Focal Length: " + str(photoExifFocalLength) + "\n"
-        detailsText = detailsText + str(photoExifExposureTime) + "\n"
-        detailsText = detailsText + "Aperture: " + str(photoExifAperture) + "\n"
-        detailsText = detailsText + "ISO: " + str(photoExifISO) + "\n"
-        detailsText = detailsText + "Dimensions: " + str(photoDimensions) + " pixels\n"
+        # Rich text (set explicitly below) so the italic "f" in the
+        # exposure/aperture line renders — every line break must therefore be
+        # an explicit <br>, not a literal "\n".
+        detailsText = "<br><br>" + photoLocation + "<br>"
+        detailsText = detailsText + photoWeekday + photoExifDate + " " + photoExifTime + "<br>"
+        detailsText = detailsText + "<br>"
+        detailsText = detailsText + photoExifModel + "<br>"
+        detailsText = detailsText + photoExifLensModel + "<br>"
+        detailsText = detailsText + str(photoExifFocalLength) + "<br>"
+        detailsText = detailsText + str(photoExifExposureTime) + ", <i>f</i>/" + str(photoExifAperture) + ", ISO " + str(photoExifISO) + "<br>"
+        detailsText = detailsText + str(photoDimensions) + "<br>"
         _fname = (ntpath.basename(currentPhoto)
                   .replace('_', '_​')
                   .replace('-', '-​')
                   .replace('.', '.​'))
-        detailsText = detailsText + "\n\n" + _fname
-        detailsText = detailsText + "\n\n\n"  #add space to separate rating stars from text
-        
+        detailsText = detailsText + "<br>" + _fname
+        detailsText = detailsText + "<br>"  # line feed between the file name and the Notes field
+
         if photoRating == "0":
             self.star1.setIcon(QIcon(QPixmap(":/icon_star_gray.png")))
             self.star2.setIcon(QIcon(QPixmap(":/icon_star_gray.png")))
@@ -911,5 +982,7 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
             self.star5.setIcon(QIcon(QPixmap(":/icon_star.png")))            
 
         self.cameraDetails.setText(detailsText)
-        
+
+        self._refreshNotesLabel()
+
         

@@ -4,6 +4,7 @@ import code_Filter
 import code_Stylesheet
 import code_ThumbnailCache
 import code_ChecklistTree
+import code_NotesDialog
 import os
 import queue
 import threading
@@ -22,7 +23,7 @@ from PySide6.QtCore import (
 from PySide6.QtWidgets import (
     QMdiSubWindow, QPushButton, QApplication, QWidget, QLabel,
     QComboBox, QHBoxLayout, QVBoxLayout, QMessageBox, QFileDialog,
-    QSlider, QCheckBox, QSizePolicy,
+    QSlider, QCheckBox, QSizePolicy, QDialog,
 )
 from PySide6.QtMultimedia import (
     QMediaPlayer, QAudioFormat, QAudioSink, QMediaDevices,
@@ -36,6 +37,7 @@ _FIELD_NAME_COLOR = "#c1c1c1"          # matches the Browse windows' card text
 _MATCH_COLOR      = "#4CAF50"          # green  – value came from metadata/filename
 _VALUE_COLOR      = "#c1c1c1"          # neutral – manually chosen / not auto-derived
 _SKIPPED_COLOR    = "#6b6e7e"          # muted value when the row is skipped
+_NO_SPECIES_COLOR = "#E57373"          # red – flags a row that still needs a species picked
 
 
 def _wrappable(text):
@@ -301,6 +303,7 @@ class threadGetAudioData(QThread):
                 a = item["recordingData"]
                 allSightings = item.get("allSightings", [s])
                 recordingData["rating"] = a.get("rating", "0")
+                recordingData["notes"] = a.get("notes", "")
                 audioMatchData = {
                     "recordingDate": s["date"],
                     "recordingTime": s["time"],
@@ -831,6 +834,7 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         thisAudioMetaData["allSightings"] = allSightings or []
         thisAudioMetaData["recordingData"] = recordingData
         thisAudioMetaData["rating"] = recordingData.get("rating", "0")
+        thisAudioMetaData["notes"] = recordingData.get("notes", "")
         thisAudioMetaData["cascadeMode"] = cascadeMode
         thisAudioMetaData["skip"] = False
         thisAudioMetaData["newLocation"] = recordingLocation
@@ -990,6 +994,10 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         btnReset.clicked.connect(partial(self.btnResetClicked, row))
         controlsCol.addWidget(btnReset)
 
+        btnNotes = QPushButton("Notes")
+        btnNotes.setFont(_panelFont)
+        btnNotes.clicked.connect(partial(self._openNotesDialog, row))
+        controlsCol.addWidget(btnNotes)
 
         cboRating = QComboBox()
         cboRating.addItems(["Not Rated", "1", "2", "3", "4", "5"])
@@ -1062,8 +1070,8 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
                 hdr.setText("")
                 hdr.setVisible(False)
             else:
-                hdr.setText('<span style="color:%s">Species not yet selected</span>'
-                            % _FIELD_NAME_COLOR)
+                hdr.setText('<span style="color:%s">Click Select to choose a species</span>'
+                            % _NO_SPECIES_COLOR)
                 hdr.setVisible(True)
 
     def _openSelectTree(self, row):
@@ -1073,6 +1081,13 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
                       md.get("newTime", ""), "")
         if dlg.exec() and dlg.result:
             self._applyTreeResult(row, dlg.result)
+
+    def _openNotesDialog(self, row):
+        md = self.metaDataByRow[row]
+        dlg = code_NotesDialog.NotesDialog(md.get("newNotes", md.get("notes", "")), self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            md["newNotes"] = dlg.result
+            self.saveNewMetaData(row)
 
     def _applyTreeResult(self, row, result):
         md = self.metaDataByRow[row]
@@ -1099,6 +1114,10 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         self.saveNewMetaData(row)
 
     def _onSpeciesChanged(self, row):
+        # Covers removing the last species via a pill's "x", which leaves the
+        # tag strip empty without going through _applyTreeResult/btnResetClicked
+        # (the only other callers that already refresh the "no species" note).
+        self._refreshRowLabels(row)
         self.saveNewMetaData(row)
 
     def _toggleSkip(self, row, checked):
@@ -1119,6 +1138,7 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         md.setdefault("newLocation", md["location"])
         md.setdefault("newDate", md["date"])
         md.setdefault("newTime", md["time"])
+        md.setdefault("newNotes", md.get("notes", ""))
         if md.get("skip"):
             md["newCommonNames"] = []
         else:
@@ -1138,6 +1158,7 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         md["newLocation"] = md["location"]
         md["newDate"] = md["date"]
         md["newTime"] = md["time"]
+        md["newNotes"] = md.get("notes", "")
         md["skip"] = False
         lbls = self._rowLabels.get(row, {})
         chk = lbls.get("skip")
@@ -1228,7 +1249,8 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
                     meta["date"] != meta["newDate"] or
                     meta["time"] != meta["newTime"] or
                     set(old_species) != set(new_species) or
-                    meta["rating"] != meta["newRating"]
+                    meta["rating"] != meta["newRating"] or
+                    meta["notes"] != meta["newNotes"]
                 )
                 if changed:
                     audio_filename = meta["recordingData"]["fileName"]
@@ -1238,6 +1260,7 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
                     except IOError:
                         pass
                     meta["recordingData"]["rating"] = meta["newRating"]
+                    meta["recordingData"]["notes"] = meta["newNotes"]
                     for species_name in new_species:
                         f = code_Filter.Filter()
                         f.setLocationName(meta["newLocation"])
@@ -1258,6 +1281,7 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
                 new_species = meta.get("newCommonNames", [])
                 if new_species:
                     meta["recordingData"]["rating"] = meta["newRating"]
+                    meta["recordingData"]["notes"] = meta["newNotes"]
                     for species_name in new_species:
                         f = code_Filter.Filter()
                         f.setLocationName(meta["newLocation"])

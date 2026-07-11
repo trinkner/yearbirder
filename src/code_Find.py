@@ -44,14 +44,16 @@ class Find(QMdiSubWindow, form_Find.Ui_frmFind):
         # get names of which checkboxes are checked
         checkedBoxes = []
         for c in ([
-            self.chkCommonName, 
+            self.chkCommonName,
             self.chkScientificName,
             self.chkCountryName,
             self.chkStateName,
             self.chkCountyName,
             self.chkLocationName,
             self.chkSpeciesComments,
-            self.chkChecklistComments
+            self.chkChecklistComments,
+            self.chkPhotoNotes,
+            self.chkRecordingNotes
             ]):
             if c.isChecked() is True:
                 checkedBoxes.append(c.objectName())
@@ -107,14 +109,16 @@ class Find(QMdiSubWindow, form_Find.Ui_frmFind):
        
         fontSize = self.mdiParent.fontSize
         for c in ([
-            self.chkCommonName, 
+            self.chkCommonName,
             self.chkScientificName,
             self.chkCountryName,
             self.chkStateName,
             self.chkCountyName,
             self.chkLocationName,
             self.chkSpeciesComments,
-            self.chkChecklistComments
+            self.chkChecklistComments,
+            self.chkPhotoNotes,
+            self.chkRecordingNotes
             ]):
             c.setFont(QFont(YBFont, fontSize))  
             c.resize(c.x(), textHeight * 1.1)
