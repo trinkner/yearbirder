@@ -178,12 +178,30 @@ class AppStyle(QProxyStyle):
 
 
 # UI font family — single source of truth for every QFont() in the app.
-# Empty string means "let Qt pick the system default", which is correct on macOS
-# (San Francisco) and Linux.  On Windows an empty family resolves to the legacy
-# bitmap font "MS Sans Serif", which DirectWrite cannot load (it spams
-# CreateFontFaceFromHDC errors and renders an ugly fallback), so we name the real
-# Windows UI font explicitly.  Use as QFont(YBFont, pointSize).
-YBFont = "Segoe UI" if sys.platform == "win32" else ""
+# Use as QFont(YBFont, pointSize).
+#
+# Windows: an empty family resolves to the legacy bitmap font "MS Sans Serif",
+# which DirectWrite cannot load (it spams CreateFontFaceFromHDC errors and
+# renders an ugly fallback), so we name the real Windows UI font explicitly.
+#
+# macOS: an empty family ("system default") is resolved through Qt's font
+# database.  When ANY app or macOS itself registers session-wide fonts
+# (font-canary evidence 2026-07-11: family count jumped 311→331 while
+# Yearbirder sat idle), Qt rebuilds that database and the empty-family lookup
+# comes back as '.Apple Color Emoji UI' — digits and spaces then render at
+# full em width ("spread text", most visibly in form_Individual's headers)
+# in every font engine rebuilt after that moment.  Requesting the system font
+# BY NAME is immune (canary "explicit pins" probes stayed OK under the broken
+# database), so pin it explicitly.  '.AppleSystemUIFont' is what the empty
+# family resolves to at startup — same San Francisco face, zero visual change.
+#
+# Linux: empty family (fontconfig default) has shown no such problem.
+if sys.platform == "win32":
+    YBFont = "Segoe UI"
+elif sys.platform == "darwin":
+    YBFont = ".AppleSystemUIFont"
+else:
+    YBFont = ""
 
 # Chart colour palette — single source of truth for code_Graphs.py and code_Web.py
 CHART_PRIMARY   = "#4f8ef7"   # thematic blue — standard-filter charts

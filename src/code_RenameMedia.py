@@ -190,6 +190,42 @@ class RenameMedia(QMdiSubWindow, form_RenameMedia.Ui_frmRenameMedia):
         self.tblPhotos.viewport().installEventFilter(self)
         self.tblPhotos.setMouseTracking(True)
 
+        # One-shot sorting: a header click sorts the table AS IT STANDS; later
+        # data changes (checkbox → proposed name → status) never reorder rows.
+        # Qt's live sort (setSortingEnabled) re-sorts the instant a cell in the
+        # sorted column changes, which made the just-clicked row jump out from
+        # under the user (often scrolling out of view) whenever Status was the
+        # active sort column.  The header keeps a sort indicator showing the
+        # last-sorted column and direction; clicking again re-sorts (toggling
+        # direction), folding in any statuses that changed since.
+        self.tblPhotos.setSortingEnabled(False)   # form_RenameMedia turns it on
+        _hdr = self.tblPhotos.horizontalHeader()
+        _hdr.setSectionsClickable(True)
+        _hdr.setSortIndicatorShown(False)   # nothing sorted yet
+        _hdr.sectionClicked.connect(self._onHeaderClicked)
+        self._sortColumn = -1
+        self._sortOrder = Qt.AscendingOrder
+
+
+    def _onHeaderClicked(self, col):
+        """One-shot sort (see __init__): sort the current contents once and
+        show the sort indicator; the order is then left alone until the next
+        header click."""
+        if col == _COL_CHECK:
+            # The checkbox column holds cell widgets, not items — there is
+            # nothing meaningful to sort by.
+            return
+        if col == self._sortColumn:
+            self._sortOrder = (Qt.DescendingOrder
+                               if self._sortOrder == Qt.AscendingOrder
+                               else Qt.AscendingOrder)
+        else:
+            self._sortColumn = col
+            self._sortOrder = Qt.AscendingOrder
+        self.tblPhotos.sortItems(col, self._sortOrder)
+        _hdr = self.tblPhotos.horizontalHeader()
+        _hdr.setSortIndicatorShown(True)
+        _hdr.setSortIndicator(col, self._sortOrder)
 
     def closeEvent(self, event):
         self.mdiParent.db.compactJsonlFile()
@@ -266,7 +302,10 @@ class RenameMedia(QMdiSubWindow, form_RenameMedia.Ui_frmRenameMedia):
         self._rows = []
         self._frozen_paths = set()
         self.tblPhotos.setRowCount(0)
-        self.tblPhotos.setSortingEnabled(False)
+        # Fresh fill: natural (catalog) order, no active one-shot sort yet.
+        self._sortColumn = -1
+        self._sortOrder = Qt.AscendingOrder
+        self.tblPhotos.horizontalHeader().setSortIndicatorShown(False)
         # Populate while hidden: a *visible* QTableWidget relays out its whole
         # geometry on every insertRow/setCellWidget, which is O(rows) per insert
         # (~8 s for 3,300 rows).  Hidden, the same build is ~0.2 s; we re-show it
@@ -332,7 +371,6 @@ class RenameMedia(QMdiSubWindow, form_RenameMedia.Ui_frmRenameMedia):
         # O(1) path -> row index for _rowDataForTableRow (avoids O(n^2) rescans).
         self._rebuildRowIndex()
 
-        self.tblPhotos.setSortingEnabled(True)
         self._updateProposedNames()
         self.tblPhotos.setVisible(True)        # re-show before column sizing
         self._updateCount()
@@ -591,18 +629,14 @@ class RenameMedia(QMdiSubWindow, form_RenameMedia.Ui_frmRenameMedia):
         self._updateProposedNames()
 
     def _updateProposedNames(self):
-        """Recompute all proposed names and update the Status column."""
+        """Recompute all proposed names and update the Status column.
+
+        Sorting is one-shot (see __init__), so setText() here never triggers a
+        re-sort: rows keep their positions, and the sort order simply goes
+        stale until the user clicks a header again."""
         if not self._rows:
             return
-
-        # Disable sorting for the duration of this update.
-        # With sorting active, any setText() call on a sorted column triggers an
-        # immediate re-sort, scrambling the row↔resolved[] mapping mid-Pass-3.
-        self.tblPhotos.setSortingEnabled(False)
-        try:
-            self._doUpdateProposedNames()
-        finally:
-            self.tblPhotos.setSortingEnabled(True)
+        self._doUpdateProposedNames()
 
 
     def _doUpdateProposedNames(self):
@@ -970,11 +1004,11 @@ class RenameMedia(QMdiSubWindow, form_RenameMedia.Ui_frmRenameMedia):
             return
 
         # ── Step 5: rename loop ───────────────────────────────────────────────
+        # (Sorting is one-shot — see __init__ — so the Status updates below
+        # cannot reorder rows mid-loop.)
         unique_token  = uuid.uuid4().hex[:8]
         succeeded     = 0
         failed        = 0
-
-        self.tblPhotos.setSortingEnabled(False)
 
         for (row, rd, old_path, proposed_basename) in rename_list:
             new_path = os.path.join(os.path.dirname(old_path), proposed_basename)

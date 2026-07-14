@@ -70,6 +70,24 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
         self.buttonChecklists.clicked.connect(self.CreateChecklists)
         self.tabIndividual.setCurrentIndex(0)
 
+        # Match every data pane in the three tabs to the app's table surface
+        # (code_Stylesheet.tableColor).  The global stylesheet only covers
+        # QTableWidget, so the By Year/By Month Locations tables already look
+        # right; the tree views (no global rule → base window color) and the
+        # dates QListWidget (global rule uses the base color) are overridden
+        # here, scoped to this window so the ChecklistTree dialog's tree keeps
+        # its current look.
+        def _paneSheet(widgetSelector):
+            return (
+                "%(w)s { background: %(bg)s; border: 1px solid #3a3d4e;"
+                " border-radius: 4px; }"
+                " %(w)s::item:selected { background: #4f8ef7; color: white; }"
+                " %(w)s::item:hover { background: #363a4f; }"
+                % {"w": widgetSelector, "bg": code_Stylesheet.tableColor})
+        for _tree in (self.trLocations, self.trDates, self.trMonthDates):
+            _tree.setStyleSheet(_paneSheet("QTreeWidget"))
+        self.lstDates.setStyleSheet(_paneSheet("QListWidget"))
+
  
     def FillIndividual(self, Species): 
         
@@ -897,7 +915,14 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
         commonFont.setBold(True)
         scientificFont=  QFont(QFont(YBFont, floor(fontSize * 1.2)))
         scientificFont.setItalic(True)
-        detailFont = QFont(YBFont, fontSize + 1)
+        # Self-heal for the "spread text" bug: if MainWindow's font canary has
+        # detected that this size's font resolution is corrupted (full-width
+        # fallback digits), use a verified-clean font pinned to an explicit
+        # family instead.  See _initFontCanary in code_MainWindow.
+        if hasattr(self.mdiParent, "substituteFont"):
+            detailFont = self.mdiParent.substituteFont(fontSize + 1)
+        else:
+            detailFont = QFont(YBFont, fontSize + 1)
         self.lblCommonName.setFont(commonFont)
         self.lblScientificName.setFont(scientificFont)
         self.lblOrderName.setFont(detailFont)

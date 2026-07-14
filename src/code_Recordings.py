@@ -3,7 +3,7 @@ from code_Stylesheet import YBFont
 from code_ManageRecordings import SpectrogramLabel   # UI widget stays in its module
 import code_Filter
 from code_Audio import (
-    build_spectrogram_pixmap as _build_spectrogram_pixmap,
+    render_spectrogram_qimage as _render_spectrogram_qimage,
     paint_spectro_axes as _paint_spectro_axes,
     PcmAudioPlayer,
     SPECTRO_AX_BBOX,
@@ -55,11 +55,13 @@ class threadLoadSpectrogram(QThread):
 
             # Tier 2: on-disk spectrogram cache (tier 1 is the in-memory
             # spectroCache, checked before a file is queued here).
+            # QImage ONLY in this thread — QPixmap creation (and destruction)
+            # is a GUI-thread-only operation, even for a cached image; the
+            # GUI thread converts in _drainResultQueue.
             img = code_ThumbnailCache.load(audioFile, "spectro_thumb",
                                            code_ThumbnailCache.SPECTRO_THUMB_VARIANT)
             if img is not None and not img.isNull():
                 # Cached image already has the axes baked in.
-                pixmap = QPixmap.fromImage(img)
                 ax_bbox = SPECTRO_AX_BBOX
                 duration, sr, axesPending = 0, 0, False
             else:
@@ -67,12 +69,12 @@ class threadLoadSpectrogram(QThread):
                 # QFont/drawText is not thread-safe on macOS (it corrupts glyph
                 # metrics app-wide). The GUI thread composites the kHz/sec axes
                 # and caches the result in _drainResultQueue.
-                pixmap, duration, sr, ax_bbox = _build_spectrogram_pixmap(
+                img, duration, sr, ax_bbox = _render_spectrogram_qimage(
                     audioFile, draw_axis_text=False)
-                axesPending = pixmap is not None and not pixmap.isNull()
+                axesPending = img is not None and not img.isNull()
 
             self.resultQueue.put(
-                (row, audioFile, pixmap, ax_bbox, duration, sr, axesPending))
+                (row, audioFile, img, ax_bbox, duration, sr, axesPending))
             self.workQueue.task_done()
 
         self.sigThreadFinished.emit()
@@ -731,7 +733,7 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
 
         while True:
             try:
-                (row, audioFile, pixmap, ax_bbox,
+                (row, audioFile, img, ax_bbox,
                  duration, sr, axesPending) = self.resultQueue.get_nowait()
             except queue.Empty:
                 break
@@ -739,14 +741,17 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
             if self._abort:
                 continue
 
-            if pixmap and not pixmap.isNull():
+            if img is not None and not img.isNull():
                 # Composite the kHz/sec axes here on the GUI thread (the worker
-                # rendered the spectrogram text-free), then cache the finished image.
+                # rendered the spectrogram text-free), then cache the finished
+                # image.  The QImage→QPixmap conversion also happens here: the
+                # workers pass QImage only, because QPixmap is GUI-thread-only.
                 if axesPending:
-                    _paint_spectro_axes(pixmap, duration, sr)
+                    _paint_spectro_axes(img, duration, sr)
                     code_ThumbnailCache.store(
-                        audioFile, pixmap.toImage(), "spectro_thumb",
+                        audioFile, img, "spectro_thumb",
                         code_ThumbnailCache.SPECTRO_THUMB_VARIANT)
+                pixmap = QPixmap.fromImage(img)
                 self.spectroCache[audioFile] = (pixmap, ax_bbox)
                 lbl = self._spectroLabels.get(row)
                 if lbl:

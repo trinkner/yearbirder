@@ -379,17 +379,11 @@ def paint_spectro_axes(paint_device, duration, fs, max_freq=10000):
     p.end()
 
 
-def build_spectrogram_pixmap(wav_path, max_freq=10000, draw_axis_text=True):
-    """QPixmap wrapper around render_spectrogram_qimage for GUI-thread/QThread
-    callers that display the result.  Returns (QPixmap, dur, fs, ax_bbox).
-
-    Off-thread callers pass draw_axis_text=False and later call paint_spectro_axes
-    on the returned pixmap from the GUI thread."""
-    img, duration, fs, ax_bbox = render_spectrogram_qimage(
-        wav_path, max_freq, draw_axis_text=draw_axis_text)
-    if img is None or img.isNull():
-        return None, duration, fs, ax_bbox
-    return QPixmap.fromImage(img), duration, fs, ax_bbox
+# NOTE: there is deliberately NO QPixmap wrapper around render_spectrogram_qimage.
+# QPixmap creation/destruction is a GUI-thread-only operation (concurrent use
+# corrupts macOS's shared native graphics state the same way off-thread
+# QFont/drawText does — app-wide stretched text).  Worker threads must handle
+# QImage only; the GUI-thread consumer converts with QPixmap.fromImage().
 
 
 # ---------------------------------------------------------------------------

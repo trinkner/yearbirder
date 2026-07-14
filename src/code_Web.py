@@ -1018,7 +1018,7 @@ td {{ border-bottom:1px solid #e0e0e0; vertical-align:middle; }}
             fam_sci = _html.escape(fam["fam_sci"])
             rows.append(
                 f'<tr style="background:#e8e8e8;">'
-                f'<td colspan="{3 if photos_open else 2}" '
+                f'<td colspan="{4 if photos_open else 2}" '
                 f'style="padding:6px 8px 3px;border-top:2px solid #bbb;">'
                 f'<span style="font-weight:bold;font-size:0.85em;letter-spacing:0.05em;">'
                 f'{fam_com.upper()}</span>'
@@ -1038,11 +1038,18 @@ td {{ border-bottom:1px solid #e0e0e0; vertical-align:middle; }}
                 )
                 name_style = "color:#555;" if seen else "font-weight:bold;"
                 photo_cell = ""
+                rec_cell = ""
                 if photos_open:
                     photo_cell = (
                         f'<td style="padding:2px 6px;text-align:center;color:#e07020;">'
                         f'&#9679;</td>'
                         if sp["photo"] else
+                        '<td></td>'
+                    )
+                    rec_cell = (
+                        f'<td style="padding:2px 6px;text-align:center;color:#e07020;">'
+                        f'&#9834;</td>'
+                        if sp.get("rec") else
                         '<td></td>'
                     )
                 rows.append(
@@ -1053,6 +1060,7 @@ td {{ border-bottom:1px solid #e0e0e0; vertical-align:middle; }}
                     f'text-align:center;{chk_style}">{chk}</span>'
                     f'</td>'
                     f'{photo_cell}'
+                    f'{rec_cell}'
                     f'<td style="padding:2px 8px;{name_style}">{com}'
                     f'<span style="font-style:italic;color:#888;font-size:0.85em;'
                     f'margin-left:8px;">{sci}</span>'
@@ -1061,7 +1069,9 @@ td {{ border-bottom:1px solid #e0e0e0; vertical-align:middle; }}
                 )
 
         rows_html = "\n".join(rows)
-        photo_note = " &nbsp;&middot;&nbsp; &#9679; = photographed" if photos_open else ""
+        photo_note = (" &nbsp;&middot;&nbsp; &#9679; = photographed"
+                      " &nbsp;&middot;&nbsp; &#9834; = recorded"
+                      if photos_open else "")
 
         return f"""<!DOCTYPE html>
 <html>
@@ -4993,11 +5003,13 @@ body {{ background:#16171d; color:#e2e4ec;
             _hs_info = self._ebirdGet(f"/v2/ref/hotspot/info/{region_code}", api_key)
             _is_private_loc = not isinstance(_hs_info, dict)
 
-        # Strip photo-presence flags — the in-report buttons handle that axis.
-        # All other filter dimensions (camera, lens, date, season, etc.) are kept.
+        # Strip photo- and recording-presence flags — the in-report buttons
+        # handle those axes.  All other filter dimensions (camera, lens, date,
+        # season, etc.) are kept.
         stripped_filter = deepcopy(filter)
         stripped_filter.setSightingHasPhoto("")
         stripped_filter.setSpeciesHasPhoto("")
+        stripped_filter.setSpeciesHasRecording("")
 
         QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
         try:
@@ -5055,11 +5067,11 @@ body {{ background:#16171d; color:#e2e4ec;
             ]
 
         # GetSightings doesn't handle locationType="EBirdRegion", so remap it to
-        # the equivalent native type before computing seen/photo sets.
+        # the equivalent native type before computing seen/photo/recording sets.
         # L-codes → "Location" (if the user has sightings there) or empty.
         # Country/state codes → "Country" / "State" (GetSightings handles both).
-        # County codes (2+ hyphens) → force empty; we can't map the eBird county
-        # code back to the county name used internally without an API call.
+        # County codes (2 hyphens) → one region-info API call maps the code to
+        # the eBird county name, which is also what the internal county keys use.
         _sf_lt = stripped_filter.getLocationType()
         _sf_ln = stripped_filter.getLocationName()
         _forced_empty = False
@@ -5080,9 +5092,29 @@ body {{ background:#16171d; color:#e2e4ec;
                     stripped_filter.setLocationType("Country")
                 elif _hyphens == 1 and _sf_ln in _db.stateDict:
                     stripped_filter.setLocationType("State")
+                elif _hyphens == 2:
+                    # County code (e.g. US-CA-081).  Internal county keys are
+                    # the plain eBird county name, or "Name (US-XX)" when the
+                    # user has sightings in same-named counties in several
+                    # states (see the parenthetical de-duplication in
+                    # code_DataBase's file load).
+                    _info = self._ebirdGet(f"/v2/ref/region/info/{_sf_ln}", api_key)
+                    _cname = ""
+                    if isinstance(_info, dict):
+                        _cname = (_info.get("result") or "").split(",")[0].strip()
+                    _state_code = "-".join(_sf_ln.split("-")[:2])
+                    _qualified = f"{_cname} ({_state_code})"
+                    if _cname and _cname in _db.countyDict:
+                        stripped_filter.setLocationType("County")
+                        stripped_filter.setLocationName(_cname)
+                    elif _cname and _qualified in _db.countyDict:
+                        stripped_filter.setLocationType("County")
+                        stripped_filter.setLocationName(_qualified)
+                    else:
+                        # Lookup failed, or the user has no sightings there.
+                        _forced_empty = True
                 else:
-                    # Either a county-level code (can't map to internal county name),
-                    # or the user has no sightings in the selected country/state.
+                    # The user has no sightings in the selected country/state.
                     _forced_empty = True
 
         # Seen set: sightings passing the stripped filter
@@ -5104,6 +5136,23 @@ body {{ background:#16171d; color:#e2e4ec;
                     name = s["commonName"]
                     photo_set.add(name)
                     photo_set.add(_base(name))
+
+        # Recording set: mirrors the photo set exactly.  Built from the same
+        # stripped_filter (already remapped/scoped above for every spawn path),
+        # so a species only gets the microphone icon when the user recorded it
+        # WITHIN this list's scope — e.g. recorded in Boulder County when the
+        # list is for Boulder County, not merely recorded somewhere in their
+        # lifetime.  The per-sighting audio check keeps the semantics
+        # sighting-level (species-level fallbacks in the filter can't leak in).
+        rec_set = set()
+        if photos_open and not _forced_empty:
+            rec_filter = deepcopy(stripped_filter)
+            rec_filter.setSpeciesHasRecording("Recorded")
+            for s in self.mdiParent.db.GetSightings(rec_filter):
+                if s.get("audio"):
+                    name = s["commonName"]
+                    rec_set.add(name)
+                    rec_set.add(_base(name))
 
         # Stats
         total        = len(taxonomy_entries)
@@ -5152,6 +5201,7 @@ body {{ background:#16171d; color:#e2e4ec;
                             "sci": t.get("sciName", ""),
                             "seen": t["comName"] in seen_set,
                             "photo": t["comName"] in photo_set,
+                            "rec": t["comName"] in rec_set,
                         }
                         for t in entries
                     ]
@@ -5159,6 +5209,20 @@ body {{ background:#16171d; color:#e2e4ec;
                 for fam_sci, fam_com, entries in families
             ]
         }
+
+        # Camera / microphone icons (photographed- and recorded-species
+        # markers), embedded as data URIs — the report page can't fetch local
+        # files, same as the map thumbnails.
+        def _resource_b64(path):
+            f = QFile(path)
+            if not f.open(QIODevice.OpenModeFlag.ReadOnly):
+                return ""
+            data = base64.b64encode(bytes(f.readAll())).decode("ascii")
+            f.close()
+            return data
+
+        cam_b64 = _resource_b64(":/icon_camera_yellow.png") if photos_open else ""
+        mic_b64 = _resource_b64(":/icon_microphone_green.png") if photos_open else ""
 
         # Build species rows
         rows_html = ""
@@ -5176,33 +5240,49 @@ body {{ background:#16171d; color:#e2e4ec;
                 sci_safe = _html.escape(sci)
                 seen  = com in seen_set
                 photo = com in photo_set
+                rec   = com in rec_set
                 row_cls  = "row seen" if seen else "row unseen"
                 if photos_open:
                     row_cls += " photo-yes" if photo else " photo-no"
+                    row_cls += " rec-yes" if rec else " rec-no"
                 chk_html = ('<span class="check seen-check">&#10003;</span>'
                             if seen else
                             '<span class="check unseen-check"></span>')
-                cam_html = ('<span class="cam-icon" title="Photographed">&#9679;</span>'
+                cam_html = ('<span class="cam-icon" title="Photographed"></span>'
                             if (photos_open and photo) else
                             '<span class="cam-absent"></span>' if photos_open else '')
+                # The mic image itself lives ONCE in the page CSS (as
+                # .mic-icon's background) — embedding the ~53KB data URI in
+                # every recorded row pushed the page past setHtml()'s ~2MB
+                # content limit, which silently renders a blank window (same
+                # Qt limitation the choropleth maps hit; see loadCountyChoropleth).
+                mic_html = ('<span class="mic-icon" title="Recorded"></span>'
+                            if (photos_open and rec) else
+                            '<span class="mic-absent"></span>' if photos_open else '')
                 com_cls  = "com seen-name" if seen else "com unseen-name"
                 rows_html += (
                     f'<div class="{row_cls}" data-species="{com_safe}">'
                     f'{chk_html}'
                     f'{cam_html}'
+                    f'{mic_html}'
                     f'<span class="{com_cls}">{com_safe}</span>'
                     f'<span class="sci">{sci_safe}</span>'
                     f'</div>\n'
                 )
 
-        # Photo filter buttons (only when catalog is open)
+        # Photo / recording filter buttons (only when catalog is open)
         photo_btns_html = ""
         if photos_open:
             photo_count = sum(1 for t in taxonomy_entries if t["comName"] in photo_set)
             no_photo_count = total - photo_count
+            rec_count = sum(1 for t in taxonomy_entries if t["comName"] in rec_set)
+            no_rec_count = total - rec_count
             photo_btns_html = f"""  <span class="filter-sep"></span>
   <button class="filter-btn photo-btn" onclick="setPhotoFilter('withphoto',this)">With Photo ({photo_count})</button>
-  <button class="filter-btn photo-btn" onclick="setPhotoFilter('nophoto',this)">No Photo ({no_photo_count})</button>"""
+  <button class="filter-btn photo-btn" onclick="setPhotoFilter('nophoto',this)">No Photo ({no_photo_count})</button>
+  <span class="filter-sep"></span>
+  <button class="filter-btn rec-btn" onclick="setRecFilter('withrec',this)">With Recording ({rec_count})</button>
+  <button class="filter-btn rec-btn" onclick="setRecFilter('norec',this)">No Recording ({no_rec_count})</button>"""
 
         # Read Qt WebChannel JS
         qwc_file = QFile(":/qtwebchannel/qwebchannel.js")
@@ -5279,14 +5359,33 @@ body {{
 .com {{ }}
 .seen-name {{ color:#8b8fa8; }}
 .unseen-name {{ color:#e2e4ec; font-weight:600; }}
+/* The camera and microphone icons render at the same 20px height as the
+   orange .check box.  The artwork is padding-free with a transparent
+   background, so each column's slot width comes from its icon's true aspect
+   ratio (camera 480x416 → 23px, mic 332x512 → 13px); every slot in a column
+   is that same width (absent included), keeping the columns and the species
+   names aligned.  Each image is embedded ONCE here as a data URI (per-row
+   embedding blew setHtml's ~2MB limit). */
 .cam-icon {{
-  font-size:11px; margin-right:8px;
-  background:#ffffff; border-radius:4px;
-  padding:2px 5px; display:inline-flex;
-  align-items:center; justify-content:center;
-  color:{CHART_PRIMARY};
+  width:23px; min-width:23px; height:20px;
+  margin-right:10px;
+  background-image:url("data:image/png;base64,{cam_b64}");
+  background-repeat:no-repeat;
+  background-position:center;
+  background-size:auto 20px;
+  display:inline-block;
 }}
-.cam-absent {{ width:27px; margin-right:8px; display:inline-block; }}
+.cam-absent {{ width:23px; min-width:23px; margin-right:10px; display:inline-block; }}
+.mic-icon {{
+  width:13px; min-width:13px; height:20px;
+  margin-right:10px;
+  background-image:url("data:image/png;base64,{mic_b64}");
+  background-repeat:no-repeat;
+  background-position:center;
+  background-size:auto 20px;
+  display:inline-block;
+}}
+.mic-absent {{ width:13px; min-width:13px; margin-right:10px; display:inline-block; }}
 .sci {{ color:#5a5d78; font-style:italic; font-size:.84em; margin-left:10px; }}
 .hidden {{ display:none !important; }}
 </style>
@@ -5317,18 +5416,23 @@ body {{
 <script>
 var seenMode  = 'all';
 var photoMode = 'all';
+var recMode   = 'all';
 
 function applyFilters() {{
   document.querySelectorAll('.row').forEach(function(row) {{
     var isSeen      = row.classList.contains('seen');
     var hasPhoto    = row.classList.contains('photo-yes');
+    var hasRec      = row.classList.contains('rec-yes');
     var showBySeen  = seenMode  === 'all' ||
                       (seenMode  === 'seen'      &&  isSeen) ||
                       (seenMode  === 'unseen'    && !isSeen);
     var showByPhoto = photoMode === 'all' ||
                       (photoMode === 'withphoto' &&  hasPhoto) ||
                       (photoMode === 'nophoto'   && !hasPhoto);
-    row.classList.toggle('hidden', !(showBySeen && showByPhoto));
+    var showByRec   = recMode   === 'all' ||
+                      (recMode   === 'withrec'   &&  hasRec) ||
+                      (recMode   === 'norec'     && !hasRec);
+    row.classList.toggle('hidden', !(showBySeen && showByPhoto && showByRec));
   }});
 }}
 
@@ -5337,9 +5441,11 @@ function setSeenFilter(mode, btn) {{
   btn.classList.add('active');
   seenMode = mode;
   if (mode === 'all') {{
-    // All resets the photo axis too
+    // All resets the photo and recording axes too
     document.querySelectorAll('.photo-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.rec-btn').forEach(b => b.classList.remove('active'));
     photoMode = 'all';
+    recMode   = 'all';
   }}
   applyFilters();
 }}
@@ -5350,6 +5456,15 @@ function setPhotoFilter(mode, btn) {{
   // Deactivate the seen All button since we're no longer showing everything
   document.querySelectorAll('.all-btn').forEach(b => b.classList.remove('active'));
   photoMode = mode;
+  applyFilters();
+}}
+
+function setRecFilter(mode, btn) {{
+  document.querySelectorAll('.rec-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  // Deactivate the seen All button since we're no longer showing everything
+  document.querySelectorAll('.all-btn').forEach(b => b.classList.remove('active'));
+  recMode = mode;
   applyFilters();
 }}
 

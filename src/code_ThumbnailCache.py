@@ -17,8 +17,10 @@ Cross-platform location (via QStandardPaths):
 
 import hashlib
 import os
+import queue
 import shutil
 import tempfile
+import threading
 
 from PySide6.QtCore import QStandardPaths, QSize, Qt, QBuffer, QIODevice
 from PySide6.QtGui import QImageReader, QImageWriter
@@ -86,21 +88,88 @@ def build(source_path):
 
 
 def build_spectro(wav_path):
-    """Force-(re)generate and store the cached spectrogram thumbnail (PNG).
+    """(Re)generate the cached spectrogram thumbnail — render half only.
 
-    Lazily imports the renderer to avoid an import cycle.  True on success.
+    Renders the spectrogram WITHOUT axis text (QImage only, safe off-thread)
+    and queues it for the GUI-thread axes pump, which paints the kHz/sec
+    labels and stores the finished PNG.  QFont/drawText off the GUI thread
+    corrupts macOS's CoreText glyph metrics app-wide (stretched text in
+    whatever window renders next), so the text half MUST NOT happen here.
+
+    Callers must arm the pump with ensure_axes_pump() from the GUI thread
+    before their worker threads start.  Lazily imports the renderer to avoid
+    an import cycle.  True when a render was queued.
     """
     import code_Audio
-    img, _dur, _sr, _bbox = code_Audio.render_spectrogram_qimage(wav_path)
+    img, dur, sr, _bbox = code_Audio.render_spectrogram_qimage(
+        wav_path, draw_axis_text=False)
     if img is None or img.isNull():
         return False
-    store(wav_path, img, "spectro_thumb", SPECTRO_THUMB_VARIANT)
+    _axesQueue.put((wav_path, img, dur, sr))
     return True
 
 
+# ---------------------------------------------------------------------------
+# GUI-thread axes pump — finishes worker-rendered spectro thumbnails
+# ---------------------------------------------------------------------------
+# The cached spectro_thumb PNG has the kHz/sec axis text baked in, but that
+# text can only be painted on the GUI thread (see build_spectro).  Worker
+# threads enqueue (path, axis-less QImage, duration, fs) here; a QTimer on the
+# GUI thread drains the queue, paints the axes, and stores the result.  The
+# timer stops itself once no builder threads remain and the queue is empty.
+
+_axesQueue = queue.Queue()
+_axesBuilders = 0
+_axesLock = threading.Lock()
+_axesTimer = None
+
+
+def builder_started():
+    """A worker thread that may call build_spectro is starting."""
+    global _axesBuilders
+    with _axesLock:
+        _axesBuilders += 1
+
+
+def builder_finished():
+    """A worker thread registered with builder_started has exited."""
+    global _axesBuilders
+    with _axesLock:
+        _axesBuilders -= 1
+
+
+def ensure_axes_pump():
+    """Arm the axes pump.  MUST be called from the GUI thread (the QTimer is
+    created in, and fires on, the calling thread) before builder threads start."""
+    global _axesTimer
+    if _axesTimer is None:
+        from PySide6.QtCore import QTimer
+        _axesTimer = QTimer()
+        _axesTimer.setInterval(100)
+        _axesTimer.timeout.connect(_drain_axes_queue)
+    if not _axesTimer.isActive():
+        _axesTimer.start()
+
+
+def _drain_axes_queue():
+    import code_Audio
+    while True:
+        try:
+            path, img, dur, sr = _axesQueue.get_nowait()
+        except queue.Empty:
+            break
+        code_Audio.paint_spectro_axes(img, dur, sr)
+        store(path, img, "spectro_thumb", SPECTRO_THUMB_VARIANT)
+    with _axesLock:
+        idle = _axesBuilders == 0
+    if idle and _axesQueue.empty():
+        _axesTimer.stop()
+
+
 def rebuild_one(item):
-    """Build all cache entries for one media file — module-level so it can run in
-    a multiprocessing worker (spawn-picklable).
+    """Build all cache entries for one media file, from a worker *thread*
+    (the recording thumbnail is finished by the in-process GUI-thread axes
+    pump, so worker processes would not work — see build_spectro).
 
     ``item`` is ``(kind, path)`` where kind is "photo" or "recording".  For a
     recording it builds both the browser thumbnail and the enlargement ribbon.
@@ -126,11 +195,9 @@ def prebuild_async(photo_paths=(), recording_paths=()):
     Best-effort and fire-and-forget: photos get a thumbnail; recordings get the
     spectrogram thumbnail AND the enlargement ribbon.  Items already cached are
     skipped (a cheap load check), so re-saving existing media costs almost
-    nothing.  Safe to call from the GUI thread — returns immediately.
+    nothing.  MUST be called from the GUI thread (it arms the axes pump that
+    finishes the spectro thumbnails) — returns immediately.
     """
-    import threading
-    import queue as _queue
-
     items = ([("photo", p) for p in photo_paths]
              + [("recording", p) for p in recording_paths])
     if not items:
@@ -145,29 +212,36 @@ def prebuild_async(photo_paths=(), recording_paths=()):
         except Exception:
             cre = None
 
-    work = _queue.Queue()
+    if recording_paths:
+        ensure_axes_pump()
+
+    work = queue.Queue()
     for it in items:
         work.put(it)
 
     def _worker():
-        while True:
-            try:
-                kind, path = work.get_nowait()
-            except _queue.Empty:
-                break
-            try:
-                if kind == "photo":
-                    if load(path, "photo") is None:
-                        build(path)
-                else:
-                    if load(path, "spectro_thumb", SPECTRO_THUMB_VARIANT) is None:
-                        build_spectro(path)
-                    if cre is not None and load(
-                            path, "spectro_ribbon",
-                            cre._RIBBON_VARIANT) is None:
-                        cre.build_ribbon_cache(path)
-            except Exception:
-                pass
+        builder_started()
+        try:
+            while True:
+                try:
+                    kind, path = work.get_nowait()
+                except queue.Empty:
+                    break
+                try:
+                    if kind == "photo":
+                        if load(path, "photo") is None:
+                            build(path)
+                    else:
+                        if load(path, "spectro_thumb", SPECTRO_THUMB_VARIANT) is None:
+                            build_spectro(path)
+                        if cre is not None and load(
+                                path, "spectro_ribbon",
+                                cre._RIBBON_VARIANT) is None:
+                            cre.build_ribbon_cache(path)
+                except Exception:
+                    pass
+        finally:
+            builder_finished()
 
     n = min(os.cpu_count() or 4, 4)
     for _ in range(min(n, len(items))):

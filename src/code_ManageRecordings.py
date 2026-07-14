@@ -58,7 +58,6 @@ from code_Audio import (
     PcmAudioPlayer,
     SPECTRO_AX_BBOX,
     render_spectrogram_qimage as _render_spectrogram_qimage,
-    build_spectrogram_pixmap as _build_spectrogram_pixmap,
     paint_spectro_axes as _paint_spectro_axes,
     decode_wav_pcm16 as _decode_wav_pcm16,
 )
@@ -265,19 +264,21 @@ class threadGetAudioData(QThread):
             # Reuse the on-disk spectrogram cache (the same "spectro_thumb"
             # image the Recordings browser caches); render only on a miss, then
             # store, so re-opening this window is fast.
+            # QImage ONLY in this thread — QPixmap creation (and destruction)
+            # is a GUI-thread-only operation, even for a cached image; the
+            # GUI thread converts when it consumes the entry.
             img = code_ThumbnailCache.load(file, "spectro_thumb",
                                            code_ThumbnailCache.SPECTRO_THUMB_VARIANT)
             if img is not None and not img.isNull():
                 # Cached image already has the axes baked in.
-                pixmap = QPixmap.fromImage(img)
                 ax_bbox = SPECTRO_AX_BBOX
                 _dur, _fs, axesPending = 0, 0, False
             else:
                 # Render text-free off-thread (QFont/drawText is not thread-safe
                 # on macOS); the GUI thread composites the axes and caches below.
-                pixmap, _dur, _fs, ax_bbox = _build_spectrogram_pixmap(
+                img, _dur, _fs, ax_bbox = _render_spectrogram_qimage(
                     file, draw_axis_text=False)
-                axesPending = pixmap is not None and not pixmap.isNull()
+                axesPending = img is not None and not img.isNull()
             recordingData = self.parent.mdiParent.db.getRecordingData(file)
 
             if mode == "new":
@@ -319,7 +320,7 @@ class threadGetAudioData(QThread):
             entry["row"] = row
             entry["recordingData"] = recordingData
             entry["audioMatchData"] = audioMatchData
-            entry["pixmap"] = pixmap
+            entry["image"] = img
             entry["ax_bbox"] = ax_bbox
             entry["axesPending"] = axesPending
             entry["duration"] = _dur
@@ -681,19 +682,25 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
                 break
             # Composite the kHz/sec axes on the GUI thread (the worker rendered
             # the spectrogram text-free — QFont/drawText is not thread-safe on
-            # macOS), then cache the finished image.
-            _pm = entry.get("pixmap")
-            if entry.get("axesPending") and _pm and not _pm.isNull():
-                _paint_spectro_axes(_pm, entry.get("duration", 0),
-                                    entry.get("sampleRate", 0))
-                code_ThumbnailCache.store(
-                    entry.get("file", ""), _pm.toImage(), "spectro_thumb",
-                    code_ThumbnailCache.SPECTRO_THUMB_VARIANT)
+            # macOS), then cache the finished image.  The QImage→QPixmap
+            # conversion also happens here: the workers pass QImage only,
+            # because QPixmap is GUI-thread-only.
+            _img = entry.get("image")
+            if _img is not None and not _img.isNull():
+                if entry.get("axesPending"):
+                    _paint_spectro_axes(_img, entry.get("duration", 0),
+                                        entry.get("sampleRate", 0))
+                    code_ThumbnailCache.store(
+                        entry.get("file", ""), _img, "spectro_thumb",
+                        code_ThumbnailCache.SPECTRO_THUMB_VARIANT)
+                _pm = QPixmap.fromImage(_img)
+            else:
+                _pm = None
             self.insertAudioIntoTable(
                 entry["row"],
                 entry["recordingData"],
                 entry["audioMatchData"],
-                entry["pixmap"],
+                _pm,
                 entry["comboData"],
                 entry.get("cascadeMode", "date_first"),
                 entry.get("ax_bbox"),

@@ -222,20 +222,6 @@ def _render_slice_qimage(audio_data, fs, t_start, t_end,
     return img.copy(), ax_bbox
 
 
-def _render_slice(audio_data, fs, t_start, t_end,
-                  freq_min=0, freq_max=None, compact=False, contrast_pct=20,
-                  ribbon=False, fig_px_wide=1600):
-    """QPixmap wrapper around _render_slice_qimage for GUI-thread display callers.
-    Returns (QPixmap, ax_bbox) or (None, None)."""
-    img, ax_bbox = _render_slice_qimage(
-        audio_data, fs, t_start, t_end,
-        freq_min=freq_min, freq_max=freq_max, compact=compact,
-        contrast_pct=contrast_pct, ribbon=ribbon, fig_px_wide=fig_px_wide)
-    if img is None or img.isNull():
-        return None, ax_bbox
-    return QPixmap.fromImage(img), ax_bbox
-
-
 # ---------------------------------------------------------------------------
 # Background render thread
 # ---------------------------------------------------------------------------
@@ -245,9 +231,14 @@ class _RenderThread(QThread):
 
     The caller supplies a cancel token: a one-element list [False].
     Setting token[0] = True before the render completes discards the result.
+
+    Emits a QImage, never a QPixmap: QPixmap creation/destruction is a
+    GUI-thread-only operation (off-thread use corrupts macOS's shared native
+    graphics state — app-wide stretched text, same failure mode as off-thread
+    QFont/drawText).  The sigDone slot converts on the GUI thread if needed.
     """
 
-    sigDone = Signal(object, object)    # QPixmap, ax_bbox (tuple or None)
+    sigDone = Signal(object, object)    # QImage, ax_bbox (tuple or None)
 
     def __init__(self, audio_data, fs, t_start, t_end, token,
                  compact=False, freq_min=0, freq_max=None, contrast_pct=20,
@@ -274,7 +265,7 @@ class _RenderThread(QThread):
     def run(self):
         if self._token[0]:
             return
-        pm, bbox = _render_slice(
+        img, bbox = _render_slice_qimage(
             self._audio_data, self._fs,
             self._t_start, self._t_end,
             freq_min=self._freq_min,
@@ -285,7 +276,7 @@ class _RenderThread(QThread):
             fig_px_wide=self._fig_px_wide,
         )
         if not self._token[0]:
-            self.sigDone.emit(pm, bbox)
+            self.sigDone.emit(img, bbox)
 
 
 # ---------------------------------------------------------------------------
@@ -1433,11 +1424,11 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
         t.start()
         self._overviewThread = t
 
-    def _onRibbonRenderDone(self, pixmap, ax_bbox):
-        if pixmap and not pixmap.isNull():
+    def _onRibbonRenderDone(self, image, ax_bbox):
+        if image is not None and not image.isNull():
             # The render is the contrast-0 base; keep it grayscale and apply the
             # live contrast remap + Hz crop on top.
-            self._ribbonBaseImage = pixmap.toImage().convertToFormat(QImage.Format_Grayscale8)
+            self._ribbonBaseImage = image.convertToFormat(QImage.Format_Grayscale8)
             self._ribbonFreqBottom = self._ribbonRenderFreqBottom
             self._ribbonFreqTop = self._ribbonRenderFreqTop
             self._seedAutoContrast()
@@ -1450,11 +1441,11 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
             code_ThumbnailCache.store(self._wavPath, self._ribbonBaseImage,
                                       "spectro_ribbon", variant=_RIBBON_VARIANT)
 
-    def _onOverviewRenderDone(self, pixmap, ax_bbox):
-        if pixmap and not pixmap.isNull():
-            self._overviewWidget.setPixmap(pixmap, ax_bbox)
+    def _onOverviewRenderDone(self, image, ax_bbox):
+        if image is not None and not image.isNull():
+            self._overviewWidget.setPixmap(QPixmap.fromImage(image), ax_bbox)
             # Persist the compact overview so the next open is instant.
-            code_ThumbnailCache.store(self._wavPath, pixmap.toImage(), "spectro_overview")
+            code_ThumbnailCache.store(self._wavPath, image, "spectro_overview")
 
     def _updateZoomCursor(self):
         """Set the zoomed-panel cursor fraction from the current player position."""

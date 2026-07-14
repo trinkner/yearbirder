@@ -56,6 +56,8 @@ from PySide6.QtGui import (
     QAction,
     QDesktopServices,
     QFont,
+    QFontDatabase,
+    QFontInfo,
     QFontMetrics,
     QIcon,
     QKeySequence,
@@ -468,12 +470,23 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
     fontSize = 11
     scaleFactor = 1
     rowHeight = 16  # default; recomputed in ScaleDisplay() and __init__
-    versionNumber = "2.01"
-    versionDate = "July 11, 2026"
+    versionNumber = "2.03"
+    versionDate = "July 14, 2026"
     taxonomyYear = ""
 
     def __init__(self):
         super(self.__class__, self).__init__()
+
+        # macOS: pin the APPLICATION default font's family by name, so widgets
+        # that never call setFont are also immune to the session-wide
+        # font-registration bug (see YBFont in code_Stylesheet — the empty
+        # "system default" family misresolves to the emoji font after Qt
+        # rebuilds its font database).  Family only; size/weight stay default.
+        if sys.platform == "darwin":
+            _appFont = QApplication.font()
+            _appFont.setFamily(YBFont)
+            QApplication.setFont(_appFont)
+
         self.setupUi(self)
         self.setCentralWidget(self.mdiArea)
         self.actionAboutYearbirder.setText("About Yearbirder")
@@ -891,7 +904,159 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self._windowBeingClosed = None
         self.mdiArea.subWindowActivated.connect(self.onSubWindowActivated)
 
+        self._initFontCanary()
+
         QApplication.processEvents()
+
+
+    # ── Font-engine canary ────────────────────────────────────────────────
+    # form_Individual's detail labels intermittently render with inflated
+    # advances for digits/hyphen/space ("spread" text) after media windows
+    # have been used.  A canary event captured 2026-07-11 shows digits AND the
+    # space jumping to a uniform em-width (full-width forms — i.e. served by a
+    # CJK-style fallback font) while letters shift by exactly -1px (a slightly
+    # different Latin face): the process's FONT RESOLUTION state changed
+    # mid-session, and every font engine REBUILT after that resolves wrong.
+    # Engines held by live widgets keep their original (correct) resolution;
+    # Qt's font cache evicts idle engines on an internal timer, which is why
+    # windows break "randomly"/while idle rather than at the corrupting moment.
+    # Until the corruptor is identified, this canary:
+    #   (a) records each monitored font's per-glyph advances and resolved
+    #       family at startup,
+    #   (b) polls every second and logs a timestamped per-glyph diff, the
+    #       resolved-family change, the font-database family count, and the
+    #       open windows to ~/Yearbirder_FontCanary.log the moment anything
+    #       changes — correlating the corruption with what the app was doing,
+    #   (c) serves substituteFont(): a known-good replacement font (explicit
+    #       family pin), which form_Individual uses to self-heal.
+
+    _CANARY_GLYPHS = "0123456789-: ()/.ABLNWabcdeghilmnorstuwy,;"
+
+    def _canaryAdvances(self, font):
+        fm = QFontMetrics(font)
+        return [fm.horizontalAdvance(ch) for ch in self._CANARY_GLYPHS]
+
+    def _canaryFont(self, pointSizeF, family=None):
+        f = QFont(family if family is not None else YBFont)
+        f.setPointSizeF(pointSizeF)
+        return f
+
+    # Candidate explicit families for pinning/self-heal.  The startup-resolved
+    # family is prepended at runtime; these are public, always-present faces.
+    _CANARY_PIN_CANDIDATES = ("Helvetica Neue", "Helvetica", "Arial")
+
+    def _initFontCanary(self):
+        # The detail-label font (fontSize+1) is the one that visibly breaks;
+        # also watch the base UI font, the platform default, and the spectro
+        # axis font to learn how widely each corruption event spreads.
+        self._canarySizes = sorted({float(self.fontSize),
+                                    float(self.fontSize + 1), 13.0, 9.0})
+        self._canaryBaseline = {}
+        self._canaryFamily = {}
+        for s in self._canarySizes:
+            f = self._canaryFont(s)
+            self._canaryBaseline[s] = self._canaryAdvances(f)
+            self._canaryFamily[s] = QFontInfo(f).family()
+        # Baselines for the explicit-family pin candidates, captured while the
+        # font database is healthy: at each corruption event we re-probe these
+        # and log whether explicit-name matching survived the rebuild — the
+        # data that decides whether pinning YBFont app-wide is a valid fix.
+        self._canaryPinBaseline = {}
+        for fam in ((self._canaryFamily[self._canarySizes[0]],)
+                    + self._CANARY_PIN_CANDIDATES):
+            f = self._canaryFont(9.0, family=fam)
+            self._canaryPinBaseline[fam] = (QFontInfo(f).family(),
+                                            self._canaryAdvances(f))
+        self._canaryFamilyCount = len(QFontDatabase.families())
+        self._canaryCorrupt = set()     # sizes currently known corrupted
+        self._canarySubstitute = {}     # original size -> verified-clean QFont
+        self._canaryTimer = QTimer(self)
+        self._canaryTimer.setInterval(1000)
+        self._canaryTimer.timeout.connect(self.checkFontCanary)
+        self._canaryTimer.start()
+
+    def _canaryLog(self, msg):
+        print(msg)
+        try:
+            with open(os.path.expanduser("~/Yearbirder_FontCanary.log"),
+                      "a", encoding="utf-8") as fh:
+                fh.write(msg + "\n")
+        except OSError:
+            pass
+
+    def checkFontCanary(self):
+        """Compare current per-glyph advances against the startup baseline and
+        log any change (with resolution context).  Returns the corrupted set."""
+        for s in self._canarySizes:
+            if s in self._canaryCorrupt:
+                continue
+            f = self._canaryFont(s)
+            now = self._canaryAdvances(f)
+            base = self._canaryBaseline[s]
+            if now != base:
+                self._canaryCorrupt.add(s)
+                diffs = ["%r %d->%d" % (ch, b, n)
+                         for ch, b, n in zip(self._CANARY_GLYPHS, base, now)
+                         if b != n]
+                stamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                famNow = QFontInfo(f).family()
+                famCountNow = len(QFontDatabase.families())
+                windows = [w.windowTitle() for w in self.mdiArea.subWindowList()]
+                # Probe the explicit-family pin candidates under the broken
+                # database: whichever still resolves and measures as at
+                # startup is a proven-safe family to pin YBFont to.
+                pins = []
+                for fam, (baseFam, baseAdv) in self._canaryPinBaseline.items():
+                    pf = self._canaryFont(9.0, family=fam)
+                    ok = (QFontInfo(pf).family() == baseFam
+                          and self._canaryAdvances(pf) == baseAdv)
+                    pins.append("%r %s" % (fam, "OK" if ok else
+                                           "BROKEN(->%r)" % QFontInfo(pf).family()))
+                self._canaryLog(
+                    "FONT ENGINE CORRUPTED  %s  %gpt\n"
+                    "  resolved family: %r -> %r\n"
+                    "  font-db families: %d -> %d\n"
+                    "  explicit pins: %s\n"
+                    "  open windows: %s\n"
+                    "  glyphs: %s"
+                    % (stamp, s,
+                       self._canaryFamily[s], famNow,
+                       self._canaryFamilyCount, famCountNow,
+                       ", ".join(pins),
+                       windows, "; ".join(diffs)))
+        return self._canaryCorrupt
+
+    def substituteFont(self, pointSize):
+        """Return a QFont for pointSize that measures clean.  If the default
+        resolution for this size is corrupted, fall back to pinning an explicit
+        known-good family (the family the size resolved to at startup, then
+        common system faces), verified against the startup baseline.  A fresh
+        default-resolved engine can NOT be trusted here: once the process's
+        font-resolution state has broken, rebuilt engines resolve wrong too."""
+        pointSize = float(pointSize)
+        self.checkFontCanary()
+        healthy = self._canaryFont(pointSize)
+        if pointSize not in self._canaryCorrupt:
+            return QFont(healthy)
+        cached = self._canarySubstitute.get(pointSize)
+        if cached is not None:
+            return QFont(cached)
+        base = self._canaryBaseline.get(pointSize)
+        candidates = [self._canaryFamily.get(pointSize),
+                      "Helvetica Neue", "Helvetica", "Arial"]
+        for fam in candidates:
+            if not fam:
+                continue
+            f = self._canaryFont(pointSize, family=fam)
+            # ±1px per glyph: family pinning can round advances a hair
+            # differently; real corruption is full-width digits, far larger.
+            if base is not None and all(
+                    abs(n - b) <= 1 for n, b in zip(self._canaryAdvances(f), base)):
+                self._canaryLog("font self-heal: %gpt pinned to family %r"
+                                % (pointSize, fam))
+                self._canarySubstitute[pointSize] = QFont(f)
+                return f
+        return healthy    # nothing clean found; give up gracefully
 
 
     def closeEvent(self, event):
@@ -2321,17 +2486,26 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
         done = self._rebuildDone
 
+        # Arm the GUI-thread axes pump: the workers render spectro thumbs
+        # text-free (QFont/drawText is not thread-safe on macOS), and the pump
+        # paints the kHz/sec labels and stores the finished PNGs.
+        code_ThumbnailCache.ensure_axes_pump()
+
         # Worker *threads* (not processes): the renderers release the GIL during
         # the heavy work (libsndfile decode, numpy FFT, matplotlib's Agg C++), so
         # threads parallelise it well — and without process-spawn overhead.
         def worker():
-            while True:
-                try:
-                    item = work.get_nowait()
-                except queue.Empty:
-                    break
-                code_ThumbnailCache.rebuild_one(item)
-                done.put(1)
+            code_ThumbnailCache.builder_started()
+            try:
+                while True:
+                    try:
+                        item = work.get_nowait()
+                    except queue.Empty:
+                        break
+                    code_ThumbnailCache.rebuild_one(item)
+                    done.put(1)
+            finally:
+                code_ThumbnailCache.builder_finished()
 
         thread_count = min(os.cpu_count() or 4, 8)
         self._rebuildWorkers = [threading.Thread(target=worker, daemon=True)
