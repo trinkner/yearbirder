@@ -177,9 +177,9 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
             menu.addSeparator()
             actionSlideshow = menu.addAction("Slideshow")
             menu.addSeparator()
-            actionDetachFile = menu.addAction("Remove photo from catalog")
+            actionDetachFile = menu.addAction("Remove photo from catalog…")
             menu.addSeparator()
-            actionDeleteFile = menu.addAction("Delete photo from file system")
+            actionDeleteFile = menu.addAction("Delete photo from file system…")
 
             action = menu.exec(self.mapToGlobal(event.pos()))
 

@@ -2258,9 +2258,9 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
         actionRate5 = menu.addAction("Rate 5 stars (5)")
         menu.addSeparator()
 
-        actionDetach = menu.addAction("Remove recording from catalog")
+        actionDetach = menu.addAction("Remove recording from catalog…")
         menu.addSeparator()
-        actionDelete = menu.addAction("Delete recording from file system")
+        actionDelete = menu.addAction("Delete recording from file system…")
 
         action = menu.exec(global_pos)
 
@@ -2292,33 +2292,65 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
     # ------------------------------------------------------------------
 
     def detachFile(self):
-        msgText = (
-            f"Remove\n\n{self._wavPath}\n\n"
-            "from the media catalog?\n\n"
-            "(File will NOT be deleted from the file system)"
-        )
-        if (code_Stylesheet.question(self, "Remove recording from catalog?", msgText)
-                != QMessageBox.StandardButton.Yes):
-            return
-
         db = self.mdiParent.db
-        db.removeRecordingFileFromDatabase(self._wavPath)
+        allSpecies  = db.getSpeciesForRecordingFile(self._wavPath)
+        thisSpecies = self._sighting.get("commonName", "")
+
+        if len(allSpecies) > 1:
+            # Shared recording: removing it for every species is a bigger act
+            # than the card the user is looking at, so offer the choice.
+            speciesLines = "\n".join("    " + s for s in allSpecies)
+            msgText = (
+                f"Remove\n\n{self._wavPath}\n\n"
+                "from the media catalog?\n\n"
+                f"This recording is assigned to {len(allSpecies)} species:\n"
+                f"{speciesLines}\n\n"
+                f"Remove it for {thisSpecies} only, or for all of these species?\n\n"
+                "(File will NOT be deleted from the file system)"
+            )
+            onlyLabel = f"Only {thisSpecies}"
+            chosen = code_Stylesheet.choose(
+                self, "Remove recording from catalog?", msgText,
+                [onlyLabel, "All Species", "Cancel"])
+            if chosen is None or chosen == "Cancel":
+                return
+            removeSpecies = thisSpecies if chosen == onlyLabel else None
+        else:
+            msgText = (
+                f"Remove\n\n{self._wavPath}\n\n"
+                "from the media catalog?\n\n"
+                "(File will NOT be deleted from the file system)"
+            )
+            if (code_Stylesheet.question(self, "Remove recording from catalog?", msgText)
+                    != QMessageBox.StandardButton.Yes):
+                return
+            removeSpecies = None
+
+        db.removeRecordingFileFromDatabase(self._wavPath, removeSpecies)
         try:
-            db.appendRecordingDeletionToJsonl(self._wavPath)
+            db.appendRecordingDeletionToJsonl(self._wavPath, removeSpecies)
         except IOError as exc:
             QMessageBox.warning(self, "Settings File Error",
                 f"Recording removed from memory but could not be recorded in the catalog:\n{exc}")
 
         db.photosNeedSaving = True
         self._audioRecord = None
-        self.mdiParent.notifyAudioDeletion(self._wavPath)
+        self.mdiParent.notifyAudioDeletion(self._wavPath, removeSpecies)
         self.close()
 
     def deleteFile(self):
+        allSpecies = self.mdiParent.db.getSpeciesForRecordingFile(self._wavPath)
         msgText = (
             f"Permanently delete\n\n{self._wavPath}\n\n"
             "from Yearbirder and the file system?"
         )
+        if len(allSpecies) > 1:
+            speciesLines = "\n".join("    " + s for s in allSpecies)
+            msgText += (
+                f"\n\nThis recording is assigned to {len(allSpecies)} species, "
+                "and will be deleted for all of them:\n"
+                f"{speciesLines}"
+            )
         if (code_Stylesheet.question(self, "Permanently delete recording?", msgText)
                 != QMessageBox.StandardButton.Yes):
             return

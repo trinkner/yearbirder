@@ -470,8 +470,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
     fontSize = 11
     scaleFactor = 1
     rowHeight = 16  # default; recomputed in ScaleDisplay() and __init__
-    versionNumber = "2.03"
-    versionDate = "July 14, 2026"
+    versionNumber = "2.05"
+    versionDate = "July 19, 2026"
     taxonomyYear = ""
 
     def __init__(self):
@@ -1932,10 +1932,13 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             if hasattr(w, 'handlePhotoDeletion'):
                 w.handlePhotoDeletion(filename)
 
-    def notifyAudioDeletion(self, filename):
+    def notifyAudioDeletion(self, filename, species=None):
+        """species=None: the file is gone for every species.  With a species,
+        only that species' assignment was removed — other cards for the same
+        file must survive."""
         for w in self.mdiArea.subWindowList():
             if hasattr(w, 'handleAudioDeletion'):
-                w.handleAudioDeletion(filename)
+                w.handleAudioDeletion(filename, species)
 
 
     def refreshOpenStats(self):

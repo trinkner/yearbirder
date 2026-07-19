@@ -187,12 +187,18 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
         self.resized.emit()
         return super(self.__class__, self).resizeEvent(event)
 
-    def handleAudioDeletion(self, filename):
+    def handleAudioDeletion(self, filename, species=None):
         orig_len = len(self.audioList)
-        self.audioList = [(a, s) for (a, s) in self.audioList if a.get("fileName") != filename]
+        self.audioList = [(a, s) for (a, s) in self.audioList
+                          if not (a.get("fileName") == filename
+                                  and (species is None
+                                       or s.get("commonName") == species))]
         if len(self.audioList) == orig_len:
             return
-        self.spectroCache.pop(filename, None)
+        # A species-scoped removal can leave the file on other species' cards;
+        # only evict the cached spectrogram when no card still shows it.
+        if not any(a.get("fileName") == filename for (a, s) in self.audioList):
+            self.spectroCache.pop(filename, None)
         if not self.audioList:
             self.close()
             return
@@ -409,12 +415,16 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
             self.mdiParent.progressOverlay.hide()
             return False
 
+        # Count unique files, not cards: a recording assigned to several species
+        # appears under each of those sightings, so tallying (sighting, audio)
+        # pairs would overcount the actual recordings.
         species = set()
-        audioCount = 0
+        audioFiles = set()
         for s in recordingSightings:
             for a in s.get("audio", []):
-                audioCount += 1
+                audioFiles.add(a["fileName"])
                 species.add(s["commonName"])
+        audioCount = len(audioFiles)
 
         self.lblSpecies.setText(
             "Species: " + str(len(species)) + ".  Recordings: " + str(audioCount))

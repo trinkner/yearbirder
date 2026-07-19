@@ -215,7 +215,12 @@ def main():
     app.setStyle(code_Stylesheet.AppStyle("Fusion"))
 
     font = app.font()
-    font.setPointSize(10)
+    # 11pt to match MainWindow.fontSize: the app-wide stylesheet disables Qt's
+    # parent->child font propagation, so widgets the scaleMe() children loops
+    # don't reach directly (nested tables, their headers, QFont()-based bold
+    # item fonts) fall back to THIS font.  At 10pt they rendered one point
+    # smaller than the explicitly-sized header labels around them.
+    font.setPointSize(11)
     # On Windows the stock default family resolves to the legacy "MS Sans Serif"
     # bitmap font, which DirectWrite cannot load — it spams CreateFontFaceFromHDC
     # errors and forces an ugly fallback (and is why QFont("") looked wrong on

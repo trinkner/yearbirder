@@ -1483,12 +1483,26 @@ class DataBase():
                 if not s["audio"]:
                     del s["audio"]
 
-    def removeRecordingFileFromDatabase(self, audioFileName):
+    def removeRecordingFileFromDatabase(self, audioFileName, commonName=None):
+        """Strip the audio entry from sightings.  With commonName, only that
+        species' sightings are touched — the file stays assigned to any other
+        species."""
         for s in self.sightingList:
             if "audio" in s:
+                if commonName is not None and s.get("commonName") != commonName:
+                    continue
                 s["audio"] = [a for a in s["audio"] if a["fileName"] != audioFileName]
                 if not s["audio"]:
                     del s["audio"]
+
+    def getSpeciesForRecordingFile(self, audioFileName):
+        """Sorted unique common names of every species this file is assigned to."""
+        species = set()
+        for s in self.sightingList:
+            for a in s.get("audio", []):
+                if a["fileName"] == audioFileName:
+                    species.add(s.get("commonName", ""))
+        return sorted(species)
 
     def appendRecordingToJsonl(self, sighting, recordingData):
         if not self.photoDataFile or not self.photoDataFile.lower().endswith(".jsonl"):
@@ -1510,11 +1524,17 @@ class DataBase():
         with open(self.photoDataFile, mode='a', encoding='utf-8') as f:
             f.write(json.dumps(record) + '\n')
 
-    def appendRecordingDeletionToJsonl(self, fileName):
+    def appendRecordingDeletionToJsonl(self, fileName, commonName=None):
+        """Deletion record for a recording.  Without commonName it revokes the
+        file for every species (the original format); with commonName the
+        replay only drops that species' assignment."""
         if not self.photoDataFile or not self.photoDataFile.lower().endswith(".jsonl"):
             return
+        record = {"type": "audio", "FileName": fileName, "deleted": True}
+        if commonName is not None:
+            record["CommonName"] = commonName
         with open(self.photoDataFile, mode='a', encoding='utf-8') as f:
-            f.write(json.dumps({"type": "audio", "FileName": fileName, "deleted": True}) + '\n')
+            f.write(json.dumps(record) + '\n')
 
     def compactJsonlFile(self):
         if self.photoDataFile and self.photoDataFile.lower().endswith(".jsonl"):
@@ -1592,7 +1612,12 @@ class DataBase():
                     record_type = record.get("type", "photo")
                     if record_type == "audio":
                         if record.get("deleted"):
-                            for k in [k for k in recordings_state if k[0] == fn]:
+                            # A CommonName on the deletion scopes it to that
+                            # species; older records have none and drop the
+                            # file for every species.
+                            cn = record.get("CommonName", "")
+                            for k in [k for k in recordings_state
+                                      if k[0] == fn and (not cn or k[2] == cn)]:
                                 del recordings_state[k]
                         else:
                             key = (fn, record.get("ChecklistID", ""), record.get("CommonName", ""))
