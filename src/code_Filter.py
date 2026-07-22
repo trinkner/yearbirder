@@ -392,6 +392,12 @@ class Filter():
             self.device != "",
         ])
 
+    def hasMediaConstraint(self):
+        """True when this filter's result set depends on the media catalog —
+        i.e. any photo or recording constraint is active.  Used to skip
+        pure-sightings reports when the media catalog changes."""
+        return self.hasPhotoFilter() or self.hasRecordingFilter()
+
     def clearPhotoFilter(self):
         self.sightingHasPhoto = ""
         self.speciesHasPhoto = ""

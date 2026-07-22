@@ -4,6 +4,7 @@ from code_Stylesheet import YBFont
 
 # import classes from other project files
 import code_Filter
+import code_MediaRefresh
 import code_Lists
 
 # import basic Python libraries
@@ -331,6 +332,7 @@ class DateTotals(QMdiSubWindow, form_DateTotals.Ui_frmDateTotals):
         sub.scaleMe()
 
 
+    @code_MediaRefresh.media_report()
     def FillDateTotals(self,  filter):
         
         self.filter = filter

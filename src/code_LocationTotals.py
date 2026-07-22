@@ -8,6 +8,7 @@ from code_Stylesheet import YBFont
 
 # import classes from other project files
 import code_Filter
+import code_MediaRefresh
 import code_Lists
 
 # import basic Python libraries
@@ -397,6 +398,7 @@ class LocationTotals(QMdiSubWindow, form_LocationTotals.Ui_frmLocationTotals):
         return(html)
         
 
+    @code_MediaRefresh.media_report()
     def FillLocationTotals(self,  filter):
         self.filter = deepcopy(filter)
         

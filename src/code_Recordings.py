@@ -205,6 +205,26 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
             return
         self._buildRows()
 
+    def handleRecordingRename(self, old_path, new_path):
+        """A Rename Media operation moved a recording on disk.  The audio dicts
+        in audioList are the live db objects, so their fileName self-heals, but
+        the per-row playback map (_filePaths) holds captured path strings and
+        the spectrogram cache is keyed by path — both would keep pointing at the
+        vanished file, so Play would silently decode nothing.  Re-point them."""
+        touched = False
+        for row, path in list(self._filePaths.items()):
+            if path == old_path:
+                self._filePaths[row] = new_path
+                touched = True
+        if old_path in self.spectroCache:
+            self.spectroCache[new_path] = self.spectroCache.pop(old_path)
+            touched = True
+        # If the renamed file is the one currently loaded in the player, keep the
+        # already-decoded buffer (it plays fine) but track the new path so a
+        # later re-select re-decodes from the right place.
+        if touched and getattr(self._player, "_currentPath", None) == old_path:
+            self._player._currentPath = new_path
+
     def resizeMe(self):
         windowWidth = self.width() - 10
         windowHeight = self.height()

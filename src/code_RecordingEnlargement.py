@@ -2287,6 +2287,18 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
         elif action == actionDelete:
             self.deleteFile()
 
+    def handleRecordingRename(self, old_path, new_path):
+        """Track a Rename Media move of the displayed recording.  The already
+        decoded player buffer keeps playing, but _wavPath drives Remove/Delete,
+        spectrogram (re)caching and the filename label, so re-point it (and the
+        path-keyed caches) or those operations would act on a vanished file."""
+        if self._wavPath == old_path:
+            self._wavPath = new_path
+            if getattr(self._player, "_currentPath", None) == old_path:
+                self._player._currentPath = new_path
+        if old_path in self._spectroCache:
+            self._spectroCache[new_path] = self._spectroCache.pop(old_path)
+
     # ------------------------------------------------------------------
     # Remove / delete
     # ------------------------------------------------------------------

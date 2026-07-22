@@ -1082,6 +1082,14 @@ class RenameMedia(QMdiSubWindow, form_RenameMedia.Ui_frmRenameMedia):
                 except IOError:
                     pass
 
+                # Re-point any open Browse Recordings / Recording Enlargement
+                # windows: their audio dicts self-heal (shared db objects) but
+                # the per-row playback paths and path-keyed caches would keep
+                # pointing at the vanished file, silently breaking Play.
+                for w in self.mdiParent.mdiArea.subWindowList():
+                    if hasattr(w, "handleRecordingRename"):
+                        w.handleRecordingRename(old_path, new_path)
+
             else:
                 # Update live db dict in-place — rd["photo"] IS the dict in the db
                 rd["photo"]["fileName"] = new_path

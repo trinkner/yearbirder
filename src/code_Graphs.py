@@ -8,6 +8,7 @@ import os
 import numpy as np
 
 import form_Graphs
+import code_MediaRefresh
 import code_Lists
 import code_Photos
 import code_SpeciesGallery
@@ -4075,6 +4076,16 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
     # Public fill entry point (called by MainWindow)
     # ------------------------------------------------------------------
 
+    # Chart types whose data comes from the media catalog; these are media-
+    # relevant even without a media filter, so a deletion/edit must refresh them.
+    _MEDIA_CHART_TYPES = {
+        "totalphotos", "ytdphotos", "photopie", "photoaccumulation", "cumulativephotos",
+        "totalrecordings", "ytdrecordings", "recordingspie", "recordingsaccumulation",
+        "cumulativerecordings",
+    }
+
+    @code_MediaRefresh.media_report(
+        is_content=lambda self: self._chart_type in Graphs._MEDIA_CHART_TYPES)
     def FillGraph(self, filter, chartType="bar"):
         self.filter = filter
         self._chart_type = chartType

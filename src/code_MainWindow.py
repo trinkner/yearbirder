@@ -5,6 +5,8 @@ import code_DataBase
 from code_Stylesheet import YBFont
 import code_BigReport
 import code_Stats
+import code_MediaRefresh
+from shiboken6 import isValid
 import code_Filter
 import code_Find
 import code_Explorer
@@ -470,8 +472,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
     fontSize = 11
     scaleFactor = 1
     rowHeight = 16  # default; recomputed in ScaleDisplay() and __init__
-    versionNumber = "2.05"
-    versionDate = "July 19, 2026"
+    versionNumber = "2.06"
+    versionDate = "July 22, 2026"
     taxonomyYear = ""
 
     def __init__(self):
@@ -1931,6 +1933,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         for w in self.mdiArea.subWindowList():
             if hasattr(w, 'handlePhotoDeletion'):
                 w.handlePhotoDeletion(filename)
+        self.notifyMediaChanged()
 
     def notifyAudioDeletion(self, filename, species=None):
         """species=None: the file is gone for every species.  With a species,
@@ -1939,12 +1942,16 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         for w in self.mdiArea.subWindowList():
             if hasattr(w, 'handleAudioDeletion'):
                 w.handleAudioDeletion(filename, species)
+        self.notifyMediaChanged()
 
-
-    def refreshOpenStats(self):
+    def notifyMediaChanged(self):
+        """Broadcast a media-catalog change to open report windows.  Each report
+        decides for itself (cheaply) whether the change touched its scope and
+        rebuilds only if so — see code_MediaRefresh.  Fire this once per change
+        (a multi-file Manage save fires it once, from closeEvent)."""
         for w in self.mdiArea.subWindowList():
-            if isinstance(w, code_Stats.Stats):
-                w.FillStats(w.filter)
+            if hasattr(w, "_mediaRebuildName"):
+                code_MediaRefresh.maybeRefresh(w)
 
 
     def refreshOpenRecordings(self):
@@ -2744,9 +2751,11 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         # complete before showMaximized fires.
         spawned_from_maximized = any(
             w.isMaximized() for w in self.mdiArea.subWindowList() if w is not child)
+        displaced_maximized = None
         if spawned_from_maximized:
             for w in self.mdiArea.subWindowList():
                 if w is not child and w.isMaximized():
+                    displaced_maximized = w
                     w.showNormal()
                     # Qt's cached pre-maximize geometry can be stale (e.g. it
                     # was captured before the window ever settled into its
@@ -2784,6 +2793,28 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
         if spawned_from_maximized:
             QTimer.singleShot(50, child.showMaximized)
+            # When the child was maximized in place of a maximized sibling, Qt
+            # does NOT reliably re-transfer the maximized state back to that
+            # sibling when the child closes — intermittently leaving the sibling
+            # at its small showNormal()/scaleMe() size (e.g. a Browse Recordings
+            # window shrinking after its Recording Enlargement closes).  Restore
+            # it explicitly when the child is destroyed.
+            if displaced_maximized is not None:
+                child.destroyed.connect(
+                    lambda *_a, w=displaced_maximized:
+                        self._restoreDisplacedMaximized(w))
+
+
+    def _restoreDisplacedMaximized(self, w):
+        """Re-maximize a sibling that was un-maximized to make room for a child
+        window, once that child has closed.  Guards against the sibling having
+        been deleted or already re-maximized in the meantime."""
+        if not isValid(w):
+            return
+        if w not in self.mdiArea.subWindowList():
+            return
+        if not w.isMaximized():
+            w.showMaximized()
 
 
     def closeDataFile(self):
@@ -5043,6 +5074,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
         self.db.photosNeedSaving = True
         self.checkIfPhotoDataNeedSaving()
+        self.notifyMediaChanged()
 
         msg = f"Updated recording data for {updated} recording(s)."
         if skipped:

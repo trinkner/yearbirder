@@ -2,6 +2,7 @@
 import form_Lists
 from code_Stylesheet import YBFont
 import code_Filter
+import code_MediaRefresh
 import code_Location
 import code_Individual
 import code_FloatDelegate
@@ -651,7 +652,8 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         return(html)
         
 
-    def FillSpecies(self, filter): 
+    @code_MediaRefresh.media_report()
+    def FillSpecies(self, filter):
         
         self.filter = filter
         self.listType = "Species"
@@ -862,7 +864,8 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         return(True)
 
 
-    def FillChecklists(self, filter): 
+    @code_MediaRefresh.media_report()
+    def FillChecklists(self, filter):
 
         self.filter = filter
         self.listType = "Checklists"
@@ -1043,7 +1046,8 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         self.setWindowIcon(icon)
 
 
-    def FillLocations(self, filter): 
+    @code_MediaRefresh.media_report()
+    def FillLocations(self, filter):
         
         self.filter = filter
         self.listType = "Locations"

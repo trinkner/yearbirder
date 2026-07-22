@@ -8344,3 +8344,33 @@ function openChecklist(subId) {{
         self.scaleMe()
         return True
 
+
+
+# ── Live media-catalog refresh ────────────────────────────────────────────────
+# Decorate each catalog-derived report builder so an open report rebuilds itself
+# when a media change touches its scope (see code_MediaRefresh).  Applied here as
+# a list rather than per-method to keep the wiring in one place.  eBird-API /
+# community builders (notable, all-sightings, hotspot, region species maps) are
+# intentionally omitted — they do not derive from the local media catalog.
+import code_MediaRefresh as _mediaRefresh
+
+# Always media-relevant: these visualise the media itself.
+_MEDIA_CONTENT_BUILDERS = (
+    "loadGeolocatedPhotosMap", "loadAnimatedPhotoSequenceMap",
+    "loadGeolocatedRecordingsMap", "loadAnimatedRecordingSequenceMap",
+    "loadAudioSpeciesGallery", "loadPhotoSpeciesGallery",
+)
+# Media-relevant only when spawned with a media filter constraint.
+_MEDIA_FILTER_BUILDERS = (
+    "LoadLocationsMap",
+    "loadChoroplethUSStates", "loadChoroplethCanadaProvinces",
+    "loadChoroplethIndiaStates", "loadChoroplethGBCounties",
+    "loadChoroplethUSCounties", "loadChoroplethWorldCountries",
+    "loadChoroplethWorldSubregion1",
+    "loadLifeListMap", "loadFirstSightingsMap",
+    "loadEffortMap", "loadBubbleMap", "loadRegionalTaxonomy",
+)
+for _n in _MEDIA_CONTENT_BUILDERS:
+    setattr(Web, _n, _mediaRefresh.media_report(is_content=True)(getattr(Web, _n)))
+for _n in _MEDIA_FILTER_BUILDERS:
+    setattr(Web, _n, _mediaRefresh.media_report()(getattr(Web, _n)))

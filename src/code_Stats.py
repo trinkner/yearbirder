@@ -1,5 +1,6 @@
 import form_Stats
 import code_Filter
+import code_MediaRefresh
 
 from math import floor
 import os
@@ -104,6 +105,7 @@ class Stats(QMdiSubWindow, form_Stats.Ui_frmStats):
         self.resize(windowWidth, windowHeight)
 
 
+    @code_MediaRefresh.media_report(is_content=True)   # Stats shows media counts
     def FillStats(self, filter):
         self.filter = filter
         sightings = self.mdiParent.db.GetSightings(filter)
@@ -204,10 +206,6 @@ class Stats(QMdiSubWindow, form_Stats.Ui_frmStats):
         # the layout we measured may have been for a stale window size —
         # measure again and correct until stable
         self._measureContent()
-
-
-    def handlePhotoDeletion(self, filename):
-        self.FillStats(self.filter)
 
 
     # ------------------------------------------------------------------

@@ -443,8 +443,8 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
             except queue.Empty:
                 break
         if self._changesSaved:
-            self.mdiParent.refreshOpenStats()
             self.mdiParent.refreshOpenRecordings()
+            self.mdiParent.notifyMediaChanged()
         super(self.__class__, self).closeEvent(event)
 
     def resizeEvent(self, event):

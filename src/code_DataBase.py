@@ -2600,6 +2600,57 @@ class DataBase():
         recordedSpeciesSet = self.GetSpeciesWithRecordings(filter)
         return {species for species in self.allSpeciesList if species not in recordedSpeciesSet}
 
+    def refreshMediaFilterSpecies(self, filter):
+        """Recompute a filter's baked validPhotoSpecies / validRecordingSpecies
+        against the CURRENT catalog.
+
+        These lists are snapshots taken when a report is spawned (see
+        GetPhotoFilter / GetRecordingsFilter), so after a media change they are
+        stale.  The list must be cleared before recomputing because
+        GetSpeciesWith(out)Photos applies the filter (including the stale list)
+        while deciding — leaving it in place would make the recompute circular."""
+        shp = filter.getSpeciesHasPhoto()
+        if shp in ("Photographed", "Not photographed"):
+            filter.setValidPhotoSpecies([])
+            if shp == "Photographed":
+                filter.setValidPhotoSpecies(self.GetSpeciesWithPhotos(filter))
+            else:
+                filter.setValidPhotoSpecies(self.GetSpeciesWithoutPhotos(filter))
+
+        shr = filter.getSpeciesHasRecording()
+        if shr in ("Recorded", "Not recorded"):
+            filter.setValidRecordingSpecies([])
+            if shr == "Recorded":
+                filter.setValidRecordingSpecies(self.GetSpeciesWithRecordings(filter))
+            else:
+                filter.setValidRecordingSpecies(self.GetSpeciesWithoutRecordings(filter))
+
+    def mediaScopeSignature(self, filter):
+        """A hashable fingerprint of the media-bearing catalog data within a
+        filter's scope, used to decide whether an open report needs rebuilding
+        after a catalog change.  Captures, for every sighting that passes the
+        filter, its identity plus the (filename, rating) of each attached photo
+        and recording — so deletions, catalog removals, species reassignments,
+        and rating edits all change the signature, while a change outside the
+        filter's scope leaves it identical.
+
+        Callers that rely on filter media-species membership should call
+        refreshMediaFilterSpecies() first so this reflects the current catalog."""
+        cf = self.CompileFilter(filter)
+        parts = []
+        for s in self.GetMinimalFilteredSightingsList(filter):
+            if self.TestSightingCompiled(s, cf):
+                photos = tuple(sorted(
+                    (p.get("fileName", ""), str(p.get("rating", "")))
+                    for p in s.get("photos", [])))
+                audio = tuple(sorted(
+                    (a.get("fileName", ""), str(a.get("rating", "")))
+                    for a in s.get("audio", [])))
+                parts.append((s.get("checklistID", ""), s.get("commonName", ""),
+                              photos, audio))
+        parts.sort()
+        return hash(tuple(parts))
+
     def GetSightingsWithPhotos(self, filter, progress_callback=None):
         # A photo belongs to exactly one species, so no photo file is ever
         # shared across sightings and this de-dup can never drop a legitimate
@@ -2665,9 +2716,18 @@ class DataBase():
         # the filter reached first and dropped the rest: they vanished from the
         # browse window and were silently lost on the next catalog save.
         returnList = []
+        seen = set()
         filteredSightingList = self.GetMinimalFilteredSightingsList(filter)
         cf = self.CompileFilter(filter)
         for s in filteredSightingList:
+            # Dedupe by sighting identity: speciesDict files each sighting under
+            # both its common and subspecies name, so a species-filtered list
+            # holds the same object twice whenever those names coincide.  Identity
+            # (not filename) is the right key — a recording shared across species
+            # lives on distinct sighting objects and must still yield a card each.
+            if id(s) in seen:
+                continue
+            seen.add(id(s))
             if self.TestSightingCompiled(s, cf) and "audio" in s:
                 returnList.append(s)
         returnList = sorted(returnList, key=lambda x: (float(x["taxonomicOrder"]), x["date"], x["time"]))

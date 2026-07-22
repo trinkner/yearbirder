@@ -697,6 +697,9 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
             # set flag for requiring photo file save
             self.mdiParent.mdiParent.db.photosNeedSaving = True
 
+            # refresh any open reports whose scope includes this photo
+            self.mdiParent.mdiParent.notifyMediaChanged()
+
 
     def deleteFile(self):
 

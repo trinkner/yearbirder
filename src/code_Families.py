@@ -3,6 +3,7 @@ import form_Families
 from code_Stylesheet import YBFont
 
 import code_Filter
+import code_MediaRefresh
 import code_Lists
 import code_Individual
 
@@ -265,6 +266,7 @@ class Families(QMdiSubWindow, form_Families.Ui_frmFamilies):
         return(html)
         
     
+    @code_MediaRefresh.media_report()
     def FillFamilies(self, filter):
         
         self.filter = deepcopy(filter)

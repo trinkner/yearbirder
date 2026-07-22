@@ -2,6 +2,7 @@
 import form_BigReport
 from code_Stylesheet import YBFont
 import code_Filter
+import code_MediaRefresh
 import code_Location
 import code_Individual
 import code_Lists
@@ -231,6 +232,7 @@ class BigReport(QMdiSubWindow, form_BigReport.Ui_frmBigReport):
         QApplication.restoreOverrideCursor()
 
 
+    @code_MediaRefresh.media_report()
     def FillAnalysisReport(self, filter):
         # save filter for later use
         self.filter = filter
