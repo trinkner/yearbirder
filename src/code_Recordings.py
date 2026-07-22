@@ -93,6 +93,7 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
         self.lblDetails.setVisible(False)
         self.filter = ()
         self.audioList = []
+        self._singleMode = False   # True only for FillSingleRecording windows
         self.spectroCache = {}   # filename -> (QPixmap, ax_bbox)
         # Qt caps a QGridLayout's total height at ~524k px, which squashes the
         # rows once there are more than ~1,600 recordings.  Use a QVBoxLayout of
@@ -400,6 +401,7 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
         self.resizeMe()
 
         self.filter = filter
+        self._singleMode = False
 
         # Arm the time-based reveal gate, then prime the overlay.  It only becomes
         # visible if loading runs longer than the threshold, so small recording
@@ -467,6 +469,7 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
         filter.setStartDate(sightingData["date"])
         filter.setEndDate(sightingData["date"])
         self.filter = filter
+        self._singleMode = True
 
         self.lblSpecies.setText("Species: 1.  Recordings: 1")
         self.mdiParent.SetChildDetailsLabels(self, filter)

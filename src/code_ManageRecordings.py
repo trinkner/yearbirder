@@ -444,6 +444,7 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
                 break
         if self._changesSaved:
             self.mdiParent.refreshOpenStats()
+            self.mdiParent.refreshOpenRecordings()
         super(self.__class__, self).closeEvent(event)
 
     def resizeEvent(self, event):

@@ -1947,6 +1947,31 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 w.FillStats(w.filter)
 
 
+    def refreshOpenRecordings(self):
+        """After a Manage Recordings save, re-run each open Browse Recordings
+        window's filter query so recordings that now match the filter appear
+        (and ones an edit pushed out of the filter drop away).  Re-querying the
+        updated catalog handles insert, edit, and removal uniformly and keeps
+        the current sort.  Single-recording windows (launched from Find) carry
+        a synthetic one-file filter and must not be re-broadened, so skip them;
+        windows never filled (filter still the empty tuple) are skipped too."""
+        for w in self.mdiArea.subWindowList():
+            if (isinstance(w, code_Recordings.Recordings)
+                    and not getattr(w, "_singleMode", False)
+                    and w.filter):
+                w.FillRecordings(w.filter)
+
+
+    def refreshOpenPhotos(self):
+        """Photos counterpart to refreshOpenRecordings, run after a Manage
+        Photos save.  See that method for the skip rationale."""
+        for w in self.mdiArea.subWindowList():
+            if (isinstance(w, code_Photos.Photos)
+                    and not getattr(w, "_singleMode", False)
+                    and w.filter):
+                w.FillPhotos(w.filter)
+
+
     def createPreferences(self):
         
 

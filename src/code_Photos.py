@@ -109,6 +109,7 @@ class Photos(QMdiSubWindow, form_Photos.Ui_frmPhotos):
         self.lblDetails.setVisible(False)
         self.filter = ()
         self.photoList = []
+        self._singleMode = False   # True only for FillSinglePhoto windows
         self.pixmapCache = {}
         self._missingPhotoSpecies = set()
         # Qt caps a QGridLayout's total height at ~524k px, which squashes the
@@ -326,6 +327,7 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
 
         # save the filter settings passed to this routine to the form for future use
         self.filter = filter
+        self._singleMode = False
 
         # Arm the time-based reveal gate, then prime the overlay.  It only becomes
         # visible if the whole operation runs longer than the threshold, so small
@@ -408,6 +410,7 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
         filter.setStartDate(sightingData["date"])
         filter.setEndDate(sightingData["date"])
         self.filter = filter
+        self._singleMode = True
 
         self.photoList = [[photoData, sightingData]]
 

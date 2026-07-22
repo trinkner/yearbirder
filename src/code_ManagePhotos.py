@@ -289,6 +289,7 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
                 break
         if self._changesSaved:
             self.mdiParent.refreshOpenStats()
+            self.mdiParent.refreshOpenPhotos()
         super(self.__class__, self).closeEvent(event)
 
     def resizeEvent(self, event):

@@ -2601,6 +2601,10 @@ class DataBase():
         return {species for species in self.allSpeciesList if species not in recordedSpeciesSet}
 
     def GetSightingsWithPhotos(self, filter, progress_callback=None):
+        # A photo belongs to exactly one species, so no photo file is ever
+        # shared across sightings and this de-dup can never drop a legitimate
+        # sighting (unlike the recordings path, where a file may be tagged to
+        # several species — see GetSightingsWithRecordings).
         returnList = []
         photosFound = set()
 
@@ -2613,8 +2617,6 @@ class DataBase():
             # progress bar while we work through the catalog.
             if progress_callback is not None and i % 200 == 0:
                 progress_callback(i, total)
-            commonName = s["commonName"]
-            # if "/" not in commonName and "sp." not in commonName:
             if self.TestSightingCompiled(s, cf) is True:
                 if "photos" in s:
                     if s["photos"][0]["fileName"] not in photosFound:
@@ -2653,16 +2655,21 @@ class DataBase():
 
 
     def GetSightingsWithRecordings(self, filter):
+        # Return EVERY filter-passing sighting that carries audio — one entry
+        # per species the recording is tagged to.  A file assigned to several
+        # species is intentionally represented once per species so it shows as
+        # a card under each (Browse Recordings), is counted per species (audio
+        # galleries/maps), and — critically — is fully written back by
+        # writePhotoDataToFile.  An earlier de-dup keyed on the first audio
+        # filename collapsed a multi-species recording onto whichever species
+        # the filter reached first and dropped the rest: they vanished from the
+        # browse window and were silently lost on the next catalog save.
         returnList = []
-        audioFound = set()
         filteredSightingList = self.GetMinimalFilteredSightingsList(filter)
         cf = self.CompileFilter(filter)
         for s in filteredSightingList:
-            if self.TestSightingCompiled(s, cf):
-                if "audio" in s:
-                    if s["audio"][0]["fileName"] not in audioFound:
-                        audioFound.add(s["audio"][0]["fileName"])
-                        returnList.append(s)
+            if self.TestSightingCompiled(s, cf) and "audio" in s:
+                returnList.append(s)
         returnList = sorted(returnList, key=lambda x: (float(x["taxonomicOrder"]), x["date"], x["time"]))
         return returnList
 
