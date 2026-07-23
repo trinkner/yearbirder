@@ -293,6 +293,11 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
         self.detailsPaneLayout.addWidget(self.notesLabel)
         self.detailsPaneLayout.addSpacing(10)   # line feed after the Notes field
 
+        # setVisible(True) MUST stay after the addWidget above (line ~257) that
+        # reparents detailsPane: calling it while the QFrame is still parent=None
+        # realizes it as a stray top-level native window (an empty "Yearbirder"
+        # window on Windows).  That exact ordering bug caused the Recording
+        # Enlargement spectro-click flash — keep the reparent before this line.
         self.detailsPane.setVisible(True)
 
         # create horizontal layout to show rating stars
@@ -557,8 +562,23 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
 
         self.setPhotoTitle()
 
+        # Fit the photo to the view synchronously, BEFORE the window is shown, so
+        # it snaps to its final size instead of visibly scaling up after the
+        # window appears (very noticeable on a slow machine).  activate() sizes
+        # viewEnlargement to its final dimensions while hidden — but a
+        # QGraphicsView's *viewport* (which fitInView measures) is not resized to
+        # match its view until the view is first shown; while hidden it stays at
+        # Qt's default 640x480.  Diagnostics confirmed the hidden fit used
+        # viewport=640x480 while the view was already 729x572, so the photo was
+        # fitted ~15% too small and then grew after show.  Force the viewport to
+        # the view's size so the hidden fit is already the final fit.
+        self.layout().activate()
+        self.viewEnlargement.viewport().resize(self.viewEnlargement.size())
+        self.fitEnlargement()
+        # Safety-net refit after show (e.g. spawned into a maximized parent whose
+        # deferred maximize changes the final view size).
         QTimer.singleShot(10, self.fitEnlargement)
-        
+
 
     def changeEnlargement(self):
 
