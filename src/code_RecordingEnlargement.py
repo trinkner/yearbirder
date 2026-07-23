@@ -1203,8 +1203,13 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
 
         _dpLayout.addSpacing(10)   # line feed after the rating stars
         _dpLayout.addStretch()
-        self._detailsPane.setVisible(True)
+        # Add to the layout (which reparents it) BEFORE making it visible.
+        # setVisible(True) on the still-parentless QFrame realizes it as a
+        # top-level native window — on Windows that appears as a small empty
+        # "Yearbirder" window that lingers on screen for the whole (event-loop-
+        # blocking) fillEnlargement decode: the reported spectrogram-click flash.
         outerHBox.addWidget(self._detailsPane)
+        self._detailsPane.setVisible(True)
 
         # ── Player ──────────────────────────────────────────────────────────
         # QAudioSink-based player: plays pre-decoded PCM from memory so the first

@@ -790,11 +790,16 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
 
         # add and position the child to our MDI area
         self.mdiParent.mdiArea.addSubWindow(sub)
-        self.mdiParent.PositionChildWindow(sub, self.mdiParent)
-        sub.show()
+        willMaximize = self.mdiParent.PositionChildWindow(sub, self.mdiParent)
 
-        # call the child's routine to fill it with data
+        # Fill BEFORE showing so the window's first paint has content: on Windows
+        # show() paints synchronously, so showing an empty child first flashes a
+        # white subwindow for one frame.  And when spawned from a maximized
+        # parent, skip show() entirely — PositionChildWindow's deferred
+        # showMaximized is the first appearance (avoids a small-size flash).
         sub.fillEnlargement()
+        if not willMaximize:
+            sub.show()
 
 
     def launchSlideshow(self):

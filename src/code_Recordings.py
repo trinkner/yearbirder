@@ -833,6 +833,12 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
         sub._currentIdx = row
         sub._spectroCache = self.spectroCache
         self.mdiParent.mdiArea.addSubWindow(sub)
-        self.mdiParent.PositionChildWindow(sub, self.mdiParent)
-        sub.show()
+        willMaximize = self.mdiParent.PositionChildWindow(sub, self.mdiParent)
+        # Fill before showing so the window appears complete rather than empty
+        # then filling in (fillEnlargement decodes the WAV and renders the
+        # overview synchronously).  When spawned from a maximized parent,
+        # PositionChildWindow has scheduled a deferred showMaximized as the first
+        # appearance, so skip the show() here to avoid a small-size flash.
         sub.fillEnlargement(fileName, s, overview_cache=cached)
+        if not willMaximize:
+            sub.show()

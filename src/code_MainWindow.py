@@ -2803,6 +2803,13 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 child.destroyed.connect(
                     lambda *_a, w=displaced_maximized:
                         self._restoreDisplacedMaximized(w))
+            # The deferred showMaximized above is this window's FIRST appearance.
+            # Signal the caller not to show() it now: showing it here would flash
+            # the window at its small pre-maximize size for one frame before it
+            # snaps to maximized.  Callers that honour this return skip show().
+            return True
+
+        return False
 
 
     def _restoreDisplacedMaximized(self, w):

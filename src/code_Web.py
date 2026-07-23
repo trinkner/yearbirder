@@ -309,9 +309,14 @@ class PhotosMapBridge(QObject):
         sub.currentIndex = cluster_index
 
         main_window.mdiArea.addSubWindow(sub)
-        main_window.PositionChildWindow(sub, self._web)
-        sub.show()
+        willMaximize = main_window.PositionChildWindow(sub, self._web)
+        # Fill before showing to avoid a one-frame white subwindow flash on
+        # Windows (show() paints synchronously there); and skip show() when
+        # spawned maximized (deferred showMaximized is the first appearance).
+        # See code_Photos.
         sub.fillEnlargement()
+        if not willMaximize:
+            sub.show()
 
 
 class _AudioGalleryBridge(QObject):
