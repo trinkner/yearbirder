@@ -651,3 +651,85 @@ code, .step-content code {
   .tab-btn { padding: 12px 18px; font-size: 14px; }
   .footer-inner { flex-direction: column; gap: 16px; }
 }
+
+/* ── Feature-card overview grid (home) ──────────────────────────────── */
+.feature-cards-section { padding: 72px 0; }
+.feature-cards-section h2 {
+  text-align: center;
+  font-size: clamp(1.6rem, 3vw, 2.2rem);
+  margin-bottom: 12px;
+}
+.feature-cards-section .section-sub {
+  text-align: center;
+  color: var(--slate);
+  max-width: 640px;
+  margin: 0 auto 48px;
+}
+.feature-cards {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+}
+.feature-card {
+  display: block;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 32px;
+  box-shadow: var(--shadow-sm);
+  color: inherit;
+  transition: box-shadow .18s, transform .18s, border-color .18s;
+}
+.feature-card:hover {
+  text-decoration: none;
+  box-shadow: var(--shadow-md);
+  transform: translateY(-3px);
+  border-color: var(--leaf);
+}
+.feature-card h3 { font-size: 1.25rem; color: var(--forest); margin-bottom: 10px; }
+.feature-card p { color: var(--slate); font-size: 0.97rem; line-height: 1.7; margin-bottom: 14px; }
+.feature-card .card-link { color: var(--grove); font-weight: 600; font-size: 0.95rem; }
+.feature-card:hover .card-link { text-decoration: underline; }
+
+/* ── 3-up audience grid ─────────────────────────────────────────────── */
+.audience-grid.three { grid-template-columns: repeat(3, 1fr); }
+
+/* ── Full-width showcase screenshot (subpages) ──────────────────────── */
+.showcase { padding: 56px 0 8px; }
+.showcase .container { max-width: 1000px; }
+.showcase img {
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  width: 100%;
+  cursor: zoom-in;
+}
+.showcase .caption { text-align: center; color: var(--slate); font-size: 0.9rem; margin-top: 14px; }
+
+/* ── Text-only detail section (e.g. map inventory) ──────────────────── */
+.detail-section { padding: 64px 0; }
+.detail-section h2 { font-size: clamp(1.5rem, 2.5vw, 2rem); margin-bottom: 16px; text-align: center; }
+.detail-section .detail-intro { color: var(--slate); text-align: center; max-width: 700px; margin: 0 auto 36px; }
+.detail-columns {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px 48px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+/* ── Subpage intro banner reuses .download-hero; add lead paragraph ──── */
+.page-hero .lead { max-width: 720px; margin: 0 auto; }
+
+/* ── Responsive additions ───────────────────────────────────────────── */
+@media (max-width: 1080px) {
+  .nav-links { gap: 2px; }
+  .nav-links a { padding: 6px 10px; font-size: 14px; }
+}
+@media (max-width: 900px) {
+  .audience-grid.three { grid-template-columns: 1fr; }
+  .feature-cards { grid-template-columns: 1fr; }
+  .detail-columns { grid-template-columns: 1fr; gap: 10px; }
+}
+@media (max-width: 680px) {
+  .nav-links { overflow-x: auto; -webkit-overflow-scrolling: touch; flex-wrap: nowrap; }
+}

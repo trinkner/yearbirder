@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Yearbirder — View, Analyze, and Explore Your eBird Sightings</title>
-  <meta name="description" content="Yearbirder is a free desktop app for birders. View, analyze, and explore your personal eBird sightings with powerful filters, charts, maps, and photo tools.">
+  <meta name="description" content="Yearbirder is a free desktop app for birders. View, analyze, and explore your personal eBird sightings with powerful filters, charts, maps, photo, and recording tools.">
   <link rel="icon" type="image/x-icon" href="images/favicon.ico">
   <link rel="icon" type="image/png" sizes="32x32" href="images/favicon-32x32.png">
   <link rel="apple-touch-icon" sizes="180x180" href="images/apple-touch-icon.png">
@@ -24,6 +24,10 @@
     </a>
     <ul class="nav-links">
       <li><a href="index.html" class="active">Overview</a></li>
+      <li><a href="sighting-analysis.html">Sighting Analysis</a></li>
+      <li><a href="photography.html">Photography</a></li>
+      <li><a href="recordings.html">Recordings</a></li>
+      <li><a href="community.html">Community</a></li>
       <li><a href="download.html" class="nav-download">Download</a></li>
       <li><a href="history.html">Version History</a></li>
       <li><a href="https://github.com/trinkner/yearbirder" target="_blank" rel="noopener">GitHub</a></li>
@@ -50,7 +54,7 @@
 <!-- ── Who it's for ────────────────────────────────────────────────── -->
 <section class="audiences">
   <div class="container">
-    <div class="audience-grid">
+    <div class="audience-grid three">
       <div class="audience-card">
         <h3>For the dedicated lister</h3>
         <p>
@@ -60,136 +64,45 @@
       <div class="audience-card">
         <h3>For the bird photographer</h3>
         <p>
-          If you're a photographer, Yearbirder can be your primary app for viewing and managing your photos. It lets you can filter your photos like your sightings, so you can instantly see your photos of a species, a county, a time of year, rating, or any other filter. You can view photos in lists of thumbnails, in an intuitive enlargement view, in slideshows or plotted on interactive maps. The app also let you rename your photo files by species name, date, and location.
+          If you're a photographer, Yearbirder can be your primary app for viewing and managing your photos. It lets you filter your photos like your sightings, so you can instantly see your photos of a species, a county, a time of year, rating, or any other filter. You can view photos in lists of thumbnails, in an intuitive enlargement view, in slideshows or plotted on interactive maps. The app also lets you rename your photo files by species name, date, and location.
+        </p>
+      </div>
+      <div class="audience-card">
+        <h3>For the bird recordist</h3>
+        <p>
+          If you record bird vocalizations, Yearbirder catalogs your recordings alongside your sightings and photos. Import your WAV files and the app matches them to your checklists and species, shows each as a spectrogram, and plays them back with a synchronized cursor. Filter your recordings like everything else — by species, region, date, rating, or audio properties — and plot them on interactive maps.
         </p>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ── Feature: Reports ────────────────────────────────────────────── -->
-<section class="feature">
+<!-- ── Explore: feature cards ─────────────────────────────────────── -->
+<section class="feature-cards-section">
   <div class="container">
-    <div class="feature-inner">
-      <div class="feature-text">
-        <h2>Explore your sightings easily</h2>
-        <p>
-          Every checklist you've ever submitted becomes data you can sort, filter, and drill into. You can generate any variety of lists: county lists, state lists, date lists, lists of checklists, lists of locations — all filterable however you see fit. You can generate custom lists, like every sparrow you've seen on an April day in San Francisco County between 2008 and 2017. Or create a list of every location where you've seen a Western Kingbird. Date Totals shows your species counts by year, month, and individual date. Location Totals breaks down your counts by region, country, state, county, and named location. The Big Report pulls it all together in a tabbed view — species, dates, locations, and checklists at once.
-        </p>
-        <ul class="feature-list">
-          <li>Filter simultaneously by region, family, species, date range, and season</li>
-          <li>Compare any two species lists side by side</li>
-          <li>Sort any table by any column instantly</li>
-          <li>Individual species window with full sighting history and monthly patterns</li>
-          <li>Location window with complete history, yearly breakdown, and a map</li>
-        </ul>
-      </div>
-      <div class="feature-screenshot">
-        <img src="images/demo_Reports1.png" alt="Yearbirder reports: Date Totals, Location Totals, and Big Report">
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ── Feature: Graphs ─────────────────────────────────────────────── -->
-<section class="feature">
-  <div class="container">
-    <div class="feature-inner flip">
-      <div class="feature-text">
-        <h2>Fourteen charts that reveal the big picture</h2>
-        <p>
-          Numbers alone don't tell the story. Yearbirder turns your data into charts that make patterns visible at a glance — from how fast you found new species each year to which locations dominate your checklist count.
-        </p>
-        <ul class="feature-list">
-          <li>Species bar graph, accumulation curves, and heatmaps</li>
-          <li>Top 20 locations by species count</li>
-          <li>Checklist scatter plot by duration and season</li>
-          <li>Phenology chart — sighting dates plotted by day of year</li>
-          <li>First and last sighting of each species per year</li>
-          <li>YTD bar charts comparing every year side by side</li>
-          <li>Pie charts by family, order, or location</li>
-        </ul>
-      </div>
-      <div class="feature-screenshot">
-        <img src="images/demo_Graphs1.png" alt="Yearbirder graphs: species bar chart, pie chart, scatter plot, and YTD comparison">
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ── Feature: Maps ──────────────────────────────────────────────── -->
-<section class="feature">
-  <div class="container">
-    <div class="feature-inner">
-      <div class="feature-text">
-        <h2>Eight interactive maps of your birding world</h2>
-        <p>
-          See where you've been, how long you've spent there, and what you've found. Every map is zoomable and pannable, generated from your own eBird data.
-        </p>
-        <ul class="feature-list">
-          <li>All sighting locations plotted on a global zoomable map</li>
-          <li>Animated lifer map — watch your life list build dot by dot</li>
-          <li>Bubble maps sized by time, checklists, species count, or individual tallies</li>
-          <li>Choropleth maps shading US states, US counties, Canada, India, Great Britain, and world countries by species or checklist count</li>
-          <li>Geotagged photos plotted as pins with thumbnail hover previews</li>
-        </ul>
-      </div>
-      <div class="feature-screenshot">
-        <img src="images/demo_Maps1.png" alt="Yearbirder maps: life list map, animated lifer map, choropleth, and bubble map">
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ── Feature: Photos ─────────────────────────────────────────────── -->
-<section class="feature">
-  <div class="container">
-    <div class="feature-inner flip">
-      <div class="feature-text">
-        <h2>A photo library built for birders</h2>
-        <p>
-          Yearbirder helps you import your photos by analyzing their file name, date and time to suggest matching checklists and species automatically. Once your photos are imported, Yearbirder's filters let you view, map and analyze your photos by every dimension that matters to a bird photographer.
-        </p>
-        <ul class="feature-list">
-          <li>Browse your photos by any filter, such as New World Sparrows photographed in Boulder County last spring</li>
-          <li>Full-screen viewing and easy zooming to the pixel level</li>
-          <li>Rate your photos for easy sorting and filtering</li>
-          <li>Species Gallery: best-rated photo per species in taxonomic order</li>
-<li>Filter by camera body, lens, aperture, shutter speed, focal length, and ISO</li>
-          <li>Photos plotted on an interactive map — hover to preview, click to enlarge</li>
-          <li>Photos displayed sequentially on an animated map, so you can, for example, watch your progress photographing American Kestrels across the US</li>
-          <li>Batch-rename files using species name, date, time, and location components</li>
-          <li>Easily create slideshows using any filter of your sightings</li>
-        </ul>
-      </div>
-      <div class="feature-screenshot">
-        <img src="images/demo_Photos1.png" alt="Yearbirder Photos: species gallery, geolocated photos map, and enlargement">
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ── Feature: Community Sightings ───────────────────────────────── -->
-<section class="feature">
-  <div class="container">
-    <div class="feature-inner">
-      <div class="feature-text">
-        <h2>Charts and graphs to explore the eBird community's sightings</h2>
-        <p>
-          Yearbirder's community reports pull live data from eBird's servers so you can see what's being seen right now — anywhere in the world. Badge bubbles instantly flag Life, State, County, and Year firsts relative to your own data, so you always know which birds matter most to you.
-        </p>
-        <ul class="feature-list">
-          <li>Notable Community Sightings — rare and unusual species flagged by eBird recently seen in your region</li>
-          <li>All Community Sightings — every species recently reported in your region</li>
-          <li>Community Sightings Explorer — browse sightings for any country, state, or county worldwide</li>
-          <li>Color-coded Life, State, County, and Year badge bubbles highlight firsts relative to your data</li>
-          <li>Create maps with the same color-coding to easily see where your next life or county bird may be</li>
-          <li>Plan your next outing in your county or a new country</li>
-        </ul>
-      </div>
-      <div class="feature-screenshot">
-        <img src="images/demo_CommunitySightings.png" alt="Yearbirder Community Sightings: notable sightings report with badge bubbles and expandable checklists">
-      </div>
+    <h2>Everything Yearbirder does</h2>
+    <p class="section-sub">Four ways to get more from the birding you've already done.</p>
+    <div class="feature-cards">
+      <a href="sighting-analysis.html" class="feature-card">
+        <h3>Sighting Analysis</h3>
+        <p>Every checklist you've ever submitted becomes data you can sort, filter, and drill into — through lists, date and location totals, the Big Report, more than 30 chart types, and more than a dozen interactive maps.</p>
+        <span class="card-link">Explore sighting analysis →</span>
+      </a>
+      <a href="photography.html" class="feature-card">
+        <h3>Photography</h3>
+        <p>A photo library built for birders. Import, browse, zoom, and rate your bird photos, filter them by species or any EXIF dimension, plot them on maps, and batch-rename your files.</p>
+        <span class="card-link">Explore photography →</span>
+      </a>
+      <a href="recordings.html" class="feature-card">
+        <h3>Recordings</h3>
+        <p>Catalog your bird recordings alongside your sightings. View spectrograms, play back with a synchronized cursor, filter by audio properties, and map your recordings.</p>
+        <span class="card-link">Explore recordings →</span>
+      </a>
+      <a href="community.html" class="feature-card">
+        <h3>Community Sightings</h3>
+        <p>Pull live eBird data to see what's being seen anywhere in the world, with Life, State, County, and Year firsts flagged against your own records — and maps to plan your next outing.</p>
+        <span class="card-link">Explore community sightings →</span>
+      </a>
     </div>
   </div>
 </section>
@@ -199,15 +112,15 @@
   <div class="container">
     <div class="stats-grid">
       <div class="stat-item">
-        <strong>14</strong>
+        <strong>30+</strong>
         <span>chart types</span>
       </div>
       <div class="stat-item">
-        <strong>8</strong>
+        <strong>12+</strong>
         <span>interactive map types</span>
       </div>
       <div class="stat-item">
-        <strong>10+</strong>
+        <strong>20+</strong>
         <span>filter dimensions</span>
       </div>
       <div class="stat-item">
@@ -234,6 +147,10 @@
     <p>© 2026 Richard Trinkner &nbsp;·&nbsp; Free software under the <a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" rel="noopener">GNU GPL v3</a></p>
     <ul class="footer-links">
       <li><a href="index.html">Overview</a></li>
+      <li><a href="sighting-analysis.html">Sighting Analysis</a></li>
+      <li><a href="photography.html">Photography</a></li>
+      <li><a href="recordings.html">Recordings</a></li>
+      <li><a href="community.html">Community</a></li>
       <li><a href="download.html">Download</a></li>
       <li><a href="history.html">Version History</a></li>
       <li><a href="https://github.com/trinkner/yearbirder" target="_blank" rel="noopener">GitHub</a></li>
@@ -242,60 +159,6 @@
     </ul>
   </div>
 </footer>
-
-<!-- ── Lightbox ────────────────────────────────────────────────────── -->
-<div id="lightbox" role="dialog" aria-modal="true" aria-label="Image preview">
-  <img id="lightbox-img" src="" alt="">
-</div>
-
-<style>
-  #lightbox {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.82);
-    z-index: 9999;
-    cursor: zoom-out;
-    align-items: center;
-    justify-content: center;
-  }
-  #lightbox.open {
-    display: flex;
-  }
-  #lightbox-img {
-    max-width: 90vw;
-    max-height: 90vh;
-    border-radius: 6px;
-    box-shadow: 0 8px 40px rgba(0,0,0,0.6);
-    cursor: default;
-  }
-  .feature-screenshot img {
-    cursor: zoom-in;
-  }
-</style>
-
-<script>
-  const lightbox    = document.getElementById('lightbox');
-  const lightboxImg = document.getElementById('lightbox-img');
-
-  document.querySelectorAll('.feature-screenshot img').forEach(img => {
-    img.addEventListener('click', () => {
-      lightboxImg.src = img.src;
-      lightboxImg.alt = img.alt;
-      lightbox.classList.add('open');
-      document.body.style.overflow = 'hidden';
-    });
-  });
-
-  lightbox.addEventListener('click', close);
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
-
-  function close() {
-    lightbox.classList.remove('open');
-    document.body.style.overflow = '';
-    lightboxImg.src = '';
-  }
-</script>
 
 </body>
 </html>

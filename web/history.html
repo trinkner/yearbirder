@@ -151,6 +151,10 @@
     </a>
     <ul class="nav-links">
       <li><a href="index.html">Overview</a></li>
+      <li><a href="sighting-analysis.html">Sighting Analysis</a></li>
+      <li><a href="photography.html">Photography</a></li>
+      <li><a href="recordings.html">Recordings</a></li>
+      <li><a href="community.html">Community</a></li>
       <li><a href="download.html" class="nav-download">Download</a></li>
       <li><a href="history.html" class="active">Version History</a></li>
       <li><a href="https://github.com/trinkner/yearbirder" target="_blank" rel="noopener">GitHub</a></li>
@@ -171,12 +175,106 @@
   <div class="container">
     <div class="timeline">
 
-      <!-- v1.492 -->
+      <!-- v2.06 -->
       <div class="release latest">
+        <div class="release-header">
+          <span class="release-version">v2.06</span>
+          <span class="release-date">July 22, 2026</span>
+          <span class="release-tag">Latest</span>
+        </div>
+        <ul class="feature-items">
+          <li>
+            <span class="feature-dot"></span>
+            <div>
+              <span class="feat-title">Bird recordings</span>
+              <p>Yearbirder now catalogs your bird recordings alongside your sightings and photos. Import your WAV files and the app reads their embedded recorder timestamps to match each one to a checklist and species — and a single recording can be assigned to several species at once. Add, browse, rate, filter, map, and rename your recordings just as you do your photos.</p>
+            </div>
+          </li>
+          <li>
+            <span class="feature-dot"></span>
+            <div>
+              <span class="feat-title">Spectrograms and synchronized playback</span>
+              <p>Every recording appears as a spectrogram. Open one in the enlargement view to zoom both the frequency (kHz) and time axes and adjust the contrast, then play it back with a cursor that tracks the sound in real time so you can follow a song note by note. High-quality playback resamples to your output device's preferred rate.</p>
+            </div>
+          </li>
+          <li>
+            <span class="feature-dot"></span>
+            <div>
+              <span class="feat-title">Per-device audio calibration</span>
+              <p>Because different audio hardware introduces different latency between what you hear and where the playback cursor sits, a new per-device calibration lets you align the two once. Yearbirder remembers the setting for each output device.</p>
+            </div>
+          </li>
+          <li>
+            <span class="feature-dot"></span>
+            <div>
+              <span class="feat-title">Recordings on maps and in charts</span>
+              <p>Plot your recordings on an interactive map with spectrogram previews, or play them back in sequence on an animated map. The Audio Species Gallery shows your best recording per species, and new recording charts track your totals, year-to-date pace, accumulation, and family breakdown.</p>
+            </div>
+          </li>
+          <li>
+            <span class="feature-dot"></span>
+            <div>
+              <span class="feat-title">Filter recordings by audio properties</span>
+              <p>Beyond species, region, date, and season, you can now filter recordings by rating, duration, sample rate, bit depth, channels, and recording device.</p>
+            </div>
+          </li>
+          <li>
+            <span class="feature-dot"></span>
+            <div>
+              <span class="feat-title">Redesigned photo and recording browsers</span>
+              <p>The Browse Photos and Browse Recordings windows share a new media-card design, with instant sorting by species, date, rating, or taxonomy. The enlargement view has a redesigned details pane showing the full sighting, media, and technical information at a glance.</p>
+            </div>
+          </li>
+          <li>
+            <span class="feature-dot"></span>
+            <div>
+              <span class="feat-title">Dramatically faster media display</span>
+              <p>A new caching system pre-renders photo thumbnails and recording spectrograms and stores them on disk, so browsers, galleries, and maps open dramatically faster — and stay fast between sessions instead of rebuilding every preview from scratch.</p>
+            </div>
+          </li>
+          <li>
+            <span class="feature-dot"></span>
+            <div>
+              <span class="feat-title">Live updates when your media changes</span>
+              <p>Open browsers, maps, charts, and lists now update on the fly when you delete, re-tag, or edit a photo or recording — no need to close and reopen them.</p>
+            </div>
+          </li>
+          <li>
+            <span class="feature-dot"></span>
+            <div>
+              <span class="feat-title">Species List media icons, Notes search, and smarter matching</span>
+              <p>Species lists now show photo and recording icons next to each species you've captured, so you can see your media coverage at a glance. Media Notes are now searchable, and photo-to-species matching includes a banding-code fallback for more reliable results.</p>
+            </div>
+          </li>
+          <li>
+            <span class="feature-dot"></span>
+            <div>
+              <span class="feat-title">Explorer region tree-picker</span>
+              <p>The Community Sightings Explorer now uses a drill-down region tree — country to state to county — in place of the cascading dropdowns, making it easier to navigate to any region in the world.</p>
+            </div>
+          </li>
+          <li>
+            <span class="feature-dot"></span>
+            <div>
+              <span class="feat-title">Windows display fixes</span>
+              <p>Resolved Windows-only issues that could produce stretched or mis-rendered text and brief flashes during startup.</p>
+            </div>
+          </li>
+          <li>
+            <span class="feature-dot"></span>
+            <div>
+              <span class="feat-title">Numerous interface improvements and bug fixes</span>
+              <p>This release also brings many smaller refinements across the app — polished layouts and typography, smoother window behavior, and a wide range of stability and correctness fixes.</p>
+            </div>
+          </li>
+        </ul>
+      </div>
+
+      <!-- v1.492 -->
+      <div class="release">
         <div class="release-header">
           <span class="release-version">v1.492</span>
           <span class="release-date">May 18, 2026</span>
-          <span class="release-tag">Latest</span>
         </div>
         <ul class="feature-items">
           <li>
@@ -481,7 +579,7 @@
 <section class="cta-banner">
   <div class="container">
     <div class="btn-group">
-      <a href="download.html" class="btn btn-primary btn-lg">Download v1.492</a>
+      <a href="download.html" class="btn btn-primary btn-lg">Download v2.06</a>
       <a href="index.html" class="btn btn-secondary btn-lg">Back to Overview</a>
     </div>
   </div>
@@ -493,6 +591,10 @@
     <p>© 2026 Richard Trinkner &nbsp;·&nbsp; Free software under the <a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" rel="noopener">GNU GPL v3</a></p>
     <ul class="footer-links">
       <li><a href="index.html">Overview</a></li>
+      <li><a href="sighting-analysis.html">Sighting Analysis</a></li>
+      <li><a href="photography.html">Photography</a></li>
+      <li><a href="recordings.html">Recordings</a></li>
+      <li><a href="community.html">Community</a></li>
       <li><a href="download.html">Download</a></li>
       <li><a href="history.html">Version History</a></li>
       <li><a href="https://github.com/trinkner/yearbirder" target="_blank" rel="noopener">GitHub</a></li>

@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Photography — Yearbirder</title>
+  <meta name="description" content="A photo library built for birders: import, browse, rate, map, and rename your bird photos — filtered by species, region, date, camera, lens, and every EXIF dimension that matters.">
+  <link rel="icon" type="image/x-icon" href="images/favicon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="images/favicon-32x32.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="images/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ── Navigation ─────────────────────────────────────────────────── -->
+<nav>
+  <div class="nav-inner">
+    <a href="index.html" class="nav-brand">
+      <img src="images/icon.png" alt="Yearbirder icon">
+      Yearbirder
+    </a>
+    <ul class="nav-links">
+      <li><a href="index.html">Overview</a></li>
+      <li><a href="sighting-analysis.html">Sighting Analysis</a></li>
+      <li><a href="photography.html" class="active">Photography</a></li>
+      <li><a href="recordings.html">Recordings</a></li>
+      <li><a href="community.html">Community</a></li>
+      <li><a href="download.html" class="nav-download">Download</a></li>
+      <li><a href="history.html">Version History</a></li>
+      <li><a href="https://github.com/trinkner/yearbirder" target="_blank" rel="noopener">GitHub</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- ── Page hero ──────────────────────────────────────────────────── -->
+<section class="download-hero page-hero">
+  <div class="container">
+    <div class="version-badge">Photography</div>
+    <h1>A photo library built for birders.</h1>
+    <p class="lead">If you're a photographer, Yearbirder can be your primary app for viewing and managing your bird photos. Filter your photos the way you filter your sightings, so you can instantly see your photos of a species, a county, a time of year, a rating, or any combination you choose.</p>
+  </div>
+</section>
+
+<!-- ── Showcase ───────────────────────────────────────────────────── -->
+<section class="showcase">
+  <div class="container">
+    <img src="images/demo_Photos.png" alt="Yearbirder Photos browser showing a grid of rated bird photo thumbnails">
+    <p class="caption">Browse your photos by any filter — here, thumbnails sorted and rated the way a birder thinks.</p>
+  </div>
+</section>
+
+<!-- ── Feature: Import ────────────────────────────────────────────── -->
+<section class="feature">
+  <div class="container">
+    <div class="feature-inner">
+      <div class="feature-text">
+        <h2>Import that does the matching for you</h2>
+        <p>
+          Yearbirder helps you import your photos by analyzing their file name, date, and time to suggest matching checklists and species automatically. Confirm or adjust the suggestions, add a rating and notes, and your photos are catalogued alongside the sightings they belong to.
+        </p>
+        <ul class="feature-list">
+          <li>Automatic checklist and species suggestions from file name and timestamp</li>
+          <li>Assign a rating and notes as you import</li>
+          <li>A single media catalog keeps photos tied to the right sighting</li>
+        </ul>
+      </div>
+      <div class="feature-screenshot">
+        <img src="images/demo_PhotosAdd.png" alt="Yearbirder Add Photos screen matching photos to checklists and species">
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Feature: View & rate ───────────────────────────────────────── -->
+<section class="feature">
+  <div class="container">
+    <div class="feature-inner flip">
+      <div class="feature-text">
+        <h2>View, zoom, and rate</h2>
+        <p>
+          Browse your photos as thumbnails, then open any one in an intuitive enlargement view with full-screen viewing and easy zooming down to the pixel level. Rate your photos so you can sort and filter to your best work in an instant.
+        </p>
+        <ul class="feature-list">
+          <li>Browse by any filter, such as New World Sparrows photographed in Boulder County last spring</li>
+          <li>Full-screen viewing and pixel-level zoom</li>
+          <li>Rate your photos for easy sorting and filtering</li>
+          <li>Species Gallery: your best-rated photo per species in taxonomic order</li>
+          <li>Filter by camera body, lens, aperture, shutter speed, focal length, and ISO</li>
+        </ul>
+      </div>
+      <div class="feature-screenshot">
+        <img src="images/demo_PhotosEnlargement.png" alt="Yearbirder photo enlargement view with details pane">
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Feature: Maps ──────────────────────────────────────────────── -->
+<section class="feature">
+  <div class="container">
+    <div class="feature-inner">
+      <div class="feature-text">
+        <h2>Your photos on the map</h2>
+        <p>
+          Every geotagged photo can be plotted on an interactive map — hover to preview the thumbnail, click to enlarge. Play your photos back in sequence on an animated map to watch, for example, your progress photographing American Kestrels across the country.
+        </p>
+        <ul class="feature-list">
+          <li>Geolocated photos plotted as pins with thumbnail hover previews</li>
+          <li>Animated photo-sequence map that plays your photos back over time</li>
+          <li>Create slideshows from any filter of your sightings</li>
+        </ul>
+      </div>
+      <div class="feature-screenshot">
+        <img src="images/demo_PhotosMaps.png" alt="Yearbirder geolocated photos map with thumbnail preview pins">
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Feature: Charts & rename ───────────────────────────────────── -->
+<section class="feature">
+  <div class="container">
+    <div class="feature-inner flip">
+      <div class="feature-text">
+        <h2>Charts, and batch renaming</h2>
+        <p>
+          Turn your photo collection into charts — how many species you've photographed, your year-to-date pace, and your totals by family. And when your files need tidying, batch-rename them using species name, date, time, and location components in a single pass.
+        </p>
+        <ul class="feature-list">
+          <li>Photo charts: totals, year-to-date, accumulation, and pie by family</li>
+          <li>Batch-rename files from species name, date, time, and location</li>
+          <li>Filter every chart by the same dimensions as your photos</li>
+        </ul>
+      </div>
+      <div class="feature-screenshot">
+        <img src="images/demo_PhotosReports.png" alt="Yearbirder photo charts showing totals and year-to-date pace">
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── CTA ────────────────────────────────────────────────────────── -->
+<section class="cta-banner">
+  <div class="container">
+    <h2>Make Yearbirder your photo library</h2>
+    <p>Free and open-source, for macOS, Windows and Linux.</p>
+    <div class="btn-group">
+      <a href="download.html" class="btn btn-primary btn-lg">Download</a>
+      <a href="https://github.com/trinkner/yearbirder" class="btn btn-secondary btn-lg" target="_blank" rel="noopener">View on GitHub</a>
+    </div>
+  </div>
+</section>
+
+<!-- ── Footer ─────────────────────────────────────────────────────── -->
+<footer>
+  <div class="container footer-inner">
+    <p>© 2026 Richard Trinkner &nbsp;·&nbsp; Free software under the <a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" rel="noopener">GNU GPL v3</a></p>
+    <ul class="footer-links">
+      <li><a href="index.html">Overview</a></li>
+      <li><a href="sighting-analysis.html">Sighting Analysis</a></li>
+      <li><a href="photography.html">Photography</a></li>
+      <li><a href="recordings.html">Recordings</a></li>
+      <li><a href="community.html">Community</a></li>
+      <li><a href="download.html">Download</a></li>
+      <li><a href="history.html">Version History</a></li>
+      <li><a href="privacy.html">Privacy Policy</a></li>
+    </ul>
+  </div>
+</footer>
+
+<!-- ── Lightbox ───────────────────────────────────────────────────── -->
+<div id="lightbox" role="dialog" aria-modal="true" aria-label="Image preview">
+  <img id="lightbox-img" src="" alt="">
+</div>
+
+<style>
+  #lightbox { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.82); z-index: 9999; cursor: zoom-out; align-items: center; justify-content: center; }
+  #lightbox.open { display: flex; }
+  #lightbox-img { max-width: 90vw; max-height: 90vh; border-radius: 6px; box-shadow: 0 8px 40px rgba(0,0,0,0.6); cursor: default; }
+  .feature-screenshot img { cursor: zoom-in; }
+</style>
+
+<script>
+  const lightbox    = document.getElementById('lightbox');
+  const lightboxImg = document.getElementById('lightbox-img');
+  document.querySelectorAll('.feature-screenshot img, .showcase img').forEach(img => {
+    img.addEventListener('click', () => {
+      lightboxImg.src = img.src;
+      lightboxImg.alt = img.alt;
+      lightbox.classList.add('open');
+      document.body.style.overflow = 'hidden';
+    });
+  });
+  lightbox.addEventListener('click', close);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
+  function close() {
+    lightbox.classList.remove('open');
+    document.body.style.overflow = '';
+    lightboxImg.src = '';
+  }
+</script>
+
+</body>
+</html>

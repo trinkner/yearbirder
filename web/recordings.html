@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Recordings — Yearbirder</title>
+  <meta name="description" content="Catalog your bird recordings alongside your sightings: import WAV files, view spectrograms, play back with a synchronized cursor, map your recordings, and filter by species, region, and audio properties.">
+  <link rel="icon" type="image/x-icon" href="images/favicon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="images/favicon-32x32.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="images/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ── Navigation ─────────────────────────────────────────────────── -->
+<nav>
+  <div class="nav-inner">
+    <a href="index.html" class="nav-brand">
+      <img src="images/icon.png" alt="Yearbirder icon">
+      Yearbirder
+    </a>
+    <ul class="nav-links">
+      <li><a href="index.html">Overview</a></li>
+      <li><a href="sighting-analysis.html">Sighting Analysis</a></li>
+      <li><a href="photography.html">Photography</a></li>
+      <li><a href="recordings.html" class="active">Recordings</a></li>
+      <li><a href="community.html">Community</a></li>
+      <li><a href="download.html" class="nav-download">Download</a></li>
+      <li><a href="history.html">Version History</a></li>
+      <li><a href="https://github.com/trinkner/yearbirder" target="_blank" rel="noopener">GitHub</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- ── Page hero ──────────────────────────────────────────────────── -->
+<section class="download-hero page-hero">
+  <div class="container">
+    <div class="version-badge">Recordings</div>
+    <h1>Your bird recordings, catalogued like your sightings.</h1>
+    <p class="lead">If you record bird sound, Yearbirder brings your WAV files into the same catalog as your sightings and photos. See each recording as a spectrogram, play it back with a synchronized cursor, and filter your library by species, region, date, and the audio properties that matter to a recordist.</p>
+  </div>
+</section>
+
+<!-- ── Showcase ───────────────────────────────────────────────────── -->
+<section class="showcase">
+  <div class="container">
+    <img src="images/demo_Recordings.png" alt="Yearbirder Recordings browser showing spectrogram cards with playback controls">
+    <p class="caption">Browse your recordings as spectrogram cards, each with playback and a scrubber.</p>
+  </div>
+</section>
+
+<!-- ── Feature: Import ────────────────────────────────────────────── -->
+<section class="feature">
+  <div class="container">
+    <div class="feature-inner">
+      <div class="feature-text">
+        <h2>Import that finds the right checklist</h2>
+        <p>
+          Add your WAV recordings and Yearbirder reads their embedded date and time — including the timestamp your recorder writes into the file — to suggest the matching checklist and species. When a recording captures more than one bird, you can assign it to several species at once, and it appears under each.
+        </p>
+        <ul class="feature-list">
+          <li>Reads embedded recorder timestamps, with a file-name fallback</li>
+          <li>Suggests the checklist and species automatically</li>
+          <li>Assign a single recording to multiple species</li>
+          <li>Add a rating and notes as you import</li>
+        </ul>
+      </div>
+      <div class="feature-screenshot">
+        <img src="images/demo_RecordingsAdd.png" alt="Yearbirder Add Recordings screen matching WAV files to checklists and species">
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Feature: Spectrogram & playback ────────────────────────────── -->
+<section class="feature">
+  <div class="container">
+    <div class="feature-inner flip">
+      <div class="feature-text">
+        <h2>See the sound, follow the cursor</h2>
+        <p>
+          Open any recording in an enlargement view with a full spectrogram you can customize by zooming both the kHz and the time, and adjusting the contrast. Play it back and a cursor tracks the sound in real time, so you can follow a song note by note. Rate each recording and add notes to build a library you can search and sort.
+        </p>
+        <ul class="feature-list">
+          <li>Full spectrogram view with zoom</li>
+          <li>High-quality playback with a synchronized moving cursor</li>
+          <li>Rate recordings and add searchable notes</li>
+          <li>Sort by species, date, rating, or taxonomic order</li>
+        </ul>
+      </div>
+      <div class="feature-screenshot">
+        <img src="images/demo_RecordingsEnlargement.png" alt="Yearbirder recording enlargement with a large spectrogram and playback cursor">
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Feature: Calibration ───────────────────────────────────────── -->
+<section class="feature">
+  <div class="container">
+    <div class="feature-inner">
+      <div class="feature-text">
+        <h2>A playback cursor you can trust</h2>
+        <p>
+          Different audio hardware introduces different amounts of latency between what you hear and where the cursor sits. Yearbirder's per-device audio calibration lets you align the two once, so the cursor stays true to the sound on your setup — headphones, interface, or built-in output.
+        </p>
+        <ul class="feature-list">
+          <li>Per-device sync calibration</li>
+          <li>Keeps the cursor aligned with what you hear</li>
+          <li>Set it once; Yearbirder remembers each device</li>
+        </ul>
+      </div>
+      <div class="feature-screenshot">
+        <img src="images/demo_RecordingsAudioCalibration.png" alt="Yearbirder audio sync calibration screen">
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Feature: Charts & maps ─────────────────────────────────────── -->
+<section class="feature">
+  <div class="container">
+    <div class="feature-inner flip">
+      <div class="feature-text">
+        <h2>Chart and map your recordings</h2>
+        <p>
+          Your recordings feed the same charts and maps as the rest of your data. Track how many species you've recorded and your year-to-date pace, plot your recordings on an interactive map, and play them back in sequence to follow your recording travels over time.
+        </p>
+        <ul class="feature-list">
+          <li>Recording charts: totals, year-to-date, accumulation, and pie by family</li>
+          <li>Geolocated recordings map with spectrogram previews</li>
+          <li>Animated recording-sequence map that plays your recordings back over time</li>
+          <li>Audio Species Gallery of your best recording per species</li>
+          <li>Batch-rename recordings from species name, date, and location</li>
+        </ul>
+      </div>
+      <div class="feature-screenshot">
+        <img src="images/demo_RecordingsReports.png" alt="Yearbirder recording charts showing totals and year-to-date pace">
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Detail: Filter dimensions ──────────────────────────────────── -->
+<section class="detail-section" style="background: var(--mist);">
+  <div class="container">
+    <h2>Filter your recordings every way that matters</h2>
+    <p class="detail-intro">
+      Beyond species, region, date, and season, Yearbirder lets you filter your recordings by their audio properties — so you can find exactly the cuts you're after.
+    </p>
+    <div class="detail-columns">
+      <ul class="feature-list">
+        <li>Species, region, date range, and season</li>
+        <li>Rating range</li>
+        <li>Recording duration</li>
+      </ul>
+      <ul class="feature-list">
+        <li>Sample rate and bit depth</li>
+        <li>Channels (mono or stereo)</li>
+        <li>Recording device</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ── CTA ────────────────────────────────────────────────────────── -->
+<section class="cta-banner">
+  <div class="container">
+    <h2>Bring your recordings into Yearbirder</h2>
+    <p>Free and open-source, for macOS, Windows and Linux.</p>
+    <div class="btn-group">
+      <a href="download.html" class="btn btn-primary btn-lg">Download</a>
+      <a href="https://github.com/trinkner/yearbirder" class="btn btn-secondary btn-lg" target="_blank" rel="noopener">View on GitHub</a>
+    </div>
+  </div>
+</section>
+
+<!-- ── Footer ─────────────────────────────────────────────────────── -->
+<footer>
+  <div class="container footer-inner">
+    <p>© 2026 Richard Trinkner &nbsp;·&nbsp; Free software under the <a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" rel="noopener">GNU GPL v3</a></p>
+    <ul class="footer-links">
+      <li><a href="index.html">Overview</a></li>
+      <li><a href="sighting-analysis.html">Sighting Analysis</a></li>
+      <li><a href="photography.html">Photography</a></li>
+      <li><a href="recordings.html">Recordings</a></li>
+      <li><a href="community.html">Community</a></li>
+      <li><a href="download.html">Download</a></li>
+      <li><a href="history.html">Version History</a></li>
+      <li><a href="privacy.html">Privacy Policy</a></li>
+    </ul>
+  </div>
+</footer>
+
+<!-- ── Lightbox ───────────────────────────────────────────────────── -->
+<div id="lightbox" role="dialog" aria-modal="true" aria-label="Image preview">
+  <img id="lightbox-img" src="" alt="">
+</div>
+
+<style>
+  #lightbox { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.82); z-index: 9999; cursor: zoom-out; align-items: center; justify-content: center; }
+  #lightbox.open { display: flex; }
+  #lightbox-img { max-width: 90vw; max-height: 90vh; border-radius: 6px; box-shadow: 0 8px 40px rgba(0,0,0,0.6); cursor: default; }
+  .feature-screenshot img { cursor: zoom-in; }
+</style>
+
+<script>
+  const lightbox    = document.getElementById('lightbox');
+  const lightboxImg = document.getElementById('lightbox-img');
+  document.querySelectorAll('.feature-screenshot img, .showcase img').forEach(img => {
+    img.addEventListener('click', () => {
+      lightboxImg.src = img.src;
+      lightboxImg.alt = img.alt;
+      lightbox.classList.add('open');
+      document.body.style.overflow = 'hidden';
+    });
+  });
+  lightbox.addEventListener('click', close);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
+  function close() {
+    lightbox.classList.remove('open');
+    document.body.style.overflow = '';
+    lightboxImg.src = '';
+  }
+</script>
+
+</body>
+</html>
