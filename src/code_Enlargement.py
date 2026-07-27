@@ -23,7 +23,9 @@ from PySide6.QtCore import (
     Qt,
     Signal,
     QTimer,
-    QSize
+    QSize,
+    QPropertyAnimation,
+    QEasingCurve
     )
 
 from PySide6.QtWidgets import (
@@ -46,6 +48,7 @@ from PySide6.QtWidgets import (
 
 BLEND_DURATION = 300   # crossfade duration in ms
 BLEND_INTERVAL = 16    # timer tick in ms (~60 fps)
+FADE_MS = 220          # Windows full-screen enter/exit opacity fade duration
 DETAILS_PANE_WIDTH = 297   # must match detailsPane.setFixedWidth() below
    
 
@@ -97,9 +100,17 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
         # we need a keepress event handler here in case the user clicks on the photo.
         # when user clicks on the photo, the keypress handler is this GraphicsView, not the Englargement class.
         def keyPressEvent(self, e):
-                        
+
+            # Ctrl/Cmd shortcuts belong to the main window (Open, Find, filters,
+            # toolbar…) — forward and stop, so this view doesn't swallow them
+            # (e.g. Cmd-O to open a data file).  self.mdiParent is the
+            # Enlargement; its .mdiParent.mdiParent is the MainWindow.
+            if e.modifiers() & Qt.ControlModifier:
+                self.mdiParent.mdiParent.mdiParent.keyPressEvent(e)
+                return
+
             # F key is pressed. Re-display the currentEnlargement to fit the screen
-            if e.key() == Qt.Key_F:   
+            if e.key() == Qt.Key_F:
                 self.mdiParent.fitEnlargement()
                 
             # Backspace key is pressed, so show previous image as enlargement     
@@ -123,7 +134,7 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
                 QTimer.singleShot(0, self.mdiParent.toggleFullScreen)
 
             # Esc is pressed, so exit full screen mode, if we're in it
-            if e.key() == Qt.Key_Escape and self.mdiParent.mdiParent.mdiParent.statusBar.isVisible() is False:
+            if e.key() == Qt.Key_Escape and self.mdiParent._fullScreen:
                 QTimer.singleShot(0, self.mdiParent.toggleFullScreen)
     
             # 1-5 pressed, so rate the photo 
@@ -152,7 +163,7 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
             actionShowPreviousPhoto = menu.addAction("Previous photo (←)")
             menu.addSeparator()
             
-            if self.mdiParent.isMaximized() is True:
+            if self.mdiParent._fullScreen:
                 if self.mdiParent.cursorIsVisible:
                     actionToggleHideCursor = menu.addAction("Hide cursor (F7)")
                 else:
@@ -163,7 +174,7 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
             else:
                 actionToggleCameraDetails = menu.addAction("Show details (F9)")
 
-            if self.mdiParent.isMaximized() and self.mdiParent.mdiParent.mdiParent.isFullScreen():
+            if self.mdiParent._fullScreen:
                 actionToggleFullScreen = menu.addAction("Exit full screen (F10)")
             else:
                 actionToggleFullScreen = menu.addAction("Full screen (F10)")
@@ -183,7 +194,7 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
 
             action = menu.exec(self.mapToGlobal(event.pos()))
 
-            if self.mdiParent.isMaximized() is True:
+            if self.mdiParent._fullScreen:
                 if action == actionToggleHideCursor:
                     self.parent().toggleHideCursor()
 
@@ -233,6 +244,13 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
         self.currentIndex = 0
         
         self.pixmapEnlargement = QPixmap()
+        # Full-screen state.  In full screen this window detaches from the MDI
+        # area and shows itself as a top-level window; the main window is left
+        # untouched behind it (see toggleFullScreen).  _mdiGeometry restores the
+        # MDI-child geometry on the way back.
+        self._fullScreen = False
+        self._mdiGeometry = None
+        self._savedFlags = None
         self._crossfadeOverlay = None
         self._blendTimer = QTimer(self)
         self._blendTimer.timeout.connect(self._blendStep)
@@ -392,8 +410,16 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
 
     def keyPressEvent(self, e):
 
+        # Any Ctrl/Cmd shortcut (Open, Find, filters, toolbar…) belongs to the
+        # main window — forward and stop so the enlargement doesn't swallow it
+        # (e.g. Cmd-O to open a data file).  self.mdiParent.mdiParent is the
+        # MainWindow.
+        if e.modifiers() & Qt.ControlModifier:
+            self.mdiParent.mdiParent.keyPressEvent(e)
+            return
+
         # F key is pressed. Re-display the currentEnlargement to fit the screen
-        if e.key() == Qt.Key_F:   
+        if e.key() == Qt.Key_F:
             self.fitEnlargement()
             
         # Backspace key is pressed, so show previous image as enlargement     
@@ -416,7 +442,7 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
         if e.key() == Qt.Key_F10:
             QTimer.singleShot(0, self.toggleFullScreen)
 
-        if e.key() == Qt.Key_Escape and not self.mdiParent.mdiParent.statusBar.isVisible():
+        if e.key() == Qt.Key_Escape and self._fullScreen:
             QTimer.singleShot(0, self.toggleFullScreen)
 
         # 1-5 pressed, so rate the photo 
@@ -430,21 +456,6 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
         # Left is pressed: show previous photo
         if e.key() == Qt.Key_Left or e.key() == Qt.Key_PageUp:
             self.showPreviousPhoto()
-
-        mw = self.mdiParent.mdiParent
-        if e.modifiers() & Qt.ControlModifier:
-            if e.key() == Qt.Key_M:
-                if mw.dckMediaFilter.isVisible():
-                    mw.hideMediaFilter()
-                else:
-                    mw.showMediaFilter()
-            elif e.key() == Qt.Key_S:
-                if mw.dckFilter.isVisible():
-                    mw.hideStandardFilter()
-                else:
-                    mw.showStandardFilter()
-            elif e.key() == Qt.Key_T:
-                mw.toolBar.setVisible(not mw.toolBar.isVisible())
 
 
     def ratePhoto(self, ratingKey, actionType=""):
@@ -646,7 +657,7 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
         if visible == self.detailsPane.isVisible():
             return
 
-        if self.isMaximized():
+        if self.isMaximized() or self._fullScreen:
             self.detailsPane.setVisible(visible)
         else:
             delta = DETAILS_PANE_WIDTH if visible else -DETAILS_PANE_WIDTH
@@ -658,11 +669,8 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
 
     def toggleHideCursor(self):
 
-        # toggle visibility of the cursor
-        if not self.isMaximized():
-            return()
-
-        if not self.mdiParent.mdiParent.isFullScreen():
+        # toggle visibility of the cursor — only in full screen
+        if not self._fullScreen:
             return()
         
         if self.cursorIsVisible is True:
@@ -769,54 +777,97 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
     def toggleFullScreen(self):
         # Called via QTimer.singleShot(0, ...) from all key/menu handlers so that
         # this runs after the triggering event handler has fully returned.
-        # Note: setUpdatesEnabled(False) cannot be used here — on macOS's Cocoa
-        # backend it conflicts with native window operations (showFullScreen,
-        # setWindowFlags) and causes a fatal crash via sendPostedEvents.
+        # Full-screen state is tracked by self._fullScreen (used for detection
+        # everywhere — Esc handling, cursor hide, the context-menu label).
         #
-        # Operation order is chosen to minimise visible intermediate states:
-        # entering — ALL rearranging (chrome hides, child maximise, frameless)
-        # happens first, the layout is settled synchronously, and the image is
-        # fitted BEFORE showFullScreen(), so the native zoom animation carries
-        # one finished dark frame with the centred image instead of a
-        # half-arranged one that snaps into place as the animation lands.
-        # exiting  — chrome restores first, then main window shrinks, then child
-        # returns to normal so the image never appears to "float" frameless.
-
+        # DETACH this enlargement from the MDI area and show it as a top-level
+        # full-screen window, fading it in/out, leaving the main window untouched
+        # behind it.  Used on BOTH platforms: it avoids Windows' desktop-exposing
+        # restore / chrome flicker / black-MDI flash AND macOS's native
+        # full-screen animation (which moves the app to its own Space, briefly
+        # exposing other windows and flickering the menu bar).  The main window's
+        # own window state never changes — the transition is a single top-level
+        # window fading in/out.
         mainWindow = self.mdiParent.mdiParent
+        mdiArea = mainWindow.mdiArea
 
-        if not mainWindow.isFullScreen():
-            mainWindow.dckFilter.setVisible(False)
-            mainWindow.dckMediaFilter.setVisible(False)
-            mainWindow.menuBar.setVisible(False)
-            mainWindow.toolBar.setVisible(False)
-            mainWindow.statusBar.setVisible(False)
-            self.showMaximized()
-            self.setWindowFlags(Qt.FramelessWindowHint)
-            # Settle the pending relayout NOW so the child/view geometry is
-            # final, then compose the frame the animation will carry.
-            # (A full-screen "cover" window masking the native transition was
-            # tried here and removed — it added MORE visible stages, not
-            # fewer.  The residual artifacts — the menu bar going black and a
-            # title-bar-height sliver of desktop — are macOS's own
-            # enter-full-screen mechanics and are not controllable from Qt.)
-            mainWindow.layout().activate()
+        if not self._fullScreen:
+            # ── Enter full screen ────────────────────────────────────────────
+            self._mdiGeometry = self.geometry()
+            # Remember the functional MDI-subwindow flags (title bar, system menu,
+            # min/max/close buttons) so they can be restored on exit.
+            self._savedFlags = self.windowFlags()
+            mdiArea.removeSubWindow(self)      # detach: self becomes top-level
+            self.setWindowFlags(Qt.Window | Qt.FramelessWindowHint)
+            self.showFullScreen()
+            self.setWindowOpacity(0.0)         # invisible; faded in below
+            self._fullScreen = True
+            # Fit to the now-full-screen view.  A QGraphicsView's viewport isn't
+            # resized to match its view until shown, so force it before fitting.
+            self.layout().activate()
+            self.viewEnlargement.viewport().resize(self.viewEnlargement.size())
             self.fitEnlargement()
-            mainWindow.showFullScreen()
-
+            self.activateWindow()
+            self.setFocus()
+            # The finished full-screen frame is composed (still invisible at
+            # opacity 0) — fade it in over the app behind it.
+            self._startFade(0.0, 1.0)
         else:
-            mainWindow.dckFilter.setVisible(True)
-            mainWindow.dckMediaFilter.setVisible(True)
-            mainWindow.menuBar.setVisible(True)
-            mainWindow.toolBar.setVisible(True)
-            mainWindow.statusBar.setVisible(True)
-            self.setWindowFlags(Qt.SubWindow)
-            mainWindow.showMaximized()
-            self.showNormal()
+            # ── Exit full screen ─────────────────────────────────────────────
+            self._fullScreen = False
             QApplication.restoreOverrideCursor()
+            # Fade out, then re-attach to the MDI in the finished callback.
+            self._startFade(1.0, 0.0, on_done=self._reattachFromFullScreen)
+            return
 
         QTimer.singleShot(0, self.fitEnlargement)
-                    
-            
+
+
+    def _startFade(self, start, end, on_done=None):
+        """Animate this window's opacity (full-screen enter/exit fade).  Keeps a
+        reference on self so the animation isn't garbage-collected."""
+        anim = QPropertyAnimation(self, b"windowOpacity", self)
+        anim.setDuration(FADE_MS)
+        anim.setStartValue(start)
+        anim.setEndValue(end)
+        # Rise fast on fade-in / drop slow on fade-out, so the window spends as
+        # little time as possible semi-transparent — on macOS the menu bar can
+        # peek through a partly-transparent full-screen window.
+        anim.setEasingCurve(QEasingCurve.OutCubic if end > start else QEasingCurve.InCubic)
+        if on_done is not None:
+            anim.finished.connect(on_done)
+        anim.start()
+        self._fadeAnim = anim
+
+    def _reattachFromFullScreen(self):
+        """Called when the exit fade-out finishes: return this window to the MDI
+        area (main window was never touched) and restore it as a normal child."""
+        mdiArea = self.mdiParent.mdiParent.mdiArea
+        self.showNormal()
+        mdiArea.addSubWindow(self)
+        # Restore the ORIGINAL subwindow flags — setting only Qt.SubWindow strips
+        # the title-bar/system-menu/button hints, leaving a frozen, decoration-
+        # less window (the MDI area still tracks it, but it can't be moved/closed).
+        if self._savedFlags is not None:
+            self.setWindowFlags(self._savedFlags)
+        if self._mdiGeometry is not None:
+            self.setGeometry(self._mdiGeometry)
+        self.setWindowOpacity(1.0)   # undo the fade (harmless on an MDI child)
+        # Fit to the restored MDI size BEFORE showing, so the photo reappears
+        # already at its final size instead of visibly re-scaling.  (The window
+        # is hidden here, so force the QGraphicsView viewport to the view size —
+        # while hidden it stays at Qt's default 640x480 and fitInView would
+        # otherwise measure the wrong size.)
+        self.layout().activate()
+        self.viewEnlargement.viewport().resize(self.viewEnlargement.size())
+        self.fitEnlargement()
+        self.show()
+        mdiArea.setActiveSubWindow(self)
+        self.activateWindow()
+        self.setFocus()
+        QTimer.singleShot(0, self.fitEnlargement)
+
+
     def launchSlideshow(self):
         import code_Slideshow
         import random

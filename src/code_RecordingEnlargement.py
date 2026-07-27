@@ -7,6 +7,7 @@ import code_ThumbnailCache
 import code_NotesDialog
 
 _DETAILS_PANE_WIDTH = 297   # must match _detailsPane.setFixedWidth() below
+FADE_MS = 220               # Windows full-screen enter/exit opacity fade duration
 
 # The compact overview and the wide ribbon both render label-less (data fills
 # the whole figure), so their data rect is the full area — a constant, so the
@@ -72,7 +73,8 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 
 from PySide6.QtGui import QPixmap, QImage, QIcon, QPainter, QPen, QColor
-from PySide6.QtCore import Signal, Qt, QThread, QTimer, QUrl, QSize, QRect, QRectF, QEvent
+from PySide6.QtCore import (Signal, Qt, QThread, QTimer, QUrl, QSize, QRect, QRectF,
+                            QEvent, QPropertyAnimation, QEasingCurve)
 from PySide6.QtWidgets import (
     QMdiSubWindow, QWidget, QLabel, QHBoxLayout, QVBoxLayout,
     QPushButton, QSlider, QApplication, QSizePolicy,
@@ -949,6 +951,13 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
         self.setAttribute(Qt.WA_DeleteOnClose, True)
         self.mdiParent = ""
 
+        # Full-screen state.  On Windows this window detaches from the MDI area
+        # and shows itself as a top-level window (main window untouched); on macOS
+        # the main window itself goes full screen (see toggleFullScreen).
+        self._fullScreen = False
+        self._mdiGeometry = None
+        self._savedFlags = None
+
         # Audio state
         self._recordingData = None
         self._fs = 0
@@ -1077,12 +1086,17 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
 
         ctrl.addStretch()
 
-        self._backToStartBtn = QPushButton("⏮")
-        self._backToStartBtn.setFixedSize(22, 30)
+        # U+FE0E (text/monochrome variation selector) stops Windows from drawing
+        # ⏮ as a colour-emoji tile (a blue square) — we want a plain white glyph
+        # on the blue pill, matching the Play button beside it.
+        self._backToStartBtn = QPushButton("⏮︎")
+        self._backToStartBtn.setFixedSize(34, 30)
         self._backToStartBtn.setToolTip("Back to start")
         self._backToStartBtn.setStyleSheet(
-            "QPushButton { color: #4f8ef7; font-size: 14px; padding: 1px 3px; }"
-            "QPushButton:pressed { color: white; }")
+            "QPushButton { background: #4f8ef7; color: white; border: none;"
+            " border-radius: 6px; font-size: 14px; padding: 1px 3px; }"
+            "QPushButton:hover { background: #6ba0f9; }"
+            "QPushButton:pressed { background: #3f78d8; }")
         self._backToStartBtn.clicked.connect(self._onBackToStart)
         ctrl.addWidget(self._backToStartBtn)
 
@@ -2120,13 +2134,22 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
         return super().eventFilter(obj, event)
 
     def keyPressEvent(self, e):
+        # Any Ctrl/Cmd shortcut (Open, Find, Media/Sighting filters, Toolbar…)
+        # belongs to the main window — forward it and stop, so these work even
+        # when this enlargement or its spectrogram has keyboard focus.  Without
+        # this the enlargement's keyPressEvent swallows the event before it can
+        # bubble up (e.g. Cmd-O to open a data file did nothing).  self.mdiParent
+        # is the MainWindow.
+        if e.modifiers() & Qt.KeyboardModifier.ControlModifier:
+            self.mdiParent.keyPressEvent(e)
+            return
         if e.key() == Qt.Key.Key_F9:
             self.toggleDetails()
         if e.key() == Qt.Key.Key_F10:
             # Defer so this runs after the event handler returns (matches the
             # photo Enlargement; avoids conflicts with native window ops).
             QTimer.singleShot(0, self.toggleFullScreen)
-        if e.key() == Qt.Key.Key_Escape and self.mdiParent.isFullScreen():
+        if e.key() == Qt.Key.Key_Escape and self._fullScreen:
             # Esc exits full screen (only when currently in full screen).
             QTimer.singleShot(0, self.toggleFullScreen)
         if e.key() in (Qt.Key.Key_0, Qt.Key.Key_1, Qt.Key.Key_2,
@@ -2141,46 +2164,72 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
         if e.key() in (Qt.Key.Key_Left, Qt.Key.Key_PageUp):
             self.showPreviousRecording()
 
-        # Cmd/Ctrl+M and Cmd/Ctrl+S must work regardless of which MDI child
-        # has focus — mirrors the same handling in the photo Enlargement.
-        if e.modifiers() & Qt.KeyboardModifier.ControlModifier:
-            mw = self.mdiParent
-            if e.key() == Qt.Key.Key_M:
-                if mw.dckMediaFilter.isVisible():
-                    mw.hideMediaFilter()
-                else:
-                    mw.showMediaFilter()
-            elif e.key() == Qt.Key.Key_S:
-                if mw.dckFilter.isVisible():
-                    mw.hideStandardFilter()
-                else:
-                    mw.showStandardFilter()
-
     def toggleFullScreen(self):
-        # Mirrors the photo Enlargement.  Called via QTimer.singleShot(0, ...)
-        # so it runs after the triggering handler returns.  The recording
-        # enlargement's mdiParent IS the MainWindow.  The spectrogram widgets are
-        # layout-managed and re-scale on resize, so no explicit re-fit is needed.
+        # Mirrors the photo Enlargement.  Called via QTimer.singleShot(0, ...) so
+        # it runs after the triggering handler returns.  This enlargement's
+        # mdiParent IS the MainWindow.  Full-screen state is tracked by
+        # self._fullScreen.  The spectrogram widgets re-scale on resize, so unlike
+        # photos there's no explicit re-fit.
+        #
+        # DETACH this enlargement from the MDI area and show it as a top-level
+        # full-screen window, fading it in/out, leaving the main window untouched.
+        # Used on BOTH platforms: it avoids Windows' desktop-exposing restore /
+        # chrome flicker AND macOS's native full-screen animation (which moves the
+        # app to its own Space, briefly exposing other windows and the menu bar).
         mainWindow = self.mdiParent
+        mdiArea = mainWindow.mdiArea
 
-        if not mainWindow.isFullScreen():
-            self.showMaximized()
-            self.setWindowFlags(Qt.FramelessWindowHint)
-            mainWindow.dckFilter.setVisible(False)
-            mainWindow.dckMediaFilter.setVisible(False)
-            mainWindow.menuBar.setVisible(False)
-            mainWindow.toolBar.setVisible(False)
-            mainWindow.statusBar.setVisible(False)
-            mainWindow.showFullScreen()
+        if not self._fullScreen:
+            # ── Enter full screen ────────────────────────────────────────────
+            self._mdiGeometry = self.geometry()
+            self._savedFlags = self.windowFlags()
+            mdiArea.removeSubWindow(self)      # detach: self becomes top-level
+            self.setWindowFlags(Qt.Window | Qt.FramelessWindowHint)
+            self.showFullScreen()
+            self.setWindowOpacity(0.0)         # invisible; faded in below
+            self._fullScreen = True
+            self.activateWindow()
+            self.setFocus()
+            self._startFade(0.0, 1.0)          # fade the full-screen image in
         else:
-            mainWindow.dckFilter.setVisible(True)
-            mainWindow.dckMediaFilter.setVisible(True)
-            mainWindow.menuBar.setVisible(True)
-            mainWindow.toolBar.setVisible(True)
-            mainWindow.statusBar.setVisible(True)
-            self.setWindowFlags(Qt.SubWindow)
-            mainWindow.showMaximized()
-            self.showNormal()
+            # ── Exit full screen ─────────────────────────────────────────────
+            self._fullScreen = False
+            # Fade out, then re-attach to the MDI in the finished callback.
+            self._startFade(1.0, 0.0, on_done=self._reattachFromFullScreen)
+
+    def _startFade(self, start, end, on_done=None):
+        """Animate this window's opacity (full-screen enter/exit fade).  Keeps a
+        reference on self so the animation isn't garbage-collected."""
+        anim = QPropertyAnimation(self, b"windowOpacity", self)
+        anim.setDuration(FADE_MS)
+        anim.setStartValue(start)
+        anim.setEndValue(end)
+        # Rise fast on fade-in / drop slow on fade-out, so the window spends as
+        # little time as possible semi-transparent — on macOS the menu bar can
+        # peek through a partly-transparent full-screen window.
+        anim.setEasingCurve(QEasingCurve.OutCubic if end > start else QEasingCurve.InCubic)
+        if on_done is not None:
+            anim.finished.connect(on_done)
+        anim.start()
+        self._fadeAnim = anim
+
+    def _reattachFromFullScreen(self):
+        """Exit fade-out finished: return this window to the MDI area (main window
+        was never touched) and restore it as a normal, fully-interactive child.
+        Restore the ORIGINAL subwindow flags — setting only Qt.SubWindow strips
+        the title-bar/system-menu/button hints, leaving a frozen window."""
+        mdiArea = self.mdiParent.mdiArea
+        self.showNormal()
+        mdiArea.addSubWindow(self)
+        if self._savedFlags is not None:
+            self.setWindowFlags(self._savedFlags)
+        if self._mdiGeometry is not None:
+            self.setGeometry(self._mdiGeometry)
+        self.setWindowOpacity(1.0)   # undo the fade (harmless on an MDI child)
+        self.show()
+        mdiArea.setActiveSubWindow(self)
+        self.activateWindow()
+        self.setFocus()
 
     # ------------------------------------------------------------------
     # Rating
@@ -2250,7 +2299,7 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
         else:
             actionToggleDetails = menu.addAction("Show details (F9)")
 
-        if self.mdiParent.isFullScreen():
+        if self._fullScreen:
             actionToggleFullScreen = menu.addAction("Exit full screen (F10)")
         else:
             actionToggleFullScreen = menu.addAction("Full screen (F10)")

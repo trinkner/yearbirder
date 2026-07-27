@@ -11,6 +11,7 @@ import code_Filter
 import code_Find
 import code_Explorer
 import code_Lists
+import code_Individual
 import code_Web
 import code_Families
 import code_Compare
@@ -21,6 +22,7 @@ import code_Graphs
 import code_Photos
 import code_Recordings
 import code_SpeciesGallery
+import code_RecordingsSpeciesGallery
 import code_ManagePhotos
 import code_ManageRecordings
 import code_RenameMedia
@@ -472,8 +474,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
     fontSize = 11
     scaleFactor = 1
     rowHeight = 16  # default; recomputed in ScaleDisplay() and __init__
-    versionNumber = "2.06"
-    versionDate = "July 22, 2026"
+    versionNumber = "2.07"
+    versionDate = "July 27, 2026"
     taxonomyYear = ""
 
     def __init__(self):
@@ -698,6 +700,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionPhotoBar.triggered.connect(self.CreatePhotoBarChart)
         self.actionPhotoAccumulation.triggered.connect(self.CreatePhotoAccumulationChart)
         self.actionCumulativePhotos.triggered.connect(self.CreateCumulativePhotosChart)
+        self.actionRecordingsGallery.triggered.connect(self.createRecordingsSpeciesGallery)
         self.actionRecordingsSpeciesGallery.triggered.connect(self.createRecordingsBySpeciesBarChart)
         self.actionGeolocatedRecordings.triggered.connect(self.createGeolocatedRecordingsMap)
         self.actionAnimatedRecordingSequenceMap.triggered.connect(self.createAnimatedRecordingSequenceMap)
@@ -1961,22 +1964,31 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         updated catalog handles insert, edit, and removal uniformly and keeps
         the current sort.  Single-recording windows (launched from Find) carry
         a synthetic one-file filter and must not be re-broadened, so skip them;
-        windows never filled (filter still the empty tuple) are skipped too."""
-        for w in self.mdiArea.subWindowList():
+        windows never filled (filter still the empty tuple) are skipped too.
+
+        FillRecordings returns False when the re-query is now empty WITHOUT
+        clearing the window's stale content (its early-out on no results), so
+        close the window in that case — otherwise an edit that emptied the
+        filter (e.g. a recording reassigned to another species) would leave the
+        old cards on screen."""
+        for w in list(self.mdiArea.subWindowList()):
             if (isinstance(w, code_Recordings.Recordings)
                     and not getattr(w, "_singleMode", False)
                     and w.filter):
-                w.FillRecordings(w.filter)
+                if w.FillRecordings(w.filter) is False:
+                    w.close()
 
 
     def refreshOpenPhotos(self):
         """Photos counterpart to refreshOpenRecordings, run after a Manage
-        Photos save.  See that method for the skip rationale."""
-        for w in self.mdiArea.subWindowList():
+        Photos save.  See that method for the skip rationale (including closing
+        a window whose re-query is now empty)."""
+        for w in list(self.mdiArea.subWindowList()):
             if (isinstance(w, code_Photos.Photos)
                     and not getattr(w, "_singleMode", False)
                     and w.filter):
-                w.FillPhotos(w.filter)
+                if w.FillPhotos(w.filter) is False:
+                    w.close()
 
 
     def createPreferences(self):
@@ -2058,6 +2070,23 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
         filter = self.GetPhotoFilter()
         sub = code_SpeciesGallery.SpeciesGallery()
+        sub.mdiParent = self
+        self.mdiArea.addSubWindow(sub)
+        self.PositionChildWindow(sub, self)
+        sub.show()
+
+        if sub.FillGallery(filter) is False:
+            sub.close()
+            self.CreateMessageNoResults()
+
+
+    def createRecordingsSpeciesGallery(self):
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+
+        filter = self.GetRecordingsFilter()
+        sub = code_RecordingsSpeciesGallery.RecordingsSpeciesGallery()
         sub.mdiParent = self
         self.mdiArea.addSubWindow(sub)
         self.PositionChildWindow(sub, self)
@@ -3373,6 +3402,21 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         # get the current filter settings in a list to pass to child
         filter = self.GetGeneralFilter()
         if filter is None:
+            return
+
+        # If a single species is selected in the Sighting Filter, the resulting
+        # Species list would show only that one species. Show the more useful
+        # Individual window for that species instead.
+        if filter.getSpeciesName() != "":
+            sub = code_Individual.Individual()
+            sub.mdiParent = self
+            sub.FillIndividual(filter.getSpeciesName())
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+            QApplication.processEvents()
+            sub.scaleMe()
+            sub.resizeMe()
             return
 
         # create child window
@@ -5012,38 +5056,37 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                            
                                       
     def updateEXIFDataForAllPhotos(self):
-                
-        # get all sightings with photos
-        
-        filter = code_Filter.Filter()
+
+        # Respect the current Sighting Filter and Photo (Media) Filter so the
+        # user can refresh EXIF data for just a subset of photos. The recording
+        # side of the media filter is irrelevant here, so clear it to avoid the
+        # media-conflict prompt in GetGeneralFilter.
+        filter = self.GetFilter()
+        filter.clearRecordingFilter()
+
+        # get the filtered sightings with photos
         sightings = self.db.GetSightingsWithPhotos(filter)
-        
-        # find total count of photos in db
-        photoCount = 0
+
+        # loop through the filtered photos, and refresh each photo's EXIF data
+        updated = 0
+        skipped = 0
         for s in sightings:
-            for p in s["photos"]:
-                photoCount += 1
-                
-        # clear pdb's photo list metadata
-        self.db.cameraList = []
-        self.db.lensList = []
-        self.db.apertureList = []
-        self.db.shutterSpeedList = []
-        self.db.isoList = []
-        self.db.focalLengthList = []
-        
-        # loop through photos, and update each photos EXIF data
-        # after each photo, update the db's photo list metadata
-        for s in sightings:
-            pCount = 0
-            for p in s["photos"]:
+            for pCount, p in enumerate(s["photos"]):
+                # skip files no longer on disk so we don't wipe good EXIF data
+                if not os.path.isfile(p["fileName"]):
+                    skipped += 1
+                    continue
                 photoData = self.db.getPhotoData(p["fileName"])
-                # save the rating for the photo 
+                # preserve the user's rating and notes (getPhotoData blanks them)
                 photoData["rating"] = p["rating"]
+                photoData["notes"] = p.get("notes", "")
                 s["photos"][pCount] = photoData
-                self.db.addPhotoDataToDb(photoData)
-                pCount += 1
-        
+                updated += 1
+
+        # rebuild the photo (and recording) filter metadata lists from the full
+        # catalog so values for photos outside this subset are retained
+        self.db.refreshPhotoLists()
+
         # clear and repopulate photo filter cbo boxes with updated data
         self.fillPhotoComboBoxes()
 
@@ -5052,15 +5095,22 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.db.photosNeedSaving = True
         self.checkIfPhotoDataNeedSaving()
 
+        msg = f"EXIF data updated for {updated} attached photo(s)."
+        if skipped:
+            msg += f"\n\n{skipped} file(s) were not found on disk and were not updated."
         QMessageBox.information(
-            self, "Updated EXIF Data",
-            "EXIF data updated for all attached photos.",
-            QMessageBox.StandardButton.Ok,
+            self, "Updated EXIF Data", msg, QMessageBox.StandardButton.Ok,
         )
         
         
     def updateRecordingDataForAll(self):
-        filter = code_Filter.Filter()
+        # Respect the current Sighting Filter and Recording (Media) Filter so the
+        # user can refresh just a subset of recordings. The photo side of the
+        # media filter is irrelevant here, so clear it to avoid the media-conflict
+        # prompt in GetGeneralFilter.
+        filter = self.GetFilter()
+        filter.clearPhotoFilter()
+
         sightings = self.db.GetSightingsWithRecordings(filter)
 
         updated = 0
@@ -5072,7 +5122,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                     skipped += 1
                     continue
                 fresh = self.db.getRecordingData(fn)
+                # preserve the user's rating and notes (getRecordingData blanks them)
                 fresh["rating"] = a.get("rating", "0")
+                fresh["notes"] = a.get("notes", "")
                 s["audio"][i] = fresh
                 updated += 1
 

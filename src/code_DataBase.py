@@ -3933,11 +3933,16 @@ class DataBase():
         self.bitDepthList = []
         self.deviceList = []
 
-        # remove photo data from sightings
+        # remove photo AND recording data from sightings — the media catalog
+        # holds both, so closing it must clear both.  (Leaving "audio" behind
+        # made closed-catalog recordings still count as "already in the catalog"
+        # on the next Add Recordings, and kept the Recordings menu visible.)
         for s in self.sightingList:
             if "photos" in s:
                 del s["photos"]
-                
+            if "audio" in s:
+                del s["audio"]
+
         self.photoDataFileOpenFlag = False
         
 
