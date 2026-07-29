@@ -833,8 +833,10 @@
 <h3>Updating EXIF data</h3>
 <p>If you have moved or re-exported your photo files, choose <strong>File → Refresh camera data from photos</strong>. Yearbirder re-reads the EXIF metadata from every file referenced in the catalog and updates its records. This is also useful after photo editing software writes new EXIF tags.</p>
 
-<h3>Cleaning up missing references</h3>
-<p>If photos have been moved or deleted from your hard drive, Yearbirder may show broken references. Use <strong>File → Compact media catalog…</strong> to scan for and remove any associations pointing to files that no longer exist.</p>
+<h3>Cleaning up missing references and unused cache</h3>
+<p>If photos or recordings have been moved or deleted from your hard drive, Yearbirder may show broken references. Use <strong>File → Compact catalog and cache…</strong> to scan for and remove any associations pointing to files that no longer exist.</p>
+<p>The same command also clears unused images from Yearbirder's on-disk <strong>cache</strong> — the thumbnails and spectrograms it renders once and reuses so media appears instantly. Any cached image that no longer matches a file in the currently open catalog is deleted, reclaiming disk space left behind by media you have removed. Your original photo and recording files are never touched; only Yearbirder's preview images are affected, and any that are still needed are re-created automatically the next time you view that media.</p>
+<p>Because the cache is shared across catalogs, running this command while one catalog is open will also clear cached images belonging to a <em>different</em> catalog. This is harmless — nothing is lost — but the other catalog's photos and recordings may take a moment to re-cache the first time you browse them after switching back to it.</p>
 
 <h3>What the media catalog contains</h3>
 <p>The catalog stores one record per photo, including:</p>

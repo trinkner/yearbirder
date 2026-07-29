@@ -307,7 +307,7 @@ class _OptimizePhotoSettingsDialog(QDialog):
         self.db = db
         self.missing = []
 
-        self.setWindowTitle("Compact Media Catalog")
+        self.setWindowTitle("Compact Catalog and Cache")
         self.setMinimumWidth(520)
         self.setModal(True)
 
@@ -399,11 +399,17 @@ class _OptimizePhotoSettingsDialog(QDialog):
             f"catalog could not be read and will be dropped on compaction."
         ) if skipped > 0 else ""
 
+        cache_note = (
+            "\n\nUnused cached images (thumbnails and spectrograms not matching "
+            "this catalog) will also be cleared from disk."
+        )
+
         if not self.missing:
             self._statusLabel.setText(
                 "Good news! Files exist on disk for all media files in the catalog."
                 + skipped_note
-                + "\n\nCompact the media catalog?\n"
+                + cache_note
+                + "\n\nCompact the catalog and cache?\n"
             )
             btn_box = QDialogButtonBox()
             btn_box.addButton("Compact", QDialogButtonBox.ButtonRole.AcceptRole)
@@ -411,6 +417,7 @@ class _OptimizePhotoSettingsDialog(QDialog):
             btn_box.accepted.connect(self.accept)
             btn_box.rejected.connect(self.reject)
             self._layout.addWidget(btn_box)
+            self.adjustSize()
             return
 
         n_photos = sum(1 for m in self.missing if m["kind"] == "photo")
@@ -432,6 +439,7 @@ class _OptimizePhotoSettingsDialog(QDialog):
             summary + skipped_note + "\n\n"
             "These entries will be removed from the media catalog "
             "and the file will be compacted. This cannot be undone."
+            + cache_note
         )
 
         for m in self.missing:
@@ -1386,7 +1394,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 f"{n} line{'s' if n != 1 else ''} in the media catalog could not "
                 f"be read and {'were' if n != 1 else 'was'} skipped.\n\n"
                 "The file may be partially corrupted. Consider running "
-                "File \u2192 Optimize media catalog\u2026 to compact and repair it.",
+                "File \u2192 Compact catalog and cache\u2026 to compact and repair it.",
                 QMessageBox.StandardButton.Ok,
             )
 
@@ -1955,6 +1963,37 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         for w in self.mdiArea.subWindowList():
             if hasattr(w, "_mediaRebuildName"):
                 code_MediaRefresh.maybeRefresh(w)
+
+
+    def evictMediaCacheIfUnreferenced(self, fileName):
+        """Delete a media file's on-disk cache (thumbnail/spectrograms) once no
+        sighting references it any more, so removing media from the catalog
+        reclaims its cache.  Must be called while the file still exists on disk —
+        the cache key derives from its path+mtime+size — so a permanent delete
+        must call this BEFORE unlinking the file."""
+        if not self.db.isMediaFileReferenced(fileName):
+            code_ThumbnailCache.evict(fileName)
+
+
+    def _liveCatalogMedia(self):
+        """(source_path, kinds) for every distinct media file in the open catalog:
+        photos carry the 'photo' cache kind, recordings the three spectro_* kinds.
+        Feeds code_ThumbnailCache.prune_to_catalog to sweep orphaned cache files."""
+        _REC_KINDS = ["spectro_thumb", "spectro_overview", "spectro_ribbon"]
+        media = []
+        seen = set()
+        for s in self.db.sightingList:
+            for p in s.get("photos", []):
+                fn = p.get("fileName", "")
+                if fn and fn not in seen:
+                    seen.add(fn)
+                    media.append((fn, ["photo"]))
+            for a in s.get("audio", []):
+                fn = a.get("fileName", "")
+                if fn and fn not in seen:
+                    seen.add(fn)
+                    media.append((fn, _REC_KINDS))
+        return media
 
 
     def refreshOpenRecordings(self):
@@ -2642,6 +2681,13 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
         MainWindow.db.compactJsonlFile()
 
+        # Sweep the on-disk cache: delete every cached thumbnail/spectrogram that
+        # does not correspond to a media file in the now-compacted catalog. This
+        # reclaims cache for files removed above and any earlier orphans. The
+        # cache is shared across catalogs, so another catalog's media re-caches
+        # on next view (no data or files are lost).
+        cache_removed = code_ThumbnailCache.prune_to_catalog(self._liveCatalogMedia())
+
         n_photos = sum(1 for m in missing if m["kind"] == "photo")
         n_recordings  = sum(1 for m in missing if m["kind"] == "recording")
         if not missing:
@@ -2653,9 +2699,12 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             if n_recordings:
                 parts.append(f"{n_recordings} missing recordings {'entries' if n_recordings != 1 else 'entry'}")
             msg = f"Removed {' and '.join(parts)} and compacted the media catalog."
+        if cache_removed:
+            msg += (f"\n\nReclaimed {cache_removed} cached "
+                    f"{'image' if cache_removed == 1 else 'images'} from disk.")
         QMessageBox.information(
             self,
-            "Optimize Complete",
+            "Compact Complete",
             msg,
             QMessageBox.StandardButton.Ok,
         )

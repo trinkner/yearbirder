@@ -80,7 +80,7 @@ class Ui_frmManagePhotos(object):
     def retranslateUi(self, frmManagePhotos):
         _translate = QtCore.QCoreApplication.translate
         frmManagePhotos.setWindowTitle(_translate("frmManagePhotos", "Manage Photos"))
-        self.btnSavePhotoSettings.setText(_translate("frmManagePhotos", "OK"))
+        self.btnSavePhotoSettings.setText(_translate("frmManagePhotos", "Save"))
         self.btnCancel.setText(_translate("frmManagePhotos", "Cancel"))
         self.actionSetDateFilter.setText(_translate("frmManagePhotos", "Set Filter to Date"))
         self.actionSetLocationFilter.setText(_translate("frmManagePhotos", "Set Filter to Location"))

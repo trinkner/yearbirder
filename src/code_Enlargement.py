@@ -703,6 +703,9 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
                 QMessageBox.warning(self, "Settings File Error",
                     f"Photo removed from memory but could not be recorded in the media catalog:\n{exc}")
 
+            # free the photo's on-disk cache now that it's out of the catalog
+            self.mdiParent.mdiParent.evictMediaCacheIfUnreferenced(currentPhoto)
+
             # remove photo from current window's photo list
             self.photoList.remove(self.photoList[self.currentIndex])
 
@@ -748,6 +751,10 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
                 f"Photo removed from memory but could not be recorded in the media catalog:\n{exc}")
 
         self.mdiParent.mdiParent.db.photosNeedSaving = True
+
+        # Evict the on-disk cache while the file still exists (the cache key needs
+        # its mtime/size), before unlinking it below.
+        self.mdiParent.mdiParent.evictMediaCacheIfUnreferenced(currentPhoto)
 
         if os.path.isfile(currentPhoto):
             try:

@@ -1244,6 +1244,9 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
 
         # Collect files successfully added so their spectrograms can be cached.
         added_recording_files = set()
+        # Files stripped from the catalog this save; those not re-added get their
+        # on-disk cache evicted below.
+        removed_recording_files = set()
 
         # Iterate the metadata dict directly (not layout row counts)
         for r in sorted(self.metaDataByRow):
@@ -1263,6 +1266,7 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
                 if changed:
                     audio_filename = meta["recordingData"]["fileName"]
                     self.mdiParent.db.removeRecordingFileFromDatabase(audio_filename)
+                    removed_recording_files.add(audio_filename)
                     try:
                         self.mdiParent.db.appendRecordingDeletionToJsonl(audio_filename)
                     except IOError:
@@ -1307,11 +1311,16 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
                                 QMessageBox.warning(self, "Catalog File Error",
                                     f"Recording saved in memory but could not be written to catalog:\n{exc}")
 
-        # Cache the spectrogram thumbnail + enlargement ribbon for the added
-        # recordings in the background (skips ones already cached) so every
+        # Cache the spectrogram thumbnail + enlargement ribbon + overview for the
+        # added recordings in the background (skips ones already cached) so every
         # catalogued recording exists in the cache.
         if added_recording_files:
             code_ThumbnailCache.prebuild_async(recording_paths=added_recording_files)
+
+        # Evict on-disk cache for recordings dropped from the catalog and not
+        # re-added (a metadata edit removes then re-adds, so those stay cached).
+        for fn in removed_recording_files:
+            self.mdiParent.evictMediaCacheIfUnreferenced(fn)
 
         # Rebuild the Media Filter's recording options so any new sample rate or
         # bit depth introduced by the saved recordings appears immediately (this

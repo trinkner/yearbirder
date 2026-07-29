@@ -58,7 +58,7 @@ class Ui_frmManageRecordings(object):
     def retranslateUi(self, frmManageRecordings):
         _translate = QtCore.QCoreApplication.translate
         frmManageRecordings.setWindowTitle(_translate("frmManageRecordings", "Add Recordings"))
-        self.btnSaveAudioSettings.setText(_translate("frmManageRecordings", "OK"))
+        self.btnSaveAudioSettings.setText(_translate("frmManageRecordings", "Save"))
         self.btnCancel.setText(_translate("frmManageRecordings", "Cancel"))
 
 

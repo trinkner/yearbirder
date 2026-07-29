@@ -1168,8 +1168,8 @@ class Ui_MainWindow(object):
         self.menuFile.addAction(self.actionManageRecordings)
         self.menuFile.addAction(self.actionUpdateRecordingData)
         self.menuFileRecordingsSeparator = self.menuFile.addSeparator()
-        # Media-wide entries (actionOptimizePhotoSettings == "Compact media
-        # catalog"; Rebuild thumbnail cache is inserted here at runtime)
+        # Media-wide entries (actionOptimizePhotoSettings == "Compact catalog and
+        # cache"; Rebuild thumbnail cache is inserted here at runtime)
         self.menuFile.addAction(self.actionRenameMedia)
         self.menuFile.addAction(self.actionOptimizePhotoSettings)
         self.menuFileMediaSeparator = self.menuFile.addSeparator()
@@ -1537,7 +1537,7 @@ class Ui_MainWindow(object):
         self.actionUpdateEXIFDataForAllPhotos.setText(_translate("MainWindow", "Refresh camera data from photos"))
         self.actionUpdateRecordingData.setText(_translate("MainWindow", "Refresh recording data from files"))
         self.actionRenameMedia.setText(_translate("MainWindow", "Rename media files..."))
-        self.actionOptimizePhotoSettings.setText(_translate("MainWindow", "Compact media catalog..."))
+        self.actionOptimizePhotoSettings.setText(_translate("MainWindow", "Compact catalog and cache..."))
         self.actionShowMediaFilter.setText(_translate("MainWindow", "Show media filter"))
         self.actionHideMediaFilter.setText(_translate("MainWindow", "Hide media filter"))
         self.actionClearMediaFilter.setText(_translate("MainWindow", "Clear media filter"))

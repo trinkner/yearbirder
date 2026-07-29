@@ -1028,6 +1028,9 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
 
         # Collect files successfully added so their thumbnails can be cached.
         added_photo_files = set()
+        # Photos stripped from the catalog this save; those not re-added get their
+        # on-disk cache evicted below.
+        removed_photo_files = set()
 
         # call database function to remove modified photos from db.
         # Iterate the metadata dict (not layout row counts): rows deleted via
@@ -1061,6 +1064,7 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
                         self.metaDataByRow[r]["time"],
                         self.metaDataByRow[r]["commonName"],
                         self.metaDataByRow[r]["photoData"]["fileName"])
+                    removed_photo_files.add(self.metaDataByRow[r]["photoData"]["fileName"])
                 
                 # check whether we're not removing this photo from db
                 # set flag to True, and then set it to False if non-write conditions exist
@@ -1136,6 +1140,11 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         # catalogued photo exists in the cache (skips ones already cached).
         if added_photo_files:
             code_ThumbnailCache.prebuild_async(photo_paths=added_photo_files)
+
+        # Evict on-disk cache for photos dropped from the catalog and not re-added
+        # (a metadata edit removes then re-adds, so those stay cached).
+        for fn in removed_photo_files:
+            self.mdiParent.evictMediaCacheIfUnreferenced(fn)
 
         if self.photosAlreadyInDb is False:
 

@@ -1495,6 +1495,20 @@ class DataBase():
                 if not s["audio"]:
                     del s["audio"]
 
+    def isMediaFileReferenced(self, fileName):
+        """True if any sighting still references this media file, as a photo or a
+        recording.  Used after a catalog removal to decide whether the file's
+        on-disk cache can be evicted (a recording may remain assigned to other
+        species; an edited file is removed then re-added, so it stays referenced)."""
+        for s in self.sightingList:
+            for p in s.get("photos", []):
+                if p.get("fileName") == fileName:
+                    return True
+            for a in s.get("audio", []):
+                if a.get("fileName") == fileName:
+                    return True
+        return False
+
     def getSpeciesForRecordingFile(self, audioFileName):
         """Sorted unique common names of every species this file is assigned to."""
         species = set()

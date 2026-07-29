@@ -62,6 +62,27 @@ def build_ribbon_cache(wav_path):
                               variant=_RIBBON_VARIANT)
     return True
 
+
+def build_overview_cache(wav_path):
+    """Render and persist the compact full-file overview strip (spectro_overview).
+
+    Off-GUI-thread safe (QImage only) — mirrors build_ribbon_cache but for the
+    small, label-less overview panel the enlargement shows above the ribbon.
+    Renders the full clip at the full frequency range with the same parameters
+    as the live _renderOverview path, so a later open is an exact cache hit.
+    True on success.
+    """
+    data, fs, n_frames = _load_audio_data(wav_path)
+    if data is None or not fs:
+        return False
+    duration = n_frames / fs if fs else 0.0
+    img, _bbox = _render_slice_qimage(
+        data, fs, 0.0, duration, compact=True, freq_max=fs // 2)
+    if img is None or img.isNull():
+        return False
+    code_ThumbnailCache.store(wav_path, img, "spectro_overview")
+    return True
+
 import datetime
 import gc
 import math
@@ -2399,6 +2420,9 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
             QMessageBox.warning(self, "Settings File Error",
                 f"Recording removed from memory but could not be recorded in the catalog:\n{exc}")
 
+        # Free the on-disk cache if the file is no longer assigned to any species.
+        self.mdiParent.evictMediaCacheIfUnreferenced(self._wavPath)
+
         db.photosNeedSaving = True
         self._audioRecord = None
         self.mdiParent.notifyAudioDeletion(self._wavPath, removeSpecies)
@@ -2430,6 +2454,10 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
                 f"Recording removed from memory but could not be recorded in the catalog:\n{exc}")
 
         db.photosNeedSaving = True
+
+        # Evict the on-disk cache while the file still exists (the cache key needs
+        # its mtime/size), before unlinking it below.
+        self.mdiParent.evictMediaCacheIfUnreferenced(self._wavPath)
 
         if os.path.isfile(self._wavPath):
             try:
