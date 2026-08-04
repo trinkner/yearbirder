@@ -429,14 +429,12 @@ class Filter():
         self.device = ""
 
 
-    def buildWindowTitle(self, prefix, db, count=None, countUnit=""):
-        """Return a descriptive MDI child window title for this filter.
-
-        Taxonomy: shows only the most specific level set — species, then family,
-        then order.  Location: shows only the single active level (the filter
-        only ever carries one at a time).  An optional count and unit label are
-        appended in parentheses, e.g. "(42 Species)".
-        """
+    def describeScope(self, db):
+        """Return a human-readable summary of this filter's sighting scope —
+        taxonomy (most specific level set), location (its single active level),
+        date range, and seasonal range, joined with "; ".  Returns
+        "All species, locations, and dates" when nothing is set.  Shared by
+        buildWindowTitle and the media-refresh confirmations."""
         locationName       = self.getLocationName()
         locationType       = self.getLocationType()
         startDate          = self.getStartDate()
@@ -494,6 +492,17 @@ class Filter():
         if windowTitle[0:2] == "; ":
             windowTitle = windowTitle[2:]
 
+        return windowTitle
+
+    def buildWindowTitle(self, prefix, db, count=None, countUnit=""):
+        """Return a descriptive MDI child window title for this filter.
+
+        Taxonomy: shows only the most specific level set — species, then family,
+        then order.  Location: shows only the single active level (the filter
+        only ever carries one at a time).  An optional count and unit label are
+        appended in parentheses, e.g. "(42 Species)".
+        """
+        windowTitle = self.describeScope(db)
         countSuffix = " (" + str(count) + (" " + countUnit if countUnit else "") + ")" if count is not None else ""
         return prefix + ": " + windowTitle + countSuffix
 

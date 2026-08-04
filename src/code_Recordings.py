@@ -204,6 +204,22 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
             self.close()
             return
         self._buildRows()
+        self._refreshCounts()
+
+    def _refreshCounts(self):
+        """Re-derive the header line and window title from audioList.  Cards
+        removed in place (handleAudioDeletion) never re-run FillRecordings, which
+        is what normally sets these — without this the counts keep reporting the
+        recordings that were removed.  Counts unique files, not cards, exactly as
+        FillRecordings does: one WAV tagged to several species is one recording."""
+        species = {s["commonName"] for (_, s) in self.audioList}
+        audioCount = len({a.get("fileName") for (a, _) in self.audioList})
+        self.lblSpecies.setText(
+            "Species: " + str(len(species)) + ".  Recordings: " + str(audioCount))
+        if self.filter:
+            self.setWindowTitle(self.filter.buildWindowTitle(
+                "Recordings", self.mdiParent.db,
+                count=audioCount, countUnit="Recordings"))
 
     def handleRecordingRename(self, old_path, new_path):
         """A Rename Media operation moved a recording on disk.  The audio dicts

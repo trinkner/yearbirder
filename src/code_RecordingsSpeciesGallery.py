@@ -307,6 +307,7 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
         QApplication.processEvents()
 
         self._numCols = self._calcCols()
+        self._stopLoading()
         self._buildCells()
         self._fillGrid()
         self._startLoading()
@@ -317,6 +318,17 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
     # ------------------------------------------------------------------
 
     def _buildCells(self):
+        # Discard the previous fill's cells first.  _fillGrid only removes the
+        # widgets it is about to add, so leftovers would stay parented to the
+        # grid and keep showing species that are no longer in the gallery — and
+        # their click handlers hold indexes into the old item list.  FillGallery
+        # runs again on every media change (see code_MediaRefresh), so this is
+        # the normal path, not an edge case.
+        for _, _, frame in self._cells:
+            self.gridPhotos.removeWidget(frame)
+            frame.hide()          # removeWidget leaves it parented and visible
+            frame.setParent(None)
+            frame.deleteLater()
         self._cells = []
         for idx, (a, s) in enumerate(self._galleryItems):
             frame = QFrame()
@@ -366,6 +378,28 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
     # Thumbnail loading
     # ------------------------------------------------------------------
 
+    def _stopLoading(self):
+        """Quiesce the loader threads before a re-fill.  Results are addressed by
+        cell index, so a spectrogram still in flight from the previous fill would
+        land on whichever species now occupies that index.  Emptying the work
+        queue first bounds the wait to the one file each thread already holds."""
+        self._drainTimer.stop()
+        while not self.workQueue.empty():
+            try:
+                self.workQueue.get_nowait()
+                self.workQueue.task_done()
+            except queue.Empty:
+                break
+        for t in self.threads:
+            if t.isRunning():
+                t.wait(3000)
+        while not self.resultQueue.empty():
+            try:
+                self.resultQueue.get_nowait()
+            except queue.Empty:
+                break
+        self.threadsRemaining = 0
+
     def _startLoading(self):
         uncached = [
             (idx, a["fileName"])
@@ -411,7 +445,12 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
                 imgLbl.setPixmap(
                     pm.scaled(imgLbl.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
 
-        if self.threadsRemaining == 0 and self.resultQueue.empty():
+        # <= 0, not == 0: a sigFinished queued by a thread _stopLoading waited on
+        # is still delivered after the counter has been reset for the new fill,
+        # so it can go negative.  isRunning() is what actually decides.
+        if (self.threadsRemaining <= 0
+                and not any(t.isRunning() for t in self.threads)
+                and self.resultQueue.empty()):
             self._drainTimer.stop()
             code_ThumbnailCache.enforce_cap()   # keep the on-disk cache bounded
 
@@ -424,30 +463,41 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
     # ------------------------------------------------------------------
 
     def _cellClicked(self, idx, event):
-        import code_Recordings
-
+        if idx >= len(self._galleryItems):
+            return
         a, s = self._galleryItems[idx]
-        species_name = s["commonName"]
 
         species_filter = copy.deepcopy(self.filter)
-        species_filter.speciesName = species_name
+        species_filter.speciesName = s["commonName"]
         species_filter.speciesList = []
 
+        self._openRecordings(species_filter)
+
+    def _openRecordings(self, recordingFilter):
+        """Spawn a Browse Recordings window, pre-checking that it will have
+        content.  PositionChildWindow restores any maximized sibling, so adding a
+        subwindow and immediately removing it again flashes an empty child —
+        validate the query before touching the MDI area, as
+        MainWindow.createRecordings does."""
+        import code_Recordings
+
+        if not self.mdiParent.db.GetSightingsWithRecordings(recordingFilter):
+            self._noRecordingsMessage()
+            return
+
         sub = code_Recordings.Recordings()
         sub.mdiParent = self.mdiParent
         self.mdiParent.mdiArea.addSubWindow(sub)
         self.mdiParent.PositionChildWindow(sub, self)
         sub.show()
-        if sub.FillRecordings(species_filter) is False:
+        # Fallback: the filter passed sightings but no individual recording did.
+        if sub.FillRecordings(recordingFilter) is False:
             sub.close()
+            self._noRecordingsMessage()
+
+    def _noRecordingsMessage(self):
+        QMessageBox.information(self.mdiParent, "No Recordings",
+                                "No recordings match the current filter.")
 
     def showAllRecordings(self):
-        import code_Recordings
-        sub = code_Recordings.Recordings()
-        sub.mdiParent = self.mdiParent
-        self.mdiParent.mdiArea.addSubWindow(sub)
-        self.mdiParent.PositionChildWindow(sub, self)
-        sub.show()
-        if sub.FillRecordings(self.filter) is False:
-            self.mdiParent.CreateMessageNoResults()
-            sub.close()
+        self._openRecordings(self.filter)

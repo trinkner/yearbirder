@@ -1185,16 +1185,53 @@ class RenameMedia(QMdiSubWindow, form_RenameMedia.Ui_frmRenameMedia):
 
 
     def handlePhotoDeletion(self, filename):
+        self._removeMediaRow(filename, "photo")
+
+
+    def handleAudioDeletion(self, filename, species=None):
+        """A recording left the catalog — deleted, or removed from the catalog
+        for one species (species set) or all of them (species None).
+
+        Rows are one per recording FILE, so a species-scoped removal only retires
+        the row once no species still references the file; until then the file is
+        still catalogued and still renameable."""
+        if species is not None:
+            for row in self._rows:
+                if (row["mediaType"] == "recording"
+                        and row["recording"].get("fileName") == filename):
+                    row["sightings"] = [s for s in row["sightings"]
+                                        if s.get("commonName", "") != species]
+                    if row["sightings"]:
+                        return          # still assigned to another species
+                    break
+        self._removeMediaRow(filename, "recording")
+
+
+    def _removeMediaRow(self, filename, mediaType):
+        """Drop the table row and backing record for a file that has left the
+        catalog, so a later rename can't act on media Yearbirder no longer
+        tracks.  Recording rows hold their media dict under "recording" (photos
+        under "photo") — the pruning here previously read an "audio" key that
+        neither row type has, so recording rows were never removed."""
+        key = "recording" if mediaType == "recording" else "photo"
+        target = unicodedata.normalize("NFC", filename or "")
+
         for r in range(self.tblPhotos.rowCount()):
             item = self.tblPhotos.item(r, _COL_CURRENT)
-            if item and item.data(Qt.UserRole) == filename:
+            if item and unicodedata.normalize(
+                    "NFC", item.data(Qt.UserRole) or "") == target:
                 self.tblPhotos.removeRow(r)
-                self._rows = [
-                    row for row in self._rows
-                    if (row.get("audio", row.get("photo", {})).get("fileName")
-                        != filename)
-                ]
                 break
+
+        self._rows = [
+            row for row in self._rows
+            if not (row["mediaType"] == mediaType
+                    and unicodedata.normalize(
+                        "NFC", row.get(key, {}).get("fileName") or "") == target)
+        ]
+        # _rowByPath still holds the departed file; rebuild so lookups match the
+        # rows that remain.
+        self._rebuildRowIndex()
 
 
     def resizeMe(self):

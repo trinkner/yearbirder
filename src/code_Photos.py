@@ -778,6 +778,22 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
         self._photoButtons = new_buttons
         self._rowWidgets = new_rows
 
+        self._refreshCounts()
+
+
+    def _refreshCounts(self):
+        """Re-derive the header line and window title from photoList.  Rows
+        removed in place (handlePhotoDeletion) never re-run FillPhotos, which is
+        what normally sets these — without this the counts keep reporting the
+        photos that were removed."""
+        species = {s["commonName"] for (_, s) in self.photoList}
+        self.lblSpecies.setText(
+            "Species: " + str(len(species)) + ". Photos: " + str(len(self.photoList)))
+        if self.filter:
+            self.setWindowTitle(self.filter.buildWindowTitle(
+                "Photos", self.mdiParent.db,
+                count=len(self.photoList), countUnit="Photos"))
+
 
     def showEnlargement(self, row):
 

@@ -482,8 +482,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
     fontSize = 11
     scaleFactor = 1
     rowHeight = 16  # default; recomputed in ScaleDisplay() and __init__
-    versionNumber = "2.07"
-    versionDate = "July 27, 2026"
+    versionNumber = "2.08"
+    versionDate = "August 4, 2026"
     taxonomyYear = ""
 
     def __init__(self):
@@ -1357,6 +1357,16 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.cboSeasonalRangeOptions.setCurrentIndex(0)
         self.txtCommonNameSearch.setText("")
 
+        # Drop keyboard focus from whichever filter widget the user last touched,
+        # so the blue :focus border (e.g. around Date Options) doesn't linger on a
+        # now-cleared control.
+        for w in (self.cboRegions, self.cboCountries, self.cboStates,
+                  self.cboCounties, self.cboLocations, self.cboOrders,
+                  self.cboFamilies, self.cboSpecies, self.cboDateOptions,
+                  self.cboYear, self.cboSeasonalRangeOptions,
+                  self.calStartDate, self.calEndDate, self.txtCommonNameSearch):
+            w.clearFocus()
+
 
     def clearMediaFilter(self):
         self.cboStartRatingRange.setCurrentIndex(0)
@@ -1940,19 +1950,42 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         msg.exec()        
         
 
-    def notifyPhotoDeletion(self, filename):
-        for w in self.mdiArea.subWindowList():
-            if hasattr(w, 'handlePhotoDeletion'):
-                w.handlePhotoDeletion(filename)
+    def broadcastMediaRemovals(self, photoFiles=(), audioRemovals=(), exclude=None):
+        """Deliver catalog departures to every open window, WITHOUT the report
+        refresh — the single delivery path behind notifyPhotoDeletion /
+        notifyAudioDeletion and a Manage save, which departs many files at once
+        and fires notifyMediaChanged itself, once, at the end.
+
+        audioRemovals items are (filename, species): species None means the file
+        is gone for every species; a species means only that assignment went.
+        exclude skips one window that has already handled the removal itself —
+        an Enlargement in full screen is detached from the MDI area (see
+        toggleFullScreen), so it isn't in subWindowList() and must drive its own
+        list; passing itself here keeps that from happening twice when it IS
+        attached.  The window list is re-read per file because handling one
+        removal can close a window."""
+        for fn in photoFiles:
+            for w in self.mdiArea.subWindowList():
+                if w is not exclude and hasattr(w, 'handlePhotoDeletion'):
+                    w.handlePhotoDeletion(fn)
+        for fn, species in audioRemovals:
+            for w in self.mdiArea.subWindowList():
+                if w is not exclude and hasattr(w, 'handleAudioDeletion'):
+                    w.handleAudioDeletion(fn, species)
+
+    def notifyPhotoDeletion(self, filename, exclude=None):
+        """A photo left the catalog — deleted from disk, or removed from the
+        catalog only.  Both have the same consequence for every open window, so
+        both fire this."""
+        self.broadcastMediaRemovals(photoFiles=(filename,), exclude=exclude)
         self.notifyMediaChanged()
 
-    def notifyAudioDeletion(self, filename, species=None):
+    def notifyAudioDeletion(self, filename, species=None, exclude=None):
         """species=None: the file is gone for every species.  With a species,
         only that species' assignment was removed — other cards for the same
         file must survive."""
-        for w in self.mdiArea.subWindowList():
-            if hasattr(w, 'handleAudioDeletion'):
-                w.handleAudioDeletion(filename, species)
+        self.broadcastMediaRemovals(audioRemovals=((filename, species),),
+                                    exclude=exclude)
         self.notifyMediaChanged()
 
     def notifyMediaChanged(self):
@@ -5144,7 +5177,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.db.photosNeedSaving = True
         self.checkIfPhotoDataNeedSaving()
 
-        msg = f"EXIF data updated for {updated} attached photo(s)."
+        msg = (f"EXIF data updated for {updated} attached photo(s)."
+               f"\n\nFilter: {filter.describeScope(self.db)}")
         if skipped:
             msg += f"\n\n{skipped} file(s) were not found on disk and were not updated."
         QMessageBox.information(
@@ -5184,7 +5218,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.checkIfPhotoDataNeedSaving()
         self.notifyMediaChanged()
 
-        msg = f"Updated recording data for {updated} recording(s)."
+        msg = (f"Updated recording data for {updated} recording(s)."
+               f"\n\nFilter: {filter.describeScope(self.db)}")
         if skipped:
             msg += f"\n\n{skipped} file(s) were not found on disk and were not updated."
         QMessageBox.information(
@@ -6217,9 +6252,12 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             startRating = self.cboStartRatingRange.currentIndex()
             endRating = self.cboEndRatingRange.currentIndex()
             
-            if startRating > endRating:
-                self.cboStartRatingRange.setCurrentIndex(endRating)            
-            
+            if endRating != 0 and startRating == 0:
+                # Upper limit set with no lower limit: default the lower limit to "0"
+                self.cboStartRatingRange.setCurrentIndex(2)
+            elif startRating > endRating:
+                self.cboStartRatingRange.setCurrentIndex(endRating)
+
             if thisSighting == "All":
                 self.unhighlightFilterElement(self.cboEndRatingRange)
             else:
@@ -6352,7 +6390,10 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
     def ComboEndRecordingsRatingRangeChanged(self):
         startRating = self.cboStartRecordingsRatingRange.currentIndex()
         endRating   = self.cboEndRecordingsRatingRange.currentIndex()
-        if startRating > endRating:
+        if endRating != 0 and startRating == 0:
+            # Upper limit set with no lower limit: default the lower limit to "0"
+            self.cboStartRecordingsRatingRange.setCurrentIndex(2)
+        elif startRating > endRating:
             self.cboStartRecordingsRatingRange.setCurrentIndex(endRating)
         if self.cboEndRecordingsRatingRange.currentText() == "All":
             self.unhighlightFilterElement(self.cboEndRecordingsRatingRange)

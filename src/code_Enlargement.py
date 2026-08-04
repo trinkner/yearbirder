@@ -5,8 +5,6 @@ import code_NotesDialog
 import datetime
 import ntpath
 
-from shiboken6 import isValid
-
 import os
 from math import floor
 
@@ -92,9 +90,20 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
             self.mdiParent = ""
             
             
-        def wheelEvent(self,event):        
+        def wheelEvent(self,event):
             adj = 1 + event.angleDelta().y()/120 * 0.1
             self.scale(adj, adj)
+
+
+        def mouseDoubleClickEvent(self, event):
+            # Double-click undoes wheel zooming, the same as F and the context
+            # menu's "Fit to window" — the zoom is right under the mouse, so the
+            # way back should be too.
+            if event.button() == Qt.LeftButton:
+                self.mdiParent.fitEnlargement()
+                event.accept()
+                return
+            super().mouseDoubleClickEvent(event)
 
 
         # we need a keepress event handler here in case the user clicks on the photo.
@@ -157,7 +166,7 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
             menu = QMenu(self)
             menu.setStyleSheet("color:silver; background-color: #343333;")
             
-            actionFitToWindow = menu.addAction("Fit to window (F)")
+            actionFitToWindow = menu.addAction("Fit to window (F or double-click)")
             menu.addSeparator()
             actionShowNextPhoto = menu.addAction("Next photo (→)")
             actionShowPreviousPhoto = menu.addAction("Previous photo (←)")
@@ -254,6 +263,16 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
         self._crossfadeOverlay = None
         self._blendTimer = QTimer(self)
         self._blendTimer.timeout.connect(self._blendStep)
+
+        # A rating edit changes what open reports show — the Species Gallery
+        # picks the best-rated photo per species, and ratings are part of the
+        # media-scope signature — so it has to be broadcast.  Debounced: stepping
+        # through stars (or rating a run of photos) would otherwise re-run every
+        # open report's signature query on each keystroke.
+        self._ratingNotifyTimer = QTimer(self)
+        self._ratingNotifyTimer.setSingleShot(True)
+        self._ratingNotifyTimer.setInterval(400)
+        self._ratingNotifyTimer.timeout.connect(self._notifyRatingChanged)
 
         self.layout().setDirection(QBoxLayout.Direction.RightToLeft)
         self.layout().setContentsMargins(0, 0, 0, 0)
@@ -485,7 +504,23 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
         except IOError as exc:
             QMessageBox.warning(self, "Settings File Error",
                 f"Rating saved in memory but could not be written to the media catalog:\n{exc}")
+        self._ratingNotifyTimer.start()   # debounced broadcast; see __init__
         self.viewEnlargement.setFocus()
+
+
+    def _notifyRatingChanged(self):
+        mainWindow = getattr(self.mdiParent, "mdiParent", None)
+        if mainWindow is not None:
+            mainWindow.notifyMediaChanged()
+
+
+    def closeEvent(self, event):
+        # Flush a pending rating broadcast: the debounce timer is parented to
+        # this window, so closing within the debounce window would drop it.
+        if self._ratingNotifyTimer.isActive():
+            self._ratingNotifyTimer.stop()
+            self._notifyRatingChanged()
+        super().closeEvent(event)
 
 
     def _refreshNotesLabel(self):
@@ -706,30 +741,18 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
             # free the photo's on-disk cache now that it's out of the catalog
             self.mdiParent.mdiParent.evictMediaCacheIfUnreferenced(currentPhoto)
 
-            # remove photo from current window's photo list
-            self.photoList.remove(self.photoList[self.currentIndex])
-
-            # refresh display of parent photo list
-            if isValid(self.mdiParent):
-                self.mdiParent.FillPhotos(self.mdiParent.filter)
-
-            # advance display to next photo
-            if len(self.photoList) == 0:
-                self.close()
-                return
-
-            if self.currentIndex < len(self.photoList):
-                self.changeEnlargement()
-
-            else:
-                self.currentIndex -= 1
-                self.changeEnlargement()
-
             # set flag for requiring photo file save
             self.mdiParent.mdiParent.db.photosNeedSaving = True
 
-            # refresh any open reports whose scope includes this photo
-            self.mdiParent.mdiParent.notifyMediaChanged()
+            # Tell every open window the photo left the catalog, then drop it
+            # from this window's own list.  Removal from the catalog has exactly
+            # the same consequences for open windows as deleting the file, so it
+            # takes the same broadcast (see deleteFile) — refreshing only the
+            # parent Photos grid left every other window stale, and the grid
+            # itself stale whenever the re-query came back empty.  Ordered so
+            # this window handles itself last: it may close on the final photo.
+            self.mdiParent.mdiParent.notifyPhotoDeletion(currentPhoto, exclude=self)
+            self.handlePhotoDeletion(currentPhoto)
 
 
     def deleteFile(self):
@@ -762,7 +785,11 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
             except:
                 pass
 
-        self.mdiParent.mdiParent.notifyPhotoDeletion(currentPhoto)
+        # Same two-step as detachFile: broadcast to the others, then handle this
+        # window explicitly — in full screen it is detached from the MDI area and
+        # the broadcast can't reach it.
+        self.mdiParent.mdiParent.notifyPhotoDeletion(currentPhoto, exclude=self)
+        self.handlePhotoDeletion(currentPhoto)
 
 
     def handlePhotoDeletion(self, filename):

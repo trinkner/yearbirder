@@ -109,4 +109,10 @@ def maybeRefresh(window):
     name = getattr(window, "_mediaRebuildName", None)
     if not name:
         return
-    getattr(window, name)(*origArgs, **origKwargs)
+    # Every Fill method returns False for "nothing to show" and — by the same
+    # convention MainWindow relies on when it spawns these windows — leaves the
+    # window's existing content untouched when it does.  On a rebuild there is
+    # no spawn to abort, so the window itself must go; otherwise a change that
+    # emptied a report's scope leaves the old contents on screen for ever.
+    if getattr(window, name)(*origArgs, **origKwargs) is False:
+        window.close()

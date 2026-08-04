@@ -39,6 +39,7 @@ _AUTO_CONTRAST_INK_PCTILE = 15
 _AUTO_CONTRAST_SCALE = 0.75  # dial the full-strength default back 25% (less white)
 _AUTO_CONTRAST_MIN = 18      # clamp so the auto value never goes flat or extreme
 _AUTO_CONTRAST_MAX = 70
+_AUTO_CONTRAST_DEFAULT_OFFSET = 10  # nudge the default slider position left (less contrast)
 
 
 def build_ribbon_cache(wav_path):
@@ -1275,6 +1276,16 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
         self._debounce.setSingleShot(True)
         self._debounce.timeout.connect(self._triggerRibbonRender)
 
+        # A rating edit changes what open reports show — the Recordings Species
+        # Gallery picks the best-rated recording per species, and ratings are part
+        # of the media-scope signature — so it has to be broadcast.  Debounced:
+        # stepping through stars would otherwise re-run every open report's
+        # signature query on each keystroke.
+        self._ratingNotifyTimer = QTimer(self)
+        self._ratingNotifyTimer.setSingleShot(True)
+        self._ratingNotifyTimer.setInterval(400)
+        self._ratingNotifyTimer.timeout.connect(self._notifyRatingChanged)
+
         # Intercept arrow/page keys before any child widget (slider, button, etc.)
         # can consume them, so Left/Right/PageUp/PageDown always navigate recordings.
         _cw = self.widget()
@@ -1287,6 +1298,11 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
     # ------------------------------------------------------------------
 
     def closeEvent(self, event):
+        # Flush a pending rating broadcast: the debounce timer is parented to
+        # this window, so closing within the debounce window would drop it.
+        if self._ratingNotifyTimer.isActive():
+            self._ratingNotifyTimer.stop()
+            self._notifyRatingChanged()
         self._updateTimer.stop()
         self._cursorTimer.stop()
         self._debounce.stop()
@@ -1640,7 +1656,9 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
         # Full-strength value (capped), then dialed back for a less-white default.
         c = min(_AUTO_CONTRAST_MAX, 100.0 * (1.0 - i_white / 255.0))
         c *= _AUTO_CONTRAST_SCALE
-        return int(round(max(_AUTO_CONTRAST_MIN, min(_AUTO_CONTRAST_MAX, c))))
+        c = int(round(max(_AUTO_CONTRAST_MIN, min(_AUTO_CONTRAST_MAX, c))))
+        # Nudge the default a further 10% left (less contrast), keeping it on-slider.
+        return max(0, c - _AUTO_CONTRAST_DEFAULT_OFFSET)
 
     def _seedAutoContrast(self):
         """Set this file's initial contrast from the base ribbon (once, at open).
@@ -2152,6 +2170,13 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
             if key in (Qt.Key.Key_Left, Qt.Key.Key_PageUp):
                 self.showPreviousRecording()
                 return True
+            # Space always toggles play/pause, intercepted here (this filter is on
+            # every child widget) so a focused button/slider/combo can't consume it
+            # first.  The Notes popup is a separate modal dialog, not a child of the
+            # central widget, so it never reaches this filter.
+            if key == Qt.Key.Key_Space:
+                self._onPlayClicked()
+                return True
         return super().eventFilter(obj, event)
 
     def keyPressEvent(self, e):
@@ -2173,6 +2198,10 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
         if e.key() == Qt.Key.Key_Escape and self._fullScreen:
             # Esc exits full screen (only when currently in full screen).
             QTimer.singleShot(0, self.toggleFullScreen)
+        if e.key() == Qt.Key.Key_Space:
+            # Space toggles play/pause whenever the window itself holds focus
+            # (child-widget focus is handled by eventFilter).
+            self._onPlayClicked()
         if e.key() in (Qt.Key.Key_0, Qt.Key.Key_1, Qt.Key.Key_2,
                        Qt.Key.Key_3, Qt.Key.Key_4, Qt.Key.Key_5):
             rating_map = {
@@ -2272,6 +2301,13 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
         except IOError as exc:
             QMessageBox.warning(self, "Settings File Error",
                 f"Rating saved in memory but could not be written to the media catalog:\n{exc}")
+        self._ratingNotifyTimer.start()   # debounced broadcast; see __init__
+
+    def _notifyRatingChanged(self):
+        # mdiParent is "" until the window is filled (and is the MainWindow, not
+        # a browse window, for this enlargement — see Recordings.showEnlargement).
+        if hasattr(self.mdiParent, "notifyMediaChanged"):
+            self.mdiParent.notifyMediaChanged()
 
     # ------------------------------------------------------------------
     # Notes
@@ -2362,6 +2398,36 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
         elif action == actionDelete:
             self.deleteFile()
 
+    def handleAudioDeletion(self, filename, species=None):
+        """A recording left the catalog — deleted from disk, or removed from the
+        catalog for one species (species set) or all of them (species None).
+
+        Without this the window kept showing a card that is no longer in the
+        catalog: a WAV tagged to several species can be open in one enlargement
+        per species, and rating the survivor re-appends the record that the other
+        window just removed.  Prev/next was stale for the same reason — it skips
+        entries whose file is missing from disk, which a catalog removal (file
+        left in place) never triggers."""
+        def removed(fileName, sighting):
+            return (fileName == filename
+                    and (species is None
+                         or sighting.get("commonName", "") == species))
+
+        # The card on display is gone — close, exactly as a removal started from
+        # this window does (see detachFile / deleteFile).
+        if removed(self._wavPath, self._sighting or {}):
+            self.close()
+            return
+
+        kept = []
+        for i, (a, s) in enumerate(self._audioList):
+            if removed(a.get("fileName", ""), s):
+                if i < self._currentIdx:
+                    self._currentIdx -= 1   # keep the cursor on the same card
+            else:
+                kept.append((a, s))
+        self._audioList = kept
+
     def handleRecordingRename(self, old_path, new_path):
         """Track a Rename Media move of the displayed recording.  The already
         decoded player buffer keeps playing, but _wavPath drives Remove/Delete,
@@ -2425,7 +2491,9 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
 
         db.photosNeedSaving = True
         self._audioRecord = None
-        self.mdiParent.notifyAudioDeletion(self._wavPath, removeSpecies)
+        # exclude=self: this window closes itself below, and in full screen it is
+        # detached from the MDI area so the broadcast couldn't reach it anyway.
+        self.mdiParent.notifyAudioDeletion(self._wavPath, removeSpecies, exclude=self)
         self.close()
 
     def deleteFile(self):
@@ -2465,5 +2533,6 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
             except Exception:
                 pass
 
-        self.mdiParent.notifyAudioDeletion(self._wavPath)
+        self._audioRecord = None
+        self.mdiParent.notifyAudioDeletion(self._wavPath, exclude=self)
         self.close()
