@@ -38,5 +38,9 @@
     <file>icon_pdf_white.png</file>
     <file>icon_print_white.png</file>
     <file>icon_tripreport_white.png</file>
+    <!-- App icon for window title bars (see yearbirder.py).  The multi-size .ico
+         the installers already use, so Qt can pick 16/32/48 for the title bar
+         and 256 for larger contexts without a second set of files. -->
+    <file alias="icon_yearbirder.ico">../icons/Yearbirder.ico</file>
   </qresource>
 </RCC>

@@ -22,7 +22,7 @@ from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QCursor, QFont
 from PySide6.QtWidgets import (
     QApplication, QDialog, QHBoxLayout, QLabel,
-    QMdiSubWindow, QMessageBox, QPushButton, QSizePolicy,
+    QMdiSubWindow, QMessageBox, QPushButton, QSizePolicy, QSlider,
     QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
@@ -393,6 +393,7 @@ class Explorer(QMdiSubWindow):
         self._regionCode   = None
         self._regionLabel  = None
         self._regionPath   = None   # {"country","state","county"} codes
+        self._backDays     = code_Web.EBIRD_BACK_DAYS_DEFAULT
 
         _load_state_data()
         self._build_ui()
@@ -425,18 +426,44 @@ class Explorer(QMdiSubWindow):
         self.regionLabel.setStyleSheet("color: #888;")
         root.addWidget(self.regionLabel)
 
+        # How far back the three community-sightings reports below ask eBird to
+        # look.  The app stylesheet already draws QSlider in the thematic blue.
+        root.addSpacing(6)
+        self.backDaysLabel = QLabel()
+        self.backDaysLabel.setAlignment(Qt.AlignHCenter)
+        self.backDaysLabel.setStyleSheet(
+            f"color: {code_Stylesheet.CHART_PRIMARY};")
+        root.addWidget(self.backDaysLabel)
+
+        self.backDaysSlider = QSlider(Qt.Horizontal)
+        self.backDaysSlider.setRange(code_Web.EBIRD_BACK_DAYS_MIN,
+                                     code_Web.EBIRD_BACK_DAYS_MAX)
+        self.backDaysSlider.setValue(self._backDays)
+        self.backDaysSlider.setSingleStep(1)
+        self.backDaysSlider.setPageStep(1)
+        # No tick marks: the app stylesheet styles the groove and handle, and a
+        # styled QSlider doesn't draw them — the label above is the readout.
+        self.backDaysSlider.setToolTip(
+            "How many days of eBird history the Notable Community Sightings,\n"
+            "All Community Sightings, and Notable Sightings Map reports cover.\n"
+            "More days means a slower query and a longer report.")
+        self.backDaysSlider.valueChanged.connect(self._onBackDaysChanged)
+        root.addWidget(self.backDaysSlider)
+        self._onBackDaysChanged(self._backDays)   # set the label's initial text
+
         root.addStretch()
 
-        # Buttons
-        self.notableBtn = QPushButton("Notable Community Sightings (Past 3 days)")
+        # Buttons.  The three community reports honour the slider above, so their
+        # labels no longer name a fixed window.
+        self.notableBtn = QPushButton("Notable Community Sightings")
         self.notableBtn.clicked.connect(self._runNotable)
         root.addWidget(self.notableBtn)
 
-        self.allBtn = QPushButton("All Community Sightings (Past 3 days)")
+        self.allBtn = QPushButton("All Community Sightings")
         self.allBtn.clicked.connect(self._runAll)
         root.addWidget(self.allBtn)
 
-        self.notableMapBtn = QPushButton("Notable Sightings Map (Past 3 days)")
+        self.notableMapBtn = QPushButton("Notable Sightings Map")
         self.notableMapBtn.clicked.connect(self._runNotableMap)
         root.addWidget(self.notableMapBtn)
 
@@ -463,7 +490,7 @@ class Explorer(QMdiSubWindow):
 
     def scaleMe(self):
         sf = self.mdiParent.scaleFactor
-        self.resize(int(440 * sf), int(315 * sf))
+        self.resize(int(440 * sf), int(375 * sf))   # + the past-days slider row
 
     # ── Region picker ─────────────────────────────────────────────────────────
 
@@ -481,6 +508,13 @@ class Explorer(QMdiSubWindow):
             region_font = self.regionLabel.font()
             region_font.setItalic(False)
             self.regionLabel.setFont(region_font)
+
+    # ── Past-days slider ──────────────────────────────────────────────────────
+
+    def _onBackDaysChanged(self, days):
+        self._backDays = days
+        self.backDaysLabel.setText(
+            f"Past {days} day" + ("" if days == 1 else "s"))
 
     # ── Filter construction ───────────────────────────────────────────────────
 
@@ -501,6 +535,9 @@ class Explorer(QMdiSubWindow):
         f.setLocationType("EBirdRegion")
         f.setLocationName(self._regionCode)
         f.regionLabel = self._regionLabel
+        # Read by the community-sightings builders (code_Web.ebirdBackDays); the
+        # reports that don't take a date window simply ignore it.
+        f.backDays = self._backDays
         return f, self._regionCode, self._regionLabel
 
     # ── Report launchers ──────────────────────────────────────────────────────

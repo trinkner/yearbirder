@@ -67,6 +67,25 @@ from collections import (
 import base64
 
 
+# ── eBird "back" (days of history) window ─────────────────────────────────────
+# The eBird API's recent/notable observation endpoints take back=1..30 days.
+# The Community Sightings Explorer's slider sets it per run and stashes the
+# value on the filter it hands to the report builders (see code_Explorer);
+# reports reached any other way fall back to the default.
+EBIRD_BACK_DAYS_MIN     = 1
+EBIRD_BACK_DAYS_MAX     = 30
+EBIRD_BACK_DAYS_DEFAULT = 3
+
+
+def ebirdBackDays(filter):
+    """The back-days window a report should use, clamped to what the API takes."""
+    try:
+        days = int(getattr(filter, "backDays", EBIRD_BACK_DAYS_DEFAULT))
+    except (TypeError, ValueError):
+        return EBIRD_BACK_DAYS_DEFAULT
+    return max(EBIRD_BACK_DAYS_MIN, min(EBIRD_BACK_DAYS_MAX, days))
+
+
 class MapBridge(QObject):
     """Qt/JavaScript bridge for the location map.
 
@@ -135,6 +154,8 @@ class CommunitySightingsMapBridge(QObject):
         # Fallback if hotspot lookup fails (private locations not in hotspot API)
         f._badgeRegionId    = getattr(self._web, "_communityRegionId",    None)
         f._badgeRegionLabel = getattr(self._web, "_communityRegionLabel", None)
+        # Drill down over the same window the parent report used, not the default
+        f.backDays          = ebirdBackDays(self._web.filter)
 
         main = self._web.mdiParent
         sub = Web()
@@ -5530,14 +5551,14 @@ body {{ background:#16171d; color:#e2e4ec;
 
     def loadNotableSightings(self, filter):
         """Fetch eBird notable/rare community sightings for the most restrictive
-        geography in the filter.  Date filter settings are ignored; always fetches
-        the past 3 days from the eBird API."""
+        geography in the filter.  Date filter settings are ignored; the window is
+        the filter's backDays (the Explorer's slider), default 3."""
         import html as _html
         from datetime import datetime, timedelta
         from collections import defaultdict
         from PySide6.QtGui import QColor, QCursor
 
-        BACK_DAYS = 3
+        BACK_DAYS = ebirdBackDays(filter)
         self.contentType = "Notable Sightings"
         self.filter = filter
 
@@ -6130,7 +6151,7 @@ body {{ background:#16171d; color:#e2e4ec;
         from collections import defaultdict
         from PySide6.QtGui import QColor, QCursor
 
-        BACK_DAYS = 3
+        BACK_DAYS = ebirdBackDays(filter)
         self.contentType = "All Community Sightings"
         self.filter = filter
 
@@ -7103,7 +7124,7 @@ function handleShowChecklist(el) {{
         from datetime import datetime, timedelta
         from PySide6.QtGui import QCursor
 
-        BACK_DAYS = 3
+        BACK_DAYS = ebirdBackDays(filter)
         self.contentType = "Notable Map"
         self.filter = deepcopy(filter)
 
