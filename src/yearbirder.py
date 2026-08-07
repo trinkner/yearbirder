@@ -43,7 +43,7 @@ from PySide6.QtWidgets import (
     QApplication,
     )
 
-from PySide6.QtGui import QFont, QPalette, QColor
+from PySide6.QtGui import QFont, QPalette, QColor, QIcon
 from PySide6.QtCore import QTimer, Qt
 
 
@@ -211,6 +211,14 @@ def main():
     # Stable app name → stable per-platform cache/data locations
     # (QStandardPaths.CacheLocation is used by the thumbnail cache).
     app.setApplicationName("Yearbirder")
+
+    # Default icon for every top-level window.  The Windows taskbar and task
+    # switcher read the icon embedded in the .exe, so those were already right,
+    # but the title bar draws the WINDOW's QIcon — and nothing ever set one, so
+    # the main window showed Qt's generic default.  Setting it here covers the
+    # main window and dialogs at once; MDI children keep the per-report icons
+    # they set for themselves.
+    app.setWindowIcon(QIcon(":/icon_yearbirder.ico"))
 
     app.setStyle(code_Stylesheet.AppStyle("Fusion"))
 

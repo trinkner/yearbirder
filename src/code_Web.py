@@ -67,6 +67,25 @@ from collections import (
 import base64
 
 
+# ── eBird "back" (days of history) window ─────────────────────────────────────
+# The eBird API's recent/notable observation endpoints take back=1..30 days.
+# The Community Sightings Explorer's slider sets it per run and stashes the
+# value on the filter it hands to the report builders (see code_Explorer);
+# reports reached any other way fall back to the default.
+EBIRD_BACK_DAYS_MIN     = 1
+EBIRD_BACK_DAYS_MAX     = 30
+EBIRD_BACK_DAYS_DEFAULT = 3
+
+
+def ebirdBackDays(filter):
+    """The back-days window a report should use, clamped to what the API takes."""
+    try:
+        days = int(getattr(filter, "backDays", EBIRD_BACK_DAYS_DEFAULT))
+    except (TypeError, ValueError):
+        return EBIRD_BACK_DAYS_DEFAULT
+    return max(EBIRD_BACK_DAYS_MIN, min(EBIRD_BACK_DAYS_MAX, days))
+
+
 class MapBridge(QObject):
     """Qt/JavaScript bridge for the location map.
 
@@ -135,6 +154,8 @@ class CommunitySightingsMapBridge(QObject):
         # Fallback if hotspot lookup fails (private locations not in hotspot API)
         f._badgeRegionId    = getattr(self._web, "_communityRegionId",    None)
         f._badgeRegionLabel = getattr(self._web, "_communityRegionLabel", None)
+        # Drill down over the same window the parent report used, not the default
+        f.backDays          = ebirdBackDays(self._web.filter)
 
         main = self._web.mdiParent
         sub = Web()
@@ -5530,14 +5551,14 @@ body {{ background:#16171d; color:#e2e4ec;
 
     def loadNotableSightings(self, filter):
         """Fetch eBird notable/rare community sightings for the most restrictive
-        geography in the filter.  Date filter settings are ignored; always fetches
-        the past 3 days from the eBird API."""
+        geography in the filter.  Date filter settings are ignored; the window is
+        the filter's backDays (the Explorer's slider), default 3."""
         import html as _html
         from datetime import datetime, timedelta
         from collections import defaultdict
         from PySide6.QtGui import QColor, QCursor
 
-        BACK_DAYS = 3
+        BACK_DAYS = ebirdBackDays(filter)
         self.contentType = "Notable Sightings"
         self.filter = filter
 
@@ -5675,7 +5696,14 @@ body {{ background:#16171d; color:#e2e4ec;
                 if _dashes >= 1:
                     check_state = loc_name if _dashes == 1 else loc_name.rsplit("-", 1)[0]
                 if _dashes >= 2:
-                    _lbl = region_label
+                    # The Explorer builds its label as "County, State, Country"
+                    # (tree order, child→parent), so take only the first comma
+                    # component before stripping the county-type suffix — the db
+                    # stores bare county names (e.g. "Barnstable").  Using the
+                    # whole label left check_county as "Barnstable, Massachusetts,
+                    # United States", which matched no db sighting, so every
+                    # species wrongly got a County badge.
+                    _lbl = region_label.split(",")[0].strip()
                     for _sfx in (" County", " Parish", " Borough", " Municipality",
                                  " Census Area", " Municipio", " District"):
                         if _lbl.endswith(_sfx):
@@ -5698,8 +5726,14 @@ body {{ background:#16171d; color:#e2e4ec;
             life_set.add(_n);  life_set.add(_b)
             if check_country and _s["country"] == check_country: country_set.add(_n); country_set.add(_b)
             if check_state   and _s["state"]   == check_state:   state_set.add(_n);  state_set.add(_b)
-            if check_county  and (_s["county"] == check_county or
-                                  _s["county"].startswith(check_county + " (")):
+            # County match must also agree on state: identically-named counties
+            # in different states (Grand, CO vs Grand, TX) are distinct.  The db
+            # only keeps the "(state)" qualifier when the name collides among
+            # counties actually birded, so a bare "Grand" seen in CO must not
+            # count toward a Grand-county-TX report.
+            if check_county and (not check_state or _s["state"] == check_state) and \
+               (_s["county"] == check_county or
+                _s["county"].startswith(check_county + " (")):
                 county_set.add(_n); county_set.add(_b)
             if _s["date"][:4] == current_year: year_set.add(_n); year_set.add(_b)
         start_date = today - timedelta(days=BACK_DAYS - 1)
@@ -6117,7 +6151,7 @@ body {{ background:#16171d; color:#e2e4ec;
         from collections import defaultdict
         from PySide6.QtGui import QColor, QCursor
 
-        BACK_DAYS = 3
+        BACK_DAYS = ebirdBackDays(filter)
         self.contentType = "All Community Sightings"
         self.filter = filter
 
@@ -6287,7 +6321,14 @@ body {{ background:#16171d; color:#e2e4ec;
                 if _dashes >= 1:
                     check_state = loc_name if _dashes == 1 else loc_name.rsplit("-", 1)[0]
                 if _dashes >= 2:
-                    _lbl = region_label
+                    # The Explorer builds its label as "County, State, Country"
+                    # (tree order, child→parent), so take only the first comma
+                    # component before stripping the county-type suffix — the db
+                    # stores bare county names (e.g. "Barnstable").  Using the
+                    # whole label left check_county as "Barnstable, Massachusetts,
+                    # United States", which matched no db sighting, so every
+                    # species wrongly got a County badge.
+                    _lbl = region_label.split(",")[0].strip()
                     for _sfx in (" County", " Parish", " Borough", " Municipality",
                                  " Census Area", " Municipio", " District"):
                         if _lbl.endswith(_sfx):
@@ -6333,8 +6374,14 @@ body {{ background:#16171d; color:#e2e4ec;
             life_set.add(_n);  life_set.add(_b)
             if check_country and _s["country"] == check_country: country_set.add(_n); country_set.add(_b)
             if check_state   and _s["state"]   == check_state:   state_set.add(_n);  state_set.add(_b)
-            if check_county  and (_s["county"] == check_county or
-                                  _s["county"].startswith(check_county + " (")):
+            # County match must also agree on state: identically-named counties
+            # in different states (Grand, CO vs Grand, TX) are distinct.  The db
+            # only keeps the "(state)" qualifier when the name collides among
+            # counties actually birded, so a bare "Grand" seen in CO must not
+            # count toward a Grand-county-TX report.
+            if check_county and (not check_state or _s["state"] == check_state) and \
+               (_s["county"] == check_county or
+                _s["county"].startswith(check_county + " (")):
                 county_set.add(_n); county_set.add(_b)
             if _s["date"][:4] == current_year: year_set.add(_n); year_set.add(_b)
 
@@ -6775,7 +6822,14 @@ function handleShowChecklist(el) {{
                 if _dashes >= 1:
                     check_state = loc_name if _dashes == 1 else loc_name.rsplit("-", 1)[0]
                 if _dashes >= 2:
-                    _lbl = region_label
+                    # The Explorer builds its label as "County, State, Country"
+                    # (tree order, child→parent), so take only the first comma
+                    # component before stripping the county-type suffix — the db
+                    # stores bare county names (e.g. "Barnstable").  Using the
+                    # whole label left check_county as "Barnstable, Massachusetts,
+                    # United States", which matched no db sighting, so every
+                    # species wrongly got a County badge.
+                    _lbl = region_label.split(",")[0].strip()
                     for _sfx in (" County", " Parish", " Borough", " Municipality",
                                  " Census Area", " Municipio", " District"):
                         if _lbl.endswith(_sfx):
@@ -6797,8 +6851,14 @@ function handleShowChecklist(el) {{
             life_set.add(_n);  life_set.add(_b)
             if check_country and _s["country"] == check_country: country_set.add(_n); country_set.add(_b)
             if check_state   and _s["state"]   == check_state:   state_set.add(_n);  state_set.add(_b)
-            if check_county  and (_s["county"] == check_county or
-                                  _s["county"].startswith(check_county + " (")):
+            # County match must also agree on state: identically-named counties
+            # in different states (Grand, CO vs Grand, TX) are distinct.  The db
+            # only keeps the "(state)" qualifier when the name collides among
+            # counties actually birded, so a bare "Grand" seen in CO must not
+            # count toward a Grand-county-TX report.
+            if check_county and (not check_state or _s["state"] == check_state) and \
+               (_s["county"] == check_county or
+                _s["county"].startswith(check_county + " (")):
                 county_set.add(_n); county_set.add(_b)
 
         loc_obs    = defaultdict(list)
@@ -7064,7 +7124,7 @@ function handleShowChecklist(el) {{
         from datetime import datetime, timedelta
         from PySide6.QtGui import QCursor
 
-        BACK_DAYS = 3
+        BACK_DAYS = ebirdBackDays(filter)
         self.contentType = "Notable Map"
         self.filter = deepcopy(filter)
 
@@ -7161,7 +7221,14 @@ function handleShowChecklist(el) {{
                 if _dashes >= 1:
                     check_state = loc_name if _dashes == 1 else loc_name.rsplit("-", 1)[0]
                 if _dashes >= 2:
-                    _lbl = region_label
+                    # The Explorer builds its label as "County, State, Country"
+                    # (tree order, child→parent), so take only the first comma
+                    # component before stripping the county-type suffix — the db
+                    # stores bare county names (e.g. "Barnstable").  Using the
+                    # whole label left check_county as "Barnstable, Massachusetts,
+                    # United States", which matched no db sighting, so every
+                    # species wrongly got a County badge.
+                    _lbl = region_label.split(",")[0].strip()
                     for _sfx in (" County", " Parish", " Borough", " Municipality",
                                  " Census Area", " Municipio", " District"):
                         if _lbl.endswith(_sfx):
@@ -7183,8 +7250,14 @@ function handleShowChecklist(el) {{
             life_set.add(_n);  life_set.add(_b)
             if check_country and _s["country"] == check_country: country_set.add(_n); country_set.add(_b)
             if check_state   and _s["state"]   == check_state:   state_set.add(_n);  state_set.add(_b)
-            if check_county  and (_s["county"] == check_county or
-                                  _s["county"].startswith(check_county + " (")):
+            # County match must also agree on state: identically-named counties
+            # in different states (Grand, CO vs Grand, TX) are distinct.  The db
+            # only keeps the "(state)" qualifier when the name collides among
+            # counties actually birded, so a bare "Grand" seen in CO must not
+            # count toward a Grand-county-TX report.
+            if check_county and (not check_state or _s["state"] == check_state) and \
+               (_s["county"] == check_county or
+                _s["county"].startswith(check_county + " (")):
                 county_set.add(_n); county_set.add(_b)
 
         # Group by location name; collect coords and species list

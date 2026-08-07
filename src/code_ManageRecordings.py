@@ -357,6 +357,8 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         self.audioAlreadyInDb = True
         self._changesSaved = False
         self._skipCloseGuard = False
+        # (filename, species|None) removals this save made, broadcast from closeEvent
+        self._departedRecordings = []
 
         # Card gutters: frame the media-card rows with the window background
         # (the other three media views do the same on their rowsLayout).
@@ -443,6 +445,12 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
             except queue.Empty:
                 break
         if self._changesSaved:
+            # Departures first, so windows drop (and close on) recordings that
+            # have left the catalog; then re-query the browse windows for
+            # everything else the save changed; then refresh the reports once.
+            # exclude=self: this window is mid-close and still in subWindowList().
+            self.mdiParent.broadcastMediaRemovals(
+                audioRemovals=self._departedRecordings, exclude=self)
             self.mdiParent.refreshOpenRecordings()
             self.mdiParent.notifyMediaChanged()
         super(self.__class__, self).closeEvent(event)
@@ -1244,6 +1252,13 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
 
         # Collect files successfully added so their spectrograms can be cached.
         added_recording_files = set()
+        # Files stripped from the catalog this save; those not re-added get their
+        # on-disk cache evicted below.
+        removed_recording_files = set()
+        # Species assignments this save took away: {filename: {species, ...}}.
+        # A save removes every assignment then re-adds the chosen ones, so the
+        # ones NOT re-added are the removals open windows have to hear about.
+        dropped_species = {}
 
         # Iterate the metadata dict directly (not layout row counts)
         for r in sorted(self.metaDataByRow):
@@ -1263,6 +1278,10 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
                 if changed:
                     audio_filename = meta["recordingData"]["fileName"]
                     self.mdiParent.db.removeRecordingFileFromDatabase(audio_filename)
+                    removed_recording_files.add(audio_filename)
+                    dropped = set(old_species) - set(new_species)
+                    if dropped:
+                        dropped_species.setdefault(audio_filename, set()).update(dropped)
                     try:
                         self.mdiParent.db.appendRecordingDeletionToJsonl(audio_filename)
                     except IOError:
@@ -1307,11 +1326,14 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
                                 QMessageBox.warning(self, "Catalog File Error",
                                     f"Recording saved in memory but could not be written to catalog:\n{exc}")
 
-        # Cache the spectrogram thumbnail + enlargement ribbon for the added
-        # recordings in the background (skips ones already cached) so every
+        # Cache the spectrogram thumbnail + enlargement ribbon + overview for the
+        # added recordings in the background (skips ones already cached) so every
         # catalogued recording exists in the cache.
         if added_recording_files:
             code_ThumbnailCache.prebuild_async(recording_paths=added_recording_files)
+
+        self._departedRecordings = self._classifyRemovals(
+            removed_recording_files, dropped_species)
 
         # Rebuild the Media Filter's recording options so any new sample rate or
         # bit depth introduced by the saved recordings appears immediately (this
@@ -1323,6 +1345,61 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         self.mdiParent.db.photosNeedSaving = True
         self._changesSaved = True
         self.close()
+
+    def handleAudioDeletion(self, filename, species=None):
+        """A recording left the catalog (or the file system) while this window
+        was open — retire its row, so a save can't write back settings for media
+        that is gone.  Manage Photos' handlePhotoDeletion is the counterpart.
+
+        Rows are one per FILE, so a removal scoped to a single species leaves the
+        row alone: the file is still on disk and still catalogued for the other
+        species, and the row's species list is the user's editable assignment for
+        the next save — it is theirs to change, not ours to rewrite underneath
+        them."""
+        if species is not None:
+            return
+
+        row = next((r for r, meta in self.metaDataByRow.items()
+                    if meta["recordingData"]["fileName"] == filename), None)
+        if row is None:
+            return
+
+        # Stop playback if this row is the one playing — its file may be gone.
+        if self._activeRow == row:
+            self._player.stop()
+            self._activeRow = None
+
+        item = self.gridAudio.itemAtPosition(row, 0)
+        rowWidget = item.widget() if item is not None else None
+        if rowWidget is not None:
+            self.gridAudio.removeWidget(rowWidget)
+            rowWidget.hide()          # removeWidget leaves it parented and visible
+            rowWidget.setParent(None)
+            rowWidget.deleteLater()
+
+        del self.metaDataByRow[row]
+        for d in (self._rowLabels, self._sliders, self._playBtns,
+                  self._filePaths, self._durations_ms, self._spectroLabels):
+            d.pop(row, None)
+
+    def _classifyRemovals(self, removedFiles, droppedSpecies):
+        """What actually left the catalog this save, as (filename, species|None)
+        for broadcastMediaRemovals — and evict the cache of anything wholly gone.
+
+        A save removes a recording's assignments and re-adds the chosen ones, so
+        "removed" alone means nothing: a file still referenced afterwards only
+        lost the species that weren't re-added (species-scoped removals), while
+        one referenced nowhere departed outright (species None).  A metadata or
+        rating edit re-adds everything and so yields neither."""
+        departed = []
+        for fn in removedFiles:
+            if not self.mdiParent.db.isMediaFileReferenced(fn):
+                code_ThumbnailCache.evict(fn)
+                departed.append((fn, None))
+            else:
+                for species in sorted(droppedSpecies.get(fn, ())):
+                    departed.append((fn, species))
+        return departed
 
     # ------------------------------------------------------------------
     # Utilities

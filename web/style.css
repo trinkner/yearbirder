@@ -688,6 +688,15 @@ code, .step-content code {
 }
 .feature-card h3 { font-size: 1.25rem; color: var(--forest); margin-bottom: 10px; }
 .feature-card p { color: var(--slate); font-size: 0.97rem; line-height: 1.7; margin-bottom: 14px; }
+.feature-card .card-thumb {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 16px;
+}
 .feature-card .card-link { color: var(--grove); font-weight: 600; font-size: 0.95rem; }
 .feature-card:hover .card-link { text-decoration: underline; }
 

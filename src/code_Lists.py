@@ -985,9 +985,11 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
 
 
     def FillFindChecklists(self, foundList, searchString=""):
-        
-        self.filter = filter
-        self.listType = "Find Results"        
+
+        # Find has no sighting filter; use an empty one so self.filter is a real
+        # Filter object (this was mistakenly assigned the built-in filter()).
+        self.filter = code_Filter.Filter()
+        self.listType = "Find Results"
                       
        # set up tblList column headers and widths
         self.tblList.setColumnCount(4)
@@ -1029,13 +1031,17 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
             self.tblList.setItem(R, 3, foundTextItem)
             R = R + 1
         
-        self.setWindowTitle("Find Results")        
+        self.setWindowTitle("Find Results")
         self.lblLocation.setVisible(False)
         self.lblDateRange.setVisible(False)
-        
-        if self.lblDetails.text() != "":
+
+        # Header reflects the search terms (was a vestigial "Details Label"
+        # placeholder from Qt Designer, since this label was never set here).
+        if searchString:
+            self.lblDetails.setText('Find results for "' + searchString + '"')
             self.lblDetails.setVisible(True)
         else:
+            self.lblDetails.setText("")
             self.lblDetails.setVisible(False)
             
         self.lblSpecies.setText("Checklists: " + str(self.tblList.rowCount()))

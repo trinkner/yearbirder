@@ -212,6 +212,8 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         self.photosAlreadyInDb = True
         self._changesSaved = False
         self._skipCloseGuard = False
+        # Files this save dropped from the catalog, broadcast from closeEvent
+        self._departedPhotoFiles = set()
                 
         # dynamic thread pool — sized to CPU count, capped at 8 for disk-bound work
         self.threadCount = min(os.cpu_count() or 4, 8)
@@ -288,6 +290,12 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
             except queue.Empty:
                 break
         if self._changesSaved:
+            # Departures first, so windows drop (and close on) photos that have
+            # left the catalog; then re-query the browse grids for everything
+            # else the save changed; then let the reports refresh once.
+            # exclude=self: this window is mid-close and still in subWindowList().
+            self.mdiParent.broadcastMediaRemovals(
+                photoFiles=self._departedPhotoFiles, exclude=self)
             self.mdiParent.refreshOpenPhotos()
             self.mdiParent.notifyMediaChanged()
         super(self.__class__, self).closeEvent(event)
@@ -1028,6 +1036,9 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
 
         # Collect files successfully added so their thumbnails can be cached.
         added_photo_files = set()
+        # Photos stripped from the catalog this save; those not re-added get their
+        # on-disk cache evicted below.
+        removed_photo_files = set()
 
         # call database function to remove modified photos from db.
         # Iterate the metadata dict (not layout row counts): rows deleted via
@@ -1061,6 +1072,7 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
                         self.metaDataByRow[r]["time"],
                         self.metaDataByRow[r]["commonName"],
                         self.metaDataByRow[r]["photoData"]["fileName"])
+                    removed_photo_files.add(self.metaDataByRow[r]["photoData"]["fileName"])
                 
                 # check whether we're not removing this photo from db
                 # set flag to True, and then set it to False if non-write conditions exist
@@ -1137,6 +1149,18 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         if added_photo_files:
             code_ThumbnailCache.prebuild_async(photo_paths=added_photo_files)
 
+        # Photos that left the catalog for good this save — removed and not
+        # re-added (an edit removes then re-adds, so a rating or species change
+        # is not a departure).  Their on-disk cache goes now, and closeEvent
+        # tells the open windows: a Manage save is the same mutation as a
+        # one-off removal, just in bulk, so it goes through the same handlers.
+        self._departedPhotoFiles = {
+            fn for fn in removed_photo_files
+            if not self.mdiParent.db.isMediaFileReferenced(fn)
+        }
+        for fn in self._departedPhotoFiles:
+            code_ThumbnailCache.evict(fn)
+
         if self.photosAlreadyInDb is False:
 
             # ensure that photo filter is visible, if we've added new photos.
@@ -1161,6 +1185,9 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         
         
     def handlePhotoDeletion(self, filename):
+        """A photo left the catalog (or the file system) while this window was
+        open — retire its row, so a save can't write back settings for media
+        that is gone."""
         row = next((r for r, meta in self.metaDataByRow.items()
                     if meta["photoData"]["fileName"] == filename), None)
         if row is None:
@@ -1169,9 +1196,12 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         if rowWidget is not None:
             self._rowOrder.remove(row)
             self.rowsLayout.removeWidget(rowWidget)
+            rowWidget.hide()          # removeWidget leaves it parented and visible
+            rowWidget.setParent(None)
             rowWidget.deleteLater()
         del self.metaDataByRow[row]
         self._rowLabels.pop(row, None)
+        self._rowContext.pop(row, None)
 
 
     def closeWindow(self):

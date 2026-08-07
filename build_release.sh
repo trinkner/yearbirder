@@ -211,7 +211,20 @@ hdiutil create -volname "${DMG_NAME}" -srcfolder "$DMG_STAGING" -ov -format UDRW
 # Let macOS pick the mount point so the script works even if an older DMG is still mounted.
 ATTACH_OUT=$(hdiutil attach "$WORK_RW_DMG" -readwrite -noverify)
 echo "$ATTACH_OUT"
-MOUNT_POINT=$(echo "$ATTACH_OUT" | tail -1 | cut -f3-)
+# Pick the entry that actually carries a mount point, preferring our own volume.
+# NOT `tail -1 | cut -f3-`: when other disk images are attached, hdiutil lists
+# their partitions too, and the last line can be a scheme/container row with no
+# mount point at all — which silently yielded an EMPTY mount point and turned
+# the cleanup lines below into operations on "/".
+MOUNT_POINT=$(echo "$ATTACH_OUT" | sed -n "s|.*\(/Volumes/${DMG_NAME}.*\)$|\1|p" | tail -1)
+if [ -z "$MOUNT_POINT" ]; then
+    MOUNT_POINT=$(echo "$ATTACH_OUT" | sed -n 's|.*\(/Volumes/.*\)$|\1|p' | tail -1)
+fi
+if [ -z "$MOUNT_POINT" ] || [ ! -d "$MOUNT_POINT" ]; then
+    echo "ERROR: could not determine the DMG mount point from hdiutil output."
+    echo "Refusing to continue — the steps below would operate on '/'."
+    exit 1
+fi
 DISK_DISPLAY=$(basename "$MOUNT_POINT")
 echo "Mounted at: $MOUNT_POINT  (Finder name: $DISK_DISPLAY)"
 

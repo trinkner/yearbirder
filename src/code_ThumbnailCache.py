@@ -172,7 +172,8 @@ def rebuild_one(item):
     pump, so worker processes would not work — see build_spectro).
 
     ``item`` is ``(kind, path)`` where kind is "photo" or "recording".  For a
-    recording it builds both the browser thumbnail and the enlargement ribbon.
+    recording it builds the browser thumbnail, the enlargement ribbon, and the
+    enlargement's compact overview strip.
     Returns ``path`` regardless of success (the caller only needs a progress
     tick); failures are swallowed so one bad file can't stall the pool.
     """
@@ -184,6 +185,7 @@ def rebuild_one(item):
             build_spectro(path)
             import code_RecordingEnlargement
             code_RecordingEnlargement.build_ribbon_cache(path)
+            code_RecordingEnlargement.build_overview_cache(path)
     except Exception:
         pass
     return path
@@ -193,10 +195,11 @@ def prebuild_async(photo_paths=(), recording_paths=()):
     """Populate the cache for newly-added media in background daemon threads.
 
     Best-effort and fire-and-forget: photos get a thumbnail; recordings get the
-    spectrogram thumbnail AND the enlargement ribbon.  Items already cached are
-    skipped (a cheap load check), so re-saving existing media costs almost
-    nothing.  MUST be called from the GUI thread (it arms the axes pump that
-    finishes the spectro thumbnails) — returns immediately.
+    spectrogram thumbnail, the enlargement ribbon, AND the enlargement's compact
+    overview strip.  Items already cached are skipped (a cheap load check), so
+    re-saving existing media costs almost nothing.  MUST be called from the GUI
+    thread (it arms the axes pump that finishes the spectro thumbnails) —
+    returns immediately.
     """
     items = ([("photo", p) for p in photo_paths]
              + [("recording", p) for p in recording_paths])
@@ -238,6 +241,9 @@ def prebuild_async(photo_paths=(), recording_paths=()):
                                 path, "spectro_ribbon",
                                 cre._RIBBON_VARIANT) is None:
                             cre.build_ribbon_cache(path)
+                        if cre is not None and load(
+                                path, "spectro_overview") is None:
+                            cre.build_overview_cache(path)
                 except Exception:
                     pass
         finally:
@@ -351,6 +357,69 @@ def rename(old_path, new_path):
                 os.replace(old_fp, new_fp)
             except OSError:
                 pass
+
+
+def evict(source_path):
+    """Delete every cached artifact (all kinds/variants) for one media file.
+
+    Called when a photo or recording is removed from the catalog so its cache
+    files (thumbnail, spectrogram overview/ribbon) don't linger on disk.
+    Best-effort.  The cache key derives from the file's path + mtime + size, so
+    this MUST run while the file still exists on disk: catalog removal does not
+    delete the file, and a permanent delete must evict BEFORE unlinking.
+    """
+    d = cache_dir()
+    if not d:
+        return
+    for kind, variant in _all_kind_variants():
+        cp = _cache_path(source_path, kind, variant)
+        if cp and os.path.exists(cp):
+            try:
+                os.remove(cp)
+            except OSError:
+                pass
+
+
+def prune_to_catalog(live_media):
+    """Delete every cache file that does not belong to the current catalog.
+
+    ``live_media`` is an iterable of ``(source_path, kinds)`` where ``kinds`` is
+    the list of cache kinds that file can have ("photo" for a photo; the three
+    spectro_* kinds for a recording).  Only files that still exist on disk
+    contribute keep-keys (a missing file's key can't be recomputed, so its cache
+    is treated as an orphan and removed).
+
+    The cache is app-wide and keyed by absolute path, shared across every media
+    catalog; this sweep therefore also removes cache for any OTHER catalog's
+    media (accepted trade-off: those images re-cache on next view — no data or
+    files are lost).  Returns the number of cache files deleted.
+    """
+    d = cache_dir()
+    if not d:
+        return 0
+    variant_by_kind = dict(_all_kind_variants())
+    keep = set()
+    for source_path, kinds in live_media:
+        for kind in kinds:
+            key = _key_for(source_path, kind, variant_by_kind.get(kind, ""))
+            if key:
+                keep.add(key + _KIND_FMT[kind][0])
+    removed = 0
+    try:
+        names = os.listdir(d)
+    except OSError:
+        return 0
+    for name in names:
+        # Only touch finished cache artifacts; leave in-flight .tmp writes alone.
+        if not name.endswith(_CACHE_EXTS):
+            continue
+        if name not in keep:
+            try:
+                os.remove(os.path.join(d, name))
+                removed += 1
+            except OSError:
+                pass
+    return removed
 
 
 def _cache_path(source_path, kind, variant=""):

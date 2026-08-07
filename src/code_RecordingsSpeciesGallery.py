@@ -1,3 +1,10 @@
+"""Recordings Species Gallery — a native thumbnail grid of the best (highest-
+rated) recording per species, shown as spectrogram thumbnails.  Cloned from the
+photo Species Gallery (code_SpeciesGallery); the only real differences are the
+data source (GetSightingsWithRecordings), the thumbnail (a spectrogram loaded
+from / rendered into the shared on-disk cache, same as Browse Recordings), and
+the click target (Browse Recordings)."""
+
 import base64
 import datetime
 import os
@@ -5,17 +12,12 @@ import queue
 import copy
 from functools import partial
 
-from PySide6.QtGui import (
-    QPixmap,
-    QIcon,
-    QImageReader,
-)
+from PySide6.QtGui import QPixmap, QIcon, QImage
 from PySide6.QtCore import (
-    Signal,   # used by _ThumbnailThread.sigFinished
+    Signal,
     QByteArray,
     QBuffer,
     QIODevice,
-    QSize,
     Qt,
     QThread,
     QTimer,
@@ -31,14 +33,23 @@ from PySide6.QtWidgets import (
 
 import form_SpeciesGallery
 import code_MediaRefresh
+import code_ThumbnailCache
+from code_Audio import (
+    render_spectrogram_qimage as _render_spectrogram_qimage,
+    paint_spectro_axes as _paint_spectro_axes,
+)
 
-# Thumbnail dimensions for gallery cells
+# Thumbnail dimensions for gallery cells — same size as the photo gallery.
 THUMB_W = 200
 THUMB_H = 150
 CELL_SPACING = 6
 
 
-class _ThumbnailThread(QThread):
+class _SpectroThumbThread(QThread):
+    """Worker: produce a spectrogram QImage for one WAV file, from the on-disk
+    cache when present, otherwise rendered WITHOUT axis text (drawing text off
+    the GUI thread corrupts macOS glyph metrics — the GUI thread paints the axes
+    in _drainResultQueue).  Mirrors threadLoadSpectrogram in code_Recordings."""
     sigFinished = Signal()
 
     def __init__(self):
@@ -55,22 +66,23 @@ class _ThumbnailThread(QThread):
     def run(self):
         while True:
             try:
-                idx, photoFile = self.workQueue.get_nowait()
+                idx, wavFile = self.workQueue.get_nowait()
             except queue.Empty:
                 break
-            reader = QImageReader(photoFile)
-            reader.setAutoTransform(True)
-            imgSize = reader.size()
-            if imgSize.isValid():
-                imgSize.scale(QSize(THUMB_W, THUMB_H), Qt.KeepAspectRatio)
-                reader.setScaledSize(imgSize)
-            qimage = reader.read()
-            self.resultQueue.put((idx, photoFile, qimage))
+            img = code_ThumbnailCache.load(wavFile, "spectro_thumb",
+                                           code_ThumbnailCache.SPECTRO_THUMB_VARIANT)
+            if img is not None and not img.isNull():
+                duration, sr, axesPending = 0, 0, False
+            else:
+                img, duration, sr, _bbox = _render_spectrogram_qimage(
+                    wavFile, draw_axis_text=False)
+                axesPending = img is not None and not img.isNull()
+            self.resultQueue.put((idx, wavFile, img, duration, sr, axesPending))
             self.workQueue.task_done()
         self.sigFinished.emit()
 
 
-class SpeciesGallery(QMdiSubWindow, form_SpeciesGallery.Ui_frmSpeciesGallery):
+class RecordingsSpeciesGallery(QMdiSubWindow, form_SpeciesGallery.Ui_frmSpeciesGallery):
 
     def __init__(self):
         super().__init__()
@@ -79,11 +91,11 @@ class SpeciesGallery(QMdiSubWindow, form_SpeciesGallery.Ui_frmSpeciesGallery):
         self.mdiParent = None
         self.filter = None
 
-        # list of (photo_dict, sighting_dict), one per species, taxonomic order
+        # list of (audio_dict, sighting_dict), one per species, taxonomic order
         self._galleryItems = []
         # list of (imgLabel, nameLabel, frame) parallel to _galleryItems
         self._cells = []
-        self._pixmapCache = {}
+        self._pixmapCache = {}   # wav path -> QPixmap (full spectro thumb)
         self._numCols = 4
         self._abort = False
         self.threadsRemaining = 0
@@ -93,7 +105,7 @@ class SpeciesGallery(QMdiSubWindow, form_SpeciesGallery.Ui_frmSpeciesGallery):
         self.resultQueue = queue.Queue()
         self.threads = []
         for _ in range(self.threadCount):
-            t = _ThumbnailThread()
+            t = _SpectroThumbThread()
             t.workQueue = self.workQueue
             t.resultQueue = self.resultQueue
             t.sigFinished.connect(self._threadFinished)
@@ -102,8 +114,11 @@ class SpeciesGallery(QMdiSubWindow, form_SpeciesGallery.Ui_frmSpeciesGallery):
         self._drainTimer = QTimer(self)
         self._drainTimer.timeout.connect(self._drainResultQueue)
 
-        self.buttonSlideshow.clicked.connect(self.launchSlideshow)
-        self.buttonShowAll.clicked.connect(self.showAllPhotos)
+        # Recordings have no slideshow; repurpose the second button to open the
+        # full Browse Recordings for the current filter, and hide Slideshow.
+        self.buttonSlideshow.setVisible(False)
+        self.buttonShowAll.setText("Show All Recordings")
+        self.buttonShowAll.clicked.connect(self.showAllRecordings)
 
     # ------------------------------------------------------------------
     # Qt event overrides
@@ -130,8 +145,6 @@ class SpeciesGallery(QMdiSubWindow, form_SpeciesGallery.Ui_frmSpeciesGallery):
         self.headerFrame.setGeometry(5, 27, self.width() - 10, header_h)
         self.scrollArea.setGeometry(5, 27 + header_h, self.width() - 10,
                                     self.height() - 35 - header_h)
-        # Defer reflow until the next event-loop iteration so Qt has finished
-        # the layout pass and the viewport reports its final size.
         QTimer.singleShot(0, self._onResize)
         return super().resizeEvent(event)
 
@@ -140,12 +153,7 @@ class SpeciesGallery(QMdiSubWindow, form_SpeciesGallery.Ui_frmSpeciesGallery):
     # ------------------------------------------------------------------
 
     def _calcCols(self):
-        """Number of columns that fit in the scroll-area viewport.
-
-        Called only from _onResize which is deferred via singleShot(0), so
-        Qt has completed the layout pass and the viewport width is reliable.
-        """
-        available = self.scrollArea.viewport().width() - 4  # small buffer
+        available = self.scrollArea.viewport().width() - 4
         return max(1, available // (THUMB_W + CELL_SPACING))
 
     def _onResize(self):
@@ -157,8 +165,6 @@ class SpeciesGallery(QMdiSubWindow, form_SpeciesGallery.Ui_frmSpeciesGallery):
             self._reflowGrid()
 
     def _reflowGrid(self):
-        """Re-place existing cell widgets under the new column count without
-        re-loading any thumbnails."""
         for _, _, frame in self._cells:
             self.gridPhotos.removeWidget(frame)
         for i, (_, _, frame) in enumerate(self._cells):
@@ -168,6 +174,20 @@ class SpeciesGallery(QMdiSubWindow, form_SpeciesGallery.Ui_frmSpeciesGallery):
     # ------------------------------------------------------------------
     # Print / PDF support
     # ------------------------------------------------------------------
+
+    def _spectroImageForPrint(self, wavFile):
+        """A finished (axes-baked) spectrogram QImage for one WAV, cache-first."""
+        img = code_ThumbnailCache.load(wavFile, "spectro_thumb",
+                                       code_ThumbnailCache.SPECTRO_THUMB_VARIANT)
+        if img is not None and not img.isNull():
+            return img
+        img, duration, sr, _bbox = _render_spectrogram_qimage(
+            wavFile, draw_axis_text=False)
+        if img is not None and not img.isNull():
+            _paint_spectro_axes(img, duration, sr)
+            code_ThumbnailCache.store(wavFile, img, "spectro_thumb",
+                                      code_ThumbnailCache.SPECTRO_THUMB_VARIANT)
+        return img
 
     def html(self):
         title = self.windowTitle()
@@ -192,12 +212,12 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
         html += heading
 
         cells = []
-        for p, s in self._galleryItems:
-            pixmap = QPixmap(p["fileName"])
-            if pixmap.isNull():
+        for a, s in self._galleryItems:
+            img = self._spectroImageForPrint(a["fileName"])
+            if img is None or img.isNull():
                 continue
-
-            pixmap = pixmap.scaled(540, 400, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            pixmap = QPixmap.fromImage(img).scaled(
+                540, 360, Qt.KeepAspectRatio, Qt.SmoothTransformation)
 
             byte_array = QByteArray()
             buf = QBuffer(byte_array)
@@ -245,28 +265,28 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
         self.filter = filter
         db = self.mdiParent.db
 
-        sightings = db.GetSightingsWithPhotos(filter)
+        sightings = db.GetSightingsWithRecordings(filter)
         if not sightings:
             return False
 
-        # Build species -> (rating, photo_dict, sighting_dict, taxonomic_order)
+        # Best (highest-rated) recording per species.  GetSightingsWithRecordings
+        # already applied the filter at the sighting level (as Browse Recordings
+        # does), so take every audio entry in the returned sightings.
         best = {}
         for s in sightings:
             taxo = float(s.get("taxonomicOrder", 0))
             name = s["commonName"]
-            for p in s["photos"]:
-                if db.TestIndividualPhoto(p, filter):
-                    try:
-                        rating = float(p["rating"]) if p["rating"] else 0.0
-                    except (ValueError, TypeError):
-                        rating = 0.0
-                    if name not in best or rating > best[name][0]:
-                        best[name] = (rating, p, s, taxo)
+            for a in s.get("audio", []):
+                try:
+                    rating = float(a["rating"]) if a.get("rating") else 0.0
+                except (ValueError, TypeError):
+                    rating = 0.0
+                if name not in best or rating > best[name][0]:
+                    best[name] = (rating, a, s, taxo)
 
         if not best:
             return False
 
-        # Sort by taxonomic order, then common name as tiebreaker
         self._galleryItems = [
             (entry[1], entry[2])
             for entry in sorted(best.values(), key=lambda x: (x[3], x[2]["commonName"]))
@@ -274,15 +294,15 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
 
         speciesCount = len(self._galleryItems)
         self.lblTitle.setText("Species Gallery")
-        self.lblCount.setText(f"{speciesCount:,} species with photos")
+        self.lblCount.setText(f"{speciesCount:,} species with recordings")
         self.setWindowTitle(
-            filter.buildWindowTitle("Species Gallery", db, count=speciesCount, countUnit="Species"))
+            filter.buildWindowTitle("Recordings Species Gallery", db,
+                                    count=speciesCount, countUnit="Species"))
 
         icon = QIcon()
-        icon.addPixmap(QPixmap(":/icon_camera_white.png"), QIcon.Normal, QIcon.Off)
+        icon.addPixmap(QPixmap(":/icon_microphone_white.png"), QIcon.Normal, QIcon.Off)
         self.setWindowIcon(icon)
 
-        # Resize the subwindow to fit 4 columns with room to breathe
         self.resize(860, 700)
         QApplication.processEvents()
 
@@ -298,7 +318,6 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
     # ------------------------------------------------------------------
 
     def _buildCells(self):
-        """Create a placeholder cell frame for every gallery item."""
         # Discard the previous fill's cells first.  _fillGrid only removes the
         # widgets it is about to add, so leftovers would stay parented to the
         # grid and keep showing species that are no longer in the gallery — and
@@ -311,7 +330,7 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
             frame.setParent(None)
             frame.deleteLater()
         self._cells = []
-        for idx, (p, s) in enumerate(self._galleryItems):
+        for idx, (a, s) in enumerate(self._galleryItems):
             frame = QFrame()
             frame.setFixedSize(THUMB_W, THUMB_H + 36)
             frame.setStyleSheet(
@@ -342,14 +361,12 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
 
             self._cells.append((imgLbl, nameLbl, frame))
 
-            # Apply any already-cached pixmap immediately
-            photoFile = p["fileName"]
-            if photoFile in self._pixmapCache:
-                pm = self._pixmapCache[photoFile]
+            wavFile = a["fileName"]
+            if wavFile in self._pixmapCache:
+                pm = self._pixmapCache[wavFile]
                 imgLbl.setPixmap(pm.scaled(imgLbl.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
 
     def _fillGrid(self):
-        """Place all cell frames into the grid layout."""
         for _, _, frame in self._cells:
             self.gridPhotos.removeWidget(frame)
         for i, (_, _, frame) in enumerate(self._cells):
@@ -363,9 +380,9 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
 
     def _stopLoading(self):
         """Quiesce the loader threads before a re-fill.  Results are addressed by
-        cell index, so a thumbnail still in flight from the previous fill would
+        cell index, so a spectrogram still in flight from the previous fill would
         land on whichever species now occupies that index.  Emptying the work
-        queue first bounds the wait to the one image each thread already holds."""
+        queue first bounds the wait to the one file each thread already holds."""
         self._drainTimer.stop()
         while not self.workQueue.empty():
             try:
@@ -385,9 +402,9 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
 
     def _startLoading(self):
         uncached = [
-            (idx, p["fileName"])
-            for idx, (p, _) in enumerate(self._galleryItems)
-            if p["fileName"] not in self._pixmapCache
+            (idx, a["fileName"])
+            for idx, (a, _) in enumerate(self._galleryItems)
+            if a["fileName"] not in self._pixmapCache
         ]
         if not uncached:
             return
@@ -404,15 +421,24 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
     def _drainResultQueue(self):
         while True:
             try:
-                idx, photoFile, qimage = self.resultQueue.get_nowait()
+                idx, wavFile, img, duration, sr, axesPending = self.resultQueue.get_nowait()
             except queue.Empty:
                 break
 
             if self._abort:
                 continue
+            if img is None or img.isNull():
+                continue
 
-            pm = QPixmap.fromImage(qimage)
-            self._pixmapCache[photoFile] = pm
+            # Composite the kHz/sec axes on the GUI thread (worker rendered the
+            # spectrogram text-free), then cache the finished image.  QImage ->
+            # QPixmap conversion is also GUI-thread-only.
+            if axesPending:
+                _paint_spectro_axes(img, duration, sr)
+                code_ThumbnailCache.store(wavFile, img, "spectro_thumb",
+                                          code_ThumbnailCache.SPECTRO_THUMB_VARIANT)
+            pm = QPixmap.fromImage(img)
+            self._pixmapCache[wavFile] = pm
 
             if idx < len(self._cells):
                 imgLbl = self._cells[idx][0]
@@ -426,71 +452,52 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
                 and not any(t.isRunning() for t in self.threads)
                 and self.resultQueue.empty()):
             self._drainTimer.stop()
+            code_ThumbnailCache.enforce_cap()   # keep the on-disk cache bounded
 
     def _threadFinished(self):
         if not self._abort:
             self.threadsRemaining -= 1
 
     # ------------------------------------------------------------------
-    # Click handler — opens Photos window filtered to the clicked species
+    # Click handler — opens Browse Recordings filtered to the clicked species
     # ------------------------------------------------------------------
 
     def _cellClicked(self, idx, event):
         if idx >= len(self._galleryItems):
             return
-        p, s = self._galleryItems[idx]
+        a, s = self._galleryItems[idx]
 
         species_filter = copy.deepcopy(self.filter)
         species_filter.speciesName = s["commonName"]
         species_filter.speciesList = []
 
-        self._openPhotos(species_filter)
+        self._openRecordings(species_filter)
 
-    def _openPhotos(self, photoFilter):
-        """Spawn a Browse Photos window, pre-checking that it will have content.
-        PositionChildWindow restores any maximized sibling, so adding a subwindow
-        and immediately removing it again flashes an empty child — validate the
-        query before touching the MDI area, as MainWindow.createPhotos does."""
-        import code_Photos
+    def _openRecordings(self, recordingFilter):
+        """Spawn a Browse Recordings window, pre-checking that it will have
+        content.  PositionChildWindow restores any maximized sibling, so adding a
+        subwindow and immediately removing it again flashes an empty child —
+        validate the query before touching the MDI area, as
+        MainWindow.createRecordings does."""
+        import code_Recordings
 
-        if not self.mdiParent.db.GetSightingsWithPhotos(photoFilter):
-            self._noPhotosMessage()
+        if not self.mdiParent.db.GetSightingsWithRecordings(recordingFilter):
+            self._noRecordingsMessage()
             return
 
-        sub = code_Photos.Photos()
+        sub = code_Recordings.Recordings()
         sub.mdiParent = self.mdiParent
         self.mdiParent.mdiArea.addSubWindow(sub)
         self.mdiParent.PositionChildWindow(sub, self)
         sub.show()
-        # Fallback: the filter passed sightings but no individual photo matched.
-        if sub.FillPhotos(photoFilter) is False:
+        # Fallback: the filter passed sightings but no individual recording did.
+        if sub.FillRecordings(recordingFilter) is False:
             sub.close()
-            self._noPhotosMessage()
+            self._noRecordingsMessage()
 
-    def _noPhotosMessage(self):
-        QMessageBox.information(self.mdiParent, "No Photos",
-                                "No photos match the current filter.")
+    def _noRecordingsMessage(self):
+        QMessageBox.information(self.mdiParent, "No Recordings",
+                                "No recordings match the current filter.")
 
-    # ------------------------------------------------------------------
-    # Slideshow
-    # ------------------------------------------------------------------
-
-    def showAllPhotos(self):
-        self._openPhotos(self.filter)
-
-    def launchSlideshow(self):
-        import code_Slideshow
-        dlg = code_Slideshow.SlideshowDialog(self.mdiParent)
-        if dlg.exec() != code_Slideshow.QDialog.DialogCode.Accepted:
-            return
-        photoList = code_Slideshow.buildPhotoList(
-            self.mdiParent.db, self.filter, dlg.sortOrder()
-        )
-        if not photoList:
-            QMessageBox.information(self.mdiParent, "No Results",
-                                    "No photos found for the current filter.")
-            return
-        self.mdiParent._slideshow = code_Slideshow.SlideshowWindow(
-            photoList, dlg.secondsPerPhoto(), dlg.showTitleBar()
-        )
-        self.mdiParent._slideshow.show()
+    def showAllRecordings(self):
+        self._openRecordings(self.filter)

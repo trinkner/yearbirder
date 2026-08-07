@@ -1495,6 +1495,20 @@ class DataBase():
                 if not s["audio"]:
                     del s["audio"]
 
+    def isMediaFileReferenced(self, fileName):
+        """True if any sighting still references this media file, as a photo or a
+        recording.  Used after a catalog removal to decide whether the file's
+        on-disk cache can be evicted (a recording may remain assigned to other
+        species; an edited file is removed then re-added, so it stays referenced)."""
+        for s in self.sightingList:
+            for p in s.get("photos", []):
+                if p.get("fileName") == fileName:
+                    return True
+            for a in s.get("audio", []):
+                if a.get("fileName") == fileName:
+                    return True
+        return False
+
     def getSpeciesForRecordingFile(self, audioFileName):
         """Sorted unique common names of every species this file is assigned to."""
         species = set()
@@ -3933,11 +3947,16 @@ class DataBase():
         self.bitDepthList = []
         self.deviceList = []
 
-        # remove photo data from sightings
+        # remove photo AND recording data from sightings — the media catalog
+        # holds both, so closing it must clear both.  (Leaving "audio" behind
+        # made closed-catalog recordings still count as "already in the catalog"
+        # on the next Add Recordings, and kept the Recordings menu visible.)
         for s in self.sightingList:
             if "photos" in s:
                 del s["photos"]
-                
+            if "audio" in s:
+                del s["audio"]
+
         self.photoDataFileOpenFlag = False
         
 
