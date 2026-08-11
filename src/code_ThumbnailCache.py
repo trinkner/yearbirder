@@ -34,6 +34,14 @@ THUMB_SIZE = QSize(500, 330)             # target photo-thumbnail bounding box
 # On-screen thumbnail geometry shared by the Photos browser and Manage Photos
 # (the cached image stays THUMB_SIZE; views scale it down for display).
 THUMB_DISPLAY_SIZE = QSize(333, 220)
+# Browse Grid packs hundreds of photos on screen at once, so it gets its own
+# small cached artifact rather than scaling THUMB_SIZE down at paint time:
+# 200x150 costs ~104 KB of pixmap memory against ~638 KB, which is the
+# difference between ~100 MB and ~640 MB for a 1,000-photo grid.
+# It is a distinct KIND, not a variant of "photo": prune_to_catalog builds a
+# dict keyed by kind (see _all_kind_variants), so two "photo" entries would
+# collide and the sweep would delete whichever variant lost.
+GRID_THUMB_SIZE = QSize(200, 150)
 # Spectro thumbnails, by contrast, are RENDERED at the display size (see
 # code_Audio.SPECTRO_THUMB_W/H — kept equal to THUMB_DISPLAY_SIZE) so no
 # scaling happens at paint time.  Bump this variant whenever the rendered
@@ -46,6 +54,7 @@ SPECTRO_THUMB_VARIANT = "333x220-ax9"
 # detail).  kind -> (file extension, QImageWriter format, quality | -1 default).
 _KIND_FMT = {
     "photo":            (".jpg", b"jpg", 85),
+    "photo_grid":       (".jpg", b"jpg", 85),   # Browse Grid cell (GRID_THUMB_SIZE)
     "spectro_thumb":    (".png", b"png", -1),
     "spectro_overview": (".png", b"png", -1),
     "spectro_ribbon":   (".png", b"png", -1),   # large; cached grayscale by caller
@@ -85,6 +94,56 @@ def build(source_path):
         return False
     store(source_path, img)
     return True
+
+
+def build_grid(source_path):
+    """(Re)generate and store the small Browse Grid thumbnail.  True on success.
+
+    Prefers downscaling the already-cached THUMB_SIZE artifact over re-reading
+    the original: catalogs predating this kind already have that one, and a
+    34 KB JPEG decode beats a multi-megabyte source read.  Falls back to a
+    scaled decode of the source when the big thumbnail isn't cached yet.
+    """
+    img = load(source_path, "photo")
+    if img is None or img.isNull():
+        img = decode_thumbnail(source_path)
+    if img is None or img.isNull():
+        return False
+    small = img.scaled(GRID_THUMB_SIZE, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+    if small.isNull():
+        return False
+    store(source_path, small, "photo_grid")
+    return True
+
+
+def ensure(source_path, kind="photo"):
+    """Return the cached QImage for one photo, generating it on a miss.
+
+    The single entry point the browser workers call, so cache tiering lives
+    here rather than in each view: memory is the caller's concern, this covers
+    disk-hit -> derive/decode -> store.  Returns a null QImage on failure (the
+    views render that as "File not found").
+    """
+    img = load(source_path, kind)
+    if img is not None and not img.isNull():
+        return img
+
+    if kind == "photo_grid":
+        if build_grid(source_path):
+            img = load(source_path, kind)
+            if img is not None and not img.isNull():
+                return img
+        # Cache write failed (read-only cache dir, disk full…) — still show the
+        # photo by scaling in memory rather than leaving the cell empty.
+        big = decode_thumbnail(source_path)
+        if big.isNull():
+            return big
+        return big.scaled(GRID_THUMB_SIZE, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+
+    img = decode_thumbnail(source_path)
+    if not img.isNull():
+        store(source_path, img, kind)
+    return img
 
 
 def build_spectro(wav_path):
@@ -172,7 +231,8 @@ def rebuild_one(item):
     pump, so worker processes would not work — see build_spectro).
 
     ``item`` is ``(kind, path)`` where kind is "photo" or "recording".  For a
-    recording it builds the browser thumbnail, the enlargement ribbon, and the
+    photo it builds the browser thumbnail AND Browse Grid's small one; for a
+    recording, the browser thumbnail, the enlargement ribbon, and the
     enlargement's compact overview strip.
     Returns ``path`` regardless of success (the caller only needs a progress
     tick); failures are swallowed so one bad file can't stall the pool.
@@ -181,6 +241,11 @@ def rebuild_one(item):
     try:
         if kind == "photo":
             build(path)
+            # Every artifact a photo has must be rebuilt here: "Rebuild all"
+            # clears the whole cache first, so anything missed would be left
+            # deleted (Browse Grid would then re-derive all of them lazily on
+            # its next open).  build_grid downscales what build() just wrote.
+            build_grid(path)
         else:
             build_spectro(path)
             import code_RecordingEnlargement
@@ -234,6 +299,11 @@ def prebuild_async(photo_paths=(), recording_paths=()):
                     if kind == "photo":
                         if load(path, "photo") is None:
                             build(path)
+                        # Browse Grid's small artifact, derived from the one
+                        # above — built at add time so the grid never pays for
+                        # it on first open.
+                        if load(path, "photo_grid") is None:
+                            build_grid(path)
                     else:
                         if load(path, "spectro_thumb", SPECTRO_THUMB_VARIANT) is None:
                             build_spectro(path)
@@ -319,7 +389,8 @@ def _all_kind_variants():
     """Every (kind, variant) artifact identity a media file might have cached.
     The ribbon's variant lives in code_RecordingEnlargement; imported lazily so
     this module has no hard dependency on it."""
-    pairs = [("photo", ""), ("spectro_thumb", SPECTRO_THUMB_VARIANT),
+    pairs = [("photo", ""), ("photo_grid", ""),
+             ("spectro_thumb", SPECTRO_THUMB_VARIANT),
              ("spectro_overview", "")]
     try:
         import code_RecordingEnlargement as cre
