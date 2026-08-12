@@ -22,6 +22,7 @@ import code_Graphs
 import code_Photos
 import code_PhotosGrid
 import code_Recordings
+import code_RecordingsGrid
 import code_SpeciesGallery
 import code_RecordingsSpeciesGallery
 import code_ManagePhotos
@@ -625,8 +626,11 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionPrint.triggered.connect(self.printMe)
         self.actionCreatePDF.triggered.connect(self.CreatePDF)
         self.actionFamilies.triggered.connect(self.CreateFamilyPieChart)
-        self.actionPhotos.triggered.connect(self.createPhotosReport)
-        self.actionRecordingsToolbar.triggered.connect(self.createRecordingsBrowser)
+        # Toolbar Photos/Recordings open the GRID views — the toolbar is the
+        # quick way in, and the grid is the better first look at a filtered
+        # result.  The card views stay on their menus as Browse Cards.
+        self.actionPhotos.triggered.connect(self.createPhotosGridReport)
+        self.actionRecordingsToolbar.triggered.connect(self.createRecordingsGridBrowser)
         self.actionPhotosByFilter.triggered.connect(self.createPhotosReport)
         self.actionPhotosGrid.triggered.connect(self.createPhotosGridReport)
         self.actionSpeciesGallery.triggered.connect(self.createSpeciesGallery)
@@ -670,6 +674,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionAddRecordings.triggered.connect(self.addAudio)
         self.actionManageRecordings.triggered.connect(self.createManageRecordings)
         self.actionBrowseRecordings.triggered.connect(self.createRecordingsBrowser)
+        self.actionRecordingsGrid.triggered.connect(self.createRecordingsGridBrowser)
         self.actionEditPhotosByFilter.triggered.connect(self.createEditPhotosByFilter)
         self.actionEditPhotosByFilter.setVisible(False)
         self.actionUpdateEXIFDataForAllPhotos.triggered.connect(self.updateEXIFDataForAllPhotos)
@@ -2491,6 +2496,17 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             sub.close()
 
     def createRecordingsBrowser(self):
+        """Recordings > Browse Cards — the vertical list of recording cards."""
+        self._createRecordingsWindow(code_Recordings.Recordings)
+
+    def createRecordingsGridBrowser(self):
+        """Recordings > Browse Grid — the same recordings as a grid."""
+        self._createRecordingsWindow(code_RecordingsGrid.RecordingsGrid)
+
+    def _createRecordingsWindow(self, viewClass):
+        """Spawn a recordings browser of the given class for the current filter.
+        Both views differ only in layout (RecordingsGrid subclasses Recordings),
+        so the guards and no-results messaging live here once."""
         if MainWindow.db.eBirdFileOpenFlag is not True:
             self.CreateMessageNoFile()
             return
@@ -2506,7 +2522,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             )
             return
 
-        sub = code_Recordings.Recordings()
+        sub = viewClass()
         sub.mdiParent = self
 
         self.mdiArea.addSubWindow(sub)

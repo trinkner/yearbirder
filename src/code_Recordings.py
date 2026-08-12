@@ -84,8 +84,17 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
 
     resized = Signal()
 
+    # ── Subclass seam (see code_RecordingsGrid.RecordingsGrid) ────────────────
+    # Cells are addressed by row index through five parallel maps —
+    # _spectroLabels, _playBtns, _sliders, _filePaths and _rowWidgets — which is
+    # what lets a subclass rearrange them without touching playback, the worker
+    # pool, sorting, deletion, or the Enlargement launch.  A subclass overrides
+    # the three layout hooks below plus the re-arranging half of
+    # SortAndDisplayRecordings.
+    SPECTRO_SIZE = code_ThumbnailCache.THUMB_DISPLAY_SIZE   # spectrogram display box
+
     def __init__(self):
-        super(self.__class__, self).__init__()
+        super().__init__()
         self.setupUi(self)
         self.setAttribute(Qt.WA_DeleteOnClose, True)
         self.mdiParent = ""
@@ -182,11 +191,11 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
         self.mdiParent.progressOverlay.hide()
         self.mdiParent.db.compactJsonlFile()
         code_ThumbnailCache.enforce_cap()   # keep the on-disk cache bounded
-        super(self.__class__, self).closeEvent(event)
+        super().closeEvent(event)
 
     def resizeEvent(self, event):
         self.resized.emit()
-        return super(self.__class__, self).resizeEvent(event)
+        return super().resizeEvent(event)
 
     def handleAudioDeletion(self, filename, species=None):
         orig_len = len(self.audioList)
@@ -611,6 +620,130 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
         self.scrollArea.verticalScrollBar().setValue(0)
         self._sorting = False
 
+    # ── Layout hooks (overridden by RecordingsGrid) ───────────────────────────
+
+    def _beginLayout(self):
+        """Drop the previous fill's widgets before a rebuild."""
+        for i in reversed(range(self.rowsLayout.count())):
+            w = self.rowsLayout.itemAt(i).widget()
+            if w:
+                w.setParent(None)
+
+    def _addCell(self, row, a, s):
+        """Build the widgets for one recording and place them.
+
+        Must register the spectrogram widget, Play button, scrubber and file
+        path in the row-keyed maps — playback and the worker drain reach cells
+        through those.
+        """
+        fileName = a.get("fileName", "")
+
+        # ── Col 0: spectrogram + scrubber ──────────────────────────────────
+        # Same display geometry as the Photos browser thumbnails.
+        visContainer = QWidget()
+        visContainer.setObjectName("cardTransparent")
+        visContainer.setFixedWidth(self.SPECTRO_SIZE.width())
+        visLayout = QVBoxLayout(visContainer)
+        visLayout.setContentsMargins(0, 0, 0, 0)
+        visLayout.setSpacing(7)   # breathing room between spectro and Play strip
+
+        spectroLabel = SpectrogramLabel()
+        spectroLabel.setCursor(Qt.PointingHandCursor)
+        spectroLabel.mousePressEvent = partial(self._spectroClicked, row)
+        visLayout.addWidget(spectroLabel)
+
+        scrubRow = QWidget()
+        scrubRow.setObjectName("cardTransparent")
+        scrubLayout = QHBoxLayout(scrubRow)
+        scrubLayout.setContentsMargins(2, 0, 2, 0)
+        scrubLayout.setSpacing(4)
+
+        playBtn = QPushButton("Play")
+        playBtn.setFixedWidth(60)
+        playBtn.setFixedHeight(28)
+        playBtn.clicked.connect(partial(self._btnPlayClicked, row))
+        self._playBtns[row] = playBtn
+
+        scrubber = QSlider(Qt.Orientation.Horizontal)
+        scrubber.setRange(0, 1000)
+        scrubber.setValue(0)
+        scrubber.setFixedHeight(28)
+        scrubber.sliderMoved.connect(partial(self._onSliderMoved, row))
+        self._sliders[row] = scrubber
+
+        scrubLayout.addWidget(playBtn)
+        scrubLayout.addWidget(scrubber)
+        visLayout.addWidget(scrubRow)
+        visLayout.addStretch(1)   # keep the strip snug under the spectro
+
+        self._spectroLabels[row] = spectroLabel
+        self._filePaths[row] = fileName
+
+        # ── Col 1: caption ─────────────────────────────────────────────────
+        # Prefer the recording's true (embedded) creation date/time; fall
+        # back to the checklist date/time when the file carries no metadata.
+        dateLine = self.captureDateLine(a, s)
+
+        rating = a.get("rating", "0")
+
+        # No Duration line — the duration is visible on the spectrogram's
+        # time axis; the blank line matches the Photos browser caption.
+        captionText = (
+            "<br><br>"
+            '<span style="font-size: 1.1em; font-weight: bold;">' + s["commonName"] + "</span><br>"
+            "<i>" + s["scientificName"] + "</i><br><br>"
+            + s["location"] + "<br>"
+            + dateLine + "<br><br>"
+            + "Rating: " + rating
+        )
+
+        labelCaption = QLabel()
+        labelCaption.setTextFormat(Qt.RichText)
+        labelCaption.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+        labelCaption.setText(captionText)
+        labelCaption.setObjectName("mediaCaption")
+
+        # One container widget per row in a QVBoxLayout (avoids the grid's
+        # ~524k-px height cap that squashed rows past ~1,600 recordings).
+        # Row height = photo-thumbnail height + the Play/scrubber strip
+        # (28px + 7px spacing) + the card's 12px internal padding.  The
+        # row carries the shared media-card background; children are
+        # transparent.
+        rowWidget = QWidget()
+        rowWidget.setObjectName("mediaCard")
+        rowWidget.setAttribute(Qt.WA_StyledBackground, True)
+        rowWidget.setMinimumHeight(
+            self.SPECTRO_SIZE.height() + 47)
+        rowLayout = QHBoxLayout(rowWidget)
+        rowLayout.setContentsMargins(6, 6, 6, 6)   # inset content off the rounded corners
+        rowLayout.setSpacing(2)
+        rowLayout.addWidget(visContainer)
+        rowLayout.addWidget(labelCaption, 1)   # caption absorbs the extra width
+
+        self.rowsLayout.addWidget(rowWidget)
+        self._rowWidgets[row] = rowWidget
+
+    def _endLayout(self):
+        """Called once every cell has been added (the grid flushes its last row)."""
+        pass
+
+    @staticmethod
+    def captureDateLine(a, s):
+        """Weekday, YYYY-MM-DD HH:MM for a recording — its own embedded
+        date/time when the file carries one, else the checklist's."""
+        if a.get("metaDate"):
+            dispDate, dispTime = a["metaDate"], a.get("metaTime", "")
+        else:
+            dispDate, dispTime = s.get("date", ""), s.get("time", "")
+        try:
+            weekday = datetime.datetime(
+                int(dispDate[0:4]), int(dispDate[5:7]), int(dispDate[8:10])
+            ).strftime("%A")
+        except Exception:
+            weekday = ""
+        line = dispDate + ((" " + dispTime) if dispTime else "")
+        return (weekday + ", " + line) if weekday else line
+
     def _buildRows(self):
         """Full grid build (initial fill / after a deletion): sort, then
         create every row and stream the spectrograms in from the workers."""
@@ -629,11 +762,8 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
 
         self._sortAudioList()
 
-        # Clear the existing rows
-        for i in reversed(range(self.rowsLayout.count())):
-            w = self.rowsLayout.itemAt(i).widget()
-            if w:
-                w.setParent(None)
+        # Clear the existing rows (subclasses clear their own containers too)
+        self._beginLayout()
 
         self._spectroLabels = {}
         self._playBtns = {}
@@ -644,106 +774,12 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
 
         for row, (a, s) in enumerate(self.audioList):
             fileName = a.get("fileName", "")
-
-            # ── Col 0: spectrogram + scrubber ──────────────────────────────────
-            # Same display geometry as the Photos browser thumbnails.
-            visContainer = QWidget()
-            visContainer.setObjectName("cardTransparent")
-            visContainer.setFixedWidth(code_ThumbnailCache.THUMB_DISPLAY_SIZE.width())
-            visLayout = QVBoxLayout(visContainer)
-            visLayout.setContentsMargins(0, 0, 0, 0)
-            visLayout.setSpacing(7)   # breathing room between spectro and Play strip
-
-            spectroLabel = SpectrogramLabel()
-            spectroLabel.setCursor(Qt.PointingHandCursor)
-            spectroLabel.mousePressEvent = partial(self._spectroClicked, row)
-            visLayout.addWidget(spectroLabel)
-
-            scrubRow = QWidget()
-            scrubRow.setObjectName("cardTransparent")
-            scrubLayout = QHBoxLayout(scrubRow)
-            scrubLayout.setContentsMargins(2, 0, 2, 0)
-            scrubLayout.setSpacing(4)
-
-            playBtn = QPushButton("Play")
-            playBtn.setFixedWidth(60)
-            playBtn.setFixedHeight(28)
-            playBtn.clicked.connect(partial(self._btnPlayClicked, row))
-            self._playBtns[row] = playBtn
-
-            scrubber = QSlider(Qt.Orientation.Horizontal)
-            scrubber.setRange(0, 1000)
-            scrubber.setValue(0)
-            scrubber.setFixedHeight(28)
-            scrubber.sliderMoved.connect(partial(self._onSliderMoved, row))
-            self._sliders[row] = scrubber
-
-            scrubLayout.addWidget(playBtn)
-            scrubLayout.addWidget(scrubber)
-            visLayout.addWidget(scrubRow)
-            visLayout.addStretch(1)   # keep the strip snug under the spectro
-
-            self._spectroLabels[row] = spectroLabel
-            self._filePaths[row] = fileName
-
-            # ── Col 1: caption ─────────────────────────────────────────────────
-            # Prefer the recording's true (embedded) creation date/time; fall
-            # back to the checklist date/time when the file carries no metadata.
-            if a.get("metaDate"):
-                dispDate, dispTime = a["metaDate"], a.get("metaTime", "")
-            else:
-                dispDate, dispTime = s.get("date", ""), s.get("time", "")
-            try:
-                weekday = datetime.datetime(
-                    int(dispDate[0:4]), int(dispDate[5:7]), int(dispDate[8:10])
-                ).strftime("%A")
-            except Exception:
-                weekday = ""
-            dateLine = dispDate + ((" " + dispTime) if dispTime else "")
-            if weekday:
-                dateLine = weekday + ", " + dateLine
-
-            rating = a.get("rating", "0")
-
-            # No Duration line — the duration is visible on the spectrogram's
-            # time axis; the blank line matches the Photos browser caption.
-            captionText = (
-                "<br><br>"
-                '<span style="font-size: 1.1em; font-weight: bold;">' + s["commonName"] + "</span><br>"
-                "<i>" + s["scientificName"] + "</i><br><br>"
-                + s["location"] + "<br>"
-                + dateLine + "<br><br>"
-                + "Rating: " + rating
-            )
-
-            labelCaption = QLabel()
-            labelCaption.setTextFormat(Qt.RichText)
-            labelCaption.setAlignment(Qt.AlignTop | Qt.AlignLeft)
-            labelCaption.setText(captionText)
-            labelCaption.setObjectName("mediaCaption")
-
-            # One container widget per row in a QVBoxLayout (avoids the grid's
-            # ~524k-px height cap that squashed rows past ~1,600 recordings).
-            # Row height = photo-thumbnail height + the Play/scrubber strip
-            # (28px + 7px spacing) + the card's 12px internal padding.  The
-            # row carries the shared media-card background; children are
-            # transparent.
-            rowWidget = QWidget()
-            rowWidget.setObjectName("mediaCard")
-            rowWidget.setAttribute(Qt.WA_StyledBackground, True)
-            rowWidget.setMinimumHeight(
-                code_ThumbnailCache.THUMB_DISPLAY_SIZE.height() + 47)
-            rowLayout = QHBoxLayout(rowWidget)
-            rowLayout.setContentsMargins(6, 6, 6, 6)   # inset content off the rounded corners
-            rowLayout.setSpacing(2)
-            rowLayout.addWidget(visContainer)
-            rowLayout.addWidget(labelCaption, 1)   # caption absorbs the extra width
-
-            self.rowsLayout.addWidget(rowWidget)
-            self._rowWidgets[row] = rowWidget
+            self._addCell(row, a, s)
 
             if fileName not in self.spectroCache:
                 uncached.append((row, fileName))
+
+        self._endLayout()
 
         # Apply cached spectrograms once layout has settled.
         QApplication.processEvents()

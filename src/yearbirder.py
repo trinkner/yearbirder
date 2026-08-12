@@ -218,7 +218,19 @@ def main():
     # the main window showed Qt's generic default.  Setting it here covers the
     # main window and dialogs at once; MDI children keep the per-report icons
     # they set for themselves.
-    app.setWindowIcon(QIcon(":/icon_yearbirder.ico"))
+    #
+    # Platform-specific artwork, because the same call means different things.
+    # macOS has no title-bar icons: this IS the Dock and Cmd-Tab icon, and it
+    # takes precedence over the bundle's .icns — and when running from source
+    # there is no bundle at all, so it is the only icon there is.  It therefore
+    # needs Apple's icon grid (824px body inside a 1024 canvas, squircle
+    # corners) or Yearbirder renders larger and squarer than every app beside
+    # it.  Windows and Linux want the full-bleed square, which is what a taskbar
+    # and a title bar expect.  See icons/make_macos_icon.py.
+    if sys.platform == "darwin":
+        app.setWindowIcon(QIcon(":/icon_yearbirder_macos.png"))
+    else:
+        app.setWindowIcon(QIcon(":/icon_yearbirder.ico"))
 
     app.setStyle(code_Stylesheet.AppStyle("Fusion"))
 

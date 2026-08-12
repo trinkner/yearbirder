@@ -42,5 +42,11 @@
          the installers already use, so Qt can pick 16/32/48 for the title bar
          and 256 for larger contexts without a second set of files. -->
     <file alias="icon_yearbirder.ico">../icons/Yearbirder.ico</file>
+    <!-- macOS app icon: the same artwork inside Apple's icon grid (824px body
+         on a 1024 canvas, system squircle corners).  On macOS the application
+         icon IS the Dock / Cmd-Tab icon, so the full-bleed .ico above rendered
+         bigger and squarer than every system app beside it.  See
+         icons/make_macos_icon.py. -->
+    <file alias="icon_yearbirder_macos.png">../icons/Yearbirder_Icon_macOS_512.png</file>
   </qresource>
 </RCC>

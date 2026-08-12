@@ -167,7 +167,11 @@
   <p class="toc-group">Working with Recordings</p>
   <ul>
     <li><a href="#adding-recordings">Adding Recordings to Yearbirder</a></li>
-    <li><a href="#recordings">Browsing and Playing Recordings</a></li>
+    <li><a href="#recordings">Browsing and Playing Recordings</a>
+      <ul>
+        <li><a href="#browse-recordings-cards">Browse Cards</a></li>
+        <li><a href="#browse-recordings-grid">Browse Grid</a></li>
+      </ul></li>
     <li><a href="#recording-enlargement">The Recording Enlargement View</a></li>
     <li><a href="#managing-recordings">Managing Your Recordings</a></li>
     <li><a href="#recordings-reports">Recordings Charts and Reports</a></li>
@@ -195,7 +199,8 @@
 <h2 id="whats-new">What's New in v2.11</h2>
 <ul>
   <li><strong>Browse Grid</strong> — A second way to browse your photos: <strong>Photos → Browse Grid</strong> shows the photos matching your filters as a grid of thumbnails rather than one card per row. It is built for large results — a filter returning a thousand images, or the hundred-odd photos you may have of a single species, is far quicker to scan several across at a time. Each cell shows the species name, with the full details on hover; click any cell to open the Enlargement view. The grid offers the same four sorting options, the same Slideshow button, and the same live updates as the card view, and reflows to fit as many columns as the window is wide. Thumbnails for the grid are prepared when you add photos to the catalog, so it opens quickly even on a large collection. See <a href="#browse-grid">Section 21 — Browse Grid</a>.</li>
-  <li><strong>Browse Photos is now Browse Cards</strong> — The original photo browser is unchanged but renamed, so the two views read as a pair on the Photos menu: <strong>Browse Cards</strong> for one photo per row with its full details alongside, <strong>Browse Grid</strong> for scanning many at once. The <strong>Photos</strong> toolbar button still opens Browse Cards. See <a href="#browse-cards">Section 21 — Browse Cards</a>.</li>
+  <li><strong>Browse Grid for recordings</strong> — <strong>Recordings → Browse Grid</strong> does the same for your sound recordings, showing them as a grid of spectrograms instead of one card per row. Every cell keeps its own <strong>Play</strong> button and scrubber, so you can audition a recording without leaving the grid, and clicking a spectrogram opens the Recording Enlargement view as before. See <a href="#recordings">Section 27 — Browsing and Playing Recordings</a>.</li>
+  <li><strong>Browse Photos is now Browse Cards</strong> — The original photo browser is unchanged but renamed, so the two views read as a pair on the Photos menu: <strong>Browse Cards</strong> for one photo per row with its full details alongside, <strong>Browse Grid</strong> for scanning many at once. The recordings browser is renamed the same way, and the <strong>Photos</strong> and <strong>Recordings</strong> toolbar buttons now open the grid views. See <a href="#browse-cards">Section 21 — Browse Cards</a>.</li>
 </ul>
 
 <h3>Earlier changes in v2.10</h3>
@@ -886,12 +891,12 @@
 </ul>
 
 <h3 id="browse-cards">Browse Cards</h3>
-<p>Open with <strong>Photos → Browse Cards</strong> or the <strong>Photos</strong> toolbar button. Shows every photo matching the current Sighting Filter and Media Filter as a vertical list of cards, one photo per row.</p>
+<p>Open with <strong>Photos → Browse Cards</strong>. Shows every photo matching the current Sighting Filter and Media Filter as a vertical list of cards, one photo per row.</p>
 <p>Each card shows a large thumbnail alongside the species name, scientific name, location, date, and your rating. Click any thumbnail to open the <strong>Enlargement</strong> view.</p>
 <p>A <strong>Slideshow</strong> button appears in the top-right corner of the window. Click it to launch a full-screen slideshow of the photos currently shown — the same configuration dialog appears first, letting you choose sort order, speed, and title-bar options. See <a href="#slideshow">Slideshow</a> for details.</p>
 
 <h3 id="browse-grid">Browse Grid</h3>
-<p>Open with <strong>Photos → Browse Grid</strong>. This shows the same set of photos as Browse Cards — everything matching the current Sighting Filter and Media Filter — arranged as a grid of thumbnails rather than a single column of cards.</p>
+<p>Open with <strong>Photos → Browse Grid</strong> or the <strong>Photos</strong> toolbar button. This shows the same set of photos as Browse Cards — everything matching the current Sighting Filter and Media Filter — arranged as a grid of thumbnails rather than a single column of cards.</p>
 <p>Browse Grid is the view to reach for when a filter returns a lot of photos. A result of a thousand or more images, or even the hundred-odd photos you might have of a single species, is far quicker to scan several across at a time than one per row. To narrow a large result before browsing it, set the Sighting Filter to a species, location, or date range, or use the Media Filter's rating range to show only your best images.</p>
 <p>Each cell shows the thumbnail with the species name beneath it. Hover over a cell to see the full details — scientific name, location, capture date and time, and rating — in a tooltip. Click anywhere on a cell to open the <strong>Enlargement</strong> view for that photo; from there the arrow keys move through every photo in the grid, in the order the grid is currently sorted.</p>
 <p>The window opens four columns wide. Widen or narrow it and the grid reflows to fit as many columns as the space allows, without reloading any thumbnails. Both browse views offer the same four sorting options and the same <strong>Slideshow</strong> button, and both stay in step with the rest of Yearbirder: deleting a photo, removing one from the catalog, or reassigning one to a different species updates the open window immediately.</p>
@@ -1144,13 +1149,22 @@
 <hr>
 
 <h2 id="recordings">27. Browsing and Playing Recordings</h2>
-<p>Open with <strong>Recordings → Browse Recordings</strong>. This window shows every recording that matches the current Sighting Filter and Media Filter, one per row. The <strong>Recordings</strong> menu appears whenever an eBird data file is open.</p>
+<p>Your recordings can be browsed two ways, and both show every recording matching the current Sighting Filter and Media Filter. The <strong>Recordings</strong> menu appears whenever an eBird data file is open.</p>
+
+<h3 id="browse-recordings-cards">Browse Cards</h3>
+<p>Open with <strong>Recordings → Browse Cards</strong>. Shows one recording per row, with the full details alongside it.</p>
 <p>Each row displays:</p>
 <ul>
   <li>A <strong>spectrogram</strong> — a visual representation of the recording, with time along the horizontal axis and frequency (pitch) along the vertical axis. Louder sounds appear darker.</li>
   <li>A <strong>Play / Pause</strong> button and a <strong>scrubber</strong> bar beneath the spectrogram.</li>
   <li>A caption with the species name, scientific name, location, date, duration, and your rating.</li>
 </ul>
+
+<h3 id="browse-recordings-grid">Browse Grid</h3>
+<p>Open with <strong>Recordings → Browse Grid</strong> or the <strong>Recordings</strong> toolbar button. The same recordings as Browse Cards, arranged as a grid of spectrograms rather than a single column — quicker to scan when a filter returns a lot of them, and the view to reach for when you are hunting for one particular cut among many.</p>
+<p>Every cell keeps its own <strong>Play / Pause</strong> button and scrubber, so you can audition a recording without leaving the grid, and the red cursor line sweeps across the cell's spectrogram exactly as it does on a card. Only one recording plays at a time: pressing Play on a second cell stops the first and resets its scrubber.</p>
+<p>The species name appears beneath each spectrogram, with the full details — scientific name, location, capture date and time, and rating — shown on hover. Click a spectrogram to open the <strong>Recording Enlargement</strong> view for that recording.</p>
+<p>The window opens three columns wide. Widen or narrow it and the grid reflows to fit as many columns as the space allows, without re-rendering any spectrograms. Both views offer the same four sorting options, and both update immediately when a recording is deleted, removed from the catalog, or reassigned to a different species.</p>
 
 <h3>Playback</h3>
 <p>Click <strong>Play</strong> to listen to a recording. A <strong>red cursor line</strong> sweeps across the spectrogram in real time to show your position, and the scrubber tracks along with it. Drag the scrubber to jump to any point in the recording. Click <strong>Pause</strong> to stop; clicking Play on a different recording switches to it.</p>
