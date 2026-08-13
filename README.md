@@ -10,13 +10,38 @@
 
 # Yearbirder
 
-**Current release: v1.50** (May 2026)
+**Current release: v2.11** (August 2026)
 
-A desktop application for exploring and analysing your personal [eBird](https://ebird.org) data and bird photos.
+A desktop application for exploring and analysing your personal [eBird](https://ebird.org) data, bird photos, and sound recordings.
 
-Yearbirder lets you filter, browse, and visualise your personal eBird sightings in ways the eBird website does not — across every location, species, date, and season in your personal history. If you are a bird photographer, Yearbirder also lets you sort, filter and view your photos in the same way.
+Yearbirder lets you filter, browse, and visualise your personal eBird sightings in ways the eBird website does not — across every location, species, date, and season in your personal history. If you photograph or record birds, Yearbirder catalogues that media alongside your sightings: browse and rate your photos, study your recordings as spectrograms with synchronised playback, and filter both by the same criteria as your sightings.
+
+Full version history and downloads: [yearbirder.org](https://yearbirder.org)
 
 ---
+
+## What's New in v2.11
+
+- **Browse Grid for photos and recordings** — `Photos → Browse Grid` and `Recordings → Browse Grid` lay your media out as a grid instead of one card per row, for filtered results too large to scan a row at a time. Recording cells keep their own **Play** button and scrubber, so you can audition without leaving the grid.
+- **Two browse views** — the original browsers are renamed **Browse Cards**; both views share the same four sorting options, Slideshow button, and live updates. The Photos and Recordings toolbar buttons open the grid views.
+- **macOS app icon** — now matches the size and rounded-square shape of other apps in the Dock and ⌘-Tab switcher.
+
+## What's New in v2.10
+
+- **Instant previews for new recordings** — spectrogram views are prepared when a recording is added, so it opens immediately in the browser and enlargement view.
+- **Compact catalog and cache** — a new command tidies the media catalog and sweeps cached previews that no longer belong to it; removing media frees its cache automatically.
+- **Past-days slider in the Community Sightings Explorer** — set how many days of eBird history the community reports cover, from one day to a full month.
+- **Filter-aware refresh** — re-reading technical data from your files honours both the Sighting and Media filters, preserving each item's rating and notes.
+- **Navigation conveniences** — double-click an enlarged photo to return to best fit; the space bar toggles playback in a recording enlargement; setting only the top of a rating range fills in the bottom.
+
+## What's New in v2.0
+
+- **Sound recordings** — Yearbirder now manages your bird recordings alongside your photos. Add WAV files to your media catalog, browse them as spectrograms with built-in playback, and study any recording in a full **Recording Enlargement** view with continuous zoom, frequency-range, and contrast controls. A **Recordings** menu provides charts, maps, and galleries mirroring the photo reports.
+- **Notes on photos and recordings** — attach free-text notes to any item, saved in your media catalog alongside the rating.
+- **Audio calibration** — correct for Bluetooth or interface latency so the spectrogram's playback cursor stays aligned with what you hear.
+- **My County and My Patch** — quick-jump buttons that set the Sighting Filter to your saved county or regular birding location.
+
+Later 2.0x releases refined this work; see the [full version history](https://yearbirder.org/history.html).
 
 ## What's New in v1.50
 
@@ -137,9 +162,11 @@ Yearbirder lets you filter, browse, and visualise your personal eBird sightings 
 
 ## Download
 
-A pre-built, signed, and notarized macOS app is available on the [Releases page](https://github.com/trinkner/yearbird/releases/latest).
+**macOS** — download the signed and notarized `Yearbirder_v2.11.dmg` from the [Releases page](https://github.com/trinkner/yearbirder/releases/latest), open it, and drag Yearbirder to your Applications folder.
 
-Download `Yearbirder.dmg`, open it, and drag Yearbirder to your Applications folder.
+**Windows** — download the installer from [yearbirder.org/download](https://yearbirder.org/download) and run it.
+
+Both are also linked from [yearbirder.org](https://yearbirder.org).
 
 ---
 
