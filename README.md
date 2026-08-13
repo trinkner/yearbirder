@@ -5,6 +5,7 @@
 <td><img src="src/readme_photos/demo_Graphs1.png" alt="Graphs" height="120"></td>
 <td><img src="src/readme_photos/demo_Maps1.png" alt="Maps" height="120"></td>
 <td><img src="src/readme_photos/demo_Photos1.png" alt="Photos" height="120"></td>
+<td><img src="web/images/demo_Recordings.png" alt="Recordings" height="120"></td>
 <td><img src="src/readme_photos/demo_CommunitySightings.png" alt="Community Sightings" height="120"></td>
 </tr></table>
 
