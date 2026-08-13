@@ -20,7 +20,9 @@ import code_LocationTotals
 import code_DateTotals
 import code_Graphs
 import code_Photos
+import code_PhotosGrid
 import code_Recordings
+import code_RecordingsGrid
 import code_SpeciesGallery
 import code_RecordingsSpeciesGallery
 import code_ManagePhotos
@@ -482,8 +484,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
     fontSize = 11
     scaleFactor = 1
     rowHeight = 16  # default; recomputed in ScaleDisplay() and __init__
-    versionNumber = "2.10"
-    versionDate = "August 7, 2026"
+    versionNumber = "2.11"
+    versionDate = "August 11, 2026"
     taxonomyYear = ""
 
     def __init__(self):
@@ -624,9 +626,13 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionPrint.triggered.connect(self.printMe)
         self.actionCreatePDF.triggered.connect(self.CreatePDF)
         self.actionFamilies.triggered.connect(self.CreateFamilyPieChart)
-        self.actionPhotos.triggered.connect(self.createPhotosReport)
-        self.actionRecordingsToolbar.triggered.connect(self.createRecordingsBrowser)
+        # Toolbar Photos/Recordings open the GRID views — the toolbar is the
+        # quick way in, and the grid is the better first look at a filtered
+        # result.  The card views stay on their menus as Browse Cards.
+        self.actionPhotos.triggered.connect(self.createPhotosGridReport)
+        self.actionRecordingsToolbar.triggered.connect(self.createRecordingsGridBrowser)
         self.actionPhotosByFilter.triggered.connect(self.createPhotosReport)
+        self.actionPhotosGrid.triggered.connect(self.createPhotosGridReport)
         self.actionSpeciesGallery.triggered.connect(self.createSpeciesGallery)
         self.actionPhotosSpeciesGallery.triggered.connect(self.createPhotosBySpeciesBarChart)
         self.actionBigReport.triggered.connect(self.CreateBigReport)
@@ -668,6 +674,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionAddRecordings.triggered.connect(self.addAudio)
         self.actionManageRecordings.triggered.connect(self.createManageRecordings)
         self.actionBrowseRecordings.triggered.connect(self.createRecordingsBrowser)
+        self.actionRecordingsGrid.triggered.connect(self.createRecordingsGridBrowser)
         self.actionEditPhotosByFilter.triggered.connect(self.createEditPhotosByFilter)
         self.actionEditPhotosByFilter.setVisible(False)
         self.actionUpdateEXIFDataForAllPhotos.triggered.connect(self.updateEXIFDataForAllPhotos)
@@ -2010,8 +2017,12 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
     def _liveCatalogMedia(self):
         """(source_path, kinds) for every distinct media file in the open catalog:
-        photos carry the 'photo' cache kind, recordings the three spectro_* kinds.
-        Feeds code_ThumbnailCache.prune_to_catalog to sweep orphaned cache files."""
+        photos carry both photo cache kinds (the browser thumbnail and Browse
+        Grid's small one), recordings the three spectro_* kinds.  Feeds
+        code_ThumbnailCache.prune_to_catalog to sweep orphaned cache files — a
+        kind missing here is swept as an orphan, so both photo kinds must be
+        listed."""
+        _PHOTO_KINDS = ["photo", "photo_grid"]
         _REC_KINDS = ["spectro_thumb", "spectro_overview", "spectro_ribbon"]
         media = []
         seen = set()
@@ -2020,7 +2031,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 fn = p.get("fileName", "")
                 if fn and fn not in seen:
                     seen.add(fn)
-                    media.append((fn, ["photo"]))
+                    media.append((fn, _PHOTO_KINDS))
             for a in s.get("audio", []):
                 fn = a.get("fileName", "")
                 if fn and fn not in seen:
@@ -2084,6 +2095,20 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
 
     def createPhotosReport(self):
+        """Photos > Browse Cards — the vertical list of photo cards."""
+        self._createPhotosWindow(code_Photos.Photos)
+
+    def createPhotosGridReport(self):
+        """Photos > Browse Grid — the same photos as a thumbnail grid."""
+        self._createPhotosWindow(code_PhotosGrid.PhotosGrid)
+
+    def _createPhotosWindow(self, viewClass):
+        """Spawn a photo browser of the given class for the current filter.
+
+        Both browse views differ only in layout (PhotosGrid subclasses Photos),
+        so the guards, the no-results messaging and the build-hidden-then-reveal
+        dance live here once.
+        """
         # if no data file is currently open, abort
         if MainWindow.db.eBirdFileOpenFlag is not True:
             self.CreateMessageNoFile()
@@ -2103,7 +2128,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             )
             return
 
-        sub = code_Photos.Photos()
+        sub = viewClass()
         sub.mdiParent = self
 
         self.mdiArea.addSubWindow(sub)
@@ -2471,6 +2496,17 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             sub.close()
 
     def createRecordingsBrowser(self):
+        """Recordings > Browse Cards — the vertical list of recording cards."""
+        self._createRecordingsWindow(code_Recordings.Recordings)
+
+    def createRecordingsGridBrowser(self):
+        """Recordings > Browse Grid — the same recordings as a grid."""
+        self._createRecordingsWindow(code_RecordingsGrid.RecordingsGrid)
+
+    def _createRecordingsWindow(self, viewClass):
+        """Spawn a recordings browser of the given class for the current filter.
+        Both views differ only in layout (RecordingsGrid subclasses Recordings),
+        so the guards and no-results messaging live here once."""
         if MainWindow.db.eBirdFileOpenFlag is not True:
             self.CreateMessageNoFile()
             return
@@ -2486,7 +2522,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             )
             return
 
-        sub = code_Recordings.Recordings()
+        sub = viewClass()
         sub.mdiParent = self
 
         self.mdiArea.addSubWindow(sub)

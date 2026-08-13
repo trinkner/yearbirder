@@ -117,7 +117,7 @@
 <div class="toc">
   <p class="toc-group">What's New</p>
   <ul>
-    <li><a href="#whats-new">What's New in v2.0</a></li>
+    <li><a href="#whats-new">What's New in v2.11</a></li>
   </ul>
   <p class="toc-group">Quick Start</p>
   <ul>
@@ -149,6 +149,8 @@
     <li><a href="#photo-settings-file">Adding Photos to Yearbirder</a></li>
     <li><a href="#photos">Viewing Photos</a>
       <ul>
+        <li><a href="#browse-cards">Browse Cards</a></li>
+        <li><a href="#browse-grid">Browse Grid</a></li>
         <li><a href="#animated-photo-sequence">Animated Photo Sequence Map</a></li>
         <li><a href="#slideshow">Slideshow</a></li>
         <li><a href="#ytd-photos">Year to Date by Photographs</a></li>
@@ -165,7 +167,11 @@
   <p class="toc-group">Working with Recordings</p>
   <ul>
     <li><a href="#adding-recordings">Adding Recordings to Yearbirder</a></li>
-    <li><a href="#recordings">Browsing and Playing Recordings</a></li>
+    <li><a href="#recordings">Browsing and Playing Recordings</a>
+      <ul>
+        <li><a href="#browse-recordings-cards">Browse Cards</a></li>
+        <li><a href="#browse-recordings-grid">Browse Grid</a></li>
+      </ul></li>
     <li><a href="#recording-enlargement">The Recording Enlargement View</a></li>
     <li><a href="#managing-recordings">Managing Your Recordings</a></li>
     <li><a href="#recordings-reports">Recordings Charts and Reports</a></li>
@@ -190,7 +196,25 @@
 <hr>
 
 <h1 class="group-heading">What's New</h1>
-<h2 id="whats-new">What's New in v2.0</h2>
+<h2 id="whats-new">What's New in v2.11</h2>
+<ul>
+  <li><strong>Browse Grid</strong> — A second way to browse your photos: <strong>Photos → Browse Grid</strong> shows the photos matching your filters as a grid of thumbnails rather than one card per row. It is built for large results — a filter returning a thousand images, or the hundred-odd photos you may have of a single species, is far quicker to scan several across at a time. Each cell shows the species name, with the full details on hover; click any cell to open the Enlargement view. The grid offers the same four sorting options, the same Slideshow button, and the same live updates as the card view, and reflows to fit as many columns as the window is wide. Thumbnails for the grid are prepared when you add photos to the catalog, so it opens quickly even on a large collection. See <a href="#browse-grid">Section 21 — Browse Grid</a>.</li>
+  <li><strong>Browse Grid for recordings</strong> — <strong>Recordings → Browse Grid</strong> does the same for your sound recordings, showing them as a grid of spectrograms instead of one card per row. Every cell keeps its own <strong>Play</strong> button and scrubber, so you can audition a recording without leaving the grid, and clicking a spectrogram opens the Recording Enlargement view as before. See <a href="#recordings">Section 27 — Browsing and Playing Recordings</a>.</li>
+  <li><strong>Browse Photos is now Browse Cards</strong> — The original photo browser is unchanged but renamed, so the two views read as a pair on the Photos menu: <strong>Browse Cards</strong> for one photo per row with its full details alongside, <strong>Browse Grid</strong> for scanning many at once. The recordings browser is renamed the same way, and the <strong>Photos</strong> and <strong>Recordings</strong> toolbar buttons now open the grid views. See <a href="#browse-cards">Section 21 — Browse Cards</a>.</li>
+</ul>
+
+<h3>Earlier changes in v2.10</h3>
+<ul>
+  <li><strong>Instant previews for new recordings</strong> — The spectrogram views a recording needs are now prepared when you add it to your catalog, so newly added recordings open immediately in both the Recordings browser and the Recording Enlargement view instead of rendering on first use.</li>
+  <li><strong>Compact catalog and cache</strong> — A new <strong>File → Compact catalog and cache…</strong> command tidies your media catalog and sweeps cached previews that no longer belong to it, reclaiming disk space. Removing a photo or recording from the catalog now frees its cached previews automatically. See <a href="#rebuild-thumbnails">Section 36 — Rebuild Media Thumbnails</a>.</li>
+  <li><strong>Single-species filter opens the Individual window</strong> — Asking for a species list when your Sighting Filter names just one species now opens that species' <strong>Individual Species</strong> window — its dates, locations, and media — instead of a one-row list. See <a href="#individual-species">Section 19 — Individual Species Window</a>.</li>
+  <li><strong>Refresh camera and recording data respects your filters</strong> — Re-reading technical data from your files now honours both the Sighting Filter and the Media Filter, so you can refresh a chosen subset rather than the whole catalog, and each item keeps its rating and notes. The confirmation names the scope it acted on.</li>
+  <li><strong>Past-days slider in the Community Sightings Explorer</strong> — A slider sets how many days of eBird history the Notable Community Sightings, All Community Sightings, and Notable Sightings Map reports cover — anywhere from a single day to a full month, in place of the fixed three-day window. The report buttons no longer carry a fixed "(Past 3 days)" label. See <a href="#explorer">Section 33 — Community Sightings Explorer</a>.</li>
+  <li><strong>Quicker ways around your photos and recordings</strong> — Double-click an enlarged photo to snap it back to best fit after zooming with the scroll wheel (the same as pressing <strong>F</strong>), and press the <strong>space bar</strong> in a recording enlargement to start or pause playback wherever the keyboard focus sits. In the Media Filter, setting only the top of a rating range now fills in the bottom for you. See <a href="#enlargement-view">Section 22 — Working with the Enlargement View</a> and <a href="#media-filter">Section 5 — The Media Filter</a>.</li>
+  <li><strong>Interface refinements and fixes</strong> — Find results now show the terms you searched for; the Manage Photos and Manage Recordings windows label their confirm button <strong>Save</strong>; enlarged photos open at their final size instead of resizing after they appear; the Yearbirder icon now appears in the main window's title bar; and Windows users no longer see a flash when clicking a spectrogram. Open browsers, galleries, and reports are also more consistent about updating themselves when media is deleted, removed from the catalog, or reassigned.</li>
+</ul>
+
+<h3>Earlier changes in v2.0</h3>
 <ul>
   <li><strong>Sound recordings</strong> — Yearbirder now manages your bird <strong>sound recordings</strong> alongside your photos. Add WAV recordings to your media catalog, browse them as spectrograms with built-in playback, and study any recording in a full-featured <strong>Recording Enlargement</strong> view with continuous zoom, frequency-range, and contrast controls. A new <strong>Recordings</strong> menu provides charts and reports that mirror the photo reports — a recordings species gallery, geolocated recordings, an animated recording sequence map, and growth/total charts. The Media Filter gains a Recordings section (rating, channels, duration, and has-recording). See <a href="#adding-recordings">Section 26 — Adding Recordings</a>, <a href="#recordings">Section 27 — Browsing and Playing Recordings</a>, <a href="#recording-enlargement">Section 28 — The Recording Enlargement View</a>, and <a href="#recordings-reports">Section 30 — Recordings Charts and Reports</a>.</li>
   <li><strong>Notes on photos and recordings</strong> — Attach your own free-text notes to any photo or sound recording. Click the <strong>Notes</strong> field beneath the file name in the Enlargement or Recording Enlargement details pane (F9), or the <strong>Notes</strong> button in Manage Photos / Manage Recordings, to open a small text box and type whatever you like — a behavior note, a location detail, a reminder to revisit the shot. Notes are saved in your media catalog alongside the rating. See <a href="#enlargement-view">Section 22 — Working with the Enlargement View</a> and <a href="#recording-enlargement">Section 28 — The Recording Enlargement View</a>.</li>
@@ -866,13 +890,20 @@
   <li>Yearbirder reads <strong>EXIF data</strong> from each JPEG file automatically: camera model, lens, shutter speed, aperture, focal length, and ISO.</li>
 </ul>
 
-<h3>Browse Photos</h3>
-<p>Open with <strong>Photos → Browse Photos</strong> or the <strong>Photos</strong> toolbar button. Shows thumbnails of every photo matching the current Sighting Filter and Media Filter.</p>
-<p>Each thumbnail shows the photo, species name, date, and your rating. Click any thumbnail to open the <strong>Enlargement</strong> view.</p>
-<p>A <strong>Slideshow</strong> button appears in the top-right corner of the Photos window. Click it to launch a full-screen slideshow of the photos currently shown — the same configuration dialog appears first, letting you choose sort order, speed, and title-bar options. See <a href="#slideshow">Slideshow</a> for details.</p>
+<h3 id="browse-cards">Browse Cards</h3>
+<p>Open with <strong>Photos → Browse Cards</strong>. Shows every photo matching the current Sighting Filter and Media Filter as a vertical list of cards, one photo per row.</p>
+<p>Each card shows a large thumbnail alongside the species name, scientific name, location, date, and your rating. Click any thumbnail to open the <strong>Enlargement</strong> view.</p>
+<p>A <strong>Slideshow</strong> button appears in the top-right corner of the window. Click it to launch a full-screen slideshow of the photos currently shown — the same configuration dialog appears first, letting you choose sort order, speed, and title-bar options. See <a href="#slideshow">Slideshow</a> for details.</p>
+
+<h3 id="browse-grid">Browse Grid</h3>
+<p>Open with <strong>Photos → Browse Grid</strong> or the <strong>Photos</strong> toolbar button. This shows the same set of photos as Browse Cards — everything matching the current Sighting Filter and Media Filter — arranged as a grid of thumbnails rather than a single column of cards.</p>
+<p>Browse Grid is the view to reach for when a filter returns a lot of photos. A result of a thousand or more images, or even the hundred-odd photos you might have of a single species, is far quicker to scan several across at a time than one per row. To narrow a large result before browsing it, set the Sighting Filter to a species, location, or date range, or use the Media Filter's rating range to show only your best images.</p>
+<p>Each cell shows the thumbnail with the species name beneath it. Hover over a cell to see the full details — scientific name, location, capture date and time, and rating — in a tooltip. Click anywhere on a cell to open the <strong>Enlargement</strong> view for that photo; from there the arrow keys move through every photo in the grid, in the order the grid is currently sorted.</p>
+<p>The window opens four columns wide. Widen or narrow it and the grid reflows to fit as many columns as the space allows, without reloading any thumbnails. Both browse views offer the same four sorting options and the same <strong>Slideshow</strong> button, and both stay in step with the rest of Yearbirder: deleting a photo, removing one from the catalog, or reassigning one to a different species updates the open window immediately.</p>
+<p>The two views are independent windows, so you can keep a grid open for scanning and open a cards window alongside it when you want to read the full details of what you have found.</p>
 
 <h3>Sorting photos</h3>
-<p>Use the radio buttons at the top of the Photos window to sort by:</p>
+<p>Use the radio buttons at the top of either browse window to sort by:</p>
 <ul>
   <li><strong>Taxonomy</strong> — groups photos by species in taxonomic order</li>
   <li><strong>Date</strong> — chronological order</li>
@@ -884,7 +915,7 @@
 <p>Use the <strong>Media Filter</strong> panel (right side of the main window) to narrow results by camera, lens, exposure settings, or rating. See <a href="#media-filter">Section 5</a> for the full list of filter options.</p>
 
 <h3>Enlargement view</h3>
-<p>Click any thumbnail in the Photos window to open the Enlargement view, which shows the photo at full size with pan and zoom. From the Enlargement view you can:</p>
+<p>Click any thumbnail in either browse window to open the Enlargement view, which shows the photo at full size with pan and zoom. From the Enlargement view you can:</p>
 <ul>
   <li><strong>Navigate</strong> between photos using the previous/next arrows. Pressing <strong>F10</strong> or using the right-click context menu enters full-screen mode; the left and right arrow keys navigate between photos with a smooth crossfade transition.</li>
   <li><strong>Set or change the rating</strong> for the photo.</li>
@@ -964,7 +995,7 @@
 <hr>
 
 <h2 id="enlargement-view">22. Working with the Enlargement View</h2>
-<p>The Enlargement view opens whenever you click a photo thumbnail anywhere in Yearbirder — in the Photos window, the Species Gallery, the Individual Species window, the Geolocated Photos map, or the Animated Photo Sequence Map. It shows your photo at full resolution against a dark background and doubles as a photo management tool: you can navigate your collection, rate images, inspect EXIF data, and perform file operations all without leaving the view.</p>
+<p>The Enlargement view opens whenever you click a photo thumbnail anywhere in Yearbirder — in Browse Cards or Browse Grid, the Species Gallery, the Individual Species window, the Geolocated Photos map, or the Animated Photo Sequence Map. It shows your photo at full resolution against a dark background and doubles as a photo management tool: you can navigate your collection, rate images, inspect EXIF data, and perform file operations all without leaving the view.</p>
 
 <h3>Navigating between photos</h3>
 <p>Use the <strong>left and right arrow keys</strong> (or <strong>Page Up / Page Down</strong>) to step through the photos in your current set. The <strong>Space bar</strong> advances to the next photo; <strong>Backspace</strong> goes back. You can also right-click and choose <strong>Next photo</strong> or <strong>Previous photo</strong> from the context menu.</p>
@@ -1118,13 +1149,22 @@
 <hr>
 
 <h2 id="recordings">27. Browsing and Playing Recordings</h2>
-<p>Open with <strong>Recordings → Browse Recordings</strong>. This window shows every recording that matches the current Sighting Filter and Media Filter, one per row. The <strong>Recordings</strong> menu appears whenever an eBird data file is open.</p>
+<p>Your recordings can be browsed two ways, and both show every recording matching the current Sighting Filter and Media Filter. The <strong>Recordings</strong> menu appears whenever an eBird data file is open.</p>
+
+<h3 id="browse-recordings-cards">Browse Cards</h3>
+<p>Open with <strong>Recordings → Browse Cards</strong>. Shows one recording per row, with the full details alongside it.</p>
 <p>Each row displays:</p>
 <ul>
   <li>A <strong>spectrogram</strong> — a visual representation of the recording, with time along the horizontal axis and frequency (pitch) along the vertical axis. Louder sounds appear darker.</li>
   <li>A <strong>Play / Pause</strong> button and a <strong>scrubber</strong> bar beneath the spectrogram.</li>
   <li>A caption with the species name, scientific name, location, date, duration, and your rating.</li>
 </ul>
+
+<h3 id="browse-recordings-grid">Browse Grid</h3>
+<p>Open with <strong>Recordings → Browse Grid</strong> or the <strong>Recordings</strong> toolbar button. The same recordings as Browse Cards, arranged as a grid of spectrograms rather than a single column — quicker to scan when a filter returns a lot of them, and the view to reach for when you are hunting for one particular cut among many.</p>
+<p>Every cell keeps its own <strong>Play / Pause</strong> button and scrubber, so you can audition a recording without leaving the grid, and the red cursor line sweeps across the cell's spectrogram exactly as it does on a card. Only one recording plays at a time: pressing Play on a second cell stops the first and resets its scrubber.</p>
+<p>The species name appears beneath each spectrogram, with the full details — scientific name, location, capture date and time, and rating — shown on hover. Click a spectrogram to open the <strong>Recording Enlargement</strong> view for that recording.</p>
+<p>The window opens three columns wide. Widen or narrow it and the grid reflows to fit as many columns as the space allows, without re-rendering any spectrograms. Both views offer the same four sorting options, and both update immediately when a recording is deleted, removed from the catalog, or reassigned to a different species.</p>
 
 <h3>Playback</h3>
 <p>Click <strong>Play</strong> to listen to a recording. A <strong>red cursor line</strong> sweeps across the spectrogram in real time to show your position, and the scrubber tracks along with it. Drag the scrubber to jump to any point in the recording. Click <strong>Pause</strong> to stop; clicking Play on a different recording switches to it.</p>
@@ -1404,9 +1444,9 @@
 <hr>
 
 <h2 id="rebuild-thumbnails">36. Rebuild Media Thumbnails</h2>
-<p>To make your photos and recordings appear quickly, Yearbirder keeps a <strong>cache</strong> of the small thumbnails it shows in the Photos browser and the spectrograms it shows in the Recordings browser and the Recording Enlargement view. This cache is built automatically: items are added to it when you first import them, and refreshed automatically if a file changes. You normally never need to think about it.</p>
+<p>To make your photos and recordings appear quickly, Yearbirder keeps a <strong>cache</strong> of the thumbnails it shows in the photo browsers — one sized for Browse Cards and a smaller one for Browse Grid — and the spectrograms it shows in the Recordings browser and the Recording Enlargement view. This cache is built automatically: items are added to it when you first import them, and refreshed automatically if a file changes. You normally never need to think about it.</p>
 <p>Occasionally you may want to rebuild the cache from scratch — for example, if you edited a photo with software that kept the original file's date and size unchanged, or if you simply want to be certain every cached image is current. Choose <strong>File → Rebuild thumbnail cache…</strong>.</p>
-<p>Yearbirder asks you to confirm, then clears the existing cache and regenerates a thumbnail for every photo and a spectrogram for every recording in your media catalog. A progress bar shows how far along it is. The work runs in the background, so the rest of Yearbirder stays responsive, and you can keep working while it finishes.</p>
+<p>Yearbirder asks you to confirm, then clears the existing cache and regenerates both thumbnail sizes for every photo and a spectrogram for every recording in your media catalog. A progress bar shows how far along it is. The work runs in the background, so the rest of Yearbirder stays responsive, and you can keep working while it finishes.</p>
 <p>This command is purely a convenience for refreshing the cache. It does not change, move, or delete any of your original photo or recording files, and it does not alter your media catalog — it only rebuilds the cached preview images Yearbirder draws from.</p>
 
 <hr>

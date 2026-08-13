@@ -76,16 +76,13 @@ class threadLoadThumbnail(QThread):
             item = self.workQueue.get()
             if item is None:        # sentinel → no more work, exit cleanly
                 break
-            row, photoFile = item
+            row, photoFile, kind = item
 
-            # Tier 2: on-disk thumbnail cache (tier 1 is the in-memory
-            # pixmapCache, checked before a file is ever queued here).
-            qimage = code_ThumbnailCache.load(photoFile)
-            if qimage is None:
-                # Tier 3: decode the source at reduced scale, then cache it.
-                qimage = code_ThumbnailCache.decode_thumbnail(photoFile)
-                if not qimage.isNull():
-                    code_ThumbnailCache.store(photoFile, qimage)
+            # Tier 1 (the in-memory pixmapCache) is checked before a file is
+            # ever queued here; ensure() covers the rest — disk hit, else
+            # derive/decode and store.  The kind selects the artifact: the card
+            # view's THUMB_SIZE thumbnail or Browse Grid's small one.
+            qimage = code_ThumbnailCache.ensure(photoFile, kind)
 
             self.resultQueue.put((row, photoFile, qimage))
 
@@ -99,8 +96,19 @@ class Photos(QMdiSubWindow, form_Photos.Ui_frmPhotos):
     resized = Signal()
     contentReady = Signal()   # grid built and thumbnails applied — reveal OK
 
+    # ── Subclass seam (see code_PhotosGrid.PhotosGrid) ────────────────────────
+    # Everything that loads and tracks thumbnails addresses cells by row index
+    # through self._photoButtons[row] -> QLabel.  A subclass that fills that
+    # dict inherits the worker pool, the disk cache, the drain timer, the
+    # progress overlay, sorting, deletion, print and slideshow unchanged, and
+    # only has to say how cells are built and arranged: override the three
+    # layout hooks below (_beginLayout / _addCell / _endLayout) plus the
+    # re-arranging half of SortAndDisplayPhotos.
+    THUMB_KIND = "photo"                                  # cache artifact to load
+    CELL_SIZE  = code_ThumbnailCache.THUMB_DISPLAY_SIZE   # on-screen thumbnail box
+
     def __init__(self):
-        super(self.__class__, self).__init__()
+        super().__init__()
         self.setupUi(self)
         self.setAttribute(Qt.WA_DeleteOnClose,True)
         self.mdiParent = ""
@@ -180,13 +188,13 @@ class Photos(QMdiSubWindow, form_Photos.Ui_frmPhotos):
         self.mdiParent.db.compactJsonlFile()
         # Keep the on-disk thumbnail cache bounded (off the load path).
         code_ThumbnailCache.enforce_cap()
-        super(self.__class__, self).closeEvent(event)
+        super().closeEvent(event)
 
 
     def resizeEvent(self, event):
         #routine to handle events on objects, like clicks, lost focus, gained forcus, etc.
         self.resized.emit()
-        return super(self.__class__, self).resizeEvent(event)
+        return super().resizeEvent(event)
 
 
     def resizeMe(self):
@@ -506,6 +514,82 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
         self.scrollArea.verticalScrollBar().setValue(0)
         self._sorting = False
 
+    # ── Layout hooks (overridden by PhotosGrid) ───────────────────────────────
+
+    def _beginLayout(self):
+        """Drop the previous fill's widgets before a rebuild."""
+        for i in reversed(range(self.rowsLayout.count())):
+            w = self.rowsLayout.itemAt(i).widget()
+            if w:
+                w.setParent(None)
+
+    def _addCell(self, row, p, s):
+        """Build the widgets for one photo and place them.
+
+        Must register the thumbnail QLabel as self._photoButtons[row] — that is
+        what the worker drain fills — and its container as self._rowWidgets[row].
+        """
+        buttonPhoto = QLabel()
+        buttonPhoto.setFixedWidth(self.CELL_SIZE.width())
+        buttonPhoto.setMinimumHeight(self.CELL_SIZE.height())
+        buttonPhoto.setAlignment(Qt.AlignCenter)
+        buttonPhoto.setCursor(Qt.PointingHandCursor)
+        buttonPhoto.mousePressEvent = partial(self._photoClicked, row)
+
+        labelCaption = QLabel()
+        labelCaption.setTextFormat(Qt.RichText)
+        labelCaption.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+        labelCaption.setText(
+            "<br><br>"
+            '<span style="font-size: 1.1em; font-weight: bold;">' + s["commonName"] + "</span><br>"
+            "<i>" + s["scientificName"] + "</i><br><br>" +
+            s["location"] + "<br>" +
+            self.captureDateLine(p, s) + "<br><br>" +
+            "Rating: " + p["rating"]
+        )
+        labelCaption.setObjectName("mediaCaption")
+
+        # One container widget per row in a QVBoxLayout (avoids the grid's
+        # ~524k-px height cap that squashed rows past ~1,600 photos).
+        # The row carries the shared media-card background; children are
+        # transparent over it.
+        rowWidget = QWidget()
+        rowWidget.setObjectName("mediaCard")
+        rowWidget.setAttribute(Qt.WA_StyledBackground, True)
+        rowWidget.setMinimumHeight(self.CELL_SIZE.height())
+        rowLayout = QHBoxLayout(rowWidget)
+        rowLayout.setContentsMargins(6, 6, 6, 6)   # inset content off the rounded corners
+        rowLayout.setSpacing(2)
+        rowLayout.addWidget(buttonPhoto)
+        rowLayout.addWidget(labelCaption, 1)   # caption absorbs the extra width
+
+        self.rowsLayout.addWidget(rowWidget)
+        self._photoButtons[row] = buttonPhoto
+        self._rowWidgets[row] = rowWidget
+
+    def _endLayout(self):
+        """Called once every cell has been added (grid flushes its last row)."""
+        pass
+
+    @staticmethod
+    def captureDateLine(p, s):
+        """"Weekday, YYYY-MM-DD HH:MM" for a photo — its own EXIF capture time
+        when the catalog has one, else the checklist's date/time."""
+        exif_dt = p.get("exifDatetime")
+        if exif_dt and len(exif_dt) >= 10:
+            dispDate = exif_dt[0:4] + "-" + exif_dt[5:7] + "-" + exif_dt[8:10]
+            dispTime = exif_dt[11:16] if len(exif_dt) >= 16 else ""
+        else:
+            dispDate, dispTime = s.get("date", ""), s.get("time", "")
+        try:
+            weekday = datetime.datetime(
+                int(dispDate[0:4]), int(dispDate[5:7]), int(dispDate[8:10])
+            ).strftime("%A")
+        except Exception:
+            weekday = ""
+        line = dispDate + ((" " + dispTime) if dispTime else "")
+        return (weekday + ", " + line) if weekday else line
+
     def _buildRows(self):
         """Full grid build (initial fill): sort, then create every row and
         stream the thumbnails in from the worker pool."""
@@ -521,11 +605,8 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
 
         self._sortPhotoList()
 
-        # clear the existing rows
-        for i in reversed(range(self.rowsLayout.count())):
-            w = self.rowsLayout.itemAt(i).widget()
-            if w:
-                w.setParent(None)
+        # clear the existing rows (subclasses clear their own containers too)
+        self._beginLayout()
 
         # create placeholder rows for every photo immediately so the layout is
         # fully established before any thumbnails arrive from threads
@@ -555,67 +636,15 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
                 overlay.setProgress(row)
                 QApplication.processEvents()   # lay out new cells + let the drain fill them
 
-            buttonPhoto = QLabel()
-            buttonPhoto.setFixedWidth(code_ThumbnailCache.THUMB_DISPLAY_SIZE.width())
-            buttonPhoto.setMinimumHeight(code_ThumbnailCache.THUMB_DISPLAY_SIZE.height())
-            buttonPhoto.setAlignment(Qt.AlignCenter)
-            buttonPhoto.setCursor(Qt.PointingHandCursor)
-            buttonPhoto.mousePressEvent = partial(self._photoClicked, row)
-
-            # Prefer the photo's true (EXIF) creation date/time from the catalog;
-            # fall back to the checklist date/time when none is stored.
-            exif_dt = p.get("exifDatetime")
-            if exif_dt and len(exif_dt) >= 10:
-                dispDate = exif_dt[0:4] + "-" + exif_dt[5:7] + "-" + exif_dt[8:10]
-                dispTime = exif_dt[11:16] if len(exif_dt) >= 16 else ""
-            else:
-                dispDate, dispTime = s.get("date", ""), s.get("time", "")
-            try:
-                photoWeekday = datetime.datetime(
-                    int(dispDate[0:4]), int(dispDate[5:7]), int(dispDate[8:10])
-                ).strftime("%A")
-            except Exception:
-                photoWeekday = ""
-            dateLine = dispDate + ((" " + dispTime) if dispTime else "")
-            if photoWeekday:
-                dateLine = photoWeekday + ", " + dateLine
-
-            labelCaption = QLabel()
-            labelCaption.setTextFormat(Qt.RichText)
-            labelCaption.setAlignment(Qt.AlignTop | Qt.AlignLeft)
-            labelCaption.setText(
-                "<br><br>"
-                '<span style="font-size: 1.1em; font-weight: bold;">' + s["commonName"] + "</span><br>"
-                "<i>" + s["scientificName"] + "</i><br><br>" +
-                s["location"] + "<br>" +
-                dateLine + "<br><br>" +
-                "Rating: " + p["rating"]
-            )
-            labelCaption.setObjectName("mediaCaption")
-
-            # One container widget per row in a QVBoxLayout (avoids the grid's
-            # ~524k-px height cap that squashed rows past ~1,600 photos).
-            # The row carries the shared media-card background; children are
-            # transparent over it.
-            rowWidget = QWidget()
-            rowWidget.setObjectName("mediaCard")
-            rowWidget.setAttribute(Qt.WA_StyledBackground, True)
-            rowWidget.setMinimumHeight(code_ThumbnailCache.THUMB_DISPLAY_SIZE.height())
-            rowLayout = QHBoxLayout(rowWidget)
-            rowLayout.setContentsMargins(6, 6, 6, 6)   # inset content off the rounded corners
-            rowLayout.setSpacing(2)
-            rowLayout.addWidget(buttonPhoto)
-            rowLayout.addWidget(labelCaption, 1)   # caption absorbs the extra width
-
-            self.rowsLayout.addWidget(rowWidget)
-            self._photoButtons[row] = buttonPhoto
-            self._rowWidgets[row] = rowWidget
+            self._addCell(row, p, s)
 
             # Queue uncached thumbnails for the (already-running) workers as each
             # row is created, so decoding overlaps grid construction.
             if p["fileName"] not in self.pixmapCache:
                 self._totalUncached += 1
-                self.workQueue.put((row, p["fileName"]))
+                self.workQueue.put((row, p["fileName"], self.THUMB_KIND))
+
+        self._endLayout()
 
         # Grid built: sentinel the workers so each exits once it drains the queue.
         # Keep _building True through the rest of this method: the drain fires
@@ -638,7 +667,7 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
                         pm = self.pixmapCache[p["fileName"]]
                         if not pm.isNull():
                             btn.setPixmap(pm.scaled(
-                                code_ThumbnailCache.THUMB_DISPLAY_SIZE,
+                                self.CELL_SIZE,
                                 Qt.KeepAspectRatio, Qt.SmoothTransformation))
 
         self.scrollArea.verticalScrollBar().setValue(0)
@@ -690,7 +719,7 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
                 btn = self._photoButtons.get(row)
                 if btn:
                     btn.setPixmap(pm.scaled(
-                        code_ThumbnailCache.THUMB_DISPLAY_SIZE,
+                        self.CELL_SIZE,
                         Qt.KeepAspectRatio, Qt.SmoothTransformation))
 
             self._loadedCount += 1
