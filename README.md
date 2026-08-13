@@ -173,19 +173,33 @@ Both are also linked from [yearbirder.org](https://yearbirder.org).
 
 ## Requirements
 
+Only needed if you run Yearbirder from source — the macOS and Windows downloads
+above are self-contained and need no Python installation.
+
 - Python 3.10 or later (download from [python.org](https://www.python.org/downloads/))
-- [PySide6](https://pypi.org/project/PySide6/) — Qt 6 bindings (LGPL)
-- [folium](https://pypi.org/project/folium/)
-- [matplotlib](https://pypi.org/project/matplotlib/)
-- [numpy](https://pypi.org/project/numpy/)
-- [natsort](https://pypi.org/project/natsort/)
-- [piexif](https://pypi.org/project/piexif/)
+- [PySide6](https://pypi.org/project/PySide6/) — Qt 6 bindings (LGPL); supplies the UI, the embedded maps (Qt WebEngine), and audio playback (Qt Multimedia)
+- [folium](https://pypi.org/project/folium/) — interactive maps
+- [matplotlib](https://pypi.org/project/matplotlib/) — charts
+- [numpy](https://pypi.org/project/numpy/) — chart and spectrogram maths
+- [natsort](https://pypi.org/project/natsort/) — natural sort ordering
+- [piexif](https://pypi.org/project/piexif/) — reads and writes photo EXIF data
+- [soundfile](https://pypi.org/project/soundfile/) — decodes WAV recordings
+- [soxr](https://pypi.org/project/soxr/) — high-quality resampling for playback
 
-After installing Python, install all other dependencies with:
+Two further packages are optional. Yearbirder runs without them, with a small
+loss of function:
+
+- [mutagen](https://pypi.org/project/mutagen/) — reads ID3 date/time tags embedded in WAV recordings by some recorders; without it those recordings fall back to their checklist's date
+- [certifi](https://pypi.org/project/certifi/) — CA bundle for the eBird API calls; without it the system trust store is used instead
+
+After installing Python, install the dependencies with:
 
 ```
-pip install pyside6 folium matplotlib numpy natsort piexif
+pip install pyside6 folium matplotlib numpy natsort piexif soundfile soxr mutagen certifi
 ```
+
+Yearbirder is built and tested against Python 3.12 (the Windows installer) and
+3.14 (the macOS app).
 
 ---
 
