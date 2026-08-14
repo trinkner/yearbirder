@@ -105,6 +105,14 @@ class Preferences(QMdiSubWindow, form_Preferences.Ui_frmPreferences):
         if idx >= 0:
             self.cboMyPatch.setCurrentIndex(idx)
 
+    def showTab(self, title):
+        """Select the tab with this title (used when another window sends the
+        user straight to a particular tab)."""
+        for i in range(self.tabWidget.count()):
+            if self.tabWidget.tabText(i) == title:
+                self.tabWidget.setCurrentIndex(i)
+                return
+
     def tabChanged(self, index):
         if self.tabWidget.tabText(index) == "My Locations":
             if not self.mdiParent.db.eBirdFileOpenFlag:

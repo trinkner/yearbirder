@@ -424,6 +424,33 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
 
     def afterSort(self, column, order):
         self.tblList.verticalHeader().setDefaultSectionSize(self.mdiParent.rowHeight)
+
+
+    def showDefaultSortIndicator(self):
+        """Point the header's sort arrow at the column the rows already arrive
+        sorted by — the leftmost visible one — so the window opens advertising
+        that the headers are clickable.
+
+        The arrow is set with the header's signals blocked ON PURPOSE.  The
+        table has sorting enabled, so QTableView listens to sortIndicatorChanged
+        and would re-sort the rows; every Fill* method inserts its rows in the
+        order the database already returned them, and re-sorting on the column's
+        DISPLAY text would not always reproduce that (checklists, for instance,
+        are ordered by country code, not by the country name shown).  Blocking
+        the signal shows the arrow and leaves the rows exactly as built.
+
+        A side benefit: with the indicator already on that column, the user's
+        first click on it flips to descending — a visible change — instead of
+        re-applying the ascending sort that is already in effect and appearing
+        to do nothing."""
+        header = self.tblList.horizontalHeader()
+        for column in range(self.tblList.columnCount()):
+            if not self.tblList.isColumnHidden(column):
+                header.blockSignals(True)
+                header.setSortIndicator(column, Qt.SortOrder.AscendingOrder)
+                header.blockSignals(False)
+                header.setSortIndicatorShown(True)
+                return
            
         
     def ChangedFindText(self):
@@ -858,8 +885,10 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         
         icon = QIcon()
         icon.addPixmap(QPixmap(":/icon_bird_white.png"), QIcon.Normal, QIcon.Off)
-        self.setWindowIcon(icon)      
-        
+        self.setWindowIcon(icon)
+
+        self.showDefaultSortIndicator()
+
         # tell MainWindow that we succeeded filling the list
         return(True)
 
@@ -956,6 +985,8 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
 
         self.resize(1050, self.height())
 
+        self.showDefaultSortIndicator()
+
         # alert MainWindow that we finished fill data successfully
         return(True)
 
@@ -1051,6 +1082,8 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         icon.addPixmap(QPixmap(":/icon_find_white.png"), QIcon.Normal, QIcon.Off)
         self.setWindowIcon(icon)
 
+        self.showDefaultSortIndicator()
+
 
     @code_MediaRefresh.media_report()
     def FillLocations(self, filter):
@@ -1116,6 +1149,8 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         self.tblList.addAction(self.actionSetLocationFilter)
         self.tblList.addAction(self.actionSetFirstDateFilter)
         self.tblList.addAction(self.actionSetLastDateFilter)
+
+        self.showDefaultSortIndicator()
 
         return(True)
 
