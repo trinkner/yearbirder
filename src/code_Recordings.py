@@ -119,10 +119,12 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
         self._spectroLabels = {}
         self._rowWidgets = {}
 
-        self.rdoSortSpecies.toggled.connect(lambda checked: self.SortAndDisplayRecordings() if checked else None)
-        self.rdoSortDate.toggled.connect(lambda checked: self.SortAndDisplayRecordings() if checked else None)
-        self.rdoSortRating.toggled.connect(lambda checked: self.SortAndDisplayRecordings() if checked else None)
-        self.rdoSortTaxonomy.toggled.connect(lambda checked: self.SortAndDisplayRecordings() if checked else None)
+        self.rdoSortSpecies.toggled.connect(lambda checked: self._sortKeyChanged() if checked else None)
+        self.rdoSortDate.toggled.connect(lambda checked: self._sortKeyChanged() if checked else None)
+        self.rdoSortRating.toggled.connect(lambda checked: self._sortKeyChanged() if checked else None)
+        self.rdoSortTaxonomy.toggled.connect(lambda checked: self._sortKeyChanged() if checked else None)
+        self.rdoSortAscending.toggled.connect(lambda checked: self.SortAndDisplayRecordings() if checked else None)
+        self.rdoSortDescending.toggled.connect(lambda checked: self.SortAndDisplayRecordings() if checked else None)
 
         self.threadCount = min(os.cpu_count() or 4, 8)
         self.workQueue = queue.Queue()
@@ -278,6 +280,8 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
         self.rdoSortDate.setFont(QFont(YBFont, fontSize))
         self.rdoSortRating.setFont(QFont(YBFont, fontSize))
         self.rdoSortTaxonomy.setFont(QFont(YBFont, fontSize))
+        self.rdoSortAscending.setFont(QFont(YBFont, fontSize))
+        self.rdoSortDescending.setFont(QFont(YBFont, fontSize))
         for c in self.layLists.findChildren(QLabel):
             c.setFont(QFont(YBFont, fontSize))
         windowWidth = int(800 * scaleFactor)
@@ -531,13 +535,36 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
 
         return True
 
+    def _sortKeyChanged(self):
+        """A sort key was picked: reset the direction to that key's natural
+        reading — Rating means best first, everything else reads ascending —
+        then sort once.  The direction radios' signals are blocked while they
+        are set so they don't kick off a second, identical sort."""
+        wanted = (self.rdoSortDescending if self.rdoSortRating.isChecked()
+                  else self.rdoSortAscending)
+        if not wanted.isChecked():
+            self.rdoSortAscending.blockSignals(True)
+            self.rdoSortDescending.blockSignals(True)
+            wanted.setChecked(True)
+            self.rdoSortAscending.blockSignals(False)
+            self.rdoSortDescending.blockSignals(False)
+        self.SortAndDisplayRecordings()
+
     def _sortAudioList(self):
-        """Sort audioList by the checked radio; returns the permutation
-        (new position -> old index) so row widgets and bookkeeping can
-        follow the data."""
+        """Sort audioList by the checked radio, in the checked direction;
+        returns the permutation (new position -> old index) so row widgets and
+        bookkeeping can follow the data.
+
+        Every key is written to sort ascending and reversed by the shared
+        `reverse` flag — including Rating, which used to hardcode best-first and
+        now gets it from the Descending default _sortKeyChanged applies.  Note
+        sorted() is stable, so reversing keeps tied items in their original
+        relative order rather than flipping them too."""
         idx = range(len(self.audioList))
+        reverse = self.rdoSortDescending.isChecked()
         if self.rdoSortSpecies.isChecked():
-            order = sorted(idx, key=lambda i: self.audioList[i][1]["commonName"])
+            order = sorted(idx, key=lambda i: self.audioList[i][1]["commonName"],
+                           reverse=reverse)
         elif self.rdoSortDate.isChecked():
             # Sort by the recording's own embedded datetime (what the caption
             # shows), falling back to the checklist's date/time (see the
@@ -547,17 +574,18 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
                 if a.get("metaDate"):
                     return a["metaDate"] + " " + a.get("metaTime", "")
                 return s.get("date", "") + " " + s.get("time", "")
-            order = sorted(idx, key=_capture_dt)
+            order = sorted(idx, key=_capture_dt, reverse=reverse)
         elif self.rdoSortRating.isChecked():
             def _rating(i):
                 try:
                     return float(self.audioList[i][0].get("rating") or 0)
                 except (ValueError, TypeError):
                     return 0.0
-            order = sorted(idx, key=_rating, reverse=True)
+            order = sorted(idx, key=_rating, reverse=reverse)
         elif self.rdoSortTaxonomy.isChecked():
             order = sorted(idx, key=lambda i: (float(self.audioList[i][1]["taxonomicOrder"]),
-                                               self.audioList[i][1]["commonName"]))
+                                               self.audioList[i][1]["commonName"]),
+                           reverse=reverse)
         else:
             order = list(idx)
         self.audioList = [self.audioList[i] for i in order]

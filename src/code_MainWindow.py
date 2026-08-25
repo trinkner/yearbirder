@@ -484,8 +484,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
     fontSize = 11
     scaleFactor = 1
     rowHeight = 16  # default; recomputed in ScaleDisplay() and __init__
-    versionNumber = "2.11"
-    versionDate = "August 11, 2026"
+    versionNumber = "2.12"
+    versionDate = "August 14, 2026"
     taxonomyYear = ""
 
     def __init__(self):
@@ -602,7 +602,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.menuHelp.addSeparator()
         self.menuHelp.addAction(_checkUpdatesAction)
         self.menuHelp.addAction(_aboutAction)        
-        self.actionPreferences.triggered.connect(self.createPreferences)
+        # lambda, not a direct connect: triggered() passes a bool that would
+        # otherwise land in createPreferences' `tab` argument
+        self.actionPreferences.triggered.connect(lambda: self.createPreferences())
         self.actionExit.triggered.connect(self.ExitApp)
         
         self.actionShowStandardFilter.triggered.connect(self.showStandardFilter)
@@ -768,6 +770,11 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.cboLocations.currentIndexChanged.connect(self.ComboLocationsChanged)
         self.btnMyCounty.clicked.connect(self.applyMyCounty)
         self.btnMyPatch.clicked.connect(self.applyMyPatch)
+        # right-clicking either button jumps straight to where it is configured
+        self.btnMyCounty.addAction(self.actionSetMyCounty)
+        self.btnMyPatch.addAction(self.actionSetMyPatch)
+        self.actionSetMyCounty.triggered.connect(self.openMyLocationsPreferences)
+        self.actionSetMyPatch.triggered.connect(self.openMyLocationsPreferences)
         self.cboOrders.currentIndexChanged.connect(self.ComboOrdersChanged)
         self.cboFamilies.currentIndexChanged.connect(self.ComboFamiliesChanged)
         self.cboSpecies.currentIndexChanged.connect(self.ComboSpeciesChanged)
@@ -2074,15 +2081,15 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                     w.close()
 
 
-    def createPreferences(self):
-        
+    def createPreferences(self, tab=None):
+        """Open the Preferences window.  `tab` optionally names a tab to open on
+        (e.g. "My Locations" when the user is sent here to set My County/Patch)."""
 
-        
         sub = code_Preferences.Preferences()
 
-        # save the MDI window as the parent for future use in the child        
-        sub.mdiParent = self 
-        
+        # save the MDI window as the parent for future use in the child
+        sub.mdiParent = self
+
         sub.fillPreferences()
 
         # add and center the child in the MDI area
@@ -2091,6 +2098,12 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         y = max(0, (self.mdiArea.height() - sub.height()) // 2)
         sub.move(x, y)
         sub.show()
+
+        # after show(): selecting a tab can raise a modal dialog of its own
+        # (My Locations warns when no data file is open), which should appear
+        # over a visible Preferences window
+        if tab:
+            sub.showTab(tab)
 
 
 
@@ -2225,8 +2238,46 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
 
     def updateMyLocationButtons(self):
-        self.btnMyCounty.setVisible(bool(MainWindow.db.myCounty))
-        self.btnMyPatch.setVisible(bool(MainWindow.db.myPatch))
+        """Both buttons are always shown; only their tooltips reflect whether a
+        location has been chosen yet.  Clicking an unset button offers a jump to
+        the My Locations tab of Preferences (see _promptSetMyLocation)."""
+        county = MainWindow.db.myCounty
+        self.btnMyCounty.setToolTip(
+            "Set filter to My County (%s)" % county if county
+            else "My County is not set yet — click to choose it in Preferences")
+
+        patch = MainWindow.db.myPatch
+        self.btnMyPatch.setToolTip(
+            "Set filter to My Patch (%s)" % patch if patch
+            else "My Patch is not set yet — click to choose it in Preferences")
+
+
+    def openMyLocationsPreferences(self, checked=False):
+        """Open Preferences on the My Locations tab.  Reached from the right-click
+        menu on either My button and from the prompt shown when one is unset.
+        (`checked` absorbs the bool QAction.triggered sends.)"""
+        self.createPreferences(tab="My Locations")
+
+
+    def _promptSetMyLocation(self, name, description):
+        """Tell the user the location hasn't been configured, and offer to open
+        Preferences on the My Locations tab."""
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Icon.Information)
+        msg.setWindowTitle("%s Is Not Set" % name)
+        msg.setText("%s has not been set yet." % name)
+        msg.setInformativeText(
+            "%s Choose it on the My Locations tab of Preferences, and this "
+            "button will filter your sightings to it with one click." % description)
+        setup_btn = msg.addButton("Set %s…" % name, QMessageBox.ButtonRole.AcceptRole)
+        # QMessageBox lays its buttons out narrower than the app stylesheet's
+        # padding needs, clipping the longer label; pin the hinted width.
+        setup_btn.setMinimumWidth(setup_btn.sizeHint().width())
+        msg.addButton("Not Now", QMessageBox.ButtonRole.RejectRole)
+        msg.setDefaultButton(setup_btn)
+        msg.exec()
+        if msg.clickedButton() is setup_btn:
+            self.openMyLocationsPreferences()
 
 
     def _resetLocationCombosToFull(self):
@@ -2264,6 +2315,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
     def applyMyCounty(self):
         county = MainWindow.db.myCounty
         if not county:
+            self._promptSetMyLocation(
+                "My County",
+                "My County is the county you bird most often.")
             return
 
         # Look up region, country, and state for this county.
@@ -2317,6 +2371,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
     def applyMyPatch(self):
         location = MainWindow.db.myPatch
         if not location:
+            self._promptSetMyLocation(
+                "My Patch",
+                "My Patch is your regular birding location.")
             return
 
         # Look up full hierarchy for this location (same lookup strategy as applyMyCounty).

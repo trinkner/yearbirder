@@ -104,12 +104,30 @@ class Ui_frmRecordings(object):
         self.rdoSortTaxonomy.setObjectName("rdoSortTaxonomy")
         self.sortButtonGroup.addButton(self.rdoSortTaxonomy, 3)
 
+        # Sort direction — its own exclusive group, set back from the keys so the
+        # two groupings read as separate choices on the one row.  Ascending is
+        # the default because Taxonomy is the default key.
+        self.directionButtonGroup = QtWidgets.QButtonGroup(self.frameLabels)
+        self.directionButtonGroup.setObjectName("directionButtonGroup")
+
+        self.rdoSortAscending = QtWidgets.QRadioButton(self.frameLabels)
+        self.rdoSortAscending.setChecked(True)
+        self.rdoSortAscending.setObjectName("rdoSortAscending")
+        self.directionButtonGroup.addButton(self.rdoSortAscending, 0)
+
+        self.rdoSortDescending = QtWidgets.QRadioButton(self.frameLabels)
+        self.rdoSortDescending.setObjectName("rdoSortDescending")
+        self.directionButtonGroup.addButton(self.rdoSortDescending, 1)
+
         self.sortRow = QtWidgets.QHBoxLayout()
         self.sortRow.addWidget(self.lblSortBy)
         self.sortRow.addWidget(self.rdoSortSpecies)
         self.sortRow.addWidget(self.rdoSortDate)
         self.sortRow.addWidget(self.rdoSortRating)
         self.sortRow.addWidget(self.rdoSortTaxonomy)
+        self.sortRow.addSpacing(40)
+        self.sortRow.addWidget(self.rdoSortAscending)
+        self.sortRow.addWidget(self.rdoSortDescending)
         self.sortRow.addStretch()
         self.verticalLayoutLabels.addLayout(self.sortRow)
 
@@ -193,6 +211,8 @@ class Ui_frmRecordings(object):
         self.rdoSortDate.setText(_translate("frmRecordings", "Date"))
         self.rdoSortRating.setText(_translate("frmRecordings", "Rating"))
         self.rdoSortTaxonomy.setText(_translate("frmRecordings", "Taxonomy"))
+        self.rdoSortAscending.setText(_translate("frmRecordings", "Ascending"))
+        self.rdoSortDescending.setText(_translate("frmRecordings", "Descending"))
 
 
 import icons_rc

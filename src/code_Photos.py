@@ -134,10 +134,12 @@ class Photos(QMdiSubWindow, form_Photos.Ui_frmPhotos):
         self._abort = False
         self._sorting = False
         self._photoButtons = {}
-        self.rdoSortSpecies.toggled.connect(lambda checked: self.SortAndDisplayPhotos() if checked else None)
-        self.rdoSortDate.toggled.connect(lambda checked: self.SortAndDisplayPhotos() if checked else None)
-        self.rdoSortRating.toggled.connect(lambda checked: self.SortAndDisplayPhotos() if checked else None)
-        self.rdoSortTaxonomy.toggled.connect(lambda checked: self.SortAndDisplayPhotos() if checked else None)
+        self.rdoSortSpecies.toggled.connect(lambda checked: self._sortKeyChanged() if checked else None)
+        self.rdoSortDate.toggled.connect(lambda checked: self._sortKeyChanged() if checked else None)
+        self.rdoSortRating.toggled.connect(lambda checked: self._sortKeyChanged() if checked else None)
+        self.rdoSortTaxonomy.toggled.connect(lambda checked: self._sortKeyChanged() if checked else None)
+        self.rdoSortAscending.toggled.connect(lambda checked: self.SortAndDisplayPhotos() if checked else None)
+        self.rdoSortDescending.toggled.connect(lambda checked: self.SortAndDisplayPhotos() if checked else None)
         self.buttonSlideshow.clicked.connect(self.launchSlideshow)
 
         # dynamic thread pool sized to CPU count, capped at 8 for disk-bound work
@@ -238,6 +240,8 @@ class Photos(QMdiSubWindow, form_Photos.Ui_frmPhotos):
         self.rdoSortDate.setFont(QFont(YBFont, fontSize))
         self.rdoSortRating.setFont(QFont(YBFont, fontSize))
         self.rdoSortTaxonomy.setFont(QFont(YBFont, fontSize))
+        self.rdoSortAscending.setFont(QFont(YBFont, fontSize))
+        self.rdoSortDescending.setFont(QFont(YBFont, fontSize))
 
         for c in self.layLists.findChildren(QLabel):
             c.setFont(QFont(YBFont, fontSize))
@@ -437,13 +441,36 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
         return(True)
 
 
+    def _sortKeyChanged(self):
+        """A sort key was picked: reset the direction to that key's natural
+        reading — Rating means best first, everything else reads ascending —
+        then sort once.  The direction radios' signals are blocked while they
+        are set so they don't kick off a second, identical sort."""
+        wanted = (self.rdoSortDescending if self.rdoSortRating.isChecked()
+                  else self.rdoSortAscending)
+        if not wanted.isChecked():
+            self.rdoSortAscending.blockSignals(True)
+            self.rdoSortDescending.blockSignals(True)
+            wanted.setChecked(True)
+            self.rdoSortAscending.blockSignals(False)
+            self.rdoSortDescending.blockSignals(False)
+        self.SortAndDisplayPhotos()
+
     def _sortPhotoList(self):
-        """Sort photoList by the checked radio; returns the permutation
-        (new position -> old index) so row widgets and bookkeeping can
-        follow the data."""
+        """Sort photoList by the checked radio, in the checked direction;
+        returns the permutation (new position -> old index) so row widgets and
+        bookkeeping can follow the data.
+
+        Every key is written to sort ascending and reversed by the shared
+        `reverse` flag — including Rating, which used to hardcode best-first and
+        now gets it from the Descending default _sortKeyChanged applies.  Note
+        sorted() is stable, so reversing keeps tied items in their original
+        relative order rather than flipping them too."""
         idx = range(len(self.photoList))
+        reverse = self.rdoSortDescending.isChecked()
         if self.rdoSortSpecies.isChecked():
-            order = sorted(idx, key=lambda i: self.photoList[i][1]["commonName"])
+            order = sorted(idx, key=lambda i: self.photoList[i][1]["commonName"],
+                           reverse=reverse)
         elif self.rdoSortDate.isChecked():
             # Sort by the photo's own capture datetime (what the caption
             # shows), not the checklist's start time — photos on the same
@@ -457,17 +484,18 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
                     return (dt[0:4] + "-" + dt[5:7] + "-" + dt[8:10]
                             + " " + dt[11:16])
                 return s.get("date", "") + " " + s.get("time", "")
-            order = sorted(idx, key=_capture_dt)
+            order = sorted(idx, key=_capture_dt, reverse=reverse)
         elif self.rdoSortRating.isChecked():
             def _rating(i):
                 try:
                     return float(self.photoList[i][0]["rating"] or 0)
                 except (ValueError, TypeError):
                     return 0.0
-            order = sorted(idx, key=_rating, reverse=True)
+            order = sorted(idx, key=_rating, reverse=reverse)
         elif self.rdoSortTaxonomy.isChecked():
             order = sorted(idx, key=lambda i: (float(self.photoList[i][1]["taxonomicOrder"]),
-                                               self.photoList[i][1]["commonName"]))
+                                               self.photoList[i][1]["commonName"]),
+                           reverse=reverse)
         else:
             order = list(idx)
         self.photoList = [self.photoList[i] for i in order]

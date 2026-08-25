@@ -943,18 +943,45 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         return labels, counts, species_lists, species_tallies, f"Recordings {suffix}"
 
     def _build_cumulative_audio_data(self, sightings):
-        """Return (dates, counts, new_species, y_label) — date of first recording per species."""
+        """Return (dates, counts, new_species, y_label, date_best_recording) —
+        date of first recording per species.
+
+        date_best_recording: {date_str: {species: wav path}} — the best-rated
+        recording of each species on the date it was first recorded, used for
+        the hover tooltip's spectrogram strip (mirrors the photo chart's
+        date_best_photo).
+        """
         species_first = {}
+        date_sp_best  = {}         # (date, sp) -> (rating, path)
         for s in sightings:
-            if not s.get("audio"):
+            audio = s.get("audio")
+            if not audio:
                 continue
             sp   = s["commonName"]
             date = s["date"]
             if sp not in species_first or date < species_first[sp]:
                 species_first[sp] = date
+            for a in audio:
+                path = a.get("fileName", "")
+                if not path:
+                    continue
+                try:
+                    rating = int(a.get("rating") or 0)
+                except (ValueError, TypeError):
+                    rating = 0
+                key = (date, sp)
+                if key not in date_sp_best or rating > date_sp_best[key][0]:
+                    date_sp_best[key] = (rating, path)
 
         if not species_first:
-            return [], [], [], ""
+            return [], [], [], "", {}
+
+        # For each species pick the best recording made on its first-recorded date
+        date_best_recording = defaultdict(dict)
+        for sp, first_date in species_first.items():
+            entry = date_sp_best.get((first_date, sp))
+            if entry:
+                date_best_recording[first_date][sp] = entry[1]
 
         daily = defaultdict(set)
         for sp, date in species_first.items():
@@ -974,7 +1001,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             new_species.append(sorted(daily[d], key=lambda sp: taxo_index.get(sp, 999999)))
             seen  |= daily[d]
             counts.append(len(seen))
-        return dates, counts, new_species, "Cumulative Species Recorded"
+        return dates, counts, new_species, "Cumulative Species Recorded", date_best_recording
 
     def _build_audio_accumulation_data(self, sightings):
         """Return (years, new_counts, repeat_counts, new_species) for audio accumulation."""
@@ -2304,9 +2331,60 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
 
     _THUMB_PX   = 150   # thumbnail long-edge size in pixels
     _MAX_THUMBS = 6     # maximum species shown with thumbnails
+    # Spectrogram strips are wide and short, so they get their own geometry
+    # rather than the photos' square bounding box.
+    _SPECTRO_TIP_W = 260
+    _SPECTRO_TIP_H = 90
+
+    def _spectro_tooltip_b64(self, wav_path):
+        """A base64 PNG spectrogram strip for the hover tooltip, or "" on failure.
+
+        Cache-first, exactly like the Recordings gallery's print path: a WAV the
+        user has already browsed is free here.  On a miss the strip is rendered
+        inline — this runs on the GUI thread (a mouse-move handler), so the
+        axis-text render would be safe, but it is skipped anyway: the tooltip is
+        a visual cue, so the bare spectrogram is cropped out of the composed
+        image and the kHz/sec margins are dropped.
+
+        A miss is NOT written back to the shared thumbnail cache: the entry
+        stored here is a cropped, axis-less strip, which is not what the
+        "spectro_thumb" kind means everywhere else.  Callers memoise the result
+        per chart in self._photo_thumb_cache.
+        """
+        import code_Audio
+        import code_ThumbnailCache
+
+        img = code_ThumbnailCache.load(wav_path, "spectro_thumb",
+                                       code_ThumbnailCache.SPECTRO_THUMB_VARIANT)
+        if img is None or img.isNull():
+            img, _dur, _sr, _bbox = code_Audio.render_spectrogram_qimage(
+                wav_path, draw_axis_text=False)
+        if img is None or img.isNull():
+            return ""
+
+        # Crop away the axis margins so the tooltip shows spectrogram, not
+        # whitespace.  SPECTRO_AX_BBOX is figure-fraction, bottom-origin.
+        x0, x1, y0f, y1f = code_Audio.SPECTRO_AX_BBOX
+        w, h = img.width(), img.height()
+        crop = img.copy(int(x0 * w), int((1.0 - y1f) * h),
+                        int((x1 - x0) * w), int((y1f - y0f) * h))
+        if crop.isNull():
+            crop = img
+
+        px = QPixmap.fromImage(crop).scaled(
+            self._SPECTRO_TIP_W, self._SPECTRO_TIP_H,
+            Qt.AspectRatioMode.IgnoreAspectRatio,
+            Qt.TransformationMode.SmoothTransformation)
+        ba = QByteArray()
+        buf = QBuffer(ba)
+        buf.open(QIODevice.OpenModeFlag.WriteOnly)
+        px.toImage().save(buf, "PNG")
+        buf.close()
+        return base64.b64encode(bytes(ba)).decode("ascii")
 
     def _update_cumulative_photos_hover(self, event):
-        """Hover for cumulativephotos: Qt thumbnail tooltip + scatter dot."""
+        """Hover for cumulativephotos / cumulativerecordings: Qt thumbnail
+        tooltip (photo thumbnails or spectrogram strips) + scatter dot."""
         hide_all = event.inaxes is not self._ax or event.xdata is None
         if not hide_all:
             idx = int(round(event.xdata))
@@ -2340,7 +2418,9 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         best_photo = getattr(self, '_date_species_best', {}).get(date_str, {})
         cache      = getattr(self, '_photo_thumb_cache', {})
 
-        verb = "recorded" if self._chart_type == "cumulativerecordings" else "photographed"
+        is_audio = self._chart_type == "cumulativerecordings"
+        verb = "recorded" if is_audio else "photographed"
+        mime = "png" if is_audio else "jpeg"
         parts = [
             f"<b>{self._labels[idx]}</b><br>"
             f"{y} species {verb} &nbsp; +{n_new} new<br>"
@@ -2350,22 +2430,27 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             path = best_photo.get(sp, "")
             if path and os.path.isfile(path):
                 if path not in cache:
-                    px = QPixmap(path)
-                    if not px.isNull():
-                        px = px.scaled(
-                            self._THUMB_PX, self._THUMB_PX,
-                            Qt.AspectRatioMode.KeepAspectRatio,
-                            Qt.TransformationMode.SmoothTransformation)
-                        ba = QByteArray()
-                        buf = QBuffer(ba)
-                        buf.open(QIODevice.OpenModeFlag.WriteOnly)
-                        px.toImage().save(buf, "JPEG", 85)
-                        buf.close()
-                        cache[path] = base64.b64encode(bytes(ba)).decode("ascii")
+                    if is_audio:
+                        b64 = self._spectro_tooltip_b64(path)
+                        if b64:
+                            cache[path] = b64
+                    else:
+                        px = QPixmap(path)
+                        if not px.isNull():
+                            px = px.scaled(
+                                self._THUMB_PX, self._THUMB_PX,
+                                Qt.AspectRatioMode.KeepAspectRatio,
+                                Qt.TransformationMode.SmoothTransformation)
+                            ba = QByteArray()
+                            buf = QBuffer(ba)
+                            buf.open(QIODevice.OpenModeFlag.WriteOnly)
+                            px.toImage().save(buf, "JPEG", 85)
+                            buf.close()
+                            cache[path] = base64.b64encode(bytes(ba)).decode("ascii")
                 b64 = cache.get(path)
                 if b64:
                     parts.append(
-                        f'<img src="data:image/jpeg;base64,{b64}"><br>'
+                        f'<img src="data:image/{mime};base64,{b64}"><br>'
                         f'<small>{sp}</small><br>'
                     )
                     continue
@@ -3422,7 +3507,20 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             gallery_filter.setEndDate(date_str)
             self._spawn_species_gallery(gallery_filter)
         elif self._chart_type == "cumulativerecordings":
-            self._spawn_species_list(new_filter)
+            # Mirrors the photo chart above: the dot's NEW species on that one
+            # date, opened as a recordings grid.  setSpeciesHasRecording keeps
+            # out sightings of those species that carry no audio.
+            sp_list = (self._cumulative_new_species[idx]
+                       if idx < len(self._cumulative_new_species) else [])
+            if not sp_list:
+                return
+            date_str = self._labels[idx]
+            grid_filter = copy.deepcopy(self.filter)
+            grid_filter.setSpeciesList(list(sp_list))
+            grid_filter.setStartDate(date_str)
+            grid_filter.setEndDate(date_str)
+            grid_filter.setSpeciesHasRecording("Recorded")
+            self._spawn_recordings_grid(grid_filter)
         else:  # cumulative, cumulativefamilies
             self._spawn_species_list(new_filter)
 
@@ -3477,6 +3575,28 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             self.mdiParent.CreateMessageNoResults()
             sub.close()
         QApplication.restoreOverrideCursor()
+
+    def _spawn_recordings_grid(self, filter):
+        """Open Recordings > Browse Grid for this filter (the cumulative
+        recordings chart's dot click).  Pre-checks for results before touching
+        the MDI area — adding then removing a window makes the sibling windows
+        visibly jerk."""
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        import code_RecordingsGrid
+        if not self.mdiParent.db.GetSightingsWithRecordings(filter):
+            QApplication.restoreOverrideCursor()
+            self.mdiParent.CreateMessageNoResults()
+            return
+        sub = code_RecordingsGrid.RecordingsGrid()
+        sub.mdiParent = self.mdiParent
+        self.mdiParent.mdiArea.addSubWindow(sub)
+        self.mdiParent.PositionChildWindow(sub, self.mdiParent)
+        sub.show()
+        ok = sub.FillRecordings(filter)
+        QApplication.restoreOverrideCursor()
+        if ok is False:
+            sub.close()
+            self.mdiParent.CreateMessageNoResults()
 
     def _spawn_recordings_browser(self, filter):
         QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
@@ -4132,12 +4252,12 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
 
         if chartType == "cumulativerecordings":
             self.frmGranularity.setVisible(False)
-            labels, counts, new_species, y_label = self._build_cumulative_audio_data(sightings)
+            labels, counts, new_species, y_label, best_audio = self._build_cumulative_audio_data(sightings)
             if not labels:
                 return False
             self._draw_line_chart(labels, counts, new_species, y_label)
-            self._date_species_best = {}
-            self._photo_thumb_cache = {}
+            self._date_species_best = best_audio    # {date: {sp: wav path}}
+            self._photo_thumb_cache = {}            # path -> b64 spectrogram strip
             self.mdiParent.SetChildDetailsLabels(self, filter)
             self.setWindowTitle(
                 filter.buildWindowTitle("Recorded Species Growth Over Time", self.mdiParent.db))
