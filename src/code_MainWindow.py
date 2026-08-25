@@ -484,8 +484,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
     fontSize = 11
     scaleFactor = 1
     rowHeight = 16  # default; recomputed in ScaleDisplay() and __init__
-    versionNumber = "2.12"
-    versionDate = "August 14, 2026"
+    versionNumber = "2.13"
+    versionDate = "August 24, 2026"
     taxonomyYear = ""
 
     def __init__(self):
@@ -1351,6 +1351,32 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
     def clearAllFilters(self):
         self.clearStandardFilter()
         self.clearMediaFilter()
+
+
+    def _dropFilterFocus(self, dock):
+        """Drop keyboard focus if it currently sits anywhere inside this filter
+        dock, so the blue :focus ring doesn't linger on a control that was just
+        cleared.
+
+        Walks up from the widget that actually holds focus rather than clearing
+        a hand-listed set of controls.  The old list named 14 sighting-filter
+        widgets and had to be extended by hand for every control added since:
+        the four Seasonal Range month/day combos were never added to it, and
+        clearMediaFilter had no equivalent loop at all, so 26 controls kept the
+        ring depending on which one you happened to touch last — which is why
+        the symptom looked intermittent rather than reproducible.
+
+        Walking the parent chain also catches focus held by a CHILD of a control
+        (a QDateTimeEdit's internal line edit reports itself, not the date edit),
+        and cannot rot as new filter controls are added.
+        """
+        focused = QApplication.focusWidget()
+        w = focused
+        while w is not None:
+            if w is dock:
+                focused.clearFocus()
+                return
+            w = w.parentWidget()
     
     
     def clearStandardFilter(self):
@@ -1371,15 +1397,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.cboSeasonalRangeOptions.setCurrentIndex(0)
         self.txtCommonNameSearch.setText("")
 
-        # Drop keyboard focus from whichever filter widget the user last touched,
-        # so the blue :focus border (e.g. around Date Options) doesn't linger on a
-        # now-cleared control.
-        for w in (self.cboRegions, self.cboCountries, self.cboStates,
-                  self.cboCounties, self.cboLocations, self.cboOrders,
-                  self.cboFamilies, self.cboSpecies, self.cboDateOptions,
-                  self.cboYear, self.cboSeasonalRangeOptions,
-                  self.calStartDate, self.calEndDate, self.txtCommonNameSearch):
-            w.clearFocus()
+        self._dropFilterFocus(self.dckFilter)
 
 
     def clearMediaFilter(self):
@@ -1407,6 +1425,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.cboRecordingsDevice.setCurrentIndex(0)
         for chk in getattr(self, "_bitDepthChecks", []):
             chk.setChecked(False)
+
+        self._dropFilterFocus(self.dckMediaFilter)
 
 
     def _warnIfJsonlSkippedLines(self):
