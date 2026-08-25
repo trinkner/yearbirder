@@ -60,3 +60,15 @@ src/code_Photos_OLD.py
 # Sample photos and legacy docs
 2026-03-17-181528_Golden-crownedSparrow_735BowhillRoad.jpg
 YearBird_WindowsInstallation_20200519.txt
+
+# Sample media and tutorial assets — hundreds of MB of photos, WAVs and a
+# multi-hundred-MB screen recording.  GitHub hard-rejects any file over 100 MB,
+# and anything committed here could not be removed later without rewriting
+# every commit, so these stay local.  The tutorial video is published on
+# YouTube and the site links to it.
+samples/
+tutorials/
+
+# Windows installer built by CI (downloaded for testing, served from R2)
+Yearbirder_Setup.exe
+Yearbirder_Setup.msix
