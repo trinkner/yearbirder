@@ -228,7 +228,9 @@ class Ui_frmRenameMedia(object):
         self.btnSelectJpg.setText(_t("frmRenameMedia", "JPG"))
         self.lblCount.setText(_t("frmRenameMedia", "0 of 0 selected"))
         self.btnRename.setText(_t("frmRenameMedia", "Rename"))
-        self.btnCancel.setText(_t("frmRenameMedia", "Cancel"))
+        # "Close", not "Cancel": renames are applied as they run, so offering
+        # "Cancel" afterwards wrongly suggests they would be undone.
+        self.btnCancel.setText(_t("frmRenameMedia", "Close"))
 
 
 import icons_rc
