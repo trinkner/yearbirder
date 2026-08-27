@@ -197,6 +197,8 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
             menu.addSeparator()
             actionSlideshow = menu.addAction("Slideshow")
             menu.addSeparator()
+            actionEditAssignment = menu.addAction("Edit species or location assignment…")
+            menu.addSeparator()
             actionDetachFile = menu.addAction("Remove photo from catalog…")
             menu.addSeparator()
             actionDeleteFile = menu.addAction("Delete photo from file system…")
@@ -235,6 +237,12 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
 
             if action == actionSlideshow:
                 self.parent().launchSlideshow()
+
+            if action == actionEditAssignment:
+                # Deferred: opening an MDI child from inside the menu's own
+                # event handler fights the popup teardown, and full screen has
+                # to unwind first (see editAssignment).
+                QTimer.singleShot(0, self.parent().editAssignment)
 
             if action == actionDeleteFile:
                 self.parent().deleteFile()
@@ -836,6 +844,10 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
             self.showFullScreen()
             self.setWindowOpacity(0.0)         # invisible; faded in below
             self._fullScreen = True
+            # Register as THE full-screen child: detached and frameless, this
+            # window is unreachable from the Windows menu, Cmd-` and App Exposé,
+            # so MainWindow has to raise it when the app is re-activated.
+            mainWindow._fullScreenChild = self
             # Fit to the now-full-screen view.  A QGraphicsView's viewport isn't
             # resized to match its view until shown, so force it before fitting.
             self.layout().activate()
@@ -849,6 +861,8 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
         else:
             # ── Exit full screen ─────────────────────────────────────────────
             self._fullScreen = False
+            if mainWindow._fullScreenChild is self:
+                mainWindow._fullScreenChild = None
             QApplication.restoreOverrideCursor()
             # Fade out, then re-attach to the MDI in the finished callback.
             self._startFade(1.0, 0.0, on_done=self._reattachFromFullScreen)
@@ -900,6 +914,76 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
         self.activateWindow()
         self.setFocus()
         QTimer.singleShot(0, self.fitEnlargement)
+
+
+    def editAssignment(self):
+        """Open Manage Photos on just the photo being enlarged, so its species
+        or location assignment can be changed.
+
+        Full screen has to unwind first: full screen detaches this window from
+        the MDI area and shows it top-level (see toggleFullScreen), so a new MDI
+        child would be created behind it and never seen.  The window is opened
+        from the fade's completion callback, once the re-attach has finished."""
+        import code_ManagePhotos
+        import code_RenameMedia
+
+        if not self.photoList:
+            return
+
+        main_window = self.mdiParent.mdiParent
+
+        # Manage Photos holds unsaved edits, so a second one editing the same
+        # catalog can conflict — the app guards this elsewhere the same way.
+        for w in main_window.mdiArea.subWindowList():
+            if isinstance(w, code_ManagePhotos.ManagePhotos):
+                QMessageBox.warning(
+                    self, "Manage Photos Already Open",
+                    "A Manage Photos window is already open.\n\n"
+                    "Please close it before editing this photo's assignment.")
+                return
+            if isinstance(w, code_RenameMedia.RenameMedia):
+                QMessageBox.warning(
+                    self, "Close Rename Media First",
+                    "Please close the Rename Media window before editing photos.\n\n"
+                    "Having both windows open at the same time could cause conflicts.")
+                return
+
+        if self._fullScreen:
+            self.toggleFullScreen()
+            # toggleFullScreen fades out and re-attaches in a callback; queue the
+            # open behind that rather than racing it.
+            QTimer.singleShot(FADE_MS + 60, self._openManagePhotosForCurrent)
+            return
+
+        self._openManagePhotosForCurrent()
+
+
+    def _openManagePhotosForCurrent(self):
+        """Spawn the single-photo Manage Photos window (see editAssignment)."""
+        import code_ManagePhotos
+
+        if not self.photoList:
+            return
+
+        photoData, sightingData = self.photoList[self.currentIndex]
+        main_window = self.mdiParent.mdiParent
+
+        sub = code_ManagePhotos.ManagePhotos()
+        sub.mdiParent = main_window
+
+        # Built hidden and revealed on contentReady, as the other Manage Photos
+        # entry points do — the row's thumbnail loads on a worker thread.
+        main_window.mdiArea.addSubWindow(sub)
+        main_window.PositionChildWindow(sub, main_window)
+
+        def _reveal():
+            sub.show()
+            main_window.mdiArea.setActiveSubWindow(sub)
+            sub.raise_()
+            sub.setFocus()
+        sub.contentReady.connect(_reveal)
+
+        sub.FillSinglePhoto(photoData, sightingData)
 
 
     def launchSlideshow(self):

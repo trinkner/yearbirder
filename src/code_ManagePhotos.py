@@ -617,6 +617,49 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         return(True)
 
 
+    def FillSinglePhoto(self, photoData, sightingData):
+        """Show exactly one known photo, bypassing the filter-driven query —
+        used by the Enlargement window's "Edit species or location
+        assignment…", where only the photo on screen should be editable.
+
+        Takes the same path as FillPhotosByFilter (the photo already carries a
+        confirmed assignment, so _rowContext supplies the sighting and the
+        worker skips matchPhoto), just with one job on the queue instead of
+        one per photo in a filter."""
+        self.scaleMe()
+        self.resizeMe()
+
+        # A real Filter, not the built-in filter(): other methods call
+        # self.filter's accessors, and the window title is built from it.
+        self.filter = code_Filter.Filter()
+        self.filter.setSpeciesName(sightingData["commonName"])
+        self.filter.setLocationName(sightingData["location"])
+        self.filter.setLocationType("Location")
+        self.filter.setStartDate(sightingData["date"])
+        self.filter.setEndDate(sightingData["date"])
+
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+
+        self.setWindowTitle("Manage Photos")
+
+        self._rowContext[0] = (sightingData, photoData)
+        self.workQueue.put([0, photoData["fileName"]])
+
+        self._totalFiles = 1
+        self._loadedCount = 0
+        self._threadsToStart = 1
+        self.threadsRemaining = 1
+
+        overlay = self.mdiParent.progressOverlay
+        overlay.armGate(1000)
+        overlay.showForPhotos()
+        overlay.startLoading(self._totalFiles)
+
+        QTimer.singleShot(0, self._startThreads)
+
+        return True
+
+
     def insertExistingPhotoIntoTable(self, row, photoData, pixMap):
         """Build one row for a photo already in the catalog.  Its assignment is
         known from the stored sighting (stashed in _rowContext), so every field

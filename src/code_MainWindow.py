@@ -931,6 +931,11 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self._windowBeingClosed = None
         self.mdiArea.subWindowActivated.connect(self.onSubWindowActivated)
 
+        # The photo/recording enlargement currently shown full screen, if any.
+        # Registered by their toggleFullScreen; see _onAppStateChanged.
+        self._fullScreenChild = None
+        QApplication.instance().applicationStateChanged.connect(self._onAppStateChanged)
+
         self._initFontCanary()
 
         QApplication.processEvents()
@@ -1107,6 +1112,36 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self._windowBeingClosed = obj
             QTimer.singleShot(0, self.restorePreviousFocus)
         return False
+
+
+    def _onAppStateChanged(self, state):
+        """Returning to the app should return to a full-screen enlargement, not
+        the main window.
+
+        Full screen detaches the enlargement from the MDI area and re-shows it
+        as a FRAMELESS TOP-LEVEL window (see Enlargement.toggleFullScreen).  On
+        re-activation macOS makes the main window key, leaving the full-screen
+        window stacked behind it — and because it is frameless and no longer an
+        MDI subwindow it appears in none of the ways back: not the Windows menu
+        (which lists mdiArea.subWindowList()), not Cmd-` cycling, not App
+        Exposé.  Raising it here is the only route back, and its absence is why
+        a stale full-screen window could linger and take right-clicks meant for
+        the windows drawn over it."""
+        if state != Qt.ApplicationState.ApplicationActive:
+            return
+        w = self._fullScreenChild
+        if w is None:
+            return
+        try:
+            still_full = w.isVisible() and getattr(w, "_fullScreen", False)
+        except RuntimeError:      # C++ side already deleted
+            self._fullScreenChild = None
+            return
+        if not still_full:
+            self._fullScreenChild = None
+            return
+        w.raise_()
+        w.activateWindow()
 
 
     def onSubWindowActivated(self, window):
