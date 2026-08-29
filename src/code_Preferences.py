@@ -378,7 +378,11 @@ class Preferences(QMdiSubWindow, form_Preferences.Ui_frmPreferences):
         return super(self.__class__, self).resizeEvent(event)
 
     def resizeMe(self):
-        self.contentWidget.setGeometry(0, 23, self.width(), self.height() - 23)
+        # Inset like every other child window (Lists, Stats, Graphs all use
+        # 5, 27 with matching right/bottom margins).  Flush to x=0 at full
+        # width/height, the content covered the native window frame and hid the
+        # hairline border AppStyle.drawPrimitive paints there for PE_FrameWindow.
+        self.contentWidget.setGeometry(5, 27, self.width() - 10, self.height() - 35)
 
     def closeMe(self):
         self.close()
