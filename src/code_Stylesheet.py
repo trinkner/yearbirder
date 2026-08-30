@@ -231,9 +231,21 @@ stylesheetBase = """
        instead painted by AppStyle.drawPrimitive over the untouched native
        frame, at the frame's true outer edge, so there's no mismatch. */
 
+    /* Square corners on the big hairline frames (pane above, QTableWidget
+       below) — NOT a style choice, a correctness one.  With a 1px border and a
+       small radius, QStyleSheetStyle paints the background square but strokes
+       the border along a rounded path, and the corner arc gets no coverage:
+       the two straight segments stop ~radius px short of each other and the
+       diagonal between them is left showing background.  (Measured: at
+       radius 4 the corner pixel is the widget's background and the border only
+       reaches full colour 4px in; at radius 0 the corner pixel is the border.)
+       Square also fixes a second mismatch for free — border-radius does not
+       clip child widgets in Qt, so a rounded frame always had a square header
+       view sitting inside it.  Small filled controls (buttons, combos, line
+       edits) keep their radius: they are filled shapes, so no gap shows. */
     QTabWidget::pane {
         border: 1px solid #3a3d4e;
-        border-radius: 6px;
+        border-radius: 0px;
     }
     QTabBar::tab {
         background: #2b2d38;
@@ -362,7 +374,13 @@ stylesheetBase = """
         background: #252730;
         gridline-color: #2e3040;
         border: 1px solid #3a3d4e;
-        border-radius: 4px;
+        border-radius: 0px;      /* see the QTabWidget::pane note above */
+    }
+    /* Inside a tab page the pane already draws the outline, so the table's own
+       border just adds a second hairline ~8px inside the first — two nearly
+       identical lines that read as noise (Date Totals, Preferences). */
+    QTabWidget QTableWidget {
+        border: none;
     }
     QTableWidget::item:selected { background: #4f8ef7; color: white; }
     QHeaderView::section {
