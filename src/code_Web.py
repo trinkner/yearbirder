@@ -15,6 +15,7 @@ from code_Stylesheet import CHART_PRIMARY, PHOTO_PRIMARY, RECORDINGS_PRIMARY
 
 # import the GUI forms that we create with Qt Creator
 import form_Web
+import code_Basemap
 
 # import the Qt components we'll use
 # do this so later we won't have to clutter our code with references to parent Qt classes 
@@ -1313,7 +1314,7 @@ td {{ border-bottom:1px solid #e8e8e8; vertical-align:middle; }}
             location_species[s["location"]][s["commonName"]] = None
         species_counts = {loc: len(sp) for loc, sp in location_species.items()}
 
-        location_map = folium.Map(tiles="CartoDB Voyager")
+        location_map = folium.Map(tiles=code_Basemap.streetTiles())
 
         # Build tooltip HTML for each location; stored in a JS dict for
         # the custom positioned tooltip (not folium.Tooltip, which can't be
@@ -1727,7 +1728,7 @@ document.addEventListener("DOMContentLoaded", function() {{
                 f["properties"].pop("clickKey", None)
                 f["properties"].pop("tipKey",   None)
 
-        state_map = folium.Map(location=[39.5, -98.3], zoom_start=4, tiles="CartoDB Voyager")
+        state_map = folium.Map(location=[39.5, -98.3], zoom_start=4, tiles=code_Basemap.streetTiles())
 
         folium.GeoJson(
             geo_file,
@@ -1835,7 +1836,7 @@ document.addEventListener("DOMContentLoaded", function() {{
                 f["properties"].pop("clickKey", None)
                 f["properties"].pop("tipKey",   None)
 
-        prov_map = folium.Map(location=[62, -96], zoom_start=3, tiles="CartoDB Voyager")
+        prov_map = folium.Map(location=[62, -96], zoom_start=3, tiles=code_Basemap.streetTiles())
 
         folium.GeoJson(
             geo_file,
@@ -1942,7 +1943,7 @@ document.addEventListener("DOMContentLoaded", function() {{
                 f["properties"].pop("clickKey", None)
                 f["properties"].pop("tipKey",   None)
 
-        state_map = folium.Map(location=[22, 80], zoom_start=4, tiles="CartoDB Voyager")
+        state_map = folium.Map(location=[22, 80], zoom_start=4, tiles=code_Basemap.streetTiles())
 
         folium.GeoJson(
             geo_file,
@@ -2050,7 +2051,7 @@ document.addEventListener("DOMContentLoaded", function() {{
                 f["properties"].pop("clickKey", None)
                 f["properties"].pop("tipKey",   None)
 
-        county_map = folium.Map(location=[54, -2], zoom_start=5, tiles="CartoDB Voyager")
+        county_map = folium.Map(location=[54, -2], zoom_start=5, tiles=code_Basemap.streetTiles())
 
         folium.GeoJson(
             geo_file,
@@ -2162,7 +2163,7 @@ document.addEventListener("DOMContentLoaded", function() {{
                 f["properties"].pop("clickKey", None)
                 f["properties"].pop("tipKey",   None)
 
-        county_map = folium.Map(location=[39.5, -98.3], zoom_start=4, tiles="CartoDB Voyager")
+        county_map = folium.Map(location=[39.5, -98.3], zoom_start=4, tiles=code_Basemap.streetTiles())
 
         folium.GeoJson(
             geo_file,
@@ -2276,7 +2277,7 @@ document.addEventListener("DOMContentLoaded", function() {{
                 f["properties"].pop("clickKey", None)
                 f["properties"].pop("tipKey",   None)
 
-        choro_map = folium.Map(location=[1, 1], zoom_start=1, tiles="CartoDB Voyager")
+        choro_map = folium.Map(location=[1, 1], zoom_start=1, tiles=code_Basemap.streetTiles())
 
         folium.GeoJson(
             geo_file,
@@ -2397,7 +2398,7 @@ document.addEventListener("DOMContentLoaded", function() {{
         life_map = folium.Map(
             location=[sum(lats) / total, sum(lons) / total],
             zoom_start=4,
-            tiles="CartoDB Voyager",
+            tiles=code_Basemap.streetTiles(),
         )
         life_map.fit_bounds([[min(lats), min(lons)], [max(lats), max(lons)]], max_zoom=15)
 
@@ -2756,7 +2757,7 @@ document.addEventListener("DOMContentLoaded", function() {{
         fsm_map = folium.Map(
             location=[sum(lats) / total, sum(lons) / total],
             zoom_start=4,
-            tiles="CartoDB Voyager",
+            tiles=code_Basemap.streetTiles(),
         )
         fsm_map.fit_bounds([[min(lats), min(lons)], [max(lats), max(lons)]], max_zoom=15)
 
@@ -3091,7 +3092,7 @@ document.addEventListener("DOMContentLoaded", function() {{
         photo_map = folium.Map(
             location=[avg_lat, avg_lon],
             zoom_start=5,
-            tiles="CartoDB Voyager",
+            tiles=code_Basemap.streetTiles(),
         )
 
         # Add an empty MarkerCluster so Folium loads the markercluster JS
@@ -3295,7 +3296,7 @@ document.addEventListener("DOMContentLoaded", function() {{
         photo_map = folium.Map(
             location=[sum(lats) / total, sum(lons) / total],
             zoom_start=4,
-            tiles="CartoDB Voyager",
+            tiles=code_Basemap.streetTiles(),
         )
         photo_map.fit_bounds([[min(lats), min(lons)], [max(lats), max(lons)]], max_zoom=15)
 
@@ -3621,7 +3622,7 @@ document.addEventListener("DOMContentLoaded", function() {{
         avg_lon = sum(m[1] for m in markers) / len(markers)
 
         rec_map = folium.Map(location=[avg_lat, avg_lon], zoom_start=5,
-                             tiles="CartoDB Voyager")
+                             tiles=code_Basemap.streetTiles())
         MarkerCluster(options={"spiderfyOnMaxZoom": True,
                                 "spiderfyDistanceMultiplier": 2}).add_to(rec_map)
         lats = [m[0] for m in markers]
@@ -3764,7 +3765,7 @@ document.addEventListener("DOMContentLoaded", function() {{
 
         rec_map = folium.Map(
             location=[sum(lats) / total, sum(lons) / total],
-            zoom_start=4, tiles="CartoDB Voyager")
+            zoom_start=4, tiles=code_Basemap.streetTiles())
         rec_map.fit_bounds([[min(lats), min(lons)], [max(lats), max(lons)]], max_zoom=15)
 
         html = rec_map.get_root().render()
@@ -4382,7 +4383,7 @@ applySort();
         effort_map = folium.Map(
             location=[avg_lat, avg_lon],
             zoom_start=5,
-            tiles="CartoDB Voyager",
+            tiles=code_Basemap.streetTiles(),
         )
 
         tip_data = {}
@@ -4654,7 +4655,7 @@ applySort();
         bubble_map = folium.Map(
             location=[avg_lat, avg_lon],
             zoom_start=5,
-            tiles="CartoDB Voyager",
+            tiles=code_Basemap.streetTiles(),
         )
 
         # Build tooltip data for both modes
@@ -6950,7 +6951,7 @@ function handleShowChecklist(el) {{
         notable_map = folium.Map(
             location=[avg_lat, avg_lng],
             zoom_start=7,
-            tiles="CartoDB Voyager",
+            tiles=code_Basemap.streetTiles(),
         )
 
         tip_data = {}
@@ -7350,7 +7351,7 @@ function handleShowChecklist(el) {{
         notable_map = folium.Map(
             location=[avg_lat, avg_lng],
             zoom_start=7,
-            tiles="CartoDB Voyager",
+            tiles=code_Basemap.streetTiles(),
         )
 
         import html as _html2
@@ -7482,7 +7483,7 @@ function handleShowChecklist(el) {{
         import tempfile
 
         self.contentType = "Location Map"
-        m = folium.Map(location=[lat, lng], zoom_start=14, tiles="CartoDB Voyager")
+        m = folium.Map(location=[lat, lng], zoom_start=14, tiles=code_Basemap.streetTiles())
         folium.CircleMarker(
             location=[lat, lng],
             radius=15,
@@ -7745,7 +7746,7 @@ function openChecklist(subId) {{
         sp_map = folium.Map(
             location=[avg_lat, avg_lng],
             zoom_start=7,
-            tiles="CartoDB Voyager",
+            tiles=code_Basemap.streetTiles(),
         )
 
         _BADGE_COLORS = {
@@ -8036,7 +8037,7 @@ function openChecklist(subId) {{
         avg_lat = sum(p[0] for p in points) / len(points)
         avg_lng = sum(p[1] for p in points) / len(points)
 
-        m = folium.Map(location=[avg_lat, avg_lng], zoom_start=10, tiles="CartoDB Voyager")
+        m = folium.Map(location=[avg_lat, avg_lng], zoom_start=10, tiles=code_Basemap.streetTiles())
 
         # Tooltip data keyed by loc_id to avoid name collisions
         tip_data = {}
@@ -8266,7 +8267,7 @@ function openChecklist(subId) {{
         sp_map = folium.Map(
             location=[avg_lat, avg_lng],
             zoom_start=7,
-            tiles="CartoDB Voyager",
+            tiles=code_Basemap.streetTiles(),
         )
 
         _BADGE_COLORS = {

@@ -4,6 +4,7 @@ from code_Stylesheet import YBFont
 
 # import classes from other project files
 import code_Filter
+import code_Basemap
 import code_Lists
 import code_Individual
 import code_Stylesheet
@@ -251,7 +252,7 @@ class Location(QMdiSubWindow, form_Location.Ui_frmLocation):
         lat, lon = float(self.coordinates[0]), float(self.coordinates[1])
 
         location_map = folium.Map(location=[lat, lon], zoom_start=13,
-                                  tiles="CartoDB Voyager")
+                                  tiles=code_Basemap.streetTiles())
         folium.CircleMarker(
             location=[lat, lon],
             radius=8,
