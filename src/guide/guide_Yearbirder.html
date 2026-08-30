@@ -200,7 +200,9 @@
 <ul>
   <li><strong>Sort dates by day of year</strong> — Right-click any date column header in a list and choose <strong>Sort by day of year (seasonal)</strong> to reorder the rows by where each date falls in the year, ignoring which year it was: every January date first, every December date last. It answers a different question from a plain date sort — not <em>when did this happen</em> but <em>when in the year do I see this</em>. Sort your Species List by <strong>First</strong> this way to see your species in the order they arrive through the season, or your Locations List to group the places you visit at the same time each year. Available on every date column in the Species, Locations, Checklists and Find Results lists, and on the Date tab of Date Totals. See <a href="#seasonal-sort">Section 6 — Sorting dates by day of year</a>.</li>
   <li><strong>Street maps no longer show a watermark</strong> — The service supplying Yearbirder's street map tiles began requiring a paid key and started stamping <em>"API KEY REQUIRED"</em> across every map. Yearbirder now draws its street maps from Esri, the same provider that has always supplied the satellite view, so maps are clean again and the app relies on one map service instead of two. The map looks slightly different — a little warmer and softer — but works exactly as before, including the Satellite toggle, Reset, and Full Screen buttons. No key or setup is needed.</li>
-  <li><strong>Interface refinements</strong> — Window and table borders now meet cleanly at their corners, the Preferences window gains the same thin border as every other window, and returning to Yearbirder after switching to another app brings you back to a full-screen photo or recording rather than the main window.</li>
+  <li><strong>Fix a photo's species or location without leaving it</strong> — The Enlargement view's right-click menu gains <strong>Edit species or location assignment…</strong>, which opens Manage Photos showing just the photo you are looking at. When you spot a misfiled photo while browsing, you can correct it there and then instead of hunting for it in a Manage Photos window full of everything else. See <a href="#edit-assignment">Section 22 — Correcting a photo's species or location</a>.</li>
+  <li><strong>Come back to the photo you were viewing</strong> — Switching to another app while viewing a photo or recording full screen, then switching back, used to return you to the main window with no way to reach the full-screen view again — it was still open, just unreachable. Yearbirder now brings you back to what you were actually looking at.</li>
+  <li><strong>Interface refinements</strong> — Window and table borders now meet cleanly at their corners, the Preferences window gains the same thin border as every other window, and clearing the filters no longer leaves a stray highlight on whichever control you touched last.</li>
 </ul>
 
 <h3>Earlier changes in v2.12</h3>
@@ -1067,6 +1069,10 @@
 
 <h3>Hiding the cursor</h3>
 <p>Press <strong>F7</strong> (or right-click → <strong>Hide cursor</strong>) to make the cursor invisible, giving you a clean view of the photo without anything obscuring the detail you are trying to evaluate. Press <strong>F7</strong> again (or right-click → <strong>Show cursor</strong>) to restore it.</p>
+
+<h3 id="edit-assignment">Correcting a photo's species or location</h3>
+<p>If you notice while browsing that a photo is attached to the wrong species, or to the wrong location or date, right-click it and choose <strong>Edit species or location assignment…</strong>. A <strong>Manage Photos</strong> window opens showing just that one photo, with the same drop-downs you would use when adding photos, so you can correct the assignment and save without searching for the photo among everything else in your catalog.</p>
+<p>The command is unavailable while a Manage Photos or Rename Media window is already open, since two windows editing the same catalog can conflict; close the other window first. If the photo is being viewed full screen, Yearbirder leaves full screen before opening the window.</p>
 
 <h3>Detaching and deleting photos</h3>
 <p>Right-click on the photo to access two file-management actions:</p>
