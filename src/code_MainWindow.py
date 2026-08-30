@@ -485,7 +485,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
     scaleFactor = 1
     rowHeight = 16  # default; recomputed in ScaleDisplay() and __init__
     versionNumber = "2.13"
-    versionDate = "August 24, 2026"
+    versionDate = "August 29, 2026"
     taxonomyYear = ""
 
     def __init__(self):
