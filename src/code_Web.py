@@ -155,8 +155,13 @@ class CommunitySightingsMapBridge(QObject):
         # Fallback if hotspot lookup fails (private locations not in hotspot API)
         f._badgeRegionId    = getattr(self._web, "_communityRegionId",    None)
         f._badgeRegionLabel = getattr(self._web, "_communityRegionLabel", None)
-        # Drill down over the same window the parent report used, not the default
-        f.backDays          = ebirdBackDays(self._web.filter)
+        # Drill down over the same window the parent report used, not the default.
+        # getattr, not attribute access: Web has no .filter of its own, and a map
+        # loader that forgets to set one must degrade to the default back-days
+        # rather than raise in here.  An exception in a @Slot invoked over the
+        # web channel is swallowed by Qt -- the click just silently does nothing,
+        # which is exactly how this went unnoticed on the Hotspot Map.
+        f.backDays          = ebirdBackDays(getattr(self._web, "filter", None))
 
         main = self._web.mdiParent
         sub = Web()
@@ -7942,9 +7947,15 @@ function openChecklist(subId) {{
         import json as _json
         import tempfile
         import urllib.request
+        from copy import deepcopy
         from PySide6.QtGui import QColor, QCursor
 
         self.contentType = "Hotspot Map"
+        # CommunitySightingsMapBridge reads self.filter to inherit the parent
+        # report's back-days window.  Web does not define .filter, so without
+        # this the dot-click slot raised AttributeError -- which Qt swallows,
+        # making clicks appear to do nothing at all.
+        self.filter = deepcopy(filter)
 
         api_key = self.mdiParent.db.ebirdApiKey.strip()
         if not api_key:
