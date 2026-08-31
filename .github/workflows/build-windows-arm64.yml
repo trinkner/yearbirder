@@ -1,0 +1,108 @@
+# Experimental native ARM64 Windows build.
+#
+# Deliberately a SEPARATE file, manual-trigger only, so the x64 release
+# pipeline in build-windows.yml cannot be broken by anything here.  It also
+# never touches GitHub Releases — the artifact is for testing only.
+#
+# Why: Yearbirder ships an x64 build, which Windows-on-ARM runs under
+# emulation.  That works, but the community sightings reports scroll
+# noticeably slowly (measured in a VM, Aug 2026).  A native ARM64 build is
+# the real fix; this workflow is the cheapest way to find out whether one
+# builds at all.
+#
+# Three things were unproven when this was written, any of which could fail
+# the run.  The "Report the build environment" step below prints enough to
+# tell them apart from the log alone:
+#   1. actions/setup-python providing an ARM64 Windows interpreter
+#   2. Inno Setup (an x86 tool) running under emulation on an ARM runner
+#   3. PyInstaller behaving on ARM64 Python
+
+name: Build Windows Installer (ARM64, experimental)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-windows-arm64:
+    runs-on: windows-11-arm
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4.2.2
+
+      - name: Set up Python 3.12 (ARM64)
+        uses: actions/setup-python@v5.6.0
+        with:
+          python-version: '3.12'
+          # Explicit rather than relying on host detection: an emulated x64
+          # interpreter would build an x64 app and quietly defeat the whole
+          # point.  If this value is unsupported the step fails loudly, which
+          # is the outcome we want over a silently wrong build.
+          architecture: 'arm64'
+
+      - name: Install dependencies
+        # soxr is deliberately omitted — there is no win_arm64 wheel, so pip
+        # would try to build libsoxr from source and fail the job.  It is an
+        # optional dependency: code_Audio.py guards the import behind
+        # _HAVE_SOXR and falls back to linear interpolation, so playback still
+        # works, just with lower-quality resampling.  Everything else here has
+        # a win_arm64 wheel on PyPI (checked Aug 2026).
+        run: |
+          pip install pyinstaller pyside6 piexif folium matplotlib numpy natsort requests pillow soundfile
+
+      - name: Report the build environment
+        # Confirms we really are on ARM64 and shows which imports survived, so
+        # a later failure can be diagnosed without re-running.
+        run: |
+          python -c "import platform, sys; print('python:', sys.version); print('machine:', platform.machine())"
+          python -c "
+          import importlib
+          for m in ('PySide6', 'numpy', 'matplotlib', 'PIL', 'soundfile', 'soxr'):
+              try:
+                  importlib.import_module(m)
+                  print('  ' + m + ': OK')
+              except Exception as e:
+                  print('  ' + m + ': MISSING (' + e.__class__.__name__ + ')')
+          "
+
+      - name: Convert PNG icon to ICO
+        run: |
+          python -c "
+          from PIL import Image
+          img = Image.open('icons/Yearbirder_Icon_1024.png').convert('RGBA')
+          img.save('icons/Yearbirder.ico', format='ICO', sizes=[(16,16),(32,32),(48,48),(64,64),(128,128),(256,256)])
+          print('ICO created successfully')
+          "
+
+      - name: Build with PyInstaller
+        run: pyinstaller yearbirder_windows.spec
+
+      - name: Extract version
+        id: version
+        run: |
+          $version = python -c "import re; content = open('src/code_MainWindow.py').read(); print(re.search(r'versionNumber = \`"(.+?)\`"', content).group(1))"
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Build installer
+        run: iscc /DMyAppVersion="${{ steps.version.outputs.version }}" yearbirder.iss
+
+      - name: Rename installer for ARM64
+        # yearbirder.iss hardcodes OutputBaseFilename=Yearbirder_Setup.  Renaming
+        # the output here, rather than parameterising the .iss, keeps the x64
+        # release pipeline untouched — and makes the two installers impossible
+        # to mistake for one another on disk.
+        run: |
+          Move-Item dist/Yearbirder_Setup.exe dist/Yearbirder_Setup_arm64.exe
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: Yearbirder-Windows-Setup-arm64
+          path: dist/Yearbirder_Setup_arm64.exe
+          retention-days: 30
+
+      # NOTE: no "attach to release" step, unlike build-windows.yml.  This build
+      # is experimental and must not reach users.
