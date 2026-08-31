@@ -90,4 +90,14 @@ app = BUNDLE(
     bundle_identifier="com.trinkner.yearbirder",
     codesign_identity=None,
     entitlements_file=None,
+    info_plist={
+        # The download page has always said "macOS 13+", but the bundle declared
+        # nothing, and the Mach-O header inherits minos 11.0 from the Python and
+        # wheels it is built against — so macOS would happily launch it on
+        # Big Sur or Monterey, which are untested.  Declaring the requirement
+        # here makes macOS enforce what the page promises: an older system
+        # refuses with a clear message instead of failing in some obscure way
+        # later.  Raise BOTH this and the page together if the floor ever moves.
+        "LSMinimumSystemVersion": "13.0",
+    },
 )
