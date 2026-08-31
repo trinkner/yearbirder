@@ -1220,6 +1220,10 @@ td {{ border-bottom:1px solid #e8e8e8; vertical-align:middle; }}
   <li><b>Yearbirder</b> is licensed under the GNU General Public License, version 3.</li>
   <li><b>PySide6</b>, by The Qt Company, is used under the GNU Lesser General Public
       License (LGPL) version 3, which permits free non-commercial use.</li>
+  <li><b>Chromium</b>, by The Chromium Authors, is embedded by Qt WebEngine and
+      renders Yearbirder's maps, reports and this window. It is used under the
+      BSD 3-Clause License, and includes further components under their own
+      licenses.</li>
   <li><b>Matplotlib</b>, by the Matplotlib Development Team, is used under the
       Matplotlib License (a BSD-compatible license).</li>
   <li><b>NumPy</b>, by the NumPy Developers, is used under the BSD 3-Clause License.</li>
