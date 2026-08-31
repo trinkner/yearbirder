@@ -2523,7 +2523,10 @@ class DataBase():
 
         # initialize variable to hold the csv data from the BBL Code file
         # open the CSV taxonomy file, using "replace" for any problematic characters
-        with open(bblFile, "r", errors='replace') as csvfile:
+        # Explicit UTF-8: the platform default is cp1252 on Windows (see the
+        # note in code_Explorer._load_state_data).  This file is ASCII today,
+        # so this is insurance against a future update carrying accents.
+        with open(bblFile, "r", encoding="utf-8", errors='replace') as csvfile:
             csvdata = csv.reader(csvfile, delimiter=',', quotechar='"')
             # store the BBL code in a dictionary, using the sci name as the key
             for row in csvdata:
@@ -4597,7 +4600,7 @@ class DataBase():
     def dumpDatabaseToFile(self):
         
         # routine used only in debugging
-        f = open("yearbirder_Db_Dump.txt", "w+")
+        f = open("yearbirder_Db_Dump.txt", "w+", encoding="utf-8")
         for s in self.sightingList:
             f.write(str(s))
             f.write("\n")
@@ -4664,7 +4667,7 @@ class DataBase():
         if not os.path.isfile(prefs_path):
             return  # No preferences saved yet
 
-        with open(prefs_path, "r") as settingsFile:
+        with open(prefs_path, "r", encoding="utf-8") as settingsFile:
             for line in settingsFile:
 
                 if line.startswith("startupFolder="):
@@ -4704,7 +4707,9 @@ class DataBase():
 
         prefs_path = os.path.join(prefs_dir, "yearbirderPreferences.txt")
 
-        with open(prefs_path, "w") as f:
+        # Read and write must name the same encoding, or a path containing a
+        # non-ASCII character would not round-trip.
+        with open(prefs_path, "w", encoding="utf-8") as f:
             f.write("startupFolder=" + self.startupFolder + "\n")
             f.write("photoDataFile=" + self.photoDataFileDefault + "\n")
             f.write("ebirdApiKey=" + self.ebirdApiKey + "\n")

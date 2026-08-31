@@ -2,6 +2,7 @@
 import form_Lists
 from code_Stylesheet import YBFont
 import code_Filter
+import code_SeasonalSort
 import code_MediaRefresh
 import code_Location
 import code_Individual
@@ -721,10 +722,8 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
                 speciesItem = QTableWidgetItem()
                 speciesItem.setText(species[0])
                 speciesItem.setData(Qt.UserRole,  species[4])                
-                firstItem = QTableWidgetItem()
-                firstItem.setData(Qt.DisplayRole, species[1])
-                lastItem = QTableWidgetItem()
-                lastItem.setData(Qt.DisplayRole, species[2])
+                firstItem = code_SeasonalSort.dateItem(species[1])
+                lastItem = code_SeasonalSort.dateItem(species[2])
                 self.tblList.setItem(R, 0, taxItem)    
                 checklistCountItem = QTableWidgetItem()
                 checklistCountItem.setData(Qt.DisplayRole, species[5])
@@ -887,6 +886,10 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         icon.addPixmap(QPixmap(":/icon_bird_white.png"), QIcon.Normal, QIcon.Off)
         self.setWindowIcon(icon)
 
+        # Only the species list has date columns; the single-checklist variant
+        # this method also builds is Tax/Species/Count/Comment.
+        if self.listType == "Species":
+            code_SeasonalSort.install(self.tblList, (2, 3))   # First, Last
         self.showDefaultSortIndicator()
 
         # tell MainWindow that we succeeded filling the list
@@ -935,8 +938,7 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
             locationItem = QTableWidgetItem()
             locationItem.setText(c[3])
             
-            dateItem = QTableWidgetItem()
-            dateItem.setText(c[4])
+            dateItem = code_SeasonalSort.dateItem(c[4])
 
             timeItem = QTableWidgetItem()
             timeItem.setText(c[5])
@@ -985,6 +987,7 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
 
         self.resize(1050, self.height())
 
+        code_SeasonalSort.install(self.tblList, (4,))     # Date
         self.showDefaultSortIndicator()
 
         # alert MainWindow that we finished fill data successfully
@@ -1048,8 +1051,7 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
             locationItem = QTableWidgetItem()
             locationItem.setText(c[2])
             
-            dateItem = QTableWidgetItem()
-            dateItem.setText(c[3])
+            dateItem = code_SeasonalSort.dateItem(c[3])
 
             foundTextItem = QTableWidgetItem()
             foundText = _find_snippet(c[4], searchString) if searchString else c[4]
@@ -1082,6 +1084,7 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         icon.addPixmap(QPixmap(":/icon_find_white.png"), QIcon.Normal, QIcon.Off)
         self.setWindowIcon(icon)
 
+        code_SeasonalSort.install(self.tblList, (2,))     # Date
         self.showDefaultSortIndicator()
 
 
@@ -1115,10 +1118,8 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         for loc in thisWindowList:
             locationItem = QTableWidgetItem()
             locationItem.setText(loc[0])
-            firstItem = QTableWidgetItem()
-            firstItem.setData(Qt.DisplayRole, loc[1])
-            lastItem = QTableWidgetItem()
-            lastItem.setData(Qt.DisplayRole, loc[2])
+            firstItem = code_SeasonalSort.dateItem(loc[1])
+            lastItem = code_SeasonalSort.dateItem(loc[2])
             checklistCountItem = QTableWidgetItem()
             checklistCountItem.setData(Qt.DisplayRole, loc[3])
             checklistCountItem.setTextAlignment(Qt.AlignCenter | Qt.AlignVCenter)
@@ -1150,6 +1151,7 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         self.tblList.addAction(self.actionSetFirstDateFilter)
         self.tblList.addAction(self.actionSetLastDateFilter)
 
+        code_SeasonalSort.install(self.tblList, (1, 2))   # First, Last
         self.showDefaultSortIndicator()
 
         return(True)

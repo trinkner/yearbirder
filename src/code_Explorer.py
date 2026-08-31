@@ -61,7 +61,12 @@ def _load_state_data():
     path = code_DataBase.resource_path("ebird_api_ref_location_eBird_list_subnational1.csv")
     data = {}
     try:
-        with open(path, "r", errors="replace") as f:
+        # encoding="utf-8" is REQUIRED, not tidiness: without it Python uses the
+        # platform default, which is cp1252 on Windows.  This file is UTF-8, so
+        # the accented region names came out mojibake there and only there —
+        # "Auvergne-Rhone-Alpes" (with a circumflex) rendered as "RhA´ne".  macOS
+        # defaults to UTF-8, which is why it looked correct in development.
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
             reader = csv.reader(f)
             next(reader)  # skip header
             for row in reader:

@@ -117,7 +117,7 @@
 <div class="toc">
   <p class="toc-group">What's New</p>
   <ul>
-    <li><a href="#whats-new">What's New in v2.11</a></li>
+    <li><a href="#whats-new">What's New in v2.13</a></li>
   </ul>
   <p class="toc-group">Quick Start</p>
   <ul>
@@ -196,7 +196,25 @@
 <hr>
 
 <h1 class="group-heading">What's New</h1>
-<h2 id="whats-new">What's New in v2.11</h2>
+<h2 id="whats-new">What's New in v2.13</h2>
+<ul>
+  <li><strong>Sort dates by day of year</strong> — Right-click any date column header in a list and choose <strong>Sort by day of year (seasonal)</strong> to reorder the rows by where each date falls in the year, ignoring which year it was: every January date first, every December date last. It answers a different question from a plain date sort — not <em>when did this happen</em> but <em>when in the year do I see this</em>. Sort your Species List by <strong>First</strong> this way to see your species in the order they arrive through the season, or your Locations List to group the places you visit at the same time each year. Available on every date column in the Species, Locations, Checklists and Find Results lists, and on the Date tab of Date Totals. See <a href="#seasonal-sort">Section 6 — Sorting dates by day of year</a>.</li>
+  <li><strong>Street maps no longer show a watermark</strong> — The service supplying Yearbirder's street map tiles began requiring a paid key and started stamping <em>"API KEY REQUIRED"</em> across every map. Yearbirder now draws its street maps from Esri, the same provider that has always supplied the satellite view, so maps are clean again and the app relies on one map service instead of two. The map looks slightly different — a little warmer and softer — but works exactly as before, including the Satellite toggle, Reset, and Full Screen buttons. No key or setup is needed.</li>
+  <li><strong>Fix a photo's species or location without leaving it</strong> — The Enlargement view's right-click menu gains <strong>Edit species or location assignment…</strong>, which opens Manage Photos showing just the photo you are looking at. When you spot a misfiled photo while browsing, you can correct it there and then instead of hunting for it in a Manage Photos window full of everything else. See <a href="#edit-assignment">Section 22 — Correcting a photo's species or location</a>.</li>
+  <li><strong>Come back to the photo you were viewing</strong> — Switching to another app while viewing a photo or recording full screen, then switching back, used to return you to the main window with no way to reach the full-screen view again — it was still open, just unreachable. Yearbirder now brings you back to what you were actually looking at.</li>
+  <li><strong>Interface refinements</strong> — Window and table borders now meet cleanly at their corners, the Preferences window gains the same thin border as every other window, and clearing the filters no longer leaves a stray highlight on whichever control you touched last.</li>
+</ul>
+
+<h3>Earlier changes in v2.12</h3>
+<ul>
+  <li><strong>Sort your photos and recordings in either direction</strong> — Both browse views for photos and recordings — <strong>Browse Cards</strong> and <strong>Browse Grid</strong> — gained <strong>Ascending</strong> and <strong>Descending</strong> buttons beside the four sort options, so you can see your newest photos first, work up from your lowest-rated recordings, or run the taxonomy backwards. Each sort option still opens the way it always did.</li>
+  <li><strong>Spectrograms on the recording growth curve</strong> — Hovering a point on <strong>Recordings → Recorded Species Growth Over Time</strong> now shows a spectrogram of each species you recorded for the first time that day, the way the photography chart shows thumbnails. Clicking the point opens those recordings in a Browse Grid window, ready to play.</li>
+  <li><strong>My County and My Patch are always available</strong> — The two quick-jump buttons now sit at the top of the Sighting Filter whether or not you have set them. Click one before it is set and Yearbirder explains what it does and offers to take you straight to the right tab of Preferences; right-click either one to go there at any time. See <a href="#standard-filter">Section 4 — The Sighting Filter</a>.</li>
+  <li><strong>Lists show which column they are sorted by</strong> — Species, Checklists, Locations and Find Results windows now open with the sort arrow visible on the column they are already sorted by — a reminder that every column header can be clicked to re-sort.</li>
+  <li><strong>Clearer wording when renaming media</strong> — The <strong>Cancel</strong> button in the Rename Media window is now labelled <strong>Close</strong>, since renames are applied as they run and closing the window never undoes them.</li>
+</ul>
+
+<h3>Earlier changes in v2.11</h3>
 <ul>
   <li><strong>Browse Grid</strong> — A second way to browse your photos: <strong>Photos → Browse Grid</strong> shows the photos matching your filters as a grid of thumbnails rather than one card per row. It is built for large results — a filter returning a thousand images, or the hundred-odd photos you may have of a single species, is far quicker to scan several across at a time. Each cell shows the species name, with the full details on hover; click any cell to open the Enlargement view. The grid offers the same four sorting options, the same Slideshow button, and the same live updates as the card view, and reflows to fit as many columns as the window is wide. Thumbnails for the grid are prepared when you add photos to the catalog, so it opens quickly even on a large collection. See <a href="#browse-grid">Section 21 — Browse Grid</a>.</li>
   <li><strong>Browse Grid for recordings</strong> — <strong>Recordings → Browse Grid</strong> does the same for your sound recordings, showing them as a grid of spectrograms instead of one card per row. Every cell keeps its own <strong>Play</strong> button and scrubber, so you can audition a recording without leaving the grid, and clicking a spectrogram opens the Recording Enlargement view as before. See <a href="#recordings">Section 27 — Browsing and Playing Recordings</a>.</li>
@@ -482,6 +500,19 @@
 <p>Species that are not full species (slash species, spuhs, hybrids) are listed separately and marked distinctly.</p>
 <p>The window title shows the total count — for example, <em>"Species: New York (42 Species)"</em>.</p>
 
+<h3>Sorting the list</h3>
+<p>Click any column header to sort the list by that column; click it again to reverse the order. The small arrow in the header shows which column the list is sorted by and in which direction. Lists open sorted by their leftmost column — taxonomic order, in the case of the Species List.</p>
+
+<h3 id="seasonal-sort">Sorting dates by day of year</h3>
+<p>Date columns can be sorted in a second way. <strong>Right-click</strong> a date column header — <strong>First</strong> or <strong>Last</strong> here — and choose between:</p>
+<ul>
+  <li><strong>Sort by date</strong> — the ordinary chronological order: oldest date first, newest last.</li>
+  <li><strong>Sort by day of year (seasonal)</strong> — orders the rows by <em>where in the year</em> each date falls, ignoring which year it was. Every January date comes first and every December date last, so a sighting from 3 January 1998 sorts ahead of one from 28 December 2025.</li>
+</ul>
+<p>The two answer different questions. A date sort tells you <em>when something happened</em>; a seasonal sort tells you <em>when in the year you see it</em>. Sorting the Species List by <strong>First</strong> seasonally lays your species out in the order they appear through the birding year — the resident birds and early migrants at the top, the late-autumn arrivals at the bottom — regardless of which year you happened to first record each one.</p>
+<p>While a list is sorted seasonally its date headers read <strong>First&nbsp;(seasonal)</strong> and <strong>Last&nbsp;(seasonal)</strong>, so it is always clear which of the two orderings you are looking at. Choosing <strong>Sort by date</strong> returns the headers and the ordering to normal. The arrow still reverses the direction as usual, so a descending seasonal sort runs from December back to January. Dates that share the same day of the year are listed oldest year first.</p>
+<p>Seasonal sorting is available wherever a list has a date column: the <strong>First</strong> and <strong>Last</strong> columns here and in the <a href="#locations-list">Locations List</a>, the <strong>Date</strong> column in the <a href="#checklists-list">Checklists List</a> and in Find Results, and the <strong>Date</strong> column on the Date tab of <a href="#date-totals">Date Totals</a>.</p>
+
 <h3>Clicking a species</h3>
 <p>Click any species name to open an <strong>Individual Species</strong> window (see <a href="#individual-species">Section 19</a>) showing the full history of your sightings of that species.</p>
 
@@ -506,6 +537,10 @@
 
 <hr>
 
+<p>The <strong>First</strong> and <strong>Last</strong> date columns can also be sorted by day of year, ignoring the year — right-click either header and choose <strong>Sort by day of year (seasonal)</strong> to group the places you visit at the same time each year. See <a href="#seasonal-sort">Section 6 — Sorting dates by day of year</a>.</p>
+
+<hr>
+
 <h2 id="checklists-list">8. Checklists List</h2>
 <p>Open with <strong>Lists → Checklists</strong> or the <strong>Checklists</strong> toolbar button.</p>
 <p>Shows every checklist that matches the current filter:</p>
@@ -525,6 +560,10 @@
 <p>Click any row to see the comments recorded for that checklist.</p>
 <p>Right-clicking a row lets you set the checklist's date, country, state, county, or location as the active filter.</p>
 <p>When the Checklists List is filtered to a <strong>single checklist</strong> (showing only that checklist's species), an <strong>eBird</strong> button also appears in the sidebar panel on the left, opening the same checklist on the eBird website.</p>
+
+<hr>
+
+<p>The <strong>Date</strong> column can also be sorted by day of year, ignoring the year — right-click the <strong>Date</strong> header and choose <strong>Sort by day of year (seasonal)</strong> to see which checklists fall at the same point in the season across all your years. See <a href="#seasonal-sort">Section 6 — Sorting dates by day of year</a>.</p>
 
 <hr>
 
@@ -553,6 +592,7 @@
 <h3>Date Totals</h3>
 <p>One row per individual date on which you submitted a checklist, showing species and checklist counts for that date.</p>
 <p>All three tables are sortable by any column. This report is useful for identifying your most productive years, your best months for birding, and your record single-day species counts.</p>
+<p>On the <strong>Date</strong> tab, the <strong>Date</strong> column can also be sorted by day of year — right-click its header and choose <strong>Sort by day of year (seasonal)</strong> to bring the same calendar day from every year together and see which times of year you bird hardest. See <a href="#seasonal-sort">Section 6 — Sorting dates by day of year</a>.</p>
 <p>The window title shows the total number of unique dates, e.g., <em>"Date Totals: All species, locations, and dates (365 Dates)"</em>.</p>
 
 <hr>
@@ -1029,6 +1069,10 @@
 
 <h3>Hiding the cursor</h3>
 <p>Press <strong>F7</strong> (or right-click → <strong>Hide cursor</strong>) to make the cursor invisible, giving you a clean view of the photo without anything obscuring the detail you are trying to evaluate. Press <strong>F7</strong> again (or right-click → <strong>Show cursor</strong>) to restore it.</p>
+
+<h3 id="edit-assignment">Correcting a photo's species or location</h3>
+<p>If you notice while browsing that a photo is attached to the wrong species, or to the wrong location or date, right-click it and choose <strong>Edit species or location assignment…</strong>. A <strong>Manage Photos</strong> window opens showing just that one photo, with the same drop-downs you would use when adding photos, so you can correct the assignment and save without searching for the photo among everything else in your catalog.</p>
+<p>The command is unavailable while a Manage Photos or Rename Media window is already open, since two windows editing the same catalog can conflict; close the other window first. If the photo is being viewed full screen, Yearbirder leaves full screen before opening the window.</p>
 
 <h3>Detaching and deleting photos</h3>
 <p>Right-click on the photo to access two file-management actions:</p>

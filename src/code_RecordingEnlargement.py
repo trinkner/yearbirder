@@ -2238,12 +2238,18 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
             self.showFullScreen()
             self.setWindowOpacity(0.0)         # invisible; faded in below
             self._fullScreen = True
+            # See Enlargement.toggleFullScreen: detached and frameless, this
+            # window is unreachable from the Windows menu, Cmd-` and App Exposé,
+            # so MainWindow raises it when the app is re-activated.
+            mainWindow._fullScreenChild = self
             self.activateWindow()
             self.setFocus()
             self._startFade(0.0, 1.0)          # fade the full-screen image in
         else:
             # ── Exit full screen ─────────────────────────────────────────────
             self._fullScreen = False
+            if mainWindow._fullScreenChild is self:
+                mainWindow._fullScreenChild = None
             # Fade out, then re-attach to the MDI in the finished callback.
             self._startFade(1.0, 0.0, on_done=self._reattachFromFullScreen)
 

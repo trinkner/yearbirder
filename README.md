@@ -11,7 +11,7 @@
 
 # Yearbirder
 
-**Current release: v2.11** (August 2026)
+**Current release: v2.13** (August 2026)
 
 A desktop application for exploring and analysing your personal [eBird](https://ebird.org) data, bird photos, and sound recordings.
 
@@ -20,6 +20,20 @@ Yearbirder lets you filter, browse, and visualise your personal eBird sightings 
 Full version history and downloads: [yearbirder.org](https://yearbirder.org)
 
 ---
+
+## What's New in v2.13
+
+- **Sort dates by day of year** — right-click any date column header and choose **Sort by day of year (seasonal)** to order rows by where each date falls in the year, ignoring the year: every January date first, every December date last. Sort your species by **First** this way and they lay themselves out in the order they arrive through the season. Available on every date column in the Species, Locations, Checklists and Find Results lists, and on Date Totals.
+- **Street maps no longer watermarked** — the previous tile service began requiring a paid key and stamping "API KEY REQUIRED" across every map. Street maps now come from Esri, the same provider that has always supplied the satellite view. Nothing to set up.
+- **Edit a photo's assignment from the Enlargement view** — right-click a photo and choose **Edit species or location assignment…** to open Manage Photos on just that photo, instead of hunting for it among everything else.
+- **Return to a full-screen photo** — switching to another app while viewing a photo or recording full screen and switching back now returns you to what you were looking at, rather than to the main window.
+
+## What's New in v2.12
+
+- **Sort photos and recordings in either direction** — **Ascending** and **Descending** buttons join the four sort options in both browse views, so you can see your newest photos first or work up from your lowest-rated recordings.
+- **Spectrograms on the recording growth curve** — hovering a point on `Recordings → Recorded Species Growth Over Time` shows a spectrogram of each species first recorded that day; clicking opens those recordings in a Browse Grid, ready to play.
+- **My County and My Patch always available** — the quick-jump buttons now sit at the top of the Sighting Filter whether or not they are set, and offer to take you to Preferences to set them.
+- **Lists show their sort column** — list windows open with the sort arrow visible on the column they are already sorted by.
 
 ## What's New in v2.11
 
@@ -163,7 +177,7 @@ Later 2.0x releases refined this work; see the [full version history](https://ye
 
 ## Download
 
-**macOS** — download the signed and notarized `Yearbirder_v2.11.dmg` from the [Releases page](https://github.com/trinkner/yearbirder/releases/latest), open it, and drag Yearbirder to your Applications folder.
+**macOS** — download the signed and notarized `Yearbirder_v2.13.dmg` from the [Releases page](https://github.com/trinkner/yearbirder/releases/latest), open it, and drag Yearbirder to your Applications folder.
 
 **Windows** — download the installer from [yearbirder.org/download](https://yearbirder.org/download) and run it.
 

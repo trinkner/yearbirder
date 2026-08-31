@@ -4,6 +4,7 @@ from code_Stylesheet import YBFont
 
 # import classes from other project files
 import code_Filter
+import code_SeasonalSort
 import code_MediaRefresh
 import code_Lists
 
@@ -484,8 +485,8 @@ class DateTotals(QMdiSubWindow, form_DateTotals.Ui_frmDateTotals):
         rank = 1
         lastDateTotal = 0
         for date in dateArray:            
-            dateItem = QTableWidgetItem()
-            dateItem.setText(date[1][0:4] + "-" + date[1][5:7] + "-" + date[1][8:])
+            dateText = date[1][0:4] + "-" + date[1][5:7] + "-" + date[1][8:]
+            dateItem = code_SeasonalSort.dateItem(dateText)
             dateTotalItem = QTableWidgetItem()
             dateTotalItem.setData(Qt.DisplayRole, date[0])
             dateTotalItem.setTextAlignment(Qt.AlignCenter|Qt.AlignVCenter)                     
@@ -496,7 +497,7 @@ class DateTotals(QMdiSubWindow, form_DateTotals.Ui_frmDateTotals):
             dateChecklistTotalItem = QTableWidgetItem()
             dateChecklistTotalItem.setData(Qt.DisplayRole, date[2])    
             dateChecklistTotalItem.setTextAlignment(Qt.AlignCenter|Qt.AlignVCenter)                     
-            self.tblDateTotals.setItem(R, 0, rankItem)    
+            self.tblDateTotals.setItem(R, 0, rankItem)
             self.tblDateTotals.setItem(R, 1, dateItem)
             self.tblDateTotals.setItem(R, 2, dateTotalItem)
             self.tblDateTotals.setItem(R, 3, dateChecklistTotalItem)
@@ -525,6 +526,12 @@ class DateTotals(QMdiSubWindow, form_DateTotals.Ui_frmDateTotals):
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         header = self.tblDateTotals.horizontalHeader()
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+
+        # Right-click the Date header to switch between chronological and
+        # seasonal order.  Only the Date tab carries real dates — Year and Month
+        # totals are already a position in the year, so there is nothing
+        # seasonal to offer there.
+        code_SeasonalSort.install(self.tblDateTotals, (1,))     # Date
 
         self.mdiParent.SetChildDetailsLabels(self, self.filter)
 

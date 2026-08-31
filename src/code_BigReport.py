@@ -2,6 +2,7 @@
 import form_BigReport
 from code_Stylesheet import YBFont
 import code_Filter
+import code_Basemap
 import code_MediaRefresh
 import code_Location
 import code_Individual
@@ -655,7 +656,7 @@ class BigReport(QMdiSubWindow, form_BigReport.Ui_frmBigReport):
         else:             zoom = 13
 
         location_map = folium.Map(location=center, zoom_start=zoom,
-                                  tiles="CartoDB Voyager")
+                                  tiles=code_Basemap.streetTiles())
         for name, coords in coordinatesDict.items():
             lat, lon = float(coords[0]), float(coords[1])
             marker = folium.CircleMarker(

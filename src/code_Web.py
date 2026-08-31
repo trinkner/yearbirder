@@ -15,6 +15,7 @@ from code_Stylesheet import CHART_PRIMARY, PHOTO_PRIMARY, RECORDINGS_PRIMARY
 
 # import the GUI forms that we create with Qt Creator
 import form_Web
+import code_Basemap
 
 # import the Qt components we'll use
 # do this so later we won't have to clutter our code with references to parent Qt classes 
@@ -1205,7 +1206,7 @@ td {{ border-bottom:1px solid #e8e8e8; vertical-align:middle; }}
         html += f'<p class="subtitle">Version {self.mdiParent.versionNumber} &nbsp;&bull;&nbsp; {self.mdiParent.versionDate}</p>'
         html += """
 <p class="description">
-  Yearbirder is a desktop app to help birders analyze, visualize and map their personal eBird sightings and, optionally, their bird photography. Yearbirder is a free and open-source Python application.<br>
+  Yearbirder is a desktop app to help birders analyze, visualize and map their personal eBird sightings and, optionally, their bird photography and recordings. Yearbirder is a free and open-source Python application.<br>
   Created by Richard Trinkner.
 </p>
 
@@ -1219,14 +1220,37 @@ td {{ border-bottom:1px solid #e8e8e8; vertical-align:middle; }}
   <li><b>Yearbirder</b> is licensed under the GNU General Public License, version 3.</li>
   <li><b>PySide6</b>, by The Qt Company, is used under the GNU Lesser General Public
       License (LGPL) version 3, which permits free non-commercial use.</li>
+  <li><b>Chromium</b>, by The Chromium Authors, is embedded by Qt WebEngine and
+      renders Yearbirder's maps, reports and this window. It is used under the
+      BSD 3-Clause License, and includes further components under their own
+      licenses.</li>
   <li><b>Matplotlib</b>, by the Matplotlib Development Team, is used under the
       Matplotlib License (a BSD-compatible license).</li>
   <li><b>NumPy</b>, by the NumPy Developers, is used under the BSD 3-Clause License.</li>
-  <li><b>Folium</b>, by the Python Visualization team, is used under the MIT License.</li>
-  <li><b>OpenLayers</b>, used for point and label map layers, is released under the
-      2-Clause BSD License.</li>
-  <li><b>Map base layers</b> are provided by OpenStreetMap contributors under the
-      Open Database License (ODbL).</li>
+  <li><b>Pillow</b>, by Jeffrey A. Clark and contributors, used to read and write
+      image files, is used under the MIT-CMU License. It bundles <b>libjpeg</b>,
+      <b>libtiff</b> and <b>OpenJPEG</b>.</li>
+  <li><b>Folium</b>, by the Python Visualization team, is used under the MIT License,
+      together with <b>branca</b> (MIT License) and <b>Jinja2</b>, by the Pallets
+      team (BSD 3-Clause License), which Folium uses to build its maps.</li>
+  <li><b>Leaflet</b>, by Volodymyr Agafonkin and contributors, is the mapping library
+      behind every Yearbirder map and is used under the BSD 2-Clause License. Map
+      pages also load <b>Leaflet.awesome-markers</b>, <b>jQuery</b> and
+      <b>Bootstrap</b>, each used under the MIT License.</li>
+  <li><b>Map base layers</b> &mdash; both the street and the satellite views &mdash; are
+      tiles from <b>Esri</b>'s ArcGIS Online basemaps. The street map draws on
+      sources including Esri, HERE, Garmin, USGS, Intermap, INCREMENT P, NRCan,
+      Esri Japan, METI, Esri China (Hong Kong), Esri Korea, Esri (Thailand),
+      NGCC, &copy; OpenStreetMap contributors, and the GIS User Community; the
+      satellite imagery on Esri, Vantor, Earthstar Geographics, and the GIS User
+      Community. OpenStreetMap data is contributed under the Open Database
+      License (ODbL).</li>
+  <li><b>Region boundaries</b> used by the shaded region maps come from the
+      <b>Plotly</b> sample datasets, used under the MIT License.</li>
+  <li><b>eBird</b> data &mdash; the bundled eBird taxonomy and species reference
+      files, and the live data retrieved from the eBird API &mdash; is provided by
+      the <b>Cornell Lab of Ornithology</b> and is used with attribution.
+      Yearbirder is not affiliated with or endorsed by eBird or the Cornell Lab.</li>
   <li><b>piexif</b>, by hMatoba, is used under the MIT License.</li>
   <li><b>natsort</b>, by Seth M. Morton, is used under the MIT License.</li>
   <li><b>SoundFile</b>, by Bastian Bechtold, used to read audio recordings, is
@@ -1236,6 +1260,11 @@ td {{ border-bottom:1px solid #e8e8e8; vertical-align:middle; }}
   <li><b>python-soxr</b>, by Dofuuz, used for high-quality audio resampling, is
       licensed under the GNU Lesser General Public License (LGPL) version 2.1. It
       bundles <b>libsoxr</b>, by Rob Sykes.</li>
+  <li><b>mutagen</b>, by the Quod Libet team, used to read audio file metadata, is
+      licensed under the GNU General Public License (GPL) version 2 or later.</li>
+  <li><b>certifi</b>, by Kenneth Reitz and contributors, supplies the Mozilla root
+      certificate bundle used for secure connections, under the Mozilla Public
+      License 2.0.</li>
   <li><b>PyInstaller</b>, by the PyInstaller Development Team, is licensed under the
       GPL with a special exception that permits bundling of non-GPL applications.</li>
 </ul>
@@ -1313,7 +1342,7 @@ td {{ border-bottom:1px solid #e8e8e8; vertical-align:middle; }}
             location_species[s["location"]][s["commonName"]] = None
         species_counts = {loc: len(sp) for loc, sp in location_species.items()}
 
-        location_map = folium.Map(tiles="CartoDB Voyager")
+        location_map = folium.Map(tiles=code_Basemap.streetTiles())
 
         # Build tooltip HTML for each location; stored in a JS dict for
         # the custom positioned tooltip (not folium.Tooltip, which can't be
@@ -1727,7 +1756,7 @@ document.addEventListener("DOMContentLoaded", function() {{
                 f["properties"].pop("clickKey", None)
                 f["properties"].pop("tipKey",   None)
 
-        state_map = folium.Map(location=[39.5, -98.3], zoom_start=4, tiles="CartoDB Voyager")
+        state_map = folium.Map(location=[39.5, -98.3], zoom_start=4, tiles=code_Basemap.streetTiles())
 
         folium.GeoJson(
             geo_file,
@@ -1835,7 +1864,7 @@ document.addEventListener("DOMContentLoaded", function() {{
                 f["properties"].pop("clickKey", None)
                 f["properties"].pop("tipKey",   None)
 
-        prov_map = folium.Map(location=[62, -96], zoom_start=3, tiles="CartoDB Voyager")
+        prov_map = folium.Map(location=[62, -96], zoom_start=3, tiles=code_Basemap.streetTiles())
 
         folium.GeoJson(
             geo_file,
@@ -1942,7 +1971,7 @@ document.addEventListener("DOMContentLoaded", function() {{
                 f["properties"].pop("clickKey", None)
                 f["properties"].pop("tipKey",   None)
 
-        state_map = folium.Map(location=[22, 80], zoom_start=4, tiles="CartoDB Voyager")
+        state_map = folium.Map(location=[22, 80], zoom_start=4, tiles=code_Basemap.streetTiles())
 
         folium.GeoJson(
             geo_file,
@@ -2050,7 +2079,7 @@ document.addEventListener("DOMContentLoaded", function() {{
                 f["properties"].pop("clickKey", None)
                 f["properties"].pop("tipKey",   None)
 
-        county_map = folium.Map(location=[54, -2], zoom_start=5, tiles="CartoDB Voyager")
+        county_map = folium.Map(location=[54, -2], zoom_start=5, tiles=code_Basemap.streetTiles())
 
         folium.GeoJson(
             geo_file,
@@ -2162,7 +2191,7 @@ document.addEventListener("DOMContentLoaded", function() {{
                 f["properties"].pop("clickKey", None)
                 f["properties"].pop("tipKey",   None)
 
-        county_map = folium.Map(location=[39.5, -98.3], zoom_start=4, tiles="CartoDB Voyager")
+        county_map = folium.Map(location=[39.5, -98.3], zoom_start=4, tiles=code_Basemap.streetTiles())
 
         folium.GeoJson(
             geo_file,
@@ -2276,7 +2305,7 @@ document.addEventListener("DOMContentLoaded", function() {{
                 f["properties"].pop("clickKey", None)
                 f["properties"].pop("tipKey",   None)
 
-        choro_map = folium.Map(location=[1, 1], zoom_start=1, tiles="CartoDB Voyager")
+        choro_map = folium.Map(location=[1, 1], zoom_start=1, tiles=code_Basemap.streetTiles())
 
         folium.GeoJson(
             geo_file,
@@ -2397,7 +2426,7 @@ document.addEventListener("DOMContentLoaded", function() {{
         life_map = folium.Map(
             location=[sum(lats) / total, sum(lons) / total],
             zoom_start=4,
-            tiles="CartoDB Voyager",
+            tiles=code_Basemap.streetTiles(),
         )
         life_map.fit_bounds([[min(lats), min(lons)], [max(lats), max(lons)]], max_zoom=15)
 
@@ -2756,7 +2785,7 @@ document.addEventListener("DOMContentLoaded", function() {{
         fsm_map = folium.Map(
             location=[sum(lats) / total, sum(lons) / total],
             zoom_start=4,
-            tiles="CartoDB Voyager",
+            tiles=code_Basemap.streetTiles(),
         )
         fsm_map.fit_bounds([[min(lats), min(lons)], [max(lats), max(lons)]], max_zoom=15)
 
@@ -3091,7 +3120,7 @@ document.addEventListener("DOMContentLoaded", function() {{
         photo_map = folium.Map(
             location=[avg_lat, avg_lon],
             zoom_start=5,
-            tiles="CartoDB Voyager",
+            tiles=code_Basemap.streetTiles(),
         )
 
         # Add an empty MarkerCluster so Folium loads the markercluster JS
@@ -3295,7 +3324,7 @@ document.addEventListener("DOMContentLoaded", function() {{
         photo_map = folium.Map(
             location=[sum(lats) / total, sum(lons) / total],
             zoom_start=4,
-            tiles="CartoDB Voyager",
+            tiles=code_Basemap.streetTiles(),
         )
         photo_map.fit_bounds([[min(lats), min(lons)], [max(lats), max(lons)]], max_zoom=15)
 
@@ -3621,7 +3650,7 @@ document.addEventListener("DOMContentLoaded", function() {{
         avg_lon = sum(m[1] for m in markers) / len(markers)
 
         rec_map = folium.Map(location=[avg_lat, avg_lon], zoom_start=5,
-                             tiles="CartoDB Voyager")
+                             tiles=code_Basemap.streetTiles())
         MarkerCluster(options={"spiderfyOnMaxZoom": True,
                                 "spiderfyDistanceMultiplier": 2}).add_to(rec_map)
         lats = [m[0] for m in markers]
@@ -3764,7 +3793,7 @@ document.addEventListener("DOMContentLoaded", function() {{
 
         rec_map = folium.Map(
             location=[sum(lats) / total, sum(lons) / total],
-            zoom_start=4, tiles="CartoDB Voyager")
+            zoom_start=4, tiles=code_Basemap.streetTiles())
         rec_map.fit_bounds([[min(lats), min(lons)], [max(lats), max(lons)]], max_zoom=15)
 
         html = rec_map.get_root().render()
@@ -4382,7 +4411,7 @@ applySort();
         effort_map = folium.Map(
             location=[avg_lat, avg_lon],
             zoom_start=5,
-            tiles="CartoDB Voyager",
+            tiles=code_Basemap.streetTiles(),
         )
 
         tip_data = {}
@@ -4654,7 +4683,7 @@ applySort();
         bubble_map = folium.Map(
             location=[avg_lat, avg_lon],
             zoom_start=5,
-            tiles="CartoDB Voyager",
+            tiles=code_Basemap.streetTiles(),
         )
 
         # Build tooltip data for both modes
@@ -6950,7 +6979,7 @@ function handleShowChecklist(el) {{
         notable_map = folium.Map(
             location=[avg_lat, avg_lng],
             zoom_start=7,
-            tiles="CartoDB Voyager",
+            tiles=code_Basemap.streetTiles(),
         )
 
         tip_data = {}
@@ -7350,7 +7379,7 @@ function handleShowChecklist(el) {{
         notable_map = folium.Map(
             location=[avg_lat, avg_lng],
             zoom_start=7,
-            tiles="CartoDB Voyager",
+            tiles=code_Basemap.streetTiles(),
         )
 
         import html as _html2
@@ -7482,7 +7511,7 @@ function handleShowChecklist(el) {{
         import tempfile
 
         self.contentType = "Location Map"
-        m = folium.Map(location=[lat, lng], zoom_start=14, tiles="CartoDB Voyager")
+        m = folium.Map(location=[lat, lng], zoom_start=14, tiles=code_Basemap.streetTiles())
         folium.CircleMarker(
             location=[lat, lng],
             radius=15,
@@ -7745,7 +7774,7 @@ function openChecklist(subId) {{
         sp_map = folium.Map(
             location=[avg_lat, avg_lng],
             zoom_start=7,
-            tiles="CartoDB Voyager",
+            tiles=code_Basemap.streetTiles(),
         )
 
         _BADGE_COLORS = {
@@ -8036,7 +8065,7 @@ function openChecklist(subId) {{
         avg_lat = sum(p[0] for p in points) / len(points)
         avg_lng = sum(p[1] for p in points) / len(points)
 
-        m = folium.Map(location=[avg_lat, avg_lng], zoom_start=10, tiles="CartoDB Voyager")
+        m = folium.Map(location=[avg_lat, avg_lng], zoom_start=10, tiles=code_Basemap.streetTiles())
 
         # Tooltip data keyed by loc_id to avoid name collisions
         tip_data = {}
@@ -8266,7 +8295,7 @@ function openChecklist(subId) {{
         sp_map = folium.Map(
             location=[avg_lat, avg_lng],
             zoom_start=7,
-            tiles="CartoDB Voyager",
+            tiles=code_Basemap.streetTiles(),
         )
 
         _BADGE_COLORS = {

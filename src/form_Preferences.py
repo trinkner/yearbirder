@@ -14,7 +14,9 @@ class Ui_frmPreferences(object):
         # Container widget
         self.contentWidget = QtWidgets.QWidget(frmPreferences)
         self.contentWidget.setObjectName("contentWidget")
-        self.contentWidget.setGeometry(0, 23, 840, 457)
+        # Inset to leave the native window frame visible (see resizeMe, which
+        # keeps these margins on every resize).
+        self.contentWidget.setGeometry(5, 27, 830, 445)
 
         self.mainLayout = QtWidgets.QVBoxLayout(self.contentWidget)
         self.mainLayout.setContentsMargins(10, 10, 10, 10)
