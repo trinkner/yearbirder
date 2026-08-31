@@ -1206,7 +1206,7 @@ td {{ border-bottom:1px solid #e8e8e8; vertical-align:middle; }}
         html += f'<p class="subtitle">Version {self.mdiParent.versionNumber} &nbsp;&bull;&nbsp; {self.mdiParent.versionDate}</p>'
         html += """
 <p class="description">
-  Yearbirder is a desktop app to help birders analyze, visualize and map their personal eBird sightings and, optionally, their bird photography. Yearbirder is a free and open-source Python application.<br>
+  Yearbirder is a desktop app to help birders analyze, visualize and map their personal eBird sightings and, optionally, their bird photography and recordings. Yearbirder is a free and open-source Python application.<br>
   Created by Richard Trinkner.
 </p>
 
@@ -1223,11 +1223,30 @@ td {{ border-bottom:1px solid #e8e8e8; vertical-align:middle; }}
   <li><b>Matplotlib</b>, by the Matplotlib Development Team, is used under the
       Matplotlib License (a BSD-compatible license).</li>
   <li><b>NumPy</b>, by the NumPy Developers, is used under the BSD 3-Clause License.</li>
-  <li><b>Folium</b>, by the Python Visualization team, is used under the MIT License.</li>
-  <li><b>OpenLayers</b>, used for point and label map layers, is released under the
-      2-Clause BSD License.</li>
-  <li><b>Map base layers</b> are provided by OpenStreetMap contributors under the
-      Open Database License (ODbL).</li>
+  <li><b>Pillow</b>, by Jeffrey A. Clark and contributors, used to read and write
+      image files, is used under the MIT-CMU License. It bundles <b>libjpeg</b>,
+      <b>libtiff</b> and <b>OpenJPEG</b>.</li>
+  <li><b>Folium</b>, by the Python Visualization team, is used under the MIT License,
+      together with <b>branca</b> (MIT License) and <b>Jinja2</b>, by the Pallets
+      team (BSD 3-Clause License), which Folium uses to build its maps.</li>
+  <li><b>Leaflet</b>, by Volodymyr Agafonkin and contributors, is the mapping library
+      behind every Yearbirder map and is used under the BSD 2-Clause License. Map
+      pages also load <b>Leaflet.awesome-markers</b>, <b>jQuery</b> and
+      <b>Bootstrap</b>, each used under the MIT License.</li>
+  <li><b>Map base layers</b> &mdash; both the street and the satellite views &mdash; are
+      tiles from <b>Esri</b>'s ArcGIS Online basemaps. The street map draws on
+      sources including Esri, HERE, Garmin, USGS, Intermap, INCREMENT P, NRCan,
+      Esri Japan, METI, Esri China (Hong Kong), Esri Korea, Esri (Thailand),
+      NGCC, &copy; OpenStreetMap contributors, and the GIS User Community; the
+      satellite imagery on Esri, Vantor, Earthstar Geographics, and the GIS User
+      Community. OpenStreetMap data is contributed under the Open Database
+      License (ODbL).</li>
+  <li><b>Region boundaries</b> used by the shaded region maps come from the
+      <b>Plotly</b> sample datasets, used under the MIT License.</li>
+  <li><b>eBird</b> data &mdash; the bundled eBird taxonomy and species reference
+      files, and the live data retrieved from the eBird API &mdash; is provided by
+      the <b>Cornell Lab of Ornithology</b> and is used with attribution.
+      Yearbirder is not affiliated with or endorsed by eBird or the Cornell Lab.</li>
   <li><b>piexif</b>, by hMatoba, is used under the MIT License.</li>
   <li><b>natsort</b>, by Seth M. Morton, is used under the MIT License.</li>
   <li><b>SoundFile</b>, by Bastian Bechtold, used to read audio recordings, is
@@ -1237,6 +1256,11 @@ td {{ border-bottom:1px solid #e8e8e8; vertical-align:middle; }}
   <li><b>python-soxr</b>, by Dofuuz, used for high-quality audio resampling, is
       licensed under the GNU Lesser General Public License (LGPL) version 2.1. It
       bundles <b>libsoxr</b>, by Rob Sykes.</li>
+  <li><b>mutagen</b>, by the Quod Libet team, used to read audio file metadata, is
+      licensed under the GNU General Public License (GPL) version 2 or later.</li>
+  <li><b>certifi</b>, by Kenneth Reitz and contributors, supplies the Mozilla root
+      certificate bundle used for secure connections, under the Mozilla Public
+      License 2.0.</li>
   <li><b>PyInstaller</b>, by the PyInstaller Development Team, is licensed under the
       GPL with a special exception that permits bundling of non-GPL applications.</li>
 </ul>
