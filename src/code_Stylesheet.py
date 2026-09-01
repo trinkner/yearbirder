@@ -304,11 +304,15 @@ stylesheetBase = """
         background: #42454f;
         border: 1px solid #565a6a;
     }
-    QWidget#mediaCard QComboBox:hover { border-color: #4f8ef7; }
+    QWidget#mediaCard QComboBox:hover { border-color: #6b7080; }
+    /* Same reasoning as the global QComboBox:focus rule below: no blue focus
+       ring, so a focus that lingers cannot leave a border behind.  The lighter
+       background stays as the feedback cue -- on a card the combo is the main
+       control, so losing every indication would be worse than the bug. */
     QWidget#mediaCard QComboBox:focus,
     QWidget#mediaCard QComboBox:on {
         background: #4d5160;
-        border: 1px solid #4f8ef7;
+        border: 1px solid #565a6a;
     }
     QWidget#mediaCard QPushButton#chipRemoveBtn {
         background: transparent; border: none;
@@ -346,15 +350,37 @@ stylesheetBase = """
         padding: 3px 8px;
         min-height: 22px;
     }
-    QComboBox:hover { border-color: #4f8ef7; }
+    /* Hover lightens the border but never turns it blue.  Blue was the last
+       remaining way a combo could draw a blue border, and a stranded :hover
+       strands just like a stranded :focus -- Qt can miss the leave event when
+       the dock relayouts or a popup opens over the widget.  With this there is
+       no combo state anywhere that paints blue, so the "border stuck on"
+       reports cannot recur from any state. */
+    QComboBox:hover { border-color: #4a4e63; }
+    /* No focus ring on combo boxes.
+       A focused combo used to draw a blue border, and in the filter docks that
+       border kept appearing to "stick" -- most visibly after Clear filters, but
+       also any time focus simply stayed on the last combo the user touched.
+       Chasing the focus around (moving it elsewhere on clear) only ever fixed
+       the cases we thought to handle; the border still turned up in others.
+       Making the focused state visually identical to the resting state removes
+       the whole class of report at once: there is no longer anything that can
+       linger.
+       This does NOT affect the blue text marking a filter as set -- that is a
+       separate per-widget stylesheet applied by
+       MainWindow.highlightFilterElement() ("QComboBox { color: ... }"), which
+       sets colour only and never touches the border. */
     QComboBox:focus {
-        background: #363a4f;
-        border: 1px solid #4f8ef7;
+        background: #2b2d38;
+        border: 1px solid #3a3d4e;
         border-radius: 5px;
     }
+    /* :on is the popup-open state. Keep a lighter background as feedback while
+       the list is showing -- it clears when the popup closes -- but no blue
+       border, so it cannot be mistaken for the stuck ring above. */
     QComboBox:on {
         background: #363a4f;
-        border: 1px solid #4f8ef7;
+        border: 1px solid #3a3d4e;
         border-radius: 5px;
     }
     QComboBox QAbstractItemView {
