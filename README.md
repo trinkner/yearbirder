@@ -11,7 +11,7 @@
 
 # Yearbirder
 
-**Current release: v2.13** (August 2026)
+**Current release: v2.14** (September 2026)
 
 A desktop application for exploring and analysing your personal [eBird](https://ebird.org) data, bird photos, and sound recordings.
 
@@ -20,6 +20,10 @@ Yearbirder lets you filter, browse, and visualise your personal eBird sightings 
 Full version history and downloads: [yearbirder.org](https://yearbirder.org)
 
 ---
+
+## What's New in v2.14
+
+- **Open a hotspot's sightings from the map** — clicking a dot on the Hotspot Map now opens an **All Community Sightings** report for that hotspot, instead of doing nothing. Hovering still shows the hotspot's name, species count and last observation date. The same fix revives click-through on the species maps.
 
 ## What's New in v2.13
 
@@ -177,7 +181,7 @@ Later 2.0x releases refined this work; see the [full version history](https://ye
 
 ## Download
 
-**macOS** — download the signed and notarized `Yearbirder_v2.13.dmg` from the [Releases page](https://github.com/trinkner/yearbirder/releases/latest), open it, and drag Yearbirder to your Applications folder.
+**macOS** — download the signed and notarized `Yearbirder_v2.14.dmg` from the [Releases page](https://github.com/trinkner/yearbirder/releases/latest), open it, and drag Yearbirder to your Applications folder.
 
 **Windows** — download the installer from [yearbirder.org/download](https://yearbirder.org/download) and run it.
 

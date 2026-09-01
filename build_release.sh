@@ -10,15 +10,120 @@
 
 set -e  # exit on any error
 
-# ── Version check ─────────────────────────────────────────────────────────────
+# ── Pre-flight checklist ──────────────────────────────────────────────────────
+# Everything checked here has to be right BEFORE the build, because each item is
+# baked into the artifact: the User Guide ships inside the .app and About
+# Yearbirder is compiled from code_Web.py.  Discovering any of it afterwards
+# means rebuilding, re-signing and re-notarizing from scratch — 20 minutes and
+# two round-trips to Apple.  The steps that come after the build are printed at
+# the end of a successful run.
+#
+# Anything that can be verified mechanically is verified rather than asked
+# about; a yes/no prompt for something the script could check itself just trains
+# you to type "y".  Only the two genuinely human judgements are prompted for.
 VERSION=$(grep 'versionNumber = ' src/code_MainWindow.py | sed 's/.*"\(.*\)".*/\1/')
 VERSION_DATE=$(grep 'versionDate = ' src/code_MainWindow.py | sed 's/.*"\(.*\)".*/\1/')
+
+GUIDE_HTML="src/guide/guide_Yearbirder.html"
+HISTORY_HTML="web/history.html"
+ABOUT_SRC="src/code_Web.py"
+
+preflight_problems=0
+ok()   { echo "   ok   $1"; }
+warn() { echo "   --   $1"; preflight_problems=$((preflight_problems + 1)); }
+
+# Released versions live as tags on the remote.  The local tag list is NOT a
+# reliable substitute: a release created with `gh release create` tags the
+# remote only, so v2.13 was absent locally the day after it shipped.
+#
+# Filter to vN.N tags specifically: the repo also carries non-release tags such
+# as "pyside6-stable", and an unfiltered list sorts one of those to the top and
+# produces nonsense like 'v"pyside6-stable" was never demoted'.
+RELEASED_TAGS=$(git ls-remote --tags origin 2>/dev/null \
+                | awk -F/ '{print $NF}' | grep -v '\^{}' \
+                | grep -E '^v[0-9]+\.[0-9]+$' || true)
+if [ -z "$RELEASED_TAGS" ]; then
+    echo "(could not reach the remote — falling back to local tags)"
+    RELEASED_TAGS=$(git tag 2>/dev/null | grep -E '^v[0-9]+\.[0-9]+$' || true)
+fi
+PREV_VERSION=$(echo "$RELEASED_TAGS" | sed 's/^v//' | sort -V | tail -1)
+
 echo ""
-echo "Current version in code_MainWindow.py: ${VERSION}  (${VERSION_DATE})"
+echo "=============================================================="
+echo " Pre-flight checklist for v${VERSION}"
+echo "=============================================================="
 echo ""
-read -p "Have you updated the version number? (y/n): " VERSION_CONFIRMED
-if [[ "$VERSION_CONFIRMED" != "y" && "$VERSION_CONFIRMED" != "Y" ]]; then
-    echo "Please update versionNumber and versionDate in src/code_MainWindow.py, then re-run."
+echo " 1. Version number and date"
+if echo "$RELEASED_TAGS" | grep -qx "v${VERSION}"; then
+    warn "v${VERSION} is already released — bump versionNumber in src/code_MainWindow.py"
+else
+    ok "version ${VERSION} is not yet released"
+fi
+VD_EPOCH=$(date -j -f "%B %d, %Y" "$VERSION_DATE" +%s 2>/dev/null || true)
+if [ -z "$VD_EPOCH" ]; then
+    warn "versionDate \"${VERSION_DATE}\" is not in \"Month D, YYYY\" form"
+else
+    VD_AGE=$(( ( $(date +%s) - VD_EPOCH ) / 86400 ))
+    if [ "$VD_AGE" -gt 14 ]; then
+        warn "versionDate is ${VD_AGE} days old (${VERSION_DATE}) — left over from the last release?"
+    else
+        ok "versionDate ${VERSION_DATE} is current"
+    fi
+fi
+
+echo ""
+echo " 2. What's New on the website (${HISTORY_HTML})"
+if grep -q "release-version\">v${VERSION}<" "$HISTORY_HTML" 2>/dev/null; then
+    ok "an entry for v${VERSION} exists"
+else
+    warn "no v${VERSION} entry yet"
+fi
+
+echo ""
+echo " 3. User Guide (${GUIDE_HTML}) — ships inside the .app"
+GUIDE_HITS=$(grep -c "What's New in v${VERSION}" "$GUIDE_HTML" 2>/dev/null || true)
+if [ "${GUIDE_HITS:-0}" -ge 2 ]; then
+    ok "What's New heading and table-of-contents entry both name v${VERSION}"
+elif [ "${GUIDE_HITS:-0}" -eq 1 ]; then
+    warn "only one of the What's New heading / TOC entry says v${VERSION} — the other is stale"
+else
+    warn "no \"What's New in v${VERSION}\" section"
+fi
+if [ -n "$PREV_VERSION" ] && ! grep -q "Earlier changes in v${PREV_VERSION}" "$GUIDE_HTML"; then
+    warn "v${PREV_VERSION} was never demoted to \"Earlier changes in v${PREV_VERSION}\""
+fi
+
+echo ""
+echo " 4. Credits in About Yearbirder (${ABOUT_SRC})"
+CREDITS_LINE=$(grep -n "The Chromium Authors" "$ABOUT_SRC" | head -1 | cut -d: -f1 || true)
+echo "        third-party credits block starts near ${ABOUT_SRC}:${CREDITS_LINE:-?}"
+
+echo ""
+echo " 5. Working tree"
+if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+    warn "uncommitted changes — commit them so the build matches what you push"
+    git status --short --untracked-files=no | sed 's/^/        /'
+else
+    ok "clean"
+fi
+
+echo ""
+echo "--------------------------------------------------------------"
+if [ "$preflight_problems" -gt 0 ]; then
+    echo " ${preflight_problems} item(s) above need attention."
+else
+    echo " All mechanical checks passed."
+fi
+echo ""
+echo " Confirm by eye — neither can be checked mechanically:"
+echo "   * the User Guide documents every new feature in this release"
+echo "   * About Yearbirder credits every library, map provider and data"
+echo "     source, including anything added or swapped this cycle"
+echo "--------------------------------------------------------------"
+echo ""
+read -p "Proceed with the build for v${VERSION}? (y/n): " PREFLIGHT_OK
+if [[ "$PREFLIGHT_OK" != "y" && "$PREFLIGHT_OK" != "Y" ]]; then
+    echo "Stopped. Nothing was built."
     exit 1
 fi
 
@@ -322,7 +427,44 @@ fi
 echo ""
 echo "=== All done! ==="
 echo ""
-echo "*** REMINDER: Upload dist/Yearbirder_Setup.exe to Cloudflare R2 ***"
-echo "    https://dash.cloudflare.com → R2 → yearbirder-downloads → Upload"
-echo "    (replaces the existing file at downloads.yearbirder.org/Yearbirder_Setup.exe)"
+echo "=============================================================="
+echo " Remaining release steps for v${VERSION}"
+echo "=============================================================="
+echo ""
+echo " 6. Test dist/Yearbirder_v${VERSION}.dmg yourself — install it and"
+echo "    check About Yearbirder reports v${VERSION} (${VERSION_DATE})."
+echo "    Any fix from here means re-running this script from the top."
+echo ""
+echo " 7. Commit and push a release/v${VERSION} branch."
+echo "    NOTE: Step 14 above just edited web/download.html — include it."
+echo "    Pushing release/** starts the Windows CI build."
+echo ""
+echo " 8. When CI finishes, download the Yearbirder-Windows-Setup artifact"
+echo "    and test the installer on the Windows VM."
+echo ""
+echo " 9. Update README.md for v${VERSION} and commit to the branch."
+echo ""
+echo "10. Upload the new Yearbirder_Setup.exe to Cloudflare R2 — BEFORE the"
+echo "    merge, not after."
+echo "    https://dash.cloudflare.com -> R2 -> yearbirder-downloads -> Upload"
+echo "    (replaces downloads.yearbirder.org/Yearbirder_Setup.exe)"
+echo "    R2 serves one fixed URL, so the file and the page it is advertised"
+echo "    on go stale independently.  Uploading first means the page still"
+echo "    says v${PREV_VERSION:-previous} while the newer exe is already"
+echo "    served; merging first means the page promises v${VERSION} and hands"
+echo "    out the old build.  The first is untidy, the second ships the wrong"
+echo "    app to anyone downloading in the gap."
+echo ""
+echo "11. Merge release/v${VERSION} to master (this takes the website live)."
+echo ""
+echo "12. Immediately create tag v${VERSION} and a GitHub release, attaching"
+echo "    dist/Yearbirder_v${VERSION}.dmg."
+echo "    web/download.html links to"
+echo "    .../download/v${VERSION}/Yearbirder_v${VERSION}.dmg — that link 404s"
+echo "    from the moment of merge until the release exists, so do not leave"
+echo "    a gap between steps 11 and 12."
+echo ""
+echo "13. Sanity-check yearbirder.org: every page reachable, v${VERSION}"
+echo "    everywhere, no stale v${PREV_VERSION:-previous} references, and both"
+echo "    download links returning 200."
 echo ""
