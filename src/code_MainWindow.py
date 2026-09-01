@@ -484,7 +484,11 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
     fontSize = 11
     scaleFactor = 1
     rowHeight = 16  # default; recomputed in ScaleDisplay() and __init__
-    versionNumber = "2.14"
+    # Free-form string, not a number: it is only ever displayed (title bar,
+    # About) and string-compared in _onUpdateCheckDone.  Letters are fine.
+    # Avoid SPACES though — build_release.sh interpolates this into DMG
+    # filenames and the disk-image volume name (Yearbirder_v${VERSION}.dmg).
+    versionNumber = "2.15-dev"
     versionDate = "September 1, 2026"
     taxonomyYear = ""
 
