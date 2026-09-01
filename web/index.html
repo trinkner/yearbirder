@@ -12,6 +12,48 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
+
+  <!-- Hero overrides for this alternative home page only.
+       Deliberately inline rather than in style.css, so the live index.html is
+       completely unaffected by this experiment.
+
+       The kestrel was a photograph, and style.css crops it to fill the panel
+       (object-fit: cover, centred at 25% height) — which is right for a photo
+       and wrong for a screenshot: cropping would slice the edges off the app
+       window. So the image is contained rather than covered, the split is
+       shifted slightly in its favour, and it gets the inset and shadow that
+       make a screenshot read as a product shot rather than a background. -->
+  <style>
+    .hero-split { grid-template-columns: 0.88fr 1.12fr; min-height: 460px; }
+
+    .hero-right {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 30px 34px 30px 6px;
+    }
+
+    .hero-app {
+      width: 100%;
+      height: auto;
+      max-height: 100%;
+      object-fit: contain;
+      display: block;
+      border-radius: 8px;
+      box-shadow: 0 12px 34px rgba(0, 0, 0, .40);
+    }
+
+    /* style.css gives .hero-right a fixed height once the split stacks, which
+       would letterbox the screenshot into a short band. Let it size to the
+       image instead. */
+    @media (max-width: 860px) {
+      .hero-right { height: auto; padding: 0 24px 30px; }
+      .hero-app   { max-height: none; }
+    }
+    @media (max-width: 600px) {
+      .hero-right { height: auto; padding: 0 16px 24px; }
+    }
+  </style>
 </head>
 <body>
 
@@ -45,8 +87,7 @@
       </p>
     </div>
     <div class="hero-right">
-      <img src="images/kestrel.jpg" alt="American Kestrel" class="hero-bird">
-      <span class="hero-photo-credit">American Kestrel</span>
+      <img src="images/opt/demo_WholeApp.webp" alt="The Yearbirder desktop app, showing several report, chart, and map windows open at once" class="hero-app">
     </div>
   </div>
 </section>
@@ -85,26 +126,26 @@
     <div class="feature-cards">
       <a href="sighting-analysis.html" class="feature-card">
         <h3>Sighting Analysis</h3>
-        <p>Every checklist you've ever submitted becomes data you can sort, filter, and drill into — through lists, date and location totals, the Big Report, more than 30 chart types, and more than a dozen interactive maps.</p>
-        <img src="images/demo_AppMain.png" alt="The Yearbirder main window with the Sighting Filter and a species list" class="card-thumb" loading="lazy">
+        <p>Every checklist you've ever submitted becomes data you can sort, filter, and drill into — through lists, totals, the Big Report, 30+ chart types, and a dozen interactive maps.</p>
+        <img src="images/opt/demo_ReportsHero.webp" alt="Six Yearbirder analysis windows open at once: a species list, Location Totals, Date Totals, an interactive map with a location tooltip, a families pie chart, and a seasonal occurrence chart" class="card-thumb" loading="lazy">
         <span class="card-link">Explore sighting analysis →</span>
       </a>
       <a href="photography.html" class="feature-card">
         <h3>Photography</h3>
         <p>A photo library built for birders. Import, browse, zoom, and rate your bird photos, filter them by species or any EXIF dimension, plot them on maps, and batch-rename your files.</p>
-        <img src="images/demo_Photos.png" alt="Yearbirder Photos browser showing a grid of rated bird photo thumbnails" class="card-thumb" loading="lazy">
+        <img src="images/opt/demo_Photos.webp" alt="Yearbirder Photos browser showing a grid of rated bird photo thumbnails" class="card-thumb" loading="lazy">
         <span class="card-link">Explore photography →</span>
       </a>
       <a href="recordings.html" class="feature-card">
         <h3>Recordings</h3>
-        <p>Catalog your bird recordings alongside your sightings. View spectrograms, play back with a synchronized cursor, filter by audio properties, and map your recordings.</p>
-        <img src="images/demo_Recordings.png" alt="Yearbirder Recordings browser showing spectrogram cards with playback controls" class="card-thumb" loading="lazy">
+        <p>A recordings library built for birders. Import your WAV files, view spectrograms, play back with a synchronized cursor, filter by audio properties, and map your recordings.</p>
+        <img src="images/opt/demo_Recordings.webp" alt="Yearbirder Recordings browser showing spectrogram cards with playback controls" class="card-thumb" loading="lazy">
         <span class="card-link">Explore recordings →</span>
       </a>
       <a href="community.html" class="feature-card">
         <h3>Community Sightings</h3>
         <p>Pull live eBird data to see what's being seen anywhere in the world, with Life, State, County, and Year firsts flagged against your own records — and maps to plan your next outing.</p>
-        <img src="images/demo_CommunitySightings.png" alt="Yearbirder Community Sightings report with badge bubbles and expandable checklists" class="card-thumb" loading="lazy">
+        <img src="images/opt/demo_CommunityAll.webp" alt="Four Yearbirder community windows open at once: the All Community Sightings report with Life, Country, State and County badges, a Hotspot Map showing a hotspot tooltip, the Community Sightings Explorer, and the Notable Community Sightings report" class="card-thumb" loading="lazy">
         <span class="card-link">Explore community sightings →</span>
       </a>
     </div>

@@ -718,12 +718,16 @@ code, .step-content code {
 .detail-section { padding: 64px 0; }
 .detail-section h2 { font-size: clamp(1.5rem, 2.5vw, 2rem); margin-bottom: 16px; text-align: center; }
 .detail-section .detail-intro { color: var(--slate); text-align: center; max-width: 700px; margin: 0 auto 36px; }
+/* Columns are sized to their content and the pair is centred as a group, rather
+   than two equal 1fr tracks inside a fixed 900px box. With 1fr tracks the right
+   column's items (all short) ended well before its track did, leaving a wide gap
+   on the right that made the whole block read as shifted left of the centred
+   heading above it — even though the 900px box itself was centred. */
 .detail-columns {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px 48px;
-  max-width: 900px;
-  margin: 0 auto;
+  grid-template-columns: repeat(2, max-content);
+  justify-content: center;
+  gap: 10px 64px;
 }
 
 /* ── Subpage intro banner reuses .download-hero; add lead paragraph ──── */
