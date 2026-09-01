@@ -499,6 +499,13 @@ class DataBase():
         # hex(QAudioDevice.id()) -> {"ms": int, "name": str} — calibrated
         # output-latency compensation per playback device (Preferences tab)
         self.audioLatencyByDevice = {}
+        # Community Sightings Explorer's last region: {"code","label","path"}.
+        # Not a Preferences-dialog setting — written whenever the Explorer's
+        # region changes, so the window reopens where the user left it.
+        self.explorerRegion = {}
+        # Explorer's past-days slider. 0 means "never set" — the Explorer then
+        # keeps its own default rather than forcing a value from here.
+        self.explorerBackDays = 0
         self._countryLookup = {}   # shortCode -> longName, built by ReadCountryStateCodeFile
         self._stateLookup = {}     # shortCode -> longName, built by ReadCountryStateCodeFile
         self.monthNameDict = ({
@@ -4694,6 +4701,20 @@ class DataBase():
                             line[len("audioLatencyByDevice="):].strip()) or {}
                     except (ValueError, TypeError):
                         self.audioLatencyByDevice = {}
+
+                elif line.startswith("explorerRegion="):
+                    try:
+                        self.explorerRegion = json.loads(
+                            line[len("explorerRegion="):].strip()) or {}
+                    except (ValueError, TypeError):
+                        self.explorerRegion = {}
+
+                elif line.startswith("explorerBackDays="):
+                    try:
+                        self.explorerBackDays = int(
+                            line[len("explorerBackDays="):].strip())
+                    except (ValueError, TypeError):
+                        self.explorerBackDays = 0
                 
     
     def writePreferences(self):
@@ -4717,5 +4738,8 @@ class DataBase():
             f.write("myPatch=" + self.myPatch + "\n")
             f.write("audioLatencyByDevice="
                     + json.dumps(self.audioLatencyByDevice) + "\n")
+            f.write("explorerRegion="
+                    + json.dumps(self.explorerRegion) + "\n")
+            f.write("explorerBackDays=" + str(self.explorerBackDays) + "\n")
         
             

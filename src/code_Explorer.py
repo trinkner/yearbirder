@@ -89,6 +89,18 @@ def _load_state_data():
 _COUNTRY_DATA = None   # sorted list of (name, code), US/Canada pinned first
 _COUNTY_DATA  = {}     # state_code → sorted list of (name, code)
 
+# The region most recently chosen in any Explorer window: {"code","label","path"}
+# or None.  The Explorer is constructed fresh on every open, so without this the
+# selection would not survive even closing and reopening the window.  Seeded
+# from preferences the first time an Explorer loads, so it also carries across
+# app restarts; see Explorer._setRegion / Explorer.load.
+_LAST_REGION = None
+
+# The past-days slider value most recently set in any Explorer window, or None.
+# Same two-tier arrangement as _LAST_REGION: session state here, seeded from
+# preferences on the first Explorer of the run.
+_LAST_BACK_DAYS = None
+
 # Strong refs to in-flight fetch threads.  Owner objects (dialog/window) can be
 # garbage-collected while a request is outstanding — e.g. the picker is closed
 # mid-fetch — and without a surviving reference the QThread's C++ object is
@@ -145,6 +157,9 @@ class RegionTreeDialog(QDialog):
         self.result    = None
         self._fetching = set()   # items with an in-flight county fetch
         self._closed   = False
+        # County code expand_to is waiting on: set when the target county's
+        # list had to be fetched, cleared once the node exists and is selected.
+        self._pendingCounty = None
         self.finished.connect(self._markClosed)
 
         self.setWindowTitle("Select a region")
@@ -272,6 +287,15 @@ class RegionTreeDialog(QDialog):
         _COUNTY_DATA[item.data(0, _ROLE)["code"]] = counties
         self._fill_counties(item, counties)
 
+        # A county targeted by expand_to could not be selected while its list
+        # was still in flight; now that the nodes exist, finish the job.
+        if self._pendingCounty:
+            target = self._find_child_by_code(item, self._pendingCounty)
+            if target is not None:
+                self._pendingCounty = None
+                self.tree.setCurrentItem(target)
+                self.tree.scrollToItem(target)
+
     def _fill_counties(self, item, counties):
         item.takeChildren()
         data = item.data(0, _ROLE)
@@ -347,8 +371,15 @@ class RegionTreeDialog(QDialog):
 
     def expand_to(self, path):
         """Re-expand to a previous selection's {country, state, county} code
-        path.  Descends only as far as synchronously-available data allows —
-        an uncached county list is not fetched here."""
+        path.
+
+        When the path names a county whose state has not had its county list
+        fetched yet, this fires that fetch rather than stopping at the state.
+        The fetch is asynchronous — the dialog still opens immediately, showing
+        "Loading counties…" — so the county cannot be selected inline; it is
+        recorded in _pendingCounty and selected by _on_counties_fetched when the
+        list lands.  This matters most after the My County shortcut, which sets
+        a region without ever opening the tree, so nothing is cached."""
         if not path or not path.get("country"):
             return
         parent = self.tree.invisibleRootItem()
@@ -362,14 +393,20 @@ class RegionTreeDialog(QDialog):
                 break
             deepest = node
             if level_key != "county":
-                data = node.data(0, _ROLE)
-                if level_key == "state" and not data.get("loaded") \
-                        and _COUNTY_DATA.get(data["code"]) is None:
-                    break   # counties not cached — don't fire a fetch here
+                if level_key == "state" and path.get("county"):
+                    # Remember the target before _ensure_loaded, so a cache hit
+                    # (which fills synchronously) is handled by the loop below
+                    # and a miss is handled once the fetch returns.
+                    self._pendingCounty = path["county"]
                 self._ensure_loaded(node)
                 node.setExpanded(True)
             parent = node
         if deepest is not None:
+            # If the county node already exists we reached it, so there is
+            # nothing left pending.
+            if deepest.data(0, _ROLE) is not None \
+                    and deepest.data(0, _ROLE).get("code") == path.get("county"):
+                self._pendingCounty = None
             self.tree.setCurrentItem(deepest)
             self.tree.scrollToItem(deepest)
 
@@ -413,7 +450,13 @@ class Explorer(QMdiSubWindow):
         root.setContentsMargins(16, 12, 16, 14)
         root.setSpacing(10)
 
-        # Centered picker button with the current selection beneath it
+        # Centered picker row with the current selection beneath it.  My County
+        # keeps the default button styling so Select Region… stays the primary
+        # action; the shortcut sits to its left, matching the Sighting Filter
+        # where My County is likewise a plain button.
+        self.myCountyBtn = QPushButton("My County")
+        self.myCountyBtn.clicked.connect(self._applyMyCounty)
+
         self.selectRegionBtn = QPushButton("Select Region…")
         self.selectRegionBtn.clicked.connect(self._openRegionDialog)
         self.selectRegionBtn.setStyleSheet(
@@ -421,7 +464,14 @@ class Explorer(QMdiSubWindow):
             " color: white; }"
             " QPushButton:hover { background: #7aaeff; }"
             " QPushButton:pressed { background: #3d74d6; }")
-        root.addWidget(self.selectRegionBtn, 0, Qt.AlignHCenter)
+
+        pickerRow = QHBoxLayout()
+        pickerRow.setSpacing(8)
+        pickerRow.addStretch(1)
+        pickerRow.addWidget(self.myCountyBtn)
+        pickerRow.addWidget(self.selectRegionBtn)
+        pickerRow.addStretch(1)
+        root.addLayout(pickerRow)
         self.regionLabel = QLabel("No region selected")
         self.regionLabel.setWordWrap(True)
         self.regionLabel.setAlignment(Qt.AlignHCenter)
@@ -485,6 +535,46 @@ class Explorer(QMdiSubWindow):
     def load(self):
         """Warm the module-level country cache so the picker opens instantly."""
         self._api_key = self.mdiParent.db.ebirdApiKey.strip()
+
+        # _build_ui runs before mdiParent is assigned, so the county-aware
+        # tooltip has to wait until here.  Wording mirrors the Sighting Filter's
+        # My County button.
+        county = self.mdiParent.db.myCounty
+        self.myCountyBtn.setToolTip(
+            "Set the region to My County (%s)" % county if county
+            else "My County is not set yet — click to choose it in Preferences")
+
+        # Restore the last region: from this session if an Explorer has already
+        # set one, otherwise from preferences (first Explorer of the run).
+        global _LAST_REGION
+        if _LAST_REGION is None:
+            stored = self.mdiParent.db.explorerRegion or {}
+            if stored.get("code"):
+                _LAST_REGION = {"code":  stored.get("code", ""),
+                                "label": stored.get("label", "") or stored.get("code", ""),
+                                "path":  stored.get("path") or {}}
+        if _LAST_REGION and not self._regionCode:
+            self._setRegion(_LAST_REGION["code"],
+                            _LAST_REGION["label"],
+                            _LAST_REGION["path"],
+                            persist=False)
+
+        # Same for the past-days slider.  Clamped to the slider's own range: a
+        # hand-edited prefs file must not be able to push it out of bounds.
+        global _LAST_BACK_DAYS
+        if _LAST_BACK_DAYS is None:
+            stored = self.mdiParent.db.explorerBackDays
+            if stored:
+                _LAST_BACK_DAYS = max(code_Web.EBIRD_BACK_DAYS_MIN,
+                                      min(code_Web.EBIRD_BACK_DAYS_MAX, int(stored)))
+        if _LAST_BACK_DAYS and _LAST_BACK_DAYS != self._backDays:
+            # Block the signal so setValue does not re-enter the handler and
+            # persist; update label and state explicitly instead.
+            self.backDaysSlider.blockSignals(True)
+            self.backDaysSlider.setValue(_LAST_BACK_DAYS)
+            self.backDaysSlider.blockSignals(False)
+            self._onBackDaysChanged(_LAST_BACK_DAYS, persist=False)
+
         if _COUNTRY_DATA is not None:
             return
         thread = _RegionFetch("/v2/ref/region/list/country/world", self._api_key)
@@ -499,27 +589,155 @@ class Explorer(QMdiSubWindow):
 
     # ── Region picker ─────────────────────────────────────────────────────────
 
+    def _setRegion(self, code, label, path, persist=True):
+        """Adopt a region and show it beneath the picker.  Shared by the tree
+        dialog, the My County shortcut, and session restore, so the three cannot
+        drift apart.
+
+        persist=False is used when restoring an already-stored region, so that
+        reopening the window does not rewrite the preferences file with the
+        value it just read."""
+        global _LAST_REGION
+        self._regionCode  = code
+        self._regionLabel = label
+        self._regionPath  = path
+        _LAST_REGION = {"code": code, "label": label, "path": path}
+        if persist:
+            # The prefs file is a handful of lines, so rewriting it on each
+            # change is cheaper than tracking dirty state, and it survives a
+            # crash that an exit-time write would lose.
+            db = self.mdiParent.db
+            db.explorerRegion = dict(_LAST_REGION)
+            db.writePreferences()
+        self.regionLabel.setText(label)
+        self.regionLabel.setStyleSheet(
+            f"color: {code_Stylesheet.CHART_PRIMARY};")
+        region_font = self.regionLabel.font()
+        region_font.setItalic(False)
+        self.regionLabel.setFont(region_font)
+
     def _openRegionDialog(self):
         dlg = RegionTreeDialog(self._api_key, self)
         if self._regionPath:
             dlg.expand_to(self._regionPath)
         if dlg.exec() and dlg.result:
-            self._regionCode  = dlg.result["code"]
-            self._regionLabel = dlg.result["label"]
-            self._regionPath  = dlg.result["path"]
-            self.regionLabel.setText(self._regionLabel)
-            self.regionLabel.setStyleSheet(
-                f"color: {code_Stylesheet.CHART_PRIMARY};")
-            region_font = self.regionLabel.font()
-            region_font.setItalic(False)
-            self.regionLabel.setFont(region_font)
+            self._setRegion(dlg.result["code"],
+                            dlg.result["label"],
+                            dlg.result["path"])
+
+    # ── My County shortcut ────────────────────────────────────────────────────
+
+    def _myCountyRegion(self):
+        """Resolve the configured My County to the Explorer's
+        (code, label, path) triple, or None if it cannot be resolved.
+
+        Preferences stores My County as a bare county NAME, while the Explorer
+        needs an eBird subnational2 code.  For US counties that is derivable
+        offline from the FIPS lookup — the same
+        f"US-{abbr}-{fips[2:]}" construction Web._getEBirdRegionCode uses — so
+        the common case costs no network round trip.  Outside the US there is no
+        FIPS table, so we ask eBird for the state's subnational2 list and match
+        by name."""
+        db = self.mdiParent.db
+        county = db.myCounty
+        if not county:
+            return None
+
+        # The county name alone is ambiguous (many states have a "Boulder"),
+        # so pull the country/state it belongs to from the user's own sightings.
+        country_code = state_code = ""
+        for entry in db.masterLocationList:
+            if entry.get("county") == county:
+                country_code = entry.get("countryCode", "")
+                state_code   = entry.get("stateCode", "")
+                break
+        if not state_code:
+            return None
+
+        state_abbr   = state_code[3:] if len(state_code) > 3 else state_code
+        country_name = db.GetCountryName(country_code) or country_code
+        state_name   = db.GetStateName(state_code) or state_code
+
+        code = ""
+        if country_code == "US":
+            for fips, s_abbr in db.countyCodeDict.get(county, []):
+                if s_abbr == state_abbr:
+                    code = f"US-{state_abbr}-{fips[2:]}"
+                    break
+        else:
+            code = self._lookupCountyCode(state_code, county)
+
+        if not code:
+            return None
+        label = f"{county}, {state_name}, {country_name}"
+        path  = {"country": country_code, "state": state_code, "county": code}
+        return code, label, path
+
+    def _lookupCountyCode(self, state_code, county_name):
+        """Non-US fallback: ask eBird for the state's subnational2 list and match
+        by name.  Synchronous, but it runs only outside the US and only on an
+        explicit button press."""
+        url = f"https://api.ebird.org/v2/ref/region/list/subnational2/{state_code}"
+        req = urllib.request.Request(url, headers={"X-eBirdApiToken": self._api_key})
+        try:
+            QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+            with urllib.request.urlopen(req, timeout=20, context=_SSL_CTX) as resp:
+                regions = json.loads(resp.read().decode("utf-8"))
+        except Exception:
+            return ""
+        finally:
+            QApplication.restoreOverrideCursor()
+        target = county_name.split(" (")[0].strip().lower()
+        for r in regions:
+            if r.get("name", "").strip().lower() == target:
+                return r.get("code", "")
+        return ""
+
+    def _applyMyCounty(self):
+        """Set the region to the county configured in Preferences → My
+        Locations, or offer to go and configure it."""
+        if not self.mdiParent.db.myCounty:
+            self.mdiParent._promptSetMyLocation(
+                "My County",
+                "My County is the county you bird most often.")
+            return
+
+        resolved = self._myCountyRegion()
+        if resolved is None:
+            QMessageBox.information(
+                self,
+                "My County Not Found",
+                f"Could not match “{self.mdiParent.db.myCounty}” to an eBird "
+                "region.\n\nChoose the region with the Select Region… button "
+                "instead.",
+            )
+            return
+        self._setRegion(*resolved)
 
     # ── Past-days slider ──────────────────────────────────────────────────────
 
-    def _onBackDaysChanged(self, days):
+    def _onBackDaysChanged(self, days, persist=True):
+        """Slider handler.  persist=False when restoring a stored value, so
+        reopening the window does not rewrite prefs with what it just read.
+        (valueChanged passes only `days`, so real drags always persist.)"""
+        global _LAST_BACK_DAYS
         self._backDays = days
         self.backDaysLabel.setText(
             f"Past {days} day" + ("" if days == 1 else "s"))
+
+        # _build_ui calls this once at construction to seed the label, while
+        # mdiParent is still "".  That call must not touch the shared session
+        # value: it would set _LAST_BACK_DAYS to the default before load() ran,
+        # so load() would see a non-None value, skip reading preferences, and
+        # find nothing to restore — the slider then reset to 3 on every open.
+        if not self.mdiParent:
+            return
+
+        _LAST_BACK_DAYS = days
+        if persist:
+            db = self.mdiParent.db
+            db.explorerBackDays = days
+            db.writePreferences()
 
     # ── Filter construction ───────────────────────────────────────────────────
 
