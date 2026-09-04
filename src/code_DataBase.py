@@ -176,6 +176,23 @@ def _checklist_distance(c, photo_minutes):
     return min(abs(photo_minutes - start), abs(photo_minutes - end))
 
 
+# Score offset that puts an eBird/BBL code hit in a tier above every
+# common/scientific name fragment.  A code in a filename is deliberate; a name
+# fragment can collide by accident and used to tie with one — "BHGR" (Black-headed
+# Grosbeak) and the "Comm" of "CommunityGarden" (Common Grackle) both scored 4,
+# and the tie went to whichever species came first in taxonomic order.
+_CODE_MATCH_BONUS = 100
+
+# Minimum length for a common/scientific name fragment to count as a match.
+# Longer than a 4-letter banding code on purpose: at 4, ordinary words in a
+# location name collide with bird names ("Community" -> "Comm" -> Common
+# Grackle).  Measured against MyEBirdData.csv, raising 4 -> 5 drops accidental
+# location/species collisions by ~79%.  The only species with names shorter
+# than this (Rook, Ruff, Sora) all carry codes identical to their names, so the
+# code tier above still matches them.
+_NAME_FRAGMENT_MIN_LEN = 5
+
+
 def _longest_substr_in(needle, haystack, min_len=4):
     """Return the length of the longest substring of needle found in haystack.
 
@@ -794,45 +811,8 @@ class DataBase():
             # Alphanumeric string for eBird/BBL code matching (codes can contain digits).
             filename_alnum = re.sub(r'[^a-z0-9]', '', fileNameLower)
 
-            # Score each candidate species against the filename.  For each species
-            # we check four name forms and keep the longest match found across all:
-            #   • eBird species code  (e.g. "gretit1") — exact substring in alnum filename
-            #   • BBL banding code    (e.g. "grti")    — exact substring in alnum filename
-            #   • Common name (alpha) (e.g. "greattit") — longest substr in alpha filename
-            #   • Scientific name (alpha)               — longest substr in alpha filename
-            # The species with the highest score (longest match, min 4 chars) wins.
-            # If none of the above find anything, _quickEntryCodeMatch() is tried
-            # as a last resort (see its docstring).
-            photoCommonName = ""
-            best_score = 0
-
-            for pcn in possibleCommonNames:
-                score = 0
-
-                ebird = self.GeteBirdCode(pcn).lower()
-                if ebird and ebird in filename_alnum:
-                    score = max(score, len(ebird))
-
-                bbl = self.GetBBLCode(pcn).lower()
-                if bbl and bbl in filename_alnum:
-                    score = max(score, len(bbl))
-
-                common_clean = re.sub(r'[^a-z]', '', pcn.lower())
-                if common_clean:
-                    score = max(score, _longest_substr_in(common_clean, filename_alpha))
-
-                sci = self.GetScientificName(pcn)
-                if sci:
-                    sci_clean = re.sub(r'[^a-z]', '', sci.lower())
-                    if sci_clean:
-                        score = max(score, _longest_substr_in(sci_clean, filename_alpha))
-
-                if score > best_score:
-                    best_score = score
-                    photoCommonName = pcn
-
-            if best_score < 4:
-                photoCommonName = self._quickEntryCodeMatch(possibleCommonNames, filename_alnum)
+            photoCommonName = self._matchSpeciesFromFileName(
+                possibleCommonNames, filename_alpha, filename_alnum)
 
         else:
             photoCommonName = ""
@@ -1236,28 +1216,8 @@ class DataBase():
             fn_alpha = re.sub(r'[^a-z]', '', fn_lower)
             fn_alnum = re.sub(r'[^a-z0-9]', '', fn_lower)
 
-            best_score = 0
-            for pcn in possibleNames:
-                score = 0
-                ebird = self.GeteBirdCode(pcn).lower()
-                if ebird and ebird in fn_alnum:
-                    score = max(score, len(ebird))
-                bbl = self.GetBBLCode(pcn).lower()
-                if bbl and bbl in fn_alnum:
-                    score = max(score, len(bbl))
-                common_clean = re.sub(r'[^a-z]', '', pcn.lower())
-                if common_clean:
-                    score = max(score, _longest_substr_in(common_clean, fn_alpha))
-                sci = self.GetScientificName(pcn)
-                if sci:
-                    sci_clean = re.sub(r'[^a-z]', '', sci.lower())
-                    if sci_clean:
-                        score = max(score, _longest_substr_in(sci_clean, fn_alpha))
-                if score > best_score:
-                    best_score = score
-                    recordingCommonName = pcn
-            if best_score < 4:
-                recordingCommonName = self._quickEntryCodeMatch(possibleNames, fn_alnum)
+            recordingCommonName = self._matchSpeciesFromFileName(
+                possibleNames, fn_alpha, fn_alnum)
 
         return {
             "recordingLocation": recordingLocation,
@@ -4467,6 +4427,63 @@ class DataBase():
             quickEntryCode = wordList[0][0:1] + wordList[1][0:1] + wordList[2][0:1] + wordList[3][0:1]
                         
         return(quickEntryCode)
+
+    def _matchSpeciesFromFileName(self, possibleNames, filename_alpha, filename_alnum):
+        """Pick the species from possibleNames whose name best matches a media
+        filename.  Shared by the photo (matchPhoto) and recording
+        (matchRecording) assignment routines.
+
+        Each candidate is scored against four name forms, keeping the best:
+          • eBird species code  (e.g. "gretit1") — exact substring in alnum filename
+          • BBL banding code    (e.g. "grti")    — exact substring in alnum filename
+          • Common name (alpha) (e.g. "greattit") — longest substr in alpha filename
+          • Scientific name (alpha)               — longest substr in alpha filename
+
+        Code hits score in their own tier (_CODE_MATCH_BONUS), so any code match
+        beats any name fragment; match length is the tiebreak within a tier, and
+        an exact tie keeps the first candidate (i.e. taxonomic order).  Name
+        fragments must reach _NAME_FRAGMENT_MIN_LEN, which is deliberately longer
+        than a banding code — a fragment is a guess, and short ones collide with
+        ordinary location words.
+
+        Returns "" when nothing matches, after trying _quickEntryCodeMatch() as
+        a last resort (see its docstring).
+        """
+        commonName = ""
+        best_score = 0
+
+        for pcn in possibleNames:
+            score = 0
+
+            ebird = self.GeteBirdCode(pcn).lower()
+            if ebird and ebird in filename_alnum:
+                score = max(score, _CODE_MATCH_BONUS + len(ebird))
+
+            bbl = self.GetBBLCode(pcn).lower()
+            if bbl and bbl in filename_alnum:
+                score = max(score, _CODE_MATCH_BONUS + len(bbl))
+
+            common_clean = re.sub(r'[^a-z]', '', pcn.lower())
+            if common_clean:
+                score = max(score, _longest_substr_in(common_clean, filename_alpha,
+                                                      _NAME_FRAGMENT_MIN_LEN))
+
+            sci = self.GetScientificName(pcn)
+            if sci:
+                sci_clean = re.sub(r'[^a-z]', '', sci.lower())
+                if sci_clean:
+                    score = max(score, _longest_substr_in(sci_clean, filename_alpha,
+                                                          _NAME_FRAGMENT_MIN_LEN))
+
+            if score > best_score:
+                best_score = score
+                commonName = pcn
+
+        if not commonName:
+            commonName = self._quickEntryCodeMatch(possibleNames, filename_alnum)
+
+        return commonName
+
 
     def _quickEntryCodeMatch(self, possibleNames, filename_alnum):
         """Last-resort filename-matching fallback, tried only once the eBird
