@@ -27,8 +27,23 @@ class Ui_frmManageRecordings(object):
         # size hint (_GEAR_BANNER_H in code_ManageRecordings must match).
         self.frmGearBanner.setFixedHeight(40)
         _bannerLayout = QtWidgets.QHBoxLayout(self.frmGearBanner)
-        _bannerLayout.setContentsMargins(8, 4, 8, 4)
+        # 13 = layLists' 5px inset + gridAudio's 8px, so the banner's contents
+        # line up with the card edges.  resizeMe widens the right margin further
+        # when a vertical scrollbar is showing (see _alignBannerToCards).
+        _bannerLayout.setContentsMargins(13, 4, 13, 4)
         _bannerLayout.setSpacing(8)
+        # Layout: [balance spacer] [stretch] label combo Apply [stretch] [toggle]
+        #
+        # The toggle sits hard right, level with the cards' right edge (both
+        # inset 8px).  The spacer mirrors its width on the left so the two ends
+        # weigh the same and the middle group centres on the STRIP, not on the
+        # space left over beside the button.  _applyBatchOptionsState keeps the
+        # spacer in step, since the button's width changes with its caption.
+        self.spcGearBannerBalance = QtWidgets.QSpacerItem(
+            0, 0, QtWidgets.QSizePolicy.Policy.Fixed,
+            QtWidgets.QSizePolicy.Policy.Minimum)
+        _bannerLayout.addItem(self.spcGearBannerBalance)
+        _bannerLayout.addStretch(1)
         self.lblGearBanner = QtWidgets.QLabel(self.frmGearBanner)
         self.lblGearBanner.setObjectName("lblGearBanner")
         _bannerLayout.addWidget(self.lblGearBanner)
@@ -40,6 +55,11 @@ class Ui_frmManageRecordings(object):
         self.btnApplyGearBanner.setObjectName("btnApplyGearBanner")
         _bannerLayout.addWidget(self.btnApplyGearBanner)
         _bannerLayout.addStretch(1)
+        # Hard right: collapsed, this button is the whole banner.  The strip
+        # keeps its height either way, so toggling never reflows the cards.
+        self.btnToggleBatch = QtWidgets.QPushButton(self.frmGearBanner)
+        self.btnToggleBatch.setObjectName("btnToggleBatch")
+        _bannerLayout.addWidget(self.btnToggleBatch)
 
         self.scrollArea = QtWidgets.QScrollArea(frmManageRecordings)
         self.scrollArea.setGeometry(QtCore.QRect(0, 10, 891, 601))
@@ -86,6 +106,7 @@ class Ui_frmManageRecordings(object):
         self.btnSaveAudioSettings.setText(_translate("frmManageRecordings", "Save"))
         self.btnCancel.setText(_translate("frmManageRecordings", "Cancel"))
         self.lblGearBanner.setText(_translate("frmManageRecordings", "Set gear for all:"))
+        self.btnToggleBatch.setText(_translate("frmManageRecordings", "Show batch options"))
         self.btnApplyGearBanner.setToolTip(_translate("frmManageRecordings", "Assign the chosen rig's recorder and microphone to every card below. Yearbirder never writes to your audio files — only to its own catalog — and \"Use each file's original metadata\" puts them back."))
         self.btnApplyGearBanner.setText(_translate("frmManageRecordings", "Apply"))
         self.cboGearBannerRig.setToolTip(_translate("frmManageRecordings", "Rigs are defined in Preferences → Recording Gear."))

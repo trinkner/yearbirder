@@ -2095,6 +2095,10 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
         # would show nothing for exactly the high-res recordings we care about.
         channels_str = rec.get("channels", "")
         device = rec.get("device", "")
+        # Only set once a rig has been assigned in Add/Manage Recordings — no
+        # audio file carries a microphone — so it stays absent rather than
+        # showing an empty line.
+        microphone = rec.get("microphone", "")
 
         info = f"\n\n{location}\n{weekday}{date} {time_str}\n"
         if duration:
@@ -2107,6 +2111,8 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
             info += f"\n{channels_str}"
         if device:
             info += f"\n{device}"
+        if microphone:
+            info += f"\n{microphone}"
         info += f"\n\n{filename}\n"   # line feed between the file name and the Notes field
 
         self._detailsCommonName.setText("\n" + common)

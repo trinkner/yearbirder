@@ -531,6 +531,11 @@ class DataBase():
         # Explorer's past-days slider. 0 means "never set" — the Explorer then
         # keeps its own default rather than forcing a value from here.
         self.explorerBackDays = 0
+        # Manage Recordings' batch-gear banner: collapsed by default so the
+        # optional bulk controls don't outrank the species/date/location work
+        # the window is actually for.  Not a Preferences-dialog setting —
+        # written whenever the user toggles it, like explorerRegion.
+        self.showBatchOptions = False
         self._countryLookup = {}   # shortCode -> longName, built by ReadCountryStateCodeFile
         self._stateLookup = {}     # shortCode -> longName, built by ReadCountryStateCodeFile
         self.monthNameDict = ({
@@ -4852,6 +4857,10 @@ class DataBase():
                     except (ValueError, TypeError):
                         self.explorerRegion = {}
 
+                elif line.startswith("showBatchOptions="):
+                    self.showBatchOptions = (
+                        line[len("showBatchOptions="):].strip() == "True")
+
                 elif line.startswith("explorerBackDays="):
                     try:
                         self.explorerBackDays = int(
@@ -4885,5 +4894,6 @@ class DataBase():
             f.write("explorerRegion="
                     + json.dumps(self.explorerRegion) + "\n")
             f.write("explorerBackDays=" + str(self.explorerBackDays) + "\n")
+            f.write("showBatchOptions=" + str(bool(self.showBatchOptions)) + "\n")
         
             

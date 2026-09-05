@@ -361,6 +361,7 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         self.btnSaveAudioSettings.clicked.connect(self.saveAudioSettings)
         self.btnCancel.clicked.connect(self.closeWindow)
         self.btnApplyGearBanner.clicked.connect(self._applyBannerRig)
+        self.btnToggleBatch.clicked.connect(self._toggleBatchOptions)
         # Hidden until the rows are built and we know rigs exist; resizeMe reads
         # its visibility to decide how much height the card list gets.
         self.frmGearBanner.setVisible(False)
@@ -486,6 +487,7 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         bannerH = 0 if self.frmGearBanner.isHidden() else _GEAR_BANNER_H + 4
         if bannerH:
             self.frmGearBanner.setGeometry(5, 27, windowWidth - 5, _GEAR_BANNER_H)
+            self._alignBannerToCards()
         self.scrollArea.setGeometry(5, 27 + bannerH,
                                     windowWidth - 5, windowHeight - 105 - bannerH)
         self.layLists.setGeometry(0, 0, windowWidth - 5, windowHeight - 100 - bannerH)
@@ -764,8 +766,11 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         if getattr(self, "_loadFinished", False):
             return
         self._loadFinished = True
-        # Every row exists now, so the banner can show an accurate card count.
+        # Every row exists now, so the banner can show an accurate card count —
+        # and the scrollbar's final state is known, so the banner can line its
+        # right edge up with the cards.
         self._populateBannerRigCombo()
+        self._alignBannerToCards()
         self.scrollArea.verticalScrollBar().setValue(0)
         self.mdiParent.progressOverlay.hide()
         QApplication.restoreOverrideCursor()
@@ -1207,6 +1212,48 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
             self._populateRigCombo(row)
         self._populateBannerRigCombo()
 
+    _BANNER_CARD_INSET = 13   # layLists' 5px + gridAudio's 8px
+
+    def _alignBannerToCards(self):
+        """Keep the banner's right edge level with the cards' right edge.
+
+        The card list loses width to a vertical scrollbar whenever it has more
+        rows than fit — the usual state here — so the banner's right margin has
+        to absorb the same amount, or the toggle button hangs out past the cards
+        by the scrollbar's width."""
+        bar = self.scrollArea.verticalScrollBar()
+        barW = bar.sizeHint().width() if bar.isVisible() else 0
+        self.frmGearBanner.layout().setContentsMargins(
+            self._BANNER_CARD_INSET, 4, self._BANNER_CARD_INSET + barW, 4)
+
+    def _applyBatchOptionsState(self):
+        """Show or hide the batch controls behind the toggle button.
+
+        The banner keeps its full height in both states: the point of
+        collapsing is to drop visual weight, not to reflow the card list every
+        time the button is pressed."""
+        shown = bool(getattr(self.mdiParent.db, "showBatchOptions", False))
+        for w in (self.lblGearBanner, self.cboGearBannerRig,
+                  self.btnApplyGearBanner):
+            w.setVisible(shown)
+        self.btnToggleBatch.setText(
+            "Hide batch options" if shown else "Show batch options")
+        # Re-balance: the caption change resizes the button, and the left spacer
+        # has to match it or the centred group drifts off the strip's midline.
+        self.spcGearBannerBalance.changeSize(
+            self.btnToggleBatch.sizeHint().width(), 0,
+            QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Minimum)
+        self.frmGearBanner.layout().invalidate()
+
+    def _toggleBatchOptions(self):
+        db = self.mdiParent.db
+        db.showBatchOptions = not bool(getattr(db, "showBatchOptions", False))
+        self._applyBatchOptionsState()
+        # Persist immediately, like the Explorer's region: this is a window
+        # preference the user set directly, not something the Preferences
+        # dialog owns, so there is no OK button to hang the write on.
+        db.writePreferences()
+
     def _populateBannerRigCombo(self):
         """Fill the banner's rig list and show the banner only if there is
         something to pick."""
@@ -1234,6 +1281,7 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         # setupUi builds the banner before the scroll area, which would other-
         # wise stack above it and hide it wherever they overlap.
         self.frmGearBanner.raise_()
+        self._applyBatchOptionsState()
         self._updateBannerButtonText()
         if wasShown != bool(names):
             self.resizeMe()
