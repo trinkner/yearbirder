@@ -11,7 +11,7 @@
 
 # Yearbirder
 
-**Current release: v2.14** (September 2026)
+**Current release: v2.15** (September 2026)
 
 A desktop application for exploring and analysing your personal [eBird](https://ebird.org) data, bird photos, and sound recordings.
 
@@ -20,6 +20,13 @@ Yearbirder lets you filter, browse, and visualise your personal eBird sightings 
 Full version history and downloads: [yearbirder.org](https://yearbirder.org)
 
 ---
+
+## What's New in v2.15
+
+- **Record which microphone you used** — no recorder writes the microphone into an audio file, so the one piece of gear you most want to filter by was the one piece Yearbirder could never know. Define your **rigs** in **Preferences → Recording Gear** — each a recording device paired with a microphone — then assign one to your recordings in **Add Recordings** or **Manage Recordings**. A batch bar sets a whole window of recordings at once, and the Media Filter gains a **Microphone** setting.
+- **Correct a recording device your file names wrongly** — assigning a rig sets both the device and the microphone, so you can put right a file that names its recorder incorrectly. Yearbirder never modifies your audio files, only its own catalog, and **Use each file's original metadata** restores both fields.
+- **Better species guesses from file names** — a banding or eBird code now outranks a chance word match, so `BHGR_BoulderCommunityGarden` is read as a Black-headed Grosbeak rather than a Common Grackle matched on the "Comm" of "Community".
+- **The Explorer remembers where you were** — the Community Sightings Explorer reopens on the region and past-days setting you last used, and a **My County** button jumps to your home county.
 
 ## What's New in v2.14
 
@@ -181,7 +188,7 @@ Later 2.0x releases refined this work; see the [full version history](https://ye
 
 ## Download
 
-**macOS** — download the signed and notarized `Yearbirder_v2.14.dmg` from the [Releases page](https://github.com/trinkner/yearbirder/releases/latest), open it, and drag Yearbirder to your Applications folder.
+**macOS** — download the signed and notarized `Yearbirder_v2.15.dmg` from the [Releases page](https://github.com/trinkner/yearbirder/releases/latest), open it, and drag Yearbirder to your Applications folder.
 
 **Windows** — download the installer from [yearbirder.org/download](https://yearbirder.org/download) and run it.
 
