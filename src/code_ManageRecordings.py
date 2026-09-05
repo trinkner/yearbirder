@@ -37,6 +37,7 @@ _FIELD_NAME_COLOR = "#c1c1c1"          # matches the Browse windows' card text
 _MATCH_COLOR      = "#4CAF50"          # green  – value came from metadata/filename
 _VALUE_COLOR      = "#c1c1c1"          # neutral – manually chosen / not auto-derived
 _SKIPPED_COLOR    = "#6b6e7e"          # muted value when the row is skipped
+_GEAR_BANNER_H    = 40                 # bulk gear banner strip; see resizeMe
 _NO_SPECIES_COLOR = "#E57373"          # red – flags a row that still needs a species picked
 
 
@@ -305,6 +306,14 @@ class threadGetAudioData(QThread):
                 allSightings = item.get("allSightings", [s])
                 recordingData["rating"] = a.get("rating", "0")
                 recordingData["notes"] = a.get("notes", "")
+                # Gear comes from the CATALOG, not the fresh file read: the
+                # stored recorder may be a user override, and the microphone is
+                # never in the file at all.  Without these two a reopened card
+                # showed a blank mic, silently reverted an overridden recorder,
+                # and made every row look changed on the next save.
+                # recordingData["fileDevice"] still holds what the file said.
+                recordingData["device"] = a.get("device", recordingData.get("device", ""))
+                recordingData["microphone"] = a.get("microphone", "")
                 audioMatchData = {
                     "recordingDate": s["date"],
                     "recordingTime": s["time"],
@@ -351,6 +360,10 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         self.fillingCombos = False
         self.btnSaveAudioSettings.clicked.connect(self.saveAudioSettings)
         self.btnCancel.clicked.connect(self.closeWindow)
+        self.btnApplyGearBanner.clicked.connect(self._applyBannerRig)
+        # Hidden until the rows are built and we know rigs exist; resizeMe reads
+        # its visibility to decide how much height the card list gets.
+        self.frmGearBanner.setVisible(False)
         self.metaDataByRow = {}
         # Per-row widget references for the label/Select/Skip panel.
         self._rowLabels = {}
@@ -462,8 +475,20 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
     def resizeMe(self):
         windowWidth = self.width() - 10
         windowHeight = self.height()
-        self.scrollArea.setGeometry(5, 27, windowWidth - 5, windowHeight - 105)
-        self.layLists.setGeometry(0, 0, windowWidth - 5, windowHeight - 100)
+        # The banner claims a strip above the card list; when it's hidden (no
+        # rigs defined) the list reclaims that height.
+        #
+        # isHidden(), not isVisible(): the rows are built while the whole window
+        # is still hidden (contentReady reveals it), and isVisible() is False for
+        # every child of a hidden window — so it would report the banner absent
+        # during the one layout pass that matters, and the scroll area would be
+        # sized to cover it.
+        bannerH = 0 if self.frmGearBanner.isHidden() else _GEAR_BANNER_H + 4
+        if bannerH:
+            self.frmGearBanner.setGeometry(5, 27, windowWidth - 5, _GEAR_BANNER_H)
+        self.scrollArea.setGeometry(5, 27 + bannerH,
+                                    windowWidth - 5, windowHeight - 105 - bannerH)
+        self.layLists.setGeometry(0, 0, windowWidth - 5, windowHeight - 100 - bannerH)
         self.btnCancel.setGeometry(10, windowHeight - 50, 100, 35)
         self.btnSaveAudioSettings.setGeometry(windowWidth - 160, windowHeight - 50, 150, 35)
 
@@ -739,6 +764,8 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         if getattr(self, "_loadFinished", False):
             return
         self._loadFinished = True
+        # Every row exists now, so the banner can show an accurate card count.
+        self._populateBannerRigCombo()
         self.scrollArea.verticalScrollBar().setValue(0)
         self.mdiParent.progressOverlay.hide()
         QApplication.restoreOverrideCursor()
@@ -865,6 +892,48 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         else:
             thisAudioMetaData["autoGreen"] = self._computeAutoGreen(audioMatchData)
 
+        # ---- Gear ----
+        # Two baselines, deliberately separate:
+        #   fileDevice — what the WAV itself reported.  Drives the green
+        #                colouring (green == still agrees with the file) and is
+        #                where "Use each file's original metadata" reverts to.
+        #   device     — what the CATALOG holds, which may be a user override.
+        #                That is the baseline the save's changed-gate compares
+        #                against, so an override doesn't read as "unchanged".
+        # The microphone is never in the file, so it is only ever a rig
+        # inference or a manual choice — never green.
+        fileDevice = recordingData.get("fileDevice", "")
+        origDevice = recordingData.get("device", "")
+        origMic = recordingData.get("microphone", "")
+        thisAudioMetaData["fileDevice"] = fileDevice
+        thisAudioMetaData["device"] = origDevice
+        thisAudioMetaData["microphone"] = origMic
+        thisAudioMetaData["newDevice"] = origDevice
+        thisAudioMetaData["newMicrophone"] = origMic
+        thisAudioMetaData["autoGreen"]["device"] = bool(fileDevice)
+        thisAudioMetaData["autoDevice"] = fileDevice
+        thisAudioMetaData["rig"] = ""
+        if origMic:
+            # Already assigned (reopened from the catalog): name the rig that
+            # describes it so the picker isn't blank on known gear.
+            rig = self.mdiParent.db.rigForGear(origDevice, origMic)
+            if rig is not None:
+                thisAudioMetaData["rig"] = rig.get("name", "")
+        else:
+            rig = self.mdiParent.db.inferRigForRecorder(origDevice)
+            if rig is not None:
+                thisAudioMetaData["rig"] = rig.get("name", "")
+                # Microphone ONLY.  Unlike applyRigToRow (a deliberate act),
+                # this runs merely because the window opened — writing the rig's
+                # recorder here would mark every card changed and let an
+                # unrelated Save rewrite the recorder across the whole archive.
+                thisAudioMetaData["newMicrophone"] = rig.get("microphone", "")
+        # Reset restores the card to the state it opened in — which for gear is
+        # after any auto-inference above, not the bare catalog values.
+        thisAudioMetaData["resetRig"] = thisAudioMetaData["rig"]
+        thisAudioMetaData["resetDevice"] = thisAudioMetaData["newDevice"]
+        thisAudioMetaData["resetMicrophone"] = thisAudioMetaData["newMicrophone"]
+
         self.metaDataByRow[row] = thisAudioMetaData
         self._buildDetailsPanel(row, detailsLayout, recordingData, isExisting)
 
@@ -897,17 +966,23 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         return {"date": dmf, "time": tmf, "location": tmf}
 
     def _fieldGreen(self, md, field):
-        """Green only if the field was auto-derived AND still equals that value."""
-        if field not in ("date", "location", "time"):
+        """Green only if the field was auto-derived AND still equals that value.
+
+        "device" qualifies because a recorder that writes its own name into the
+        file is stating a fact; "microphone" never does, since no file carries
+        one — it is always a rig inference or a manual choice."""
+        if field not in ("date", "location", "time", "device"):
             return False
         if not md.get("autoGreen", {}).get(field, False):
             return False
         current = {"date": md.get("newDate", ""),
                    "location": md.get("newLocation", ""),
-                   "time": md.get("newTime", "")}[field]
+                   "time": md.get("newTime", ""),
+                   "device": md.get("newDevice", "")}[field]
         auto = {"date": md.get("autoDate", ""),
                 "location": md.get("autoLocation", ""),
-                "time": md.get("autoTime", "")}[field]
+                "time": md.get("autoTime", ""),
+                "device": md.get("autoDevice", "")}[field]
         return current == auto
 
     def _fieldHtml(self, name, value, green, skipped):
@@ -961,7 +1036,7 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         leftCol.addWidget(lblMeta)
         leftCol.addSpacing(10)   # line feed after the metadata line
 
-        for key in ("date", "location", "time"):
+        for key in ("date", "location", "time", "device", "microphone"):
             lbl = QLabel()
             lbl.setTextFormat(Qt.TextFormat.RichText)
             lbl.setWordWrap(True)
@@ -1040,6 +1115,17 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         controlsCol.addWidget(cboRating)
 
 
+        # Rig picker.  Its list is narrowed to the rigs whose recorder matches
+        # what the file reported, so a card from a known recorder offers only
+        # the mics that can plausibly have been on it (see _rigNamesForRow).
+        cboRig = QComboBox()
+        cboRig.setObjectName("cboRig" + str(row))
+        cboRig.setFont(_panelFont)
+        lbls["rig"] = cboRig
+        self._populateRigCombo(row)
+        cboRig.currentIndexChanged.connect(partial(self.cboRigChanged, row))
+        controlsCol.addWidget(cboRig)
+
         chkSkip = QCheckBox("Remove" if isExisting else "Skip")
         chkSkip.setFont(_panelFont)
         chkSkip.toggled.connect(partial(self._toggleSkip, row))
@@ -1058,6 +1144,190 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         detailsLayout.addLayout(bodyRow)
         self._refreshRowLabels(row)
 
+    # Revert to what the WAV itself reported: recorder back to fileDevice, mic
+    # cleared (no file carries one).  Replaces a separate "No rig" entry — with
+    # no override in play the two are identical, and two near-synonyms in one
+    # dropdown is worse than one entry that is right in both cases.
+    _RIG_ORIGINAL = "Use each file's original metadata"
+
+    def _rigNamesForRow(self, row):
+        """Rig names to offer this card, most relevant first.
+
+        A file that named its recorder gets that recorder's rigs at the top,
+        then a separator entry that opens the list up to every rig — the
+        narrowing is a convenience, not a restriction, because a recorder can
+        write a name that doesn't match how the user spelled it in the Gear tab.
+        """
+        db = self.mdiParent.db
+        allNames = [r.get("name", "") for r in db.rigs if r.get("name")]
+        md = self.metaDataByRow.get(row, {})
+        matching = [r.get("name", "")
+                    for r in db.rigsForRecorder(md.get("device", ""))]
+        if not matching or len(matching) == len(allNames):
+            return allNames, []
+        rest = [n for n in allNames if n not in matching]
+        return matching, rest
+
+    def _populateRigCombo(self, row):
+        """Fill one card's rig combo and select the row's current rig."""
+        lbls = self._rowLabels.get(row, {})
+        cbo = lbls.get("rig")
+        if cbo is None:
+            return
+        md = self.metaDataByRow.get(row, {})
+        matching, rest = self._rigNamesForRow(row)
+
+        cbo.blockSignals(True)
+        cbo.clear()
+        # Rigs first so index 0 is always a harmless selection; the revert entry
+        # goes last, below a separator, where it can't be picked up by default.
+        if matching:
+            cbo.addItems(matching)
+        if rest:
+            if matching:
+                cbo.insertSeparator(cbo.count())
+            cbo.addItems(rest)
+        if cbo.count():
+            cbo.insertSeparator(cbo.count())
+        cbo.addItem(self._RIG_ORIGINAL)
+
+        # -1 (blank) when no rig describes this card, rather than falling back to
+        # the revert entry — showing "Use each file's original metadata" would
+        # claim the card is set to revert when it simply has gear from no known
+        # rig, and index 0 would claim a rig it never used.
+        current = md.get("rig", "")
+        cbo.setCurrentIndex(cbo.findText(current) if current else -1)
+        cbo.blockSignals(False)
+        cbo.setEnabled(not md.get("skip", False))
+
+    def refreshRigPickers(self):
+        """Rebuild every card's rig combo — the Gear preferences changed while
+        this window was open."""
+        for row in self.metaDataByRow:
+            self._populateRigCombo(row)
+        self._populateBannerRigCombo()
+
+    def _populateBannerRigCombo(self):
+        """Fill the banner's rig list and show the banner only if there is
+        something to pick."""
+        names = [r.get("name", "") for r in self.mdiParent.db.rigs if r.get("name")]
+        cbo = self.cboGearBannerRig
+        current = cbo.currentText()
+        cbo.blockSignals(True)
+        cbo.clear()
+        cbo.addItems(names)
+        # Last, below a separator: this entry wipes gear across every card, and
+        # the combo selects index 0 on load — leading the list would leave the
+        # banner pre-armed to revert, one misclick from destroying assignments.
+        if names:
+            cbo.insertSeparator(cbo.count())
+        cbo.addItem(self._RIG_ORIGINAL)
+        # Guard the empty string: separators carry empty text, so an unguarded
+        # findText("") on the first population selects the SEPARATOR — leaving
+        # currentText() blank and Apply a silent no-op.
+        idx = cbo.findText(current) if current else -1
+        cbo.setCurrentIndex(idx if idx >= 0 else 0)
+        cbo.blockSignals(False)
+
+        wasShown = not self.frmGearBanner.isHidden()
+        self.frmGearBanner.setVisible(bool(names))
+        # setupUi builds the banner before the scroll area, which would other-
+        # wise stack above it and hide it wherever they overlap.
+        self.frmGearBanner.raise_()
+        self._updateBannerButtonText()
+        if wasShown != bool(names):
+            self.resizeMe()
+
+    def _bannerTargetRows(self):
+        """Rows the banner's Apply would touch: every card on screen except the
+        skipped ones, which are on their way out.
+
+        There is deliberately no "only cards without a microphone" option — the
+        Media Filter's Microphone = "Unknown" bucket selects exactly those
+        recordings before the window opens, which is both a better place to
+        narrow the set and one less control competing with the card count."""
+        return [row for row, md in self.metaDataByRow.items()
+                if not md.get("skip", False)]
+
+    def _updateBannerButtonText(self):
+        """Put the affected count on the button — the banner's edit is invisible
+        until Save, so the count is what tells the user their filter caught the
+        set they expected."""
+        n = len(self._bannerTargetRows())
+        self.btnApplyGearBanner.setText("Apply to %d card%s" % (n, "" if n == 1 else "s"))
+
+    def _applyBannerRig(self):
+        rigName = self.cboGearBannerRig.currentText()
+        if not rigName:
+            return
+        rows = self._bannerTargetRows()
+        for row in rows:
+            self.applyRigToRow(row, rigName)
+        self._updateBannerButtonText()
+
+    def cboRigChanged(self, row, _index=0):
+        lbls = self._rowLabels.get(row, {})
+        cbo = lbls.get("rig")
+        if cbo is None or cbo.currentIndex() < 0:
+            # Blank selection ("no rig describes this card") is a display state,
+            # not a choice — it must not be read as a revert.
+            return
+        self.applyRigToRow(row, cbo.currentText())
+        # A card gaining or losing a mic changes what "blanks only" would catch.
+        self._updateBannerButtonText()
+
+    def applyRigToRow(self, row, rigName):
+        """Apply a rig's gear to one card, or revert the card to what its file
+        reported.
+
+        A rig is a recorder AND a microphone — that pair is what the user picked
+        — so applying one sets both.  Half-applying it would leave the card in a
+        state that isn't the chosen rig at all: recorder from the file, mic from
+        the rig, shown as though they belonged together.  The file's spelling is
+        therefore a default, not an authority; metadata can simply be wrong (a
+        microphone that wasn't fully plugged in still gets named in the file),
+        and the user is the one who knows.
+
+        Only Yearbirder's catalog is written — the WAV is never touched — and
+        "Use each file's original metadata" restores both fields in one click.
+
+        Note this is the DELIBERATE path.  Auto-inference at load deliberately
+        does not come through here for the recorder (see insertAudioIntoTable):
+        opening a window must never mutate data.
+        """
+        md = self.metaDataByRow.get(row)
+        if md is None:
+            return
+
+        if rigName == self._RIG_ORIGINAL or not rigName:
+            # Back to the file's own reading.  fileDevice is re-read from the
+            # WAV on every card build, so this works however long ago the
+            # override was saved.
+            md["rig"] = ""
+            md["newMicrophone"] = ""
+            md["newDevice"] = md.get("fileDevice", "")
+        else:
+            rig = self.mdiParent.db.GetRig(rigName)
+            if rig is None:
+                return
+            # Both fields, unconditionally — rigs are guaranteed to carry both
+            # (enforced in the Gear tab and again when preferences are read), so
+            # neither assignment can blank a value.
+            md["rig"] = rigName
+            md["newMicrophone"] = rig.get("microphone", "")
+            md["newDevice"] = rig.get("recorder", "")
+
+        lbls = self._rowLabels.get(row, {})
+        cbo = lbls.get("rig")
+        if cbo is not None:
+            idx = cbo.findText(md["rig"]) if md["rig"] else cbo.findText(self._RIG_ORIGINAL)
+            if cbo.currentIndex() != idx:
+                cbo.blockSignals(True)
+                cbo.setCurrentIndex(idx)
+                cbo.blockSignals(False)
+        self._refreshRowLabels(row)
+        self.saveNewMetaData(row)
+
     def _refreshRowLabels(self, row):
         md = self.metaDataByRow[row]
         lbls = self._rowLabels.get(row)
@@ -1070,6 +1340,16 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         lbls["date"].setText(self._fieldHtml("Date", date, self._fieldGreen(md, "date"), skipped))
         lbls["location"].setText(self._fieldHtml("Location", loc, self._fieldGreen(md, "location"), skipped))
         lbls["time"].setText(self._fieldHtml("Time", tm, self._fieldGreen(md, "time"), skipped))
+        dev = md.get("newDevice") or "—"
+        mic = md.get("newMicrophone") or "—"
+        lbls["device"].setText(
+            self._fieldHtml("Recording Device", dev, self._fieldGreen(md, "device"), skipped))
+        # Never green: a microphone is only ever inferred from a rig or typed by
+        # the user, never read from the file.
+        lbls["microphone"].setText(self._fieldHtml("Microphone", mic, False, skipped))
+        rigCbo = lbls.get("rig")
+        if rigCbo is not None:
+            rigCbo.setEnabled(rigCbo.count() > 1 and not skipped)
         ts = lbls.get("tagStrip")
         if ts is not None:
             ts.setEnabled(not skipped)
@@ -1140,6 +1420,7 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         self.metaDataByRow[row]["skip"] = checked
         self._refreshRowLabels(row)
         self.saveNewMetaData(row)
+        self._updateBannerButtonText()
 
     def cboRatingChanged(self, row, _index=None):
         if self.fillingCombos:
@@ -1155,6 +1436,8 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         md.setdefault("newDate", md["date"])
         md.setdefault("newTime", md["time"])
         md.setdefault("newNotes", md.get("notes", ""))
+        md.setdefault("newDevice", md.get("device", ""))
+        md.setdefault("newMicrophone", md.get("microphone", ""))
         if md.get("skip"):
             md["newCommonNames"] = []
         else:
@@ -1175,8 +1458,20 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         md["newDate"] = md["date"]
         md["newTime"] = md["time"]
         md["newNotes"] = md.get("notes", "")
+        # Reset means "undo my unsaved edits", so gear goes back to the state
+        # the card opened in (including any rig inferred then) — not to the
+        # file's reading, which is what the revert combo entry is for.
+        md["newDevice"] = md.get("resetDevice", md.get("device", ""))
+        md["newMicrophone"] = md.get("resetMicrophone", md.get("microphone", ""))
+        md["rig"] = md.get("resetRig", "")
         md["skip"] = False
         lbls = self._rowLabels.get(row, {})
+        rigCbo = lbls.get("rig")
+        if rigCbo is not None:
+            rigCbo.blockSignals(True)
+            rigCbo.setCurrentIndex(
+                rigCbo.findText(md["rig"]) if md["rig"] else -1)
+            rigCbo.blockSignals(False)
         chk = lbls.get("skip")
         if chk is not None:
             chk.blockSignals(True)
@@ -1273,7 +1568,13 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
                     meta["time"] != meta["newTime"] or
                     set(old_species) != set(new_species) or
                     meta["rating"] != meta["newRating"] or
-                    meta["notes"] != meta["newNotes"]
+                    meta["notes"] != meta["newNotes"] or
+                    # Gear belongs here: the bulk-assign workflow filters to
+                    # recordings whose date, location, time and species are
+                    # already right and changes ONLY the mic, so without these
+                    # two every card would look unchanged and save nothing.
+                    meta.get("device", "") != meta.get("newDevice", "") or
+                    meta.get("microphone", "") != meta.get("newMicrophone", "")
                 )
                 if changed:
                     audio_filename = meta["recordingData"]["fileName"]
@@ -1288,6 +1589,8 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
                         pass
                     meta["recordingData"]["rating"] = meta["newRating"]
                     meta["recordingData"]["notes"] = meta["newNotes"]
+                    meta["recordingData"]["device"] = meta.get("newDevice", "")
+                    meta["recordingData"]["microphone"] = meta.get("newMicrophone", "")
                     for species_name in new_species:
                         f = code_Filter.Filter()
                         f.setLocationName(meta["newLocation"])
@@ -1309,6 +1612,8 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
                 if new_species:
                     meta["recordingData"]["rating"] = meta["newRating"]
                     meta["recordingData"]["notes"] = meta["newNotes"]
+                    meta["recordingData"]["device"] = meta.get("newDevice", "")
+                    meta["recordingData"]["microphone"] = meta.get("newMicrophone", "")
                     for species_name in new_species:
                         f = code_Filter.Filter()
                         f.setLocationName(meta["newLocation"])

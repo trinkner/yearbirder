@@ -16,6 +16,31 @@ class Ui_frmManageRecordings(object):
         icon = QtGui.QIcon()
         icon.addPixmap(QtGui.QPixmap(":/icon_bird_white.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         frmManageRecordings.setWindowIcon(icon)
+        # ── Bulk gear banner ─────────────────────────────────────────────────
+        # Sits above the card list; assigns one rig to every loaded card at
+        # once, which is the usual case since a batch is normally one outing
+        # with one rig.  Hidden entirely when no rigs are defined.
+        self.frmGearBanner = QtWidgets.QFrame(frmManageRecordings)
+        self.frmGearBanner.setObjectName("frmGearBanner")
+        self.frmGearBanner.setGeometry(QtCore.QRect(5, 27, 891, 40))
+        # Pinned so resizeMe's height arithmetic can't drift with the layout's
+        # size hint (_GEAR_BANNER_H in code_ManageRecordings must match).
+        self.frmGearBanner.setFixedHeight(40)
+        _bannerLayout = QtWidgets.QHBoxLayout(self.frmGearBanner)
+        _bannerLayout.setContentsMargins(8, 4, 8, 4)
+        _bannerLayout.setSpacing(8)
+        self.lblGearBanner = QtWidgets.QLabel(self.frmGearBanner)
+        self.lblGearBanner.setObjectName("lblGearBanner")
+        _bannerLayout.addWidget(self.lblGearBanner)
+        self.cboGearBannerRig = QtWidgets.QComboBox(self.frmGearBanner)
+        self.cboGearBannerRig.setObjectName("cboGearBannerRig")
+        self.cboGearBannerRig.setMinimumWidth(200)
+        _bannerLayout.addWidget(self.cboGearBannerRig)
+        self.btnApplyGearBanner = QtWidgets.QPushButton(self.frmGearBanner)
+        self.btnApplyGearBanner.setObjectName("btnApplyGearBanner")
+        _bannerLayout.addWidget(self.btnApplyGearBanner)
+        _bannerLayout.addStretch(1)
+
         self.scrollArea = QtWidgets.QScrollArea(frmManageRecordings)
         self.scrollArea.setGeometry(QtCore.QRect(0, 10, 891, 601))
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding)
@@ -60,6 +85,10 @@ class Ui_frmManageRecordings(object):
         frmManageRecordings.setWindowTitle(_translate("frmManageRecordings", "Add Recordings"))
         self.btnSaveAudioSettings.setText(_translate("frmManageRecordings", "Save"))
         self.btnCancel.setText(_translate("frmManageRecordings", "Cancel"))
+        self.lblGearBanner.setText(_translate("frmManageRecordings", "Set gear for all:"))
+        self.btnApplyGearBanner.setToolTip(_translate("frmManageRecordings", "Assign the chosen rig's recorder and microphone to every card below. Yearbirder never writes to your audio files — only to its own catalog — and \"Use each file's original metadata\" puts them back."))
+        self.btnApplyGearBanner.setText(_translate("frmManageRecordings", "Apply"))
+        self.cboGearBannerRig.setToolTip(_translate("frmManageRecordings", "Rigs are defined in Preferences → Recording Gear."))
 
 
 import icons_rc

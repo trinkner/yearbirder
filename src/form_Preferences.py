@@ -164,6 +164,54 @@ class Ui_frmPreferences(object):
         self.tabEbirdLayout.addStretch(1)
         self.tabWidget.addTab(self.tabEbird, "eBird")
 
+        # ── Tab 4: Gear ──────────────────────────────────────────────────────
+        self.tabGear = QtWidgets.QWidget()
+        self.tabGear.setObjectName("tabGear")
+        self.tabGearLayout = QtWidgets.QVBoxLayout(self.tabGear)
+        self.tabGearLayout.setContentsMargins(10, 14, 10, 10)
+        self.tabGearLayout.setSpacing(10)
+
+        self.grpRigs = QtWidgets.QGroupBox(self.tabGear)
+        self.grpRigs.setObjectName("grpRigs")
+        self.grpRigs.setStyleSheet(
+            "QGroupBox { font-size: 14px; font-weight: bold; } "
+            "QGroupBox QWidget { font-size: 13px; font-weight: normal; }"
+        )
+        self.verticalLayout_4 = QtWidgets.QVBoxLayout(self.grpRigs)
+        self.verticalLayout_4.setObjectName("verticalLayout_4")
+        self.lblRigs = QtWidgets.QLabel(self.grpRigs)
+        self.lblRigs.setObjectName("lblRigs")
+        self.lblRigs.setWordWrap(True)
+        self.verticalLayout_4.addWidget(self.lblRigs)
+
+        self.tblRigs = QtWidgets.QTableWidget(self.grpRigs)
+        self.tblRigs.setObjectName("tblRigs")
+        self.tblRigs.setColumnCount(3)
+        self.tblRigs.setHorizontalHeaderLabels(["Rig Name", "Recording Device", "Microphone"])
+        self.tblRigs.verticalHeader().setVisible(False)
+        self.tblRigs.setSelectionBehavior(
+            QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows)
+        self.tblRigs.setSelectionMode(
+            QtWidgets.QAbstractItemView.SelectionMode.SingleSelection)
+        _rigHeader = self.tblRigs.horizontalHeader()
+        _rigHeader.setSectionResizeMode(
+            QtWidgets.QHeaderView.ResizeMode.Stretch)
+        self.verticalLayout_4.addWidget(self.tblRigs)
+
+        self.hboxRigButtons = QtWidgets.QHBoxLayout()
+        self.hboxRigButtons.setObjectName("hboxRigButtons")
+        self.btnAddRig = QtWidgets.QPushButton(self.grpRigs)
+        self.btnAddRig.setObjectName("btnAddRig")
+        self.hboxRigButtons.addWidget(self.btnAddRig)
+        self.btnRemoveRig = QtWidgets.QPushButton(self.grpRigs)
+        self.btnRemoveRig.setObjectName("btnRemoveRig")
+        self.hboxRigButtons.addWidget(self.btnRemoveRig)
+        self.hboxRigButtons.addStretch(1)
+        self.verticalLayout_4.addLayout(self.hboxRigButtons)
+
+        self.tabGearLayout.addWidget(self.grpRigs)
+        self.tabWidget.addTab(self.tabGear, "Recording Gear")
+
         # ── Cancel / OK ──────────────────────────────────────────────────────
         self.buttonBox = QtWidgets.QDialogButtonBox(self.contentWidget)
         self.buttonBox.setStandardButtons(
@@ -214,6 +262,11 @@ class Ui_frmPreferences(object):
         self.grpEbirdApiKey.setTitle(_translate("frmPreferences", "eBird API Key"))
         self.lblEbirdApiKey.setText(_translate("frmPreferences", "Optional. Required for reports and maps that use eBird server data. Get a free key at <a href=\"https://ebird.org/api/keygen\">ebird.org/api/keygen</a>."))
         self.btnToggleApiKey.setText(_translate("frmPreferences", "Show"))
+
+        self.grpRigs.setTitle(_translate("frmPreferences", "Recording Rigs"))
+        self.lblRigs.setText(_translate("frmPreferences", "A rig is a recording device paired with a microphone. Recording devices often write their own name into the file, but none of them store which microphone you used — so define your rigs here and assign them in Add or Manage Recordings. List a rig for each microphone you use with a recording device."))
+        self.btnAddRig.setText(_translate("frmPreferences", "Add Rig"))
+        self.btnRemoveRig.setText(_translate("frmPreferences", "Remove Rig"))
 
         self.actionSetDateFilter.setText(_translate("frmPreferences", "Set Filter to Date"))
         self.actionSetLocationFilter.setText(_translate("frmPreferences", "Set Filter to Location"))

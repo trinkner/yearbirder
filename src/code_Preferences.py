@@ -55,6 +55,8 @@ class Preferences(QMdiSubWindow, form_Preferences.Ui_frmPreferences):
         self.btnSelectPhotoDataFile.clicked.connect(self.selectPhotoDataFile)
         self.btnToggleApiKey.clicked.connect(self.toggleApiKeyVisibility)
         self.tabWidget.currentChanged.connect(self.tabChanged)
+        self.btnAddRig.clicked.connect(self._addRig)
+        self.btnRemoveRig.clicked.connect(self._removeRig)
         self._buildPlaybackTab()
 
     def fillPreferences(self):
@@ -70,6 +72,72 @@ class Preferences(QMdiSubWindow, form_Preferences.Ui_frmPreferences):
         self.txtEbirdApiKey.setText(self.mdiParent.db.ebirdApiKey)
 
         self._fillMyLocationCombos()
+        self._refreshRigTable()
+
+    def _refreshRigTable(self):
+        """Show the saved rigs.  Cells are edited in place; the table is the
+        working copy and savePreferences() harvests it."""
+        self.tblRigs.setRowCount(0)
+        for rig in self.mdiParent.db.rigs:
+            self._appendRigRow(rig.get("name", ""),
+                               rig.get("recorder", ""),
+                               rig.get("microphone", ""))
+
+    def _appendRigRow(self, name, recorder, microphone):
+        r = self.tblRigs.rowCount()
+        self.tblRigs.insertRow(r)
+        for col, value in enumerate((name, recorder, microphone)):
+            self.tblRigs.setItem(r, col, QTableWidgetItem(value))
+        return r
+
+    def _addRig(self):
+        r = self._appendRigRow("", "", "")
+        self.tblRigs.selectRow(r)
+        self.tblRigs.editItem(self.tblRigs.item(r, 0))
+
+    def _removeRig(self):
+        r = self.tblRigs.currentRow()
+        if r >= 0:
+            self.tblRigs.removeRow(r)
+
+    def _harvestRigs(self):
+        """Read the rig table back into (rigs, problems).
+
+        A rig must carry all three fields: Manage Recordings applies a rig as a
+        pair, so a half-filled one would blank a recorder or a microphone rather
+        than set it.  Enforcing it here means every use site can trust it.
+
+        A completely blank row is an Add the user thought better of, and is
+        dropped in silence.  Anything partly filled — or a duplicate name — is
+        reported instead of quietly discarded, so work never disappears without
+        explanation."""
+        rigs = []
+        problems = []
+        seen = set()
+        for r in range(self.tblRigs.rowCount()):
+            def cell(c):
+                item = self.tblRigs.item(r, c)
+                return item.text().strip() if item else ""
+            name, recorder, mic = cell(0), cell(1), cell(2)
+
+            if not any((name, recorder, mic)):
+                continue                       # abandoned Add — nothing to keep
+
+            missing = [label for label, value in
+                       (("a name", name), ("a recording device", recorder),
+                        ("a microphone", mic)) if not value]
+            if missing:
+                problems.append("Row %d (%s) needs %s."
+                                % (r + 1, name or "unnamed", " and ".join(missing)))
+                continue
+
+            if name.lower() in seen:
+                problems.append('Row %d: there is already a rig named "%s".'
+                                % (r + 1, name))
+                continue
+            seen.add(name.lower())
+            rigs.append({"name": name, "recorder": recorder, "microphone": mic})
+        return rigs, problems
 
     def _fillMyLocationCombos(self):
         """Populate the My County and My Patch comboboxes from the open data file."""
@@ -437,8 +505,24 @@ class Preferences(QMdiSubWindow, form_Preferences.Ui_frmPreferences):
         if self.cboMyPatch.isEnabled():
             self.mdiParent.db.myPatch = self.cboMyPatch.currentText()
 
+        rigs, rigProblems = self._harvestRigs()
+        if rigProblems:
+            # Stay open on the Gear tab rather than saving a partial rig or
+            # dropping it silently — the user is mid-edit, not done.
+            self.showTab("Recording Gear")
+            QMessageBox.warning(
+                self, "Incomplete Rig",
+                "Every rig needs a name, a recording device, and a microphone, "
+                "and each name must be unique.\n\n" + "\n".join(rigProblems))
+            return
+        self.mdiParent.db.rigs = rigs
+
         self.mdiParent.db.writePreferences()
         self.mdiParent.updateMyLocationButtons()
+        # An open Add/Manage Recordings window built its rig pickers from the
+        # old list — a user who came here precisely because they had no rigs
+        # would otherwise return to an empty combo.
+        self.mdiParent.refreshOpenRigPickers()
 
         self.close()
 

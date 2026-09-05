@@ -479,6 +479,7 @@ class DataBase():
         self.sampleRateList = []
         self.bitDepthList = []
         self.deviceList = []
+        self.micList = []
         self.sightingList = []
         self.eBirdFileOpenFlag = False
         self.eBirdFilePath = ""
@@ -516,6 +517,13 @@ class DataBase():
         # hex(QAudioDevice.id()) -> {"ms": int, "name": str} — calibrated
         # output-latency compensation per playback device (Preferences tab)
         self.audioLatencyByDevice = {}
+        # Recording rigs: [{"name","recorder","microphone"}, ...] from the Gear
+        # tab.  A rig is an input convenience only — Manage Recordings writes the
+        # recorder/microphone onto each recording, never the rig itself, so
+        # renaming or deleting a rig can't rewrite catalogued history.
+        # Several rigs may share a recorder (one body, many mics); the ambiguity
+        # that creates is resolved by rigsForRecorder() at assignment time.
+        self.rigs = []
         # Community Sightings Explorer's last region: {"code","label","path"}.
         # Not a Preferences-dialog setting — written whenever the Explorer's
         # region changes, so the window reopens where the user left it.
@@ -1102,6 +1110,17 @@ class DataBase():
             recordingData["channels"] = ""
 
         recordingData["device"] = _read_wav_device(fileName)
+        # What the FILE itself reported, kept apart from "device" because the
+        # catalog's value may be a user override.  Re-read on every card build
+        # (this method already runs per card), so the way back to the file's own
+        # value never has to be stored — the WAV is never written, so it can't
+        # drift.  Derived, never persisted: the catalog writers list keys
+        # explicitly.
+        recordingData["fileDevice"] = recordingData["device"]
+        # No recorder writes the microphone into the file (checked across BWF
+        # bext / RIFF INFO / iXML), so it is only ever set by the user, via a
+        # rig in Manage Recordings.
+        recordingData["microphone"] = ""
 
         return recordingData
 
@@ -1369,6 +1388,7 @@ class DataBase():
                             "BitDepth":    a.get("bitDepth", ""),
                             "Channels":    a.get("channels", ""),
                             "Device":      a.get("device", ""),
+                            "Microphone":  a.get("microphone", ""),
                             "Rating":      a.get("rating", "0"),
                             "Notes":       a.get("notes", ""),
                         }
@@ -1498,6 +1518,7 @@ class DataBase():
             "BitDepth":    recordingData.get("bitDepth", ""),
             "Channels":    recordingData.get("channels", ""),
             "Device":      recordingData.get("device", ""),
+            "Microphone":  recordingData.get("microphone", ""),
             "Rating":      recordingData.get("rating", "0"),
             "Notes":       recordingData.get("notes", ""),
         }
@@ -1660,6 +1681,9 @@ class DataBase():
                 if not dev_val and "Device" not in row and os.path.isfile(fn):
                     dev_val = _read_wav_device(fn)
                 recordingData["device"] = dev_val
+                # Microphone is never in the file — absent means nobody has
+                # assigned a rig to this recording yet.
+                recordingData["microphone"] = row.get("Microphone", "")
                 rating = row.get("Rating", "0")
                 recordingData["rating"] = rating if rating in ["0","1","2","3","4","5"] else "0"
                 recordingData["notes"] = row.get("Notes", "")
@@ -1722,6 +1746,8 @@ class DataBase():
         depth_set = set()
         device_set = set()
         has_unknown_device = False
+        mic_set = set()
+        has_unknown_mic = False
         for s in self.sightingList:
             if "audio" in s:
                 for a in s["audio"]:
@@ -1746,6 +1772,11 @@ class DataBase():
                         device_set.add(dev)
                     else:
                         has_unknown_device = True
+                    mic = a.get("microphone", "")
+                    if mic:
+                        mic_set.add(mic)
+                    else:
+                        has_unknown_mic = True
         self.durationList = [f"{d}s" for d in sorted(duration_set)]
         # Sample rates as kHz combo labels, low→high; bit depths in fidelity order.
         self.sampleRateList = [_khz_label(hz) for hz in sorted(rate_set)]
@@ -1755,6 +1786,13 @@ class DataBase():
         self.deviceList = sorted(device_set)
         if has_unknown_device:
             self.deviceList.append("Unknown")
+        # Microphones assigned via rigs, same shape as deviceList.  "Unknown"
+        # covers everything not yet assigned — which is every recording until
+        # the user sets up rigs, so this combo stays hidden until then (see
+        # fillRecordingsComboBoxes).
+        self.micList = sorted(mic_set)
+        if mic_set and has_unknown_mic:
+            self.micList.append("Unknown")
 
 
     def CountSpecies(self, speciesList):
@@ -3192,6 +3230,7 @@ class DataBase():
             'endSampleRate':       filter.getEndSampleRate(),
             'bitDepths':           filter.getBitDepths(),
             'device':              filter.getDevice(),
+            'microphone':          filter.getMicrophone(),
         }
 
     def TestSightingCompiled(self, sighting, cf):
@@ -3240,6 +3279,7 @@ class DataBase():
         endSampleRate = cf['endSampleRate']
         bitDepths = cf['bitDepths']
         device = cf['device']
+        microphone = cf['microphone']
 
         # Check every filter setting. Return False immediately if sighting fails.
         # If sighting survives the filter, return True
@@ -3692,7 +3732,8 @@ class DataBase():
             startSampleRate != "" or
             endSampleRate != "" or
             bitDepths != [] or
-            device != ""
+            device != "" or
+            microphone != ""
         ):
             if "audio" not in sighting:
                 return False
@@ -3813,6 +3854,16 @@ class DataBase():
                 if not deviceOK:
                     return False
 
+            if microphone != "":
+                # "Unknown" matches recordings with no rig assigned yet.
+                wanted = "" if microphone == "Unknown" else microphone
+                micOK = False
+                for a in sighting["audio"]:
+                    if a.get("microphone", "") == wanted:
+                        micOK = True
+                if not micOK:
+                    return False
+
         # if we've arrived here, the sighting passes the filter.
         return(True)
 
@@ -3916,6 +3967,7 @@ class DataBase():
         self.sampleRateList = []
         self.bitDepthList = []
         self.deviceList = []
+        self.micList = []
 
         # remove photo AND recording data from sightings — the media catalog
         # holds both, so closing it must clear both.  (Leaving "audio" behind
@@ -4428,6 +4480,62 @@ class DataBase():
                         
         return(quickEntryCode)
 
+    def GetRig(self, name):
+        """Return the rig dict with this name, or None."""
+        for r in self.rigs:
+            if r.get("name", "") == name:
+                return r
+        return None
+
+    def rigsForRecorder(self, recorder):
+        """Rigs whose recorder matches the one detected in a file's metadata.
+
+        Matched case-insensitively and ignoring surrounding space, because the
+        string in the file is the manufacturer's ("ZOOM F3") while the one the
+        user typed into the Gear tab is whatever reads naturally ("Zoom F3").
+
+        An empty recorder matches nothing: a file with no device metadata gives
+        us no evidence, so the user picks the rig by hand.
+        """
+        key = (recorder or "").strip().lower()
+        if not key:
+            return []
+        return [r for r in self.rigs
+                if (r.get("recorder", "") or "").strip().lower() == key]
+
+    def rigForGear(self, recorder, microphone):
+        """The rig that describes an already-assigned recorder/mic pair, or None.
+
+        Used to re-label a card reopened from the catalog: the catalog stores
+        the gear, not which rig produced it, so without this the rig picker
+        would sit blank on recordings that plainly came from a known rig.
+        Prefers a rig that matches BOTH fields; falls back to one matching the
+        microphone alone, since the recorder may be the file's spelling rather
+        than the rig's.
+        """
+        if not microphone:
+            return None
+        rec = (recorder or "").strip().lower()
+        byMic = [r for r in self.rigs
+                 if (r.get("microphone", "") or "").strip().lower()
+                 == microphone.strip().lower()]
+        for r in byMic:
+            if (r.get("recorder", "") or "").strip().lower() == rec:
+                return r
+        return byMic[0] if len(byMic) == 1 else None
+
+    def inferRigForRecorder(self, recorder):
+        """The rig to apply automatically for a detected recorder, or None.
+
+        Only an unambiguous match counts.  When several rigs share a recorder
+        (one body used with several mics) we have no evidence for which was
+        used, and guessing would write a specific, wrong microphone that looks
+        authoritative — so nothing is filled in and the user chooses.  Same rule
+        as _quickEntryCodeMatch() applies to species codes.
+        """
+        matches = self.rigsForRecorder(recorder)
+        return matches[0] if len(matches) == 1 else None
+
     def _matchSpeciesFromFileName(self, possibleNames, filename_alpha, filename_alnum):
         """Pick the species from possibleNames whose name best matches a media
         filename.  Shared by the photo (matchPhoto) and recording
@@ -4719,6 +4827,24 @@ class DataBase():
                     except (ValueError, TypeError):
                         self.audioLatencyByDevice = {}
 
+                elif line.startswith("rigs="):
+                    try:
+                        loaded = json.loads(line[len("rigs="):].strip()) or []
+                        # Same completeness rule the Gear tab enforces, applied
+                        # again here: a rig is applied as a pair, so a blank
+                        # field would erase a recorder or microphone instead of
+                        # setting one.  Guards against a hand-edited or
+                        # truncated preferences file.
+                        self.rigs = [
+                            r for r in loaded
+                            if isinstance(r, dict)
+                            and (r.get("name") or "").strip()
+                            and (r.get("recorder") or "").strip()
+                            and (r.get("microphone") or "").strip()
+                        ]
+                    except (ValueError, TypeError):
+                        self.rigs = []
+
                 elif line.startswith("explorerRegion="):
                     try:
                         self.explorerRegion = json.loads(
@@ -4755,6 +4881,7 @@ class DataBase():
             f.write("myPatch=" + self.myPatch + "\n")
             f.write("audioLatencyByDevice="
                     + json.dumps(self.audioLatencyByDevice) + "\n")
+            f.write("rigs=" + json.dumps(self.rigs) + "\n")
             f.write("explorerRegion="
                     + json.dumps(self.explorerRegion) + "\n")
             f.write("explorerBackDays=" + str(self.explorerBackDays) + "\n")

@@ -880,6 +880,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.cboStartRecordingsSampleRateRange.currentIndexChanged.connect(self.ComboStartRecordingsSampleRateChanged)
         self.cboEndRecordingsSampleRateRange.currentIndexChanged.connect(self.ComboEndRecordingsSampleRateChanged)
         self.cboRecordingsDevice.currentIndexChanged.connect(self.ComboRecordingsDeviceChanged)
+        self.cboRecordingsMicrophone.currentIndexChanged.connect(self.ComboRecordingsMicrophoneChanged)
         self._bitDepthChecks = []   # runtime QCheckBoxes, one per catalog bit depth
 
         # Clicking anywhere on the section header row toggles the section
@@ -1204,6 +1205,16 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.finishedProcessingPreferences()
         
 
+    def refreshOpenRigPickers(self):
+        """Rebuild the rig pickers in any open Add/Manage Recordings window.
+
+        Called after the Gear preferences are saved: a user who opened Manage
+        Recordings, found no rigs to pick, and went off to define some must come
+        back to a populated combo rather than the empty one built at load."""
+        for w in self.mdiArea.subWindowList():
+            if isinstance(w, code_ManageRecordings.ManageRecordings):
+                w.refreshRigPickers()
+
     def _updateMediaMenuVisibility(self):
         """Show the Photos menu only when the open media catalog actually contains
         photos, and the Recordings menu only when it contains recordings.  Both
@@ -1462,6 +1473,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.cboStartRecordingsSampleRateRange.setCurrentIndex(0)
         self.cboEndRecordingsSampleRateRange.setCurrentIndex(0)
         self.cboRecordingsDevice.setCurrentIndex(0)
+        self.cboRecordingsMicrophone.setCurrentIndex(0)
         for chk in getattr(self, "_bitDepthChecks", []):
             chk.setChecked(False)
 
@@ -1985,6 +1997,20 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.unhighlightFilterElement(self.cboRecordingsDevice)
         self.cboRecordingsDevice.setVisible(bool(self.db.deviceList))
         self.lblRecordingsDevice.setVisible(bool(self.db.deviceList))
+
+        # Microphone combo: same shape, but the list is empty until the user
+        # assigns a rig to at least one recording, so it stays hidden until
+        # there is something to filter on.
+        self.cboRecordingsMicrophone.blockSignals(True)
+        self.cboRecordingsMicrophone.clear()
+        self.cboRecordingsMicrophone.addItem("All")
+        self.cboRecordingsMicrophone.insertSeparator(1)
+        self.cboRecordingsMicrophone.addItems(self.db.micList)
+        self.cboRecordingsMicrophone.setCurrentIndex(0)
+        self.cboRecordingsMicrophone.blockSignals(False)
+        self.unhighlightFilterElement(self.cboRecordingsMicrophone)
+        self.cboRecordingsMicrophone.setVisible(bool(self.db.micList))
+        self.lblRecordingsMicrophone.setVisible(bool(self.db.micList))
 
 
     def _togglePhotoSection(self):
@@ -5253,6 +5279,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             newFilter.setBitDepths(checkedDepths)
         if self.cboRecordingsDevice.currentIndex() != 0:
             newFilter.setDevice(self.cboRecordingsDevice.currentText())
+        if self.cboRecordingsMicrophone.currentIndex() != 0:
+            newFilter.setMicrophone(self.cboRecordingsMicrophone.currentText())
 
         if self.cboSpeciesHasRecording.currentText() == "Recorded":
             newFilter.setValidRecordingSpecies(self.db.GetSpeciesWithRecordings(newFilter))
@@ -5499,6 +5527,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         endSampleRate = filter.getEndSampleRate()
         bitDepths = filter.getBitDepths()
         device = filter.getDevice()
+        microphone = filter.getMicrophone()
 
         # set main location label, using "All Locations" if none others are selected
         if locationName == "":   
@@ -5651,6 +5680,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
         if device != "":
             detailsText = detailsText + "; " + device
+        if microphone != "":
+            detailsText = detailsText + "; " + microphone
 
         #remove leading "; "
         dateText = dateText[2:]
@@ -6622,6 +6653,12 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.unhighlightFilterElement(self.cboRecordingsDevice)
         else:
             self.highlightRecordingFilterElement(self.cboRecordingsDevice)
+
+    def ComboRecordingsMicrophoneChanged(self):
+        if self.cboRecordingsMicrophone.currentText() == "All":
+            self.unhighlightFilterElement(self.cboRecordingsMicrophone)
+        else:
+            self.highlightRecordingFilterElement(self.cboRecordingsMicrophone)
 
 
     def createChoroplethUSStates(self):

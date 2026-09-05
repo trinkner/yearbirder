@@ -44,6 +44,7 @@ class Filter():
     endSampleRate = ""
     bitDepths = []
     device = ""
+    microphone = ""
 
         
     def setLocationType(self,  locationType):
@@ -360,6 +361,12 @@ class Filter():
     def getDevice(self):
         return self.device
 
+    def setMicrophone(self, microphone):
+        self.microphone = microphone
+
+    def getMicrophone(self):
+        return self.microphone
+
     def hasPhotoFilter(self):
         return any([
             self.sightingHasPhoto != "",
@@ -390,6 +397,7 @@ class Filter():
             self.endSampleRate != "",
             self.bitDepths != [],
             self.device != "",
+            self.microphone != "",
         ])
 
     def hasMediaConstraint(self):
@@ -427,6 +435,7 @@ class Filter():
         self.endSampleRate = ""
         self.bitDepths = []
         self.device = ""
+        self.microphone = ""
 
 
     def describeScope(self, db):
