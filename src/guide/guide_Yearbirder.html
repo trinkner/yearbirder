@@ -117,7 +117,7 @@
 <div class="toc">
   <p class="toc-group">What's New</p>
   <ul>
-    <li><a href="#whats-new">What's New in v2.14</a></li>
+    <li><a href="#whats-new">What's New in v2.15</a></li>
   </ul>
   <p class="toc-group">Quick Start</p>
   <ul>
@@ -196,7 +196,16 @@
 <hr>
 
 <h1 class="group-heading">What's New</h1>
-<h2 id="whats-new">What's New in v2.14</h2>
+<h2 id="whats-new">What's New in v2.15</h2>
+<ul>
+  <li><strong>Record which microphone you used</strong> — No recorder writes the microphone into an audio file, so the one piece of gear you most want to filter by was the one piece Yearbirder could never know. Define your <strong>rigs</strong> — a recording device paired with a microphone — in <strong>Preferences → Recording Gear</strong>, then assign one to your recordings in <strong>Add Recordings</strong> or <strong>Manage Recordings</strong>. When a file names a recording device you keep only one rig for, the microphone is filled in for you; when several rigs share that device, Yearbirder leaves the choice to you rather than guessing wrongly. A batch bar assigns one rig to every card at once, since a session is usually one outing with one rig. The Media Filter gains a <strong>Microphone</strong> setting, and the Recording Enlargement view lists the microphone below the recording device. See <a href="#adding-recordings">Section 26 — Adding Recordings</a> and <a href="#managing-recordings">Section 29 — Managing Your Recordings</a>.</li>
+  <li><strong>Correct a recording device your file names wrongly</strong> — Some apps write the microphone into the field meant for the recorder, and a microphone that was not fully plugged in still gets named as though it were. Assigning a rig now sets both the recording device and the microphone, so you can put right whatever the file claims. Yearbirder never writes to your audio files — only to its own catalog — and <strong>Use each file's original metadata</strong> restores both fields whenever you want them back. A device you have changed is shown in plain text rather than green, so you can see at a glance which recordings no longer match their files.</li>
+  <li><strong>Better species guesses from file names</strong> — When you add photos or recordings, Yearbirder reads the file name to guess the species. A banding or eBird code now always outranks a chance word match, so a photo named <em>BHGR_BoulderCommunityGarden</em> is recognised as a Black-headed Grosbeak rather than a Common Grackle matched on the "Comm" of "Community". Short fragments of a species name no longer count as a match at all. See <a href="#photo-settings-file">Section 20 — Adding Photos</a>.</li>
+  <li><strong>The Explorer remembers where you were</strong> — The <strong>Community Sightings Explorer</strong> now reopens on the region and past-days setting you last used instead of resetting every time, and a <strong>My County</strong> button jumps straight to your home county. See <a href="#explorer">Section 33 — Community Sightings Explorer</a>.</li>
+  <li><strong>Interface refinements</strong> — A filter combo box with nothing selected no longer paints a stray blue border.</li>
+</ul>
+
+<h3>Earlier changes in v2.14</h3>
 <ul>
   <li><strong>Open a hotspot's sightings from the map</strong> — Clicking a dot on the <strong>Community → Hotspot Map</strong> now opens an <strong>All Community Sightings</strong> report for that hotspot, so you can go from spotting a promising location on the map to reading what has been seen there without setting the filter yourself. Hovering still shows the hotspot's name, species count, and last observation date. The same click now works on the species maps. See <a href="#explorer">Section 33 — Community Sightings Explorer</a>.</li>
 </ul>
@@ -483,6 +492,7 @@
     <tr><td>Sample Rate Range</td><td>Minimum and maximum sample rate (in kHz, e.g. 44.1&nbsp;kHz, 48&nbsp;kHz, 96&nbsp;kHz). Yearbirder reads each recording's sample rate from the file itself when you add it.</td></tr>
     <tr><td>Bit Depth</td><td>A set of checkboxes — one for each bit depth found in your catalog (for example 16-bit, 24-bit, or 32-bit float). Tick any combination to show only recordings of those bit depths.</td></tr>
     <tr><td>Recording Device</td><td>Filter by the device a recording was made with (for example <em>ZOOM F3</em> or <em>Shure MV88</em>). Yearbirder reads the device from the file's metadata when you add it; recordings whose files carry no device information are grouped under <em>Unknown</em>.</td></tr>
+    <tr><td>Microphone</td><td>Filter by the microphone a recording was made with. No audio file records this, so the setting appears only once you have assigned a rig to at least one recording (see <a href="#recording-gear">Section 26 — Recording gear</a>). Recordings with no rig assigned yet are grouped under <em>Unknown</em>, which is the quickest way to find the ones still to be labelled.</td></tr>
   </tbody>
 </table>
 <p>The <strong>Sample Rate Range</strong>, <strong>Bit Depth</strong>, and <strong>Recording Device</strong> controls list only the values that actually occur in your catalog, so you will never see an option that returns no results. The bit-depth checkboxes are a multi-select: leaving them all unticked disables the filter, while ticking two or more shows recordings matching <em>any</em> of the ticked depths.</p>
@@ -1187,6 +1197,21 @@
 <h3>Managing recordings</h3>
 <p>To review or edit the details of recordings already in your catalog, open the Manage Recordings window — see <a href="#managing-recordings">Section 29 — Managing Your Recordings</a>.</p>
 
+<h3 id="recording-gear">Recording gear: devices and microphones</h3>
+<p>Most recorders write their own name into the file, so Yearbirder can tell a Zoom F3 recording from one made on a phone without being told. <strong>No recorder writes down which microphone you used</strong> — that information exists nowhere but in your memory. A <strong>rig</strong> is how you supply it: a recording device paired with a microphone, given a name you choose.</p>
+<p>Set your rigs up in <strong>Preferences → Recording Gear</strong>. Each one needs all three of a name, a recording device, and a microphone. List a separate rig for every microphone you use with a given device — several rigs may share the same recorder:</p>
+<ul>
+  <li><em>F3 + MKE 600</em> — Zoom F3, Sennheiser MKE 600</li>
+  <li><em>F3 + omni pair</em> — Zoom F3, Clippy EM272</li>
+  <li><em>iPhone + MV88</em> — iPhone 12 Mini, Shure MV88</li>
+</ul>
+<p>When you add recordings, each card carries a <strong>rig</strong> picker offering the rigs that match whatever device the file named, with your other rigs below. If exactly one rig uses that device, its microphone is filled in for you. If several do, Yearbirder fills in nothing and waits for you to choose — with no evidence for which microphone was on the recorder, a confident guess would simply be wrong most of the time.</p>
+<p>Choosing a rig sets <strong>both</strong> the recording device and the microphone, so it also corrects a file that names its device wrongly. That happens more than you would expect: some recording apps write the microphone into the field meant for the recorder, and a microphone that was not fully seated still gets named in the file as though it had been used. <strong>Yearbirder never modifies your audio files</strong> — only its own catalog — and choosing <strong>Use each file's original metadata</strong> restores both fields at any time. A device you have changed is shown in plain text rather than green, so you can see which recordings no longer agree with their files.</p>
+
+<h3>Assigning gear to many recordings at once</h3>
+<p>A recording session is usually one outing with one rig, so the Add Recordings and Manage Recordings windows offer a batch bar. Click <strong>Show batch options</strong> at the top right, pick a rig, and <strong>Apply</strong> assigns it to every card in the window; the button names the number of cards it will affect. Your choice to show or hide the bar is remembered.</p>
+<p>This is also how you label recordings you added before setting up rigs. Narrow the Media Filter to the recordings you want — by <strong>Recording Device</strong>, by <strong>Microphone → Unknown</strong> for anything not yet assigned, and by date for the period you used a particular microphone — then open <strong>Recordings → Manage recordings</strong> and apply the rig to the whole set at once.</p>
+
 <h3>What a recording record contains</h3>
 <ul>
   <li>File path to the WAV recording</li>
@@ -1194,6 +1219,7 @@
   <li>Associated sighting location, date, and time</li>
   <li>Your personal rating</li>
   <li>Duration and channel count (Mono / Stereo), read from the file</li>
+  <li>Recording device, read from the file where present, and microphone, from the rig you assign</li>
 </ul>
 
 <hr>
@@ -1277,6 +1303,7 @@
   <li><strong>Time</strong> — the checklist start time for the selected location and date. The available times update automatically when you change the date.</li>
   <li><strong>Species</strong> — the species on the selected checklist to which this recording is attached. The available species update automatically when you change the time. A single recording can be attached to more than one species — useful when a recording captures several birds. To remove a recording from the catalog without deleting the file from disk, detach it from the species.</li>
   <li><strong>Rating</strong> — the recording's quality rating (Not Rated, or 1–5).</li>
+  <li><strong>Rig</strong> — the recording device and microphone this recording was made with. See <a href="#recording-gear">Section 26 — Recording gear</a> for how rigs are defined and assigned, including the batch bar for setting a whole window of recordings at once.</li>
 </ul>
 <p>Each row also has a <strong>Notes</strong> button, next to Reset. Click it to open a small text box and attach a free-text note to the recording — the same note field shown in the Recording Enlargement view's details pane (see <a href="#recording-enlargement">Section 28</a>).</p>
 <p>Any control that differs from the recording's current saved value is highlighted. Click the <strong>Reset</strong> button on a row to revert that recording's controls — including its note — to their original values.</p>
@@ -1548,7 +1575,7 @@
 
 <h2 id="preferences">39. Saving Preferences</h2>
 
-<p>Click <strong>Yearbirder → Preferences</strong> on the menu bar to set your preferences. Settings are organized across four tabs:</p>
+<p>Click <strong>Yearbirder → Preferences</strong> on the menu bar to set your preferences. Settings are organized across five tabs:</p>
 
 <h3>Default Files</h3>
 <ul>
@@ -1568,6 +1595,9 @@
 <ul>
   <li><strong>eBird API Key</strong> — Your personal eBird API key, required for all Community menu reports (<a href="#regional-taxonomy">Species List</a>, Notable and All Community Sightings, Hotspot Map, and the Community Sightings Explorer). The key is stored locally and never shared. Get a free key at <a href="https://ebird.org/api/keygen">ebird.org/api/keygen</a>.</li>
 </ul>
+
+<h3>Recording Gear</h3>
+<p>Define the <strong>rigs</strong> you record with — each a recording device paired with a microphone, under a name you choose. Your audio files record the device but never the microphone, so rigs are how that information reaches your catalog. Use <strong>Add Rig</strong> and <strong>Remove Rig</strong> to edit the list; every rig needs all three of a name, a recording device, and a microphone, and each name must be unique. List a separate rig for each microphone you pair with a given device. See <a href="#recording-gear">Section 26 — Recording gear</a> for how rigs are assigned to recordings.</p>
 
 <h3>Audio Calibration</h3>
 <p>Bluetooth headphones and some audio interfaces add playback latency that Yearbirder has no way to measure on its own — the sound reaches your ears later than Yearbirder thinks it does, so the red cursor in a recording's spectrogram appears to run ahead of what you hear. This tab lets you correct for that, separately for each audio output device, with a short tick-and-flash test.</p>
