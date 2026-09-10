@@ -77,7 +77,9 @@ from PySide6.QtCore import (
     Qt,
     QDate,
     QMarginsF,
+    QRectF,
     QSize,
+    QSizeF,
     QTimer,
     QEvent,
     QThread,
@@ -3632,7 +3634,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 document.setHtml(html)
 
                 # create the PDF file by printing to the "printer" (which is set to PDF)
-                document.print_(printer)  
+                footer = (activeWindow.pdfFooter()
+                          if hasattr(activeWindow, "pdfFooter") else "")
+                self.PrintDocument(document, printer, footer)
 
                 if sys.platform == "win32":
                     os.startfile(filename[0])
@@ -3647,6 +3651,67 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 "Saving as PDF is not available for this window.",
                 QMessageBox.StandardButton.Ok,
             )
+
+
+    def PrintDocument(self, document, printer, footerText=""):
+        """Send a QTextDocument to a printer, optionally footing every page.
+
+        Without footer text this is just QTextDocument.print_().  With it the
+        document has to be painted page by page instead: print_() offers no
+        hook for page furniture, so the body is laid out in a page box short
+        enough to leave a footer band, and the painter is translated up by one
+        body height before each successive page is drawn.
+
+        A window opts in by defining pdfFooter(); one that doesn't prints
+        exactly as it always has.
+        """
+        if not footerText:
+            document.print_(printer)
+            return
+
+        # Work in device pixels: the painter maps 1:1 onto the printable area
+        # inside the margins, and point-sized fonts resolve against the
+        # printer's own DPI.
+        resolution = printer.resolution()
+        pageRect   = printer.pageLayout().paintRectPixels(resolution)
+        footerBand = int(resolution * 0.4)          # ~0.4in reserved at the foot
+        bodyHeight = pageRect.height() - footerBand
+        document.setPageSize(QSizeF(pageRect.width(), bodyHeight))
+
+        footerFont = QFont(QFontInfo(document.defaultFont()).family())
+        footerFont.setPointSizeF(7.5)
+
+        painter = QPainter()
+        if not painter.begin(printer):
+            return
+        pageCount = document.pageCount()
+        for page in range(pageCount):
+            if page > 0:
+                printer.newPage()
+
+            painter.save()
+            painter.translate(0, -page * bodyHeight)
+            document.drawContents(
+                painter,
+                QRectF(0, page * bodyHeight, pageRect.width(), bodyHeight))
+            painter.restore()
+
+            painter.save()
+            painter.setFont(footerFont)
+            painter.setPen(QColor("#9aa0ad"))
+            painter.drawLine(0, bodyHeight + footerBand // 3,
+                             pageRect.width(), bodyHeight + footerBand // 3)
+            painter.setPen(QColor("#5a6070"))
+            footerRect = QRectF(0, bodyHeight + footerBand // 3,
+                                pageRect.width(), footerBand - footerBand // 3)
+            painter.drawText(footerRect,
+                             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                             footerText)
+            painter.drawText(footerRect,
+                             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+                             f"Page {page + 1} of {pageCount}")
+            painter.restore()
+        painter.end()
 
 
     def CreateSpeciesList(self): 
@@ -5806,7 +5871,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             if dialog.exec():
 
                 # send the html to the physical printer
-                document.print_(printer)
+                footer = (activeWindow.pdfFooter()
+                          if hasattr(activeWindow, "pdfFooter") else "")
+                self.PrintDocument(document, printer, footer)
 
         else:
             QMessageBox.information(

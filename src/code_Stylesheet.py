@@ -216,6 +216,10 @@ tableColor = "#252730"
 mdiAreaColor = QColor(39, 39, 43)
 textColor = "#e2e4ec"
 speciesColor = QColor(79, 142, 247)
+# Shared media-card gray, for surfaces built outside the Qt stylesheet (HTML
+# reports).  Kept in step with the QWidget#mediaCard rule in stylesheetBase,
+# which cannot interpolate this name — it is a plain, brace-heavy QSS string.
+mediaCardColor = "#343333"
 
 stylesheetBase = """
     QWidget {
@@ -274,7 +278,7 @@ stylesheetBase = """
        same gray the Enlargement windows already use.  Styled here via object
        names — per-widget setStyleSheet in row builders costs milliseconds
        per row. */
-    QWidget#mediaCard { background-color: #343333; border-radius: 6px; }
+    QWidget#mediaCard { background-color: #343333; border-radius: 6px; }   /* == mediaCardColor */
     /* The global "QWidget { background: #1e1f26 }" rule above makes every
        plain child paint an opaque background ON TOP of the card, hiding it.
        Scoped transparency lets the card show through: labels, checkboxes and
