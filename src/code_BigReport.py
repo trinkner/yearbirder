@@ -156,10 +156,13 @@ def _itineraryDaySummary(dayStops):
 
 
 def _itineraryStopMeta(stop):
-    """One stop's protocol / duration / distance / species count, as plain text."""
-    meta = [stop[key] for key in ("protocol", "duration", "distance") if stop[key]]
-    meta.append(f"{len(stop['species'])} species")
-    return meta
+    """One stop's effort — protocol, duration, distance — as plain text.
+
+    Deliberately just the intrinsic fields: each renderer appends what suits
+    it (the printed report adds a species count and the checklist number; the
+    tab shows the species themselves, so it needs neither).
+    """
+    return [stop[key] for key in ("protocol", "duration", "distance") if stop[key]]
 
 
 def _itinerarySpeciesCount(entry):
@@ -217,9 +220,8 @@ class BigReportItineraryBridge(QObject):
     """Qt/JavaScript bridge for the Big Report Itinerary tab.
 
     Registered on the page's QWebChannel as 'bridge'.  Clicking a stop's
-    location name opens the Location child window, clicking a species opens
-    the Individual child window, and clicking the eBird link opens the
-    checklist in the system browser.
+    location name opens the Location child window; clicking a species opens
+    the Individual child window.
     """
 
     def __init__(self, big_report):
@@ -250,12 +252,6 @@ class BigReportItineraryBridge(QObject):
         self._br.mdiParent.PositionChildWindow(sub, self._br)
         sub.show()
         sub.resizeMe()
-
-    @Slot(str)
-    def checklistClicked(self, checklistID):
-        from PySide6.QtGui import QDesktopServices
-        if checklistID:
-            QDesktopServices.openUrl(QUrl(f"https://ebird.org/checklist/{checklistID}"))
 
 
 class BigReport(QMdiSubWindow, form_BigReport.Ui_frmBigReport):
@@ -1063,26 +1059,27 @@ document.addEventListener("DOMContentLoaded", function() {{
   .day-sub { font-size:11px; color:#8b8fa8; margin-left:10px; }
   .stop { background:CARD_BG; border-radius:5px; padding:10px 14px;
           margin-bottom:10px; }
-  .stop-head { display:flex; flex-wrap:wrap; align-items:baseline; gap:10px; }
-  .stop-time { font-size:12px; font-variant-numeric:tabular-nums;
-               white-space:nowrap; }
-  .stop-loc { color:COLOR_PRIMARY; font-weight:600; font-size:14px; cursor:pointer; }
+  /* inline-block so the click target is the name, not the whole card width */
+  .stop-loc { display:inline-block; color:COLOR_PRIMARY; font-weight:600;
+              font-size:14px; cursor:pointer; }
   .stop-loc:hover { text-decoration:underline; }
-  .stop-region { font-size:12px; }
-  .meta { margin-top:6px; font-size:12px; }
-  .meta span { white-space:nowrap; }
-  .meta .sep { color:#8b8fa8; margin:0 7px; }
-  .ebird { color:COLOR_PRIMARY; cursor:pointer; }
-  .ebird:hover { text-decoration:underline; }
-  .comments { margin-top:8px; font-size:12px; line-height:1.45;
+  /* details left, species right; the species column wraps under on a
+     narrow window rather than crushing the prose measure */
+  .stop-body { display:flex; flex-wrap:wrap; align-items:flex-start;
+               gap:14px 32px; margin-top:7px; }
+  .stop-details { flex:0 1 620px; max-width:620px; }
+  .detail { font-size:12px; margin-bottom:3px; }
+  .comments { margin-top:7px; font-size:12px; line-height:1.45;
               white-space:pre-wrap; }
-  .species { margin-top:9px; columns:210px; column-gap:20px; }
-  .sp { display:block; break-inside:avoid; padding:1px 0; font-size:12px;
-        color:COLOR_PRIMARY; cursor:pointer; }
-  .sp:hover { text-decoration:underline; }
+  /* narrow enough that a right-aligned count stays near its name — a wider
+     column strands short names an inch from their number */
+  .species { flex:0 0 250px; }
+  .sp { display:flex; justify-content:space-between; gap:14px;
+        padding:1px 0; font-size:12px; color:COLOR_PRIMARY; cursor:pointer; }
+  .sp:hover .nm { text-decoration:underline; }
   .sp.taxon { color:#8b8fa8; cursor:default; }
-  .sp.taxon:hover { text-decoration:none; }
-  .sp .ct { color:#e2e4ec; margin-left:5px; font-variant-numeric:tabular-nums; }
+  .sp.taxon:hover .nm { text-decoration:none; }
+  .sp .ct { color:#e2e4ec; font-variant-numeric:tabular-nums; }
   .none { color:#8b8fa8; padding:20px 0; }
 """.replace("COLOR_PRIMARY", primary).replace("CARD_BG", code_Stylesheet.mediaCardColor)
 
@@ -1112,47 +1109,40 @@ document.addEventListener("DOMContentLoaded", function() {{
                     "</div>"
                     )
 
-            parts.append("<div class='stop'><div class='stop-head'>")
+            # the location name leads the card on its own line
             parts.append(
-                f"<span class='stop-loc' data-loc=\"{escape(stop['location'])}\">"
-                f"{escape(stop['location'])}</span>"
+                "<div class='stop'>"
+                f"<div class='stop-loc' data-loc=\"{escape(stop['location'])}\">"
+                f"{escape(stop['location'])}</div>"
+                "<div class='stop-body'><div class='stop-details'>"
                 )
-            time = _fmtItineraryTime(stop["time"])
-            if time:
-                parts.append(f"<span class='stop-time'>{escape(time)}</span>")
-            if stop["region"]:
-                parts.append(f"<span class='stop-region'>{escape(stop['region'])}</span>")
-            parts.append("</div>")
 
-            meta = [escape(m) for m in _itineraryStopMeta(stop)]
-            if stop["checklistID"]:
-                meta.append(
-                    f"<span class='ebird' data-cid=\"{escape(stop['checklistID'])}\">"
-                    f"{escape(stop['checklistID'])} &#8599;</span>"
-                    )
-            parts.append(
-                "<div class='meta'>" +
-                "<span class='sep'>·</span>".join(f"<span>{m}</span>" for m in meta) +
-                "</div>"
-                )
+            where = [t for t in (_fmtItineraryTime(stop["time"]), stop["region"]) if t]
+            where.append(f"{len(stop['species'])} species")
+            parts.append(f"<div class='detail'>{escape('  ·  '.join(where))}</div>")
+
+            effort = _itineraryStopMeta(stop)
+            if effort:
+                parts.append(f"<div class='detail'>{escape('  ·  '.join(effort))}</div>")
 
             if stop["comments"]:
                 parts.append(f"<div class='comments'>{escape(stop['comments'])}</div>")
 
-            parts.append("<div class='species'>")
+            parts.append("</div><div class='species'>")
             for entry in stop["species"]:
                 countText = _itinerarySpeciesCount(entry)
                 countHtml = f"<span class='ct'>{countText}</span>" if countText else ""
                 if entry["isSpecies"]:
                     parts.append(
-                        f"<span class='sp' data-sp=\"{escape(entry['commonName'])}\">"
-                        f"{escape(entry['name'])}{countHtml}</span>"
+                        f"<div class='sp' data-sp=\"{escape(entry['commonName'])}\">"
+                        f"<span class='nm'>{escape(entry['name'])}</span>{countHtml}</div>"
                         )
                 else:
                     parts.append(
-                        f"<span class='sp taxon'>{escape(entry['name'])}{countHtml}</span>"
+                        "<div class='sp taxon'>"
+                        f"<span class='nm'>{escape(entry['name'])}</span>{countHtml}</div>"
                         )
-            parts.append("</div></div>")
+            parts.append("</div></div></div>")
 
         if currentDate is not None:
             parts.append("</div>")
@@ -1173,9 +1163,7 @@ document.addEventListener('click', function(e) {
     var el = e.target.closest('[data-loc]');
     if (el) { window.bridge.locationClicked(el.getAttribute('data-loc')); return; }
     el = e.target.closest('[data-sp]');
-    if (el) { window.bridge.speciesClicked(el.getAttribute('data-sp')); return; }
-    el = e.target.closest('[data-cid]');
-    if (el) { window.bridge.checklistClicked(el.getAttribute('data-cid')); }
+    if (el) { window.bridge.speciesClicked(el.getAttribute('data-sp')); }
 });
 """ % qwc_js
 
@@ -1439,6 +1427,7 @@ document.addEventListener('click', function(e) {
                 heading += "  ·  " + stop["region"]
 
             meta = _itineraryStopMeta(stop)
+            meta.append(f"{len(stop['species'])} species")
             if stop["checklistID"]:
                 meta.append(stop["checklistID"])
 
