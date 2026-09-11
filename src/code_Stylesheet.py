@@ -336,6 +336,13 @@ stylesheetBase = """
        rather than with per-widget setStyleSheet: per-widget sheets force a
        fresh style object + repolish per chip piece (~13ms per row). */
     QWidget#speciesChip { background-color: #4a86c8; border-radius: 8px; }
+    /* Confidence of the filename match that suggested this species, matching
+       the Manage Photos labels: green when the whole name was recognised,
+       amber when only part of it was or a typo had to be corrected.  The
+       thematic blue above means the species was chosen by hand.  Skipped wins
+       over both — it is about the whole row, not the match. */
+    QWidget#speciesChip[matchConfidence="high"] { background-color: #3c8c40; }
+    QWidget#speciesChip[matchConfidence="low"]  { background-color: #b37a00; }
     QWidget#speciesChip[skipped="true"] { background-color: #6b6e7e; }
     QWidget#speciesChip QLabel { color: white; background: transparent; border: none; }
     QPushButton#chipRemoveBtn {

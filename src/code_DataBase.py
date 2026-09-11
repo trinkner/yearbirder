@@ -181,6 +181,11 @@ def _checklist_distance(c, photo_minutes):
 # fragment can collide by accident and used to tie with one — "BHGR" (Black-headed
 # Grosbeak) and the "Comm" of "CommunityGarden" (Common Grackle) both scored 4,
 # and the tie went to whichever species came first in taxonomic order.
+#
+# The code must appear as a WHOLE token, not merely as a substring.  A 4-letter
+# code is short enough to turn up inside an ordinary bird name once the spaces
+# are gone: "AmericanGoldfinch" contains "CANG", so every American Goldfinch
+# photo was being matched to Canada Goose.
 _CODE_MATCH_BONUS = 100
 
 # Minimum length for a common/scientific name fragment to count as a match.
@@ -191,6 +196,155 @@ _CODE_MATCH_BONUS = 100
 # than this (Rook, Ruff, Sora) all carry codes identical to their names, so the
 # code tier above still matches them.
 _NAME_FRAGMENT_MIN_LEN = 5
+
+# Score offset for a whole-word name match, between the fragment tier (a
+# fragment can reach the length of the longest species name, ~25) and the code
+# tier at 100.  Word matching knows where the words are, so it outranks any
+# run of characters that merely happens to appear in the filename.
+_WORD_MATCH_BONUS = 50
+
+# A word must cover at least this share of a species name's discriminating
+# weight for the word tier to claim a match.  Below it we fall through to the
+# fragment tier rather than acting on one weak word — a lone "Sparrow" in a
+# filename should not pick a sparrow out of a checklist holding several.
+_WORD_MATCH_MIN_COVERAGE = 0.5
+
+# Only words this long are fuzzy-matched.  Short words are too easy to reach by
+# accident: at 4, one edit turns "Blue" into "Blues", "Bald" into "Bold", and
+# any location word into a bird.  At 5 the shortest real gain is "Baird"/"Barid".
+_FUZZY_MIN_LEN = 5
+
+# Credit for a fuzzy (one-edit) word match, against 1.0 for an exact one, so a
+# species matching exactly always outranks one matching only through a typo.
+_FUZZY_CREDIT = 0.75
+
+# How much a filename match is worth trusting, reported alongside the species so
+# callers can show the user which assignments deserve a second look.
+#   HIGH – a species code, or every word of the name present and spelled right
+#   LOW  – part of the name, or a word reached only through a typo correction
+#   NONE – nothing matched, or two species matched equally well
+SPECIES_MATCH_HIGH = "high"
+SPECIES_MATCH_LOW  = "low"
+SPECIES_MATCH_NONE = "none"
+
+
+def _osa_distance(a, b, max_distance=1):
+    """Optimal string alignment distance between a and b, bounded.
+
+    Like Levenshtein but counts an adjacent transposition as ONE edit, which
+    matters here because transposition is the commonest typing slip and plain
+    Levenshtein scores it as two ("Lincoln" -> "Linclon").  Returns
+    max_distance + 1 as soon as the true distance is known to exceed the
+    bound, so the usual case costs almost nothing.
+    """
+    len_a, len_b = len(a), len(b)
+    if abs(len_a - len_b) > max_distance:
+        return max_distance + 1
+
+    twoBack = None
+    previous = list(range(len_b + 1))
+    for i in range(1, len_a + 1):
+        current = [i] + [0] * len_b
+        for j in range(1, len_b + 1):
+            cost = 0 if a[i - 1] == b[j - 1] else 1
+            current[j] = min(previous[j] + 1,          # deletion
+                             current[j - 1] + 1,       # insertion
+                             previous[j - 1] + cost)   # substitution
+            if (i > 1 and j > 1
+                    and a[i - 1] == b[j - 2] and a[i - 2] == b[j - 1]):
+                current[j] = min(current[j], twoBack[j - 2] + 1)   # transposition
+        if min(current) > max_distance:
+            return max_distance + 1
+        twoBack, previous = previous, current
+    return previous[len_b]
+
+
+def _filename_fields(stem):
+    """Split a filename stem into fields, each a list of lowercase word tokens.
+
+    Removing the spaces from "Lincoln's Sparrow" to build a filename destroys
+    the word boundaries, but it leaves two things behind that put them back:
+    the separators between fields, and the capitalisation inside them.  So
+    "2026-09-11-095012_LinclonSparrow_BoulderCommunityGarden" becomes
+    [[], ['linclon', 'sparrow'], ['boulder', 'community', 'garden']].
+
+    Fields are kept apart on purpose.  A species name lives in one field, so
+    scoring each separately stops a bird being assembled out of words that
+    were never next to each other — the "CommunityGarden" -> Common Grackle
+    collision, in a form that no minimum length can reach.
+
+    A filename typed all in one case ("lincolnsparrow") yields a single token
+    per field and simply finds no word matches; the fragment tier still sees it.
+    """
+    fields = []
+    for field in re.split(r'[\s_]+', stem):
+        tokens = []
+        for chunk in re.split(r'[^A-Za-z]+', field):
+            if chunk:
+                # PascalCase/camelCase, keeping acronyms whole: "RTHawk" -> RT, Hawk
+                tokens.extend(re.findall(
+                    r'[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z]+|[A-Z]+', chunk))
+        fields.append([t.lower() for t in tokens])
+    return fields
+
+
+def _filename_code_tokens(stem):
+    """The set of tokens a species code could legitimately be, from one stem.
+
+    Like _filename_fields but digit-aware, because eBird codes can carry digits
+    ("gretit1", "houspa13"): digits stay attached to the letters before them
+    instead of splitting the token.  "DSC0123_AMGO" -> {'dsc0123', 'amgo'}.
+    """
+    tokens = set()
+    for chunk in re.split(r'[^A-Za-z0-9]+', stem):
+        if not chunk:
+            continue
+        for token in re.findall(
+                r'[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z]+\d*|[A-Z]+\d*|\d+', chunk):
+            tokens.add(token.lower())
+    return tokens
+
+
+def _species_name_words(name):
+    """Split a species name into words, each as the set of spellings a filename
+    might plausibly use.
+
+    The possessive is the reason this returns a set rather than a string.
+    "Lincoln's Sparrow" has to match both the spelling the app's own Rename
+    produces (it deletes the apostrophe, giving "LincolnsSparrow") and the one
+    people type by hand, which usually drops the possessive altogether
+    ("LincolnSparrow").  Returns [{'lincolns', 'lincoln'}, {'sparrow'}].
+    """
+    words = []
+    seen = set()
+    for raw in re.split(r"[\s\-/]+", name.lower()):
+        word = re.sub(r"[^a-z']", "", raw)
+        if not word:
+            continue
+        plain = word.replace("'", "")
+        if not plain or plain in seen:
+            continue
+        seen.add(plain)
+        forms = {plain}
+        if word.endswith("'s"):
+            forms.add(word[:-2])            # "lincoln's" -> "lincoln"
+        words.append((plain, forms))
+    return words
+
+
+def _word_credit(forms, tokens):
+    """How well one species-name word is matched by a field's tokens: 1.0 exact,
+    _FUZZY_CREDIT for a single edit, 0.0 for nothing."""
+    for form in forms:
+        if form in tokens:
+            return 1.0
+    for form in forms:
+        if len(form) < _FUZZY_MIN_LEN:
+            continue
+        for token in tokens:
+            if _osa_distance(form, token, 1) <= 1:
+                return _FUZZY_CREDIT
+    return 0.0
 
 
 def _longest_substr_in(needle, haystack, min_len=4):
@@ -818,23 +972,21 @@ class DataBase():
             filter.setTime(photoTime)
             possibleCommonNames = self.GetSpecies(filter)
 
-            fileNameLower = os.path.splitext(str(fileName))[0].lower()
-            # Alpha-only string for common/scientific name substring matching.
-            filename_alpha = re.sub(r'[^a-z]', '', fileNameLower)
-            # Alphanumeric string for eBird/BBL code matching (codes can contain digits).
-            filename_alnum = re.sub(r'[^a-z0-9]', '', fileNameLower)
-
-            photoCommonName = self._matchSpeciesFromFileName(
-                possibleCommonNames, filename_alpha, filename_alnum)
+            # Original case on purpose — the capitalisation is what remains of
+            # the spaces removed to build the filename.
+            photoCommonName, photoSpeciesConfidence = self._matchSpeciesFromFileName(
+                possibleCommonNames, os.path.splitext(str(fileName))[0])
 
         else:
             photoCommonName = ""
+            photoSpeciesConfidence = SPECIES_MATCH_NONE
         
         photoMatchData = {}
         photoMatchData["photoLocation"] = photoLocation
         photoMatchData["photoDate"] = photoDate
         photoMatchData["photoTime"] = photoTime
         photoMatchData["photoCommonName"] = photoCommonName
+        photoMatchData["photoSpeciesConfidence"] = photoSpeciesConfidence
         photoMatchData["dateMatchFound"] = dateMatchFound
         photoMatchData["timeMatchFound"] = timeMatchFound
 
@@ -1227,6 +1379,7 @@ class DataBase():
 
         # Species name matching from filename (same algorithm as matchPhoto)
         recordingCommonName = ""
+        recordingSpeciesConfidence = SPECIES_MATCH_NONE
         if recordingLocation and recordingDate and recordingTime:
             f3 = code_Filter.Filter()
             f3.setLocationType("Location")
@@ -1236,18 +1389,16 @@ class DataBase():
             f3.setTime(recordingTime)
             possibleNames = self.GetSpecies(f3)
 
-            fn_lower = os.path.splitext(os.path.basename(file))[0].lower()
-            fn_alpha = re.sub(r'[^a-z]', '', fn_lower)
-            fn_alnum = re.sub(r'[^a-z0-9]', '', fn_lower)
-
-            recordingCommonName = self._matchSpeciesFromFileName(
-                possibleNames, fn_alpha, fn_alnum)
+            # original case: see the note in matchPhoto
+            recordingCommonName, recordingSpeciesConfidence = self._matchSpeciesFromFileName(
+                possibleNames, os.path.splitext(os.path.basename(file))[0])
 
         return {
             "recordingLocation": recordingLocation,
             "recordingDate": recordingDate,
             "recordingTime": recordingTime,
             "recordingCommonName": recordingCommonName,
+            "recordingSpeciesConfidence": recordingSpeciesConfidence,
             "dateMatchFound": dateMatchFound,
             "timeMatchFound": timeMatchFound,
         }
@@ -4541,61 +4692,170 @@ class DataBase():
         matches = self.rigsForRecorder(recorder)
         return matches[0] if len(matches) == 1 else None
 
-    def _matchSpeciesFromFileName(self, possibleNames, filename_alpha, filename_alnum):
+    def _matchSpeciesFromFileName(self, possibleNames, fileNameStem):
         """Pick the species from possibleNames whose name best matches a media
         filename.  Shared by the photo (matchPhoto) and recording
         (matchRecording) assignment routines.
 
-        Each candidate is scored against four name forms, keeping the best:
-          • eBird species code  (e.g. "gretit1") — exact substring in alnum filename
-          • BBL banding code    (e.g. "grti")    — exact substring in alnum filename
-          • Common name (alpha) (e.g. "greattit") — longest substr in alpha filename
-          • Scientific name (alpha)               — longest substr in alpha filename
+        fileNameStem is the basename with its extension removed, in its
+        ORIGINAL case — the capitalisation is data here, not noise: it is what
+        survives of the spaces that were removed to build the filename.
 
-        Code hits score in their own tier (_CODE_MATCH_BONUS), so any code match
-        beats any name fragment; match length is the tiebreak within a tier, and
-        an exact tie keeps the first candidate (i.e. taxonomic order).  Name
-        fragments must reach _NAME_FRAGMENT_MIN_LEN, which is deliberately longer
-        than a banding code — a fragment is a guess, and short ones collide with
-        ordinary location words.
+        Candidates are scored in three tiers, highest first:
 
-        Returns "" when nothing matches, after trying _quickEntryCodeMatch() as
-        a last resort (see its docstring).
+          100+  eBird species code ("linspa") or BBL code ("LISP") appearing
+                anywhere in the filename.  A code is deliberate, so it outranks
+                everything below.
+           50+  Whole-word match of the common or scientific name against the
+                words recovered from one field of the filename (see
+                _filename_fields).  Words are weighted by how well they tell
+                this checklist's candidates apart (see _candidateWordWeights),
+                so "Lincoln" decides and "Sparrow" barely votes.
+            1+  Longest run of characters shared with the name, the original
+                behaviour, kept for filenames with no recoverable word
+                boundaries ("lincolnsparrow").
+
+        A tie at the top score returns "" rather than a guess.  The previous
+        behaviour — keep the first candidate, i.e. lowest taxonomic order —
+        silently resolved every shared-group-word tie in favour of whichever
+        bird happened to be listed first, which is how a Lincoln's Sparrow came
+        back as a House Sparrow.  Half of all checklists hold two species
+        sharing a final word, so a wrong answer here is not rare, and a wrong
+        answer that looks confident is worse than a blank.
+
+        Returns (commonName, confidence) — one of SPECIES_MATCH_HIGH / _LOW /
+        _NONE — with commonName "" when nothing matches, after trying
+        _quickEntryCodeMatch() as a last resort (see its docstring).
         """
-        commonName = ""
-        best_score = 0
+        fileNameLower = fileNameStem.lower()
+        filename_alpha = re.sub(r'[^a-z]', '', fileNameLower)
+        filename_alnum = re.sub(r'[^a-z0-9]', '', fileNameLower)
+        fields = _filename_fields(fileNameStem)
+        codeTokens = _filename_code_tokens(fileNameStem)
 
+        nameWords = {pcn: _species_name_words(pcn) for pcn in possibleNames}
+        weights = self._candidateWordWeights(nameWords.values())
+
+        # A code token that is also an ordinary word of some candidate's name is
+        # not evidence of a code.  Several band codes ARE English bird words —
+        # Wrentit is "WREN", teal sp. is "TEAL" — so "BewickWren" was reading as
+        # a Wrentit code and outranking a perfect word match on Bewick's Wren.
+        # Let the word tier settle those.
+        candidateWordForms = {form
+                              for words in nameWords.values()
+                              for _, forms in words
+                              for form in forms}
+        codeTokens -= candidateWordForms
+
+        scores = []
         for pcn in possibleNames:
             score = 0
 
             ebird = self.GeteBirdCode(pcn).lower()
-            if ebird and ebird in filename_alnum:
+            if ebird and ebird in codeTokens:
                 score = max(score, _CODE_MATCH_BONUS + len(ebird))
 
             bbl = self.GetBBLCode(pcn).lower()
-            if bbl and bbl in filename_alnum:
+            if bbl and bbl in codeTokens:
                 score = max(score, _CODE_MATCH_BONUS + len(bbl))
 
-            common_clean = re.sub(r'[^a-z]', '', pcn.lower())
-            if common_clean:
-                score = max(score, _longest_substr_in(common_clean, filename_alpha,
-                                                      _NAME_FRAGMENT_MIN_LEN))
+            if score == 0:
+                coverage = self._wordCoverage(nameWords[pcn], fields, weights)
+                sci = self.GetScientificName(pcn)
+                if sci:
+                    coverage = max(coverage, self._wordCoverage(
+                        _species_name_words(sci), fields, weights))
+                if coverage >= _WORD_MATCH_MIN_COVERAGE:
+                    score = _WORD_MATCH_BONUS + coverage
 
-            sci = self.GetScientificName(pcn)
-            if sci:
-                sci_clean = re.sub(r'[^a-z]', '', sci.lower())
-                if sci_clean:
-                    score = max(score, _longest_substr_in(sci_clean, filename_alpha,
+            if score == 0:
+                common_clean = re.sub(r'[^a-z]', '', pcn.lower())
+                if common_clean:
+                    score = max(score, _longest_substr_in(common_clean, filename_alpha,
                                                           _NAME_FRAGMENT_MIN_LEN))
 
-            if score > best_score:
-                best_score = score
-                commonName = pcn
+                sci = self.GetScientificName(pcn)
+                if sci:
+                    sci_clean = re.sub(r'[^a-z]', '', sci.lower())
+                    if sci_clean:
+                        score = max(score, _longest_substr_in(sci_clean, filename_alpha,
+                                                              _NAME_FRAGMENT_MIN_LEN))
 
-        if not commonName:
-            commonName = self._quickEntryCodeMatch(possibleNames, filename_alnum)
+            scores.append((score, pcn))
 
-        return commonName
+        best = max((s for s, _ in scores), default=0)
+        if best > 0:
+            winners = [pcn for s, pcn in scores if s == best]
+            if len(winners) == 1:
+                if best >= _CODE_MATCH_BONUS:
+                    return winners[0], SPECIES_MATCH_HIGH
+                if best >= _WORD_MATCH_BONUS:
+                    # Coverage reaches 1.0 only when every word of the name was
+                    # matched exactly — a fuzzy word scores _FUZZY_CREDIT and
+                    # drops it below, which is exactly the distinction we want
+                    # to report: a typo-corrected match is a guess.
+                    coverage = best - _WORD_MATCH_BONUS
+                    return winners[0], (SPECIES_MATCH_HIGH if coverage >= 0.999
+                                        else SPECIES_MATCH_LOW)
+                return winners[0], SPECIES_MATCH_LOW      # fragment tier
+            return "", SPECIES_MATCH_NONE   # ambiguous — let the user choose
+
+        # an intuitive-but-wrong code is a guess by definition
+        guess = self._quickEntryCodeMatch(possibleNames, filename_alnum)
+        return (guess, SPECIES_MATCH_LOW) if guess else ("", SPECIES_MATCH_NONE)
+
+
+    @staticmethod
+    def _candidateWordWeights(candidateWordLists):
+        """Weight each name word by how well it tells THIS checklist's
+        candidates apart: 1/(number of candidates using it).
+
+        On a checklist holding both House Sparrow and Lincoln's Sparrow,
+        "sparrow" identifies nothing and scores 0.5, while "lincoln" and
+        "house" each identify one bird and score 1.0.  The weights are
+        per-checklist, so the same word counts for a lot on a list where only
+        one bird carries it and for little on a list full of them.
+        """
+        counts = Counter()
+        for words in candidateWordLists:
+            for plain, _ in words:
+                counts[plain] += 1
+        return {word: 1.0 / count for word, count in counts.items()}
+
+
+    @staticmethod
+    def _wordCoverage(words, fields, weights):
+        """Share of a species name's weight matched within a single filename
+        field, taking the best field.
+
+        Coverage, not a raw total: a name whose every word is present beats one
+        that matched the same words but left others unaccounted for, so
+        "YellowWarbler" picks Yellow Warbler over Yellow-rumped Warbler.
+        Scoring within one field keeps a species from being assembled out of
+        words scattered across the filename.
+        """
+        if not words:
+            return 0.0
+        total = sum(weights.get(plain, 1.0) for plain, _ in words)
+        if total <= 0:
+            return 0.0
+
+        best = 0.0
+        for tokens in fields:
+            if not tokens:
+                continue
+            credits = [_word_credit(forms, tokens) for _, forms in words]
+            # The last word of a bird's name is its group noun — Sparrow, Jay,
+            # Teal.  Without it the "match" is a coincidence somewhere else in
+            # the filename: "MashpeePineBarrens" is a place, and matching only
+            # the "Pine" of Pine Warbler there is how a Blue Jay photo came
+            # back as a warbler.
+            if credits[-1] <= 0:
+                continue
+            matched = sum(weights.get(plain, 1.0) * credit
+                          for (plain, _), credit in zip(words, credits))
+            best = max(best, matched / total)
+        return best
 
 
     def _quickEntryCodeMatch(self, possibleNames, filename_alnum):

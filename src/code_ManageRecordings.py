@@ -5,6 +5,7 @@ import code_Stylesheet
 import code_ThumbnailCache
 import code_ChecklistTree
 import code_NotesDialog
+from code_DataBase import SPECIES_MATCH_NONE
 import os
 import queue
 import threading
@@ -156,6 +157,9 @@ class SpeciesTagStrip(QWidget):
         super().__init__(parent)
         self._species = []
         self._skipped = False
+        # species -> confidence of the filename match that suggested it; a
+        # species the user chose is absent and keeps the thematic blue
+        self._confidence = {}
         self._layout = QVBoxLayout(self)
         self._layout.setContentsMargins(0, 2, 0, 2)
         self._layout.setSpacing(3)
@@ -183,6 +187,15 @@ class SpeciesTagStrip(QWidget):
 
     def setSpeciesList(self, names):
         self._species = [n for n in names if n]
+        self._rebuild()
+
+    def setMatchConfidence(self, confidence):
+        """Mark which species were suggested by the filename, and how strongly.
+
+        Takes {speciesName: SPECIES_MATCH_*}.  Anything not listed was picked
+        by hand and is drawn in the ordinary chip colour.
+        """
+        self._confidence = dict(confidence or {})
         self._rebuild()
 
     def getSpecies(self):
@@ -219,6 +232,7 @@ class SpeciesTagStrip(QWidget):
         chip.setObjectName("speciesChip")
         chip.setAttribute(Qt.WA_StyledBackground, True)
         chip.setProperty("skipped", self._skipped)
+        chip.setProperty("matchConfidence", self._confidence.get(name, ""))
         chipLayout = QHBoxLayout(chip)
         chipLayout.setContentsMargins(8, 3, 5, 3)
         chipLayout.setSpacing(8)
@@ -889,6 +903,17 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         thisAudioMetaData["newDate"] = recordingDate
         thisAudioMetaData["newTime"] = recordingTime
         thisAudioMetaData["newCommonNames"] = list(initialSpecies)
+        # Only a species the FILENAME suggested carries a confidence.  A stored
+        # assignment (allSightings) was confirmed once already and a species the
+        # user picks is their own call, so both keep the plain chip colour.
+        if not allSightings and recordingCommonName:
+            thisAudioMetaData["speciesConfidence"] = {
+                recordingCommonName: audioMatchData.get(
+                    "recordingSpeciesConfidence", SPECIES_MATCH_NONE)}
+        else:
+            thisAudioMetaData["speciesConfidence"] = {}
+        thisAudioMetaData["autoSpeciesConfidence"] = dict(
+            thisAudioMetaData["speciesConfidence"])
         thisAudioMetaData["autoDate"] = recordingDate
         thisAudioMetaData["autoLocation"] = recordingLocation
         thisAudioMetaData["autoTime"] = recordingTime
@@ -1061,6 +1086,7 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         # it (~5ms more) — measured as the bulk of the per-row build cost.
         tagStrip = SpeciesTagStrip(detailsLayout.parentWidget())
         tagStrip.setObjectName("tagStrip" + str(row))
+        tagStrip.setMatchConfidence(self.metaDataByRow[row].get("speciesConfidence", {}))
         tagStrip.setSpeciesList(list(self.metaDataByRow[row]["commonNames"]))
         tagStrip.speciesChanged.connect(partial(self._onSpeciesChanged, row))
         lbls["tagStrip"] = tagStrip
@@ -1449,7 +1475,16 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
             chk.blockSignals(True)
             chk.setChecked(False)
             chk.blockSignals(False)
+        conf = dict(md.get("speciesConfidence", {}))
+        if sameChecklist:
+            # the user has settled this species, so it stops being flagged as a
+            # guess — otherwise a reviewed chip would nag with no way to clear it
+            conf.pop(result["species"], None)
+        else:
+            conf = {}          # different checklist: the filename guess is void
+        md["speciesConfidence"] = conf
         if ts is not None:
+            ts.setMatchConfidence(conf)
             if sameChecklist:
                 ts.addSpecies(result["species"])        # same checklist: add a species
             else:
@@ -1527,6 +1562,8 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
             chk.blockSignals(False)
         ts = lbls.get("tagStrip")
         if ts is not None:
+            md["speciesConfidence"] = dict(md.get("autoSpeciesConfidence", {}))
+            ts.setMatchConfidence(md["speciesConfidence"])
             ts.setSpeciesList(list(md.get("origCommonNames", [])))
         cbo = lbls.get("rating")
         if cbo is not None:
