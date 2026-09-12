@@ -228,6 +228,22 @@ SPECIES_MATCH_LOW  = "low"
 SPECIES_MATCH_NONE = "none"
 
 
+def _parse_name_search(text):
+    """Split a Name Search string into (mode, needle), both lowercased.
+
+    The widget searches common names by default; "s:" switches it to the
+    scientific name and "b:" to the BBL banding code, so "b:osfl" finds the
+    Olive-sided Flycatcher.  A prefix with nothing after it ("s:", "b:") yields
+    an empty needle, which the caller treats as matching nothing rather than
+    everything.
+    """
+    search = (text or "").strip().lower()
+    for prefix, mode in (("s:", "scientific"), ("b:", "banding")):
+        if search.startswith(prefix):
+            return mode, search[len(prefix):].strip()
+    return "common", search
+
+
 def _osa_distance(a, b, max_distance=1):
     """Optimal string alignment distance between a and b, bounded.
 
@@ -3013,7 +3029,7 @@ class DataBase():
             returnList = self.countyDict[locationName]
         elif locationType == "Location" and locationName in self.locationDict:
             returnList = self.locationDict[locationName]
-        elif commonNameSearch != "" and "s:" not in commonNameSearch:
+        elif commonNameSearch != "" and _parse_name_search(commonNameSearch)[0] == "common":
             # Name Search (substring on the common/subspecies name): instead of
             # scanning every sighting, scan the far smaller set of species names
             # in speciesDict and gather the sightings of matching species.  A
@@ -3021,9 +3037,9 @@ class DataBase():
             # dedupe by object identity.  Placed below the more-specific date /
             # location dimensions (so those still win when set) but above the
             # broad order / family fallbacks and the whole-database else.
-            # Scientific-name searches ("s:" prefix) fall through, since
-            # speciesDict is not keyed by sci-name; the per-sighting test still
-            # validates the full filter in every case.
+            # Scientific-name ("s:") and banding-code ("b:") searches fall
+            # through, since speciesDict is keyed by neither; the per-sighting
+            # test still validates the full filter in every case.
             needle = commonNameSearch.lower()
             seen = set()
             for speciesName_key, speciesSightings in self.speciesDict.items():
@@ -3360,6 +3376,9 @@ class DataBase():
             'family':             filter.getFamily(),
             'time':               filter.getTime(),
             'commonNameSearch':   filter.getCommonNameSearch(),
+            # parsed once here, not per sighting — TestSightingCompiled runs
+            # over the whole database
+            'nameSearch':         _parse_name_search(filter.getCommonNameSearch()),
             'sightingHasPhoto':   filter.getSightingHasPhoto(),
             'speciesHasPhoto':    filter.getSpeciesHasPhoto(),
             'validPhotoSpecies':  filter.getValidPhotoSpecies(),
@@ -3408,6 +3427,7 @@ class DataBase():
         family = cf['family']
         time = cf['time']
         commonNameSearch = cf['commonNameSearch']
+        nameSearchMode, nameSearchNeedle = cf['nameSearch']
 
         sightingHasPhoto = cf['sightingHasPhoto']
         speciesHasPhoto = cf['speciesHasPhoto']
@@ -3476,22 +3496,23 @@ class DataBase():
 
         # if a commonNameSearch string has been specified, check if sighting matches
         if commonNameSearch != "":
-            # check to see if s: prepends the search, in which case we need to search sci name
-            if "s:" in commonNameSearch:
-                commonNameSearch = commonNameSearch.strip()
-                if len(commonNameSearch) > 2:
-                    if commonNameSearch[0:2].lower() == "s:":
-                        sciNameSearch = commonNameSearch[2:]
-                        if sciNameSearch.lower() not in sighting["scientificName"].lower():
-                            return(False)
-                    else:
-                        return(False)
-                else:
+            # "s:" searches the scientific name, "b:" the BBL banding code,
+            # anything else the common/subspecies name (see _parse_name_search)
+            if nameSearchMode == "scientific":
+                if (not nameSearchNeedle
+                        or nameSearchNeedle not in sighting["scientificName"].lower()):
+                    return(False)
+
+            elif nameSearchMode == "banding":
+                # the code is filed by scientific name, and not every species
+                # has one — those simply never match a b: search
+                bblCode = self.bblCodeDict.get(sighting["scientificName"], "")
+                if not nameSearchNeedle or nameSearchNeedle not in bblCode.lower():
                     return(False)
 
             else:
-                if commonNameSearch.lower() not in sighting["commonName"].lower():
-                    if commonNameSearch.lower() not in sighting["subspeciesName"].lower():
+                if nameSearchNeedle not in sighting["commonName"].lower():
+                    if nameSearchNeedle not in sighting["subspeciesName"].lower():
                         return(False)
 
         # if a checklistID has been specified, check if sighting matches

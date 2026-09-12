@@ -427,7 +427,7 @@
     <tr><td>Order</td><td>Bird order (e.g., Passeriformes)</td></tr>
     <tr><td>Family</td><td>Bird family (e.g., Parulidae – Wood-Warblers)</td></tr>
     <tr><td>Species</td><td>A single species name</td></tr>
-    <tr><td>Name Search</td><td>Free-text search; matches any part of a species' common name</td></tr>
+    <tr><td>Name Search</td><td>Free-text search; matches any part of a species' common name. Prefix with <code>s:</code> to search scientific names (<code>s:Buteo</code>) or <code>b:</code> to search banding codes (<code>b:OSFL</code>)</td></tr>
   </tbody>
 </table>
 <p>The taxonomic filters also follow a hierarchy for the purposes of the window title: if a Species is selected, Family and Order are not shown in the title (they are implied). If only a Family is selected, Order is not shown. Only the most specific level selected is displayed.</p>
@@ -1555,6 +1555,7 @@
 
 <h3>Combining Name Search with other filters</h3>
 <p>The Name Search field accepts a partial name and filters the Species List in real time. This is the fastest way to find a species when you are not sure of its exact name — type "thrush" and all thrushes appear regardless of which family they belong to.</p>
+<p>Two prefixes switch which name is searched. <code>s:</code> searches scientific names, so <code>s:Buteo</code> finds every buteo hawk. <code>b:</code> searches the four-letter <strong>banding codes</strong>, so <code>b:OSFL</code> finds the Olive-sided Flycatcher — handy if you already think in banding codes. Both accept partial text: <code>b:OS</code> matches every code beginning or containing "OS". Species with no banding code on file are never returned by a <code>b:</code> search.</p>
 
 <h3>Using graphs to understand your birding patterns</h3>
 <ul>

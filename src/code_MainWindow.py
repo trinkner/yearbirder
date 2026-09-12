@@ -821,7 +821,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.cboSpecies.setToolTip("Filter by species.")
         self.txtCommonNameSearch.setToolTip(
             "Filter by a word or phrase in the common name or subspecies name.\n"
-            "Use s: prefix to search scientific names instead (e.g., s:Buteo).")
+            "Use s: prefix to search scientific names instead (e.g., s:Buteo).\n"
+            "Use b: prefix to search banding codes (e.g., b:OSFL).")
         self.cboDateOptions.setToolTip(
             "Choose how to filter by date: use the calendars below, select a\n"
             "preset (Today, This Year, etc.), or apply no date filter.")
@@ -5640,10 +5641,12 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             detailsText = detailsText + "; " + family
             
         if commonNameSearch != "":
-            if "s:" in commonNameSearch:
-                detailsText = detailsText + "; Scientific name includes '" +  commonNameSearch.split("s:",1)[1]  + "'"
-            else:
-                detailsText = detailsText + "; Common name includes '" +  commonNameSearch + "'"
+            searchMode, searchNeedle = code_DataBase._parse_name_search(commonNameSearch)
+            searchLabel = {"scientific": "Scientific name",
+                           "banding":    "Banding code",
+                           "common":     "Common name"}[searchMode]
+            detailsText = (detailsText + "; " + searchLabel + " includes '"
+                           + searchNeedle + "'")
 
         if sightingPhotographed == "Has photo":
             detailsText = detailsText + "; " + "Sightings with photos"

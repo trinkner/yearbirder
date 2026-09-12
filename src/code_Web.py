@@ -16,6 +16,7 @@ from code_Stylesheet import CHART_PRIMARY, PHOTO_PRIMARY, RECORDINGS_PRIMARY
 # import the GUI forms that we create with Qt Creator
 import form_Web
 import code_Basemap
+import code_DataBase
 
 # import the Qt components we'll use
 # do this so later we won't have to clutter our code with references to parent Qt classes 
@@ -4956,10 +4957,11 @@ body {{ background:#16171d; color:#e2e4ec;
         elif order:
             parts.append(order)
         if search:
-            if "s:" in search and search.strip().lower().startswith("s:"):
-                parts.append(f"Scientific name includes '{search.strip()[2:]}'")
-            else:
-                parts.append(f"Name includes '{search}'")
+            searchMode, searchNeedle = code_DataBase._parse_name_search(search)
+            label = {"scientific": "Scientific name",
+                     "banding":    "Banding code",
+                     "common":     "Name"}[searchMode]
+            parts.append(f"{label} includes '{searchNeedle}'")
 
         # --- Date range ---
         sd, ed = filter.getStartDate(), filter.getEndDate()
