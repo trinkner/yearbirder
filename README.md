@@ -11,7 +11,7 @@
 
 # Yearbirder
 
-**Current release: v2.15** (September 2026)
+**Current release: v2.16** (September 2026)
 
 A desktop application for exploring and analysing your personal [eBird](https://ebird.org) data, bird photos, and sound recordings.
 
@@ -198,7 +198,7 @@ Later 2.0x releases refined this work; see the [full version history](https://ye
 
 ## Download
 
-**macOS** — download the signed and notarized `Yearbirder_v2.15.dmg` from the [Releases page](https://github.com/trinkner/yearbirder/releases/latest), open it, and drag Yearbirder to your Applications folder.
+**macOS** — download the signed and notarized `Yearbirder_v2.16.dmg` from the [Releases page](https://github.com/trinkner/yearbirder/releases/latest), open it, and drag Yearbirder to your Applications folder.
 
 **Windows** — download the installer from [yearbirder.org/download](https://yearbirder.org/download) and run it.
 
