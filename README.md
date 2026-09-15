@@ -21,6 +21,16 @@ Full version history and downloads: [yearbirder.org](https://yearbirder.org)
 
 ---
 
+## What's New in v2.16
+
+- **Big Report is now the Trip Report** — same report, a name that says what it is for: **Reports → Trip Report** or the **Trip Report** toolbar button.
+- **A day-by-day Itinerary** — a new **Itinerary** tab retells a trip in the order you birded it: checklists grouped by date, each stop with its time, location, protocol, duration, distance, and comments beside the species recorded there. The **Map** tab numbers each location by the order you first birded it, to match.
+- **A redesigned Trip Report PDF** — a title block, summary strip, banded sections, striped tables, the Itinerary as its own section, and a footer with the date and page number on every page. The map no longer prints with blank patches, and the Species table prints the count, first date, and last date under the right headings.
+- **Much better species guesses from file names** — file names are read word by word, weighting the words that tell a checklist's birds apart, so `LincolnSparrow` is no longer read as a House Sparrow. Typos such as `Linclon` are forgiven, a tie leaves the species for you to choose, and American Goldfinch photos are no longer read as Canada Goose (whose code CANG hides inside "AmeriCANGoldfinch").
+- **See how sure a guess is** — Add and Manage Photos and Recordings colour a suggested species **green** for an exact code or name match and **amber** for a partial or typo-corrected one.
+- **Search by banding code** — `b:OSFL` in **Name Search** finds the Olive-sided Flycatcher, alongside `s:` for scientific names.
+- **Interface refinements** — slimmer drop-down arrows throughout, Sighting Filter date fields that match the menus beside them, and photo and recording browsers that open sized to fit a small set of results.
+
 ## What's New in v2.15
 
 - **Record which microphone you used** — no recorder writes the microphone into an audio file, so the one piece of gear you most want to filter by was the one piece Yearbirder could never know. Define your **rigs** in **Preferences → Recording Gear** — each a recording device paired with a microphone — then assign one to your recordings in **Add Recordings** or **Manage Recordings**. A batch bar sets a whole window of recordings at once, and the Media Filter gains a **Microphone** setting.
@@ -73,7 +83,7 @@ Later 2.0x releases refined this work; see the [full version history](https://ye
 
 - **Community → Species List** — The former "Regional Taxonomy" report has been renamed **Species List** and is now at **Community → Species List**.
 - **Species List in Community Sightings Explorer** — The Explorer now includes a **Species List** button. Opens the eBird species checklist for the selected region with seen/photo badges reflecting only your own sightings in that country or state; no badges are shown for regions where you have no sightings.
-- **Satellite and Reset controls on Location and Big Report maps** — The map tab in the Location window and the Big Report window now has the same **Satellite/Map** toggle and **Reset** button found on all other Yearbirder maps.
+- **Satellite and Reset controls on Location and Trip Report maps** — The map tab in the Location window and the Trip Report window now has the same **Satellite/Map** toggle and **Reset** button found on all other Yearbirder maps.
 - **User Guide keyboard shortcut** — Press **Cmd-?** (Mac) or **F1** (Windows/Linux) to open the User Guide.
 - **eBird button on checklists** — The Checklists List now has a green **eBird** button on every row that opens that checklist on the eBird website. A matching button appears in the sidebar when viewing a single checklist's species list. Requires an eBird API key.
 - **Statistics — file date information** — The Statistics report now shows the download date of your eBird data file and the time of your most recent sighting at the bottom of the sightings column. When a media catalog is open, the date the catalog was last updated appears at the bottom of the photos column.
@@ -142,7 +152,7 @@ Later 2.0x releases refined this work; see the [full version history](https://ye
 - **Date Totals** — species counts by year, month, and individual date
 - **Location Totals** — species counts by region, country, state, county, and named location
 - **Powerful filter panel** — filter everything simultaneously by region, country, state, county, location, taxonomic order, family, species, date range, and seasonal range; the Date Options picker includes a **Select Year** mode that reveals a second dropdown listing every year in your data, so you can filter to any specific calendar year in one step
-- **Big Report** — comprehensive multi-tab report combining species, dates, locations, and checklists
+- **Trip Report** — comprehensive multi-tab report combining species, dates, locations, and checklists
 - **Compare Lists** — compare any two species lists side by side
 - **Species List** — interactive regional species checklist from the eBird API showing seen/unseen status and, when a media catalog is open, photographed status; filter by seen, unseen, photographed, or not-yet-photographed. When a specific location is selected, queries that location directly; private locations are labelled "(Personal Location)"
 - **Hotspot Map** — map of public eBird hotspots in the selected region, with bubbles sized by checklist count; accessible from the Community menu or the Community Sightings Explorer
