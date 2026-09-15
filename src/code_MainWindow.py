@@ -7228,16 +7228,15 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             widget.setStyleSheet(f"QComboBox {{ color: {color}; }}")
 
         if widget.objectName()[0:3] == "cal":
-            red = str(code_Stylesheet.mdiAreaColor.red())
-            green = str(code_Stylesheet.mdiAreaColor.green())
-            blue = str(code_Stylesheet.mdiAreaColor.blue())
-            bg = "rgb(" + red + "," + green + "," + blue + ")"
             # The displayed date text lives in QDateTimeEdit's internal QLineEdit
             # (objectName "qt_spinbox_lineedit").  The global "QWidget { color }"
             # rule matches that line edit directly and out-specifies an inherited
             # "QDateTimeEdit { color }", so we must colour the line edit itself.
+            # Colour only, like the combos: the date edits share the combo fill
+            # from the stylesheet, and a highlight background made a set date
+            # read darker than a set combo beside it.
             widget.setStyleSheet(
-                "QDateTimeEdit { background-color: " + bg + "; color: " + color + "; }"
+                "QDateTimeEdit { color: " + color + "; }"
                 "QDateTimeEdit QLineEdit { color: " + color + "; background: transparent; }"
             )
 

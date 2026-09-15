@@ -644,6 +644,40 @@ stylesheetBase += f"""
     QComboBox::down-arrow:disabled {{
         image: url({_chevron_disabled_path});
     }}
+
+    /* Calendar-popup date edits (Sighting Filter) had no rules at all, so they
+       fell back to Fusion's darker field and boxed arrow button beside the
+       combos above them.  Dressed to match QComboBox: same fill, border,
+       radius, padding and chevron.  The inner qt_spinbox_lineedit would
+       otherwise pick up the global QLineEdit field styling.  No min-height:
+       unlike QComboBox's, it inflates the spin box past the combo's height. */
+    QDateTimeEdit {{
+        background: #2b2d38;
+        border: 1px solid #3a3d4e;
+        border-radius: 5px;
+        padding: 3px 8px;
+    }}
+    QDateTimeEdit:hover {{ border-color: #4a4e63; }}
+    QDateTimeEdit QLineEdit {{
+        background: transparent;
+        border: none;
+        padding: 0px;
+    }}
+    QDateTimeEdit::drop-down {{
+        subcontrol-origin: padding;
+        subcontrol-position: center right;
+        width: 18px;
+        border: none;
+        background: transparent;
+    }}
+    QDateTimeEdit::down-arrow {{
+        image: url({_chevron_path});
+        width: 10px;
+        height: 10px;
+    }}
+    QDateTimeEdit::down-arrow:disabled {{
+        image: url({_chevron_disabled_path});
+    }}
 """
 
 
