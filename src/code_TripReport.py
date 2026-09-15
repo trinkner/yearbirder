@@ -1,5 +1,5 @@
 # import project files
-import form_BigReport
+import form_TripReport
 from code_Stylesheet import YBFont
 import code_Filter
 import code_Basemap
@@ -193,16 +193,16 @@ def _fmtItineraryProtocol(protocol):
     return protocol
 
 
-class BigReportMapBridge(QObject):
-    """Qt/JavaScript bridge for the Big Report map tab.
+class TripReportMapBridge(QObject):
+    """Qt/JavaScript bridge for the Trip Report map tab.
 
     Registered on the page's QWebChannel as 'bridge'.  Clicking a location
     dot calls locationClicked(name) which opens the Location child window.
     """
 
-    def __init__(self, big_report):
+    def __init__(self, trip_report):
         super().__init__()
-        self._br = big_report
+        self._br = trip_report
 
     @Slot(str)
     def locationClicked(self, locationName):
@@ -216,17 +216,17 @@ class BigReportMapBridge(QObject):
         sub.scaleMe()
 
 
-class BigReportItineraryBridge(QObject):
-    """Qt/JavaScript bridge for the Big Report Itinerary tab.
+class TripReportItineraryBridge(QObject):
+    """Qt/JavaScript bridge for the Trip Report Itinerary tab.
 
     Registered on the page's QWebChannel as 'bridge'.  Clicking a stop's
     location name opens the Location child window; clicking a species opens
     the Individual child window.
     """
 
-    def __init__(self, big_report):
+    def __init__(self, trip_report):
         super().__init__()
-        self._br = big_report
+        self._br = trip_report
 
     @Slot(str)
     def locationClicked(self, locationName):
@@ -254,7 +254,7 @@ class BigReportItineraryBridge(QObject):
         sub.resizeMe()
 
 
-class BigReport(QMdiSubWindow, form_BigReport.Ui_frmBigReport):
+class TripReport(QMdiSubWindow, form_TripReport.Ui_frmTripReport):
 
     # create "resized" as a signal that the window can emit
     # we respond to this signal with the form's resizeMe method below
@@ -527,7 +527,7 @@ class BigReport(QMdiSubWindow, form_BigReport.Ui_frmBigReport):
         # set main location label, using "All Locations" if none others are selected
         self.mdiParent.SetChildDetailsLabels(self, filter)
 
-        self.setWindowTitle(self.filter.buildWindowTitle("Big Report", self.mdiParent.db, count=count, countUnit="Species"))
+        self.setWindowTitle(self.filter.buildWindowTitle("Trip Report", self.mdiParent.db, count=count, countUnit="Species"))
 
         if self.lblDetails.text() != "":
             self.lblDetails.setVisible(True)
@@ -911,7 +911,7 @@ class BigReport(QMdiSubWindow, form_BigReport.Ui_frmBigReport):
             marker.add_to(location_map)
 
         # Wire up QWebChannel bridge for click-to-spawn-Location
-        self._mapBridge = BigReportMapBridge(self)
+        self._mapBridge = TripReportMapBridge(self)
         channel = QWebChannel(self.webMap.page())
         channel.registerObject("bridge", self._mapBridge)
         self.webMap.page().setWebChannel(channel)
@@ -984,7 +984,7 @@ document.addEventListener("DOMContentLoaded", function() {{
         """Group the filtered sightings into checklists, in chronological order.
 
         Every stop carries only the species the report's filter let through, so
-        a species-filtered Big Report yields an itinerary of just those birds.
+        a species-filtered Trip Report yields an itinerary of just those birds.
         """
         stops = {}
         seen = set()
@@ -1180,7 +1180,7 @@ document.addEventListener('click', function(e) {
 
         # Wire up the QWebChannel bridge for click-through to Location,
         # Individual, and the checklist on eBird
-        self._itineraryBridge = BigReportItineraryBridge(self)
+        self._itineraryBridge = TripReportItineraryBridge(self)
         channel = QWebChannel(self.webItinerary.page())
         channel.registerObject("bridge", self._itineraryBridge)
         self.webItinerary.page().setWebChannel(channel)
@@ -1324,7 +1324,7 @@ document.addEventListener('click', function(e) {
         defines it gets page furniture, one that doesn't prints as before.
         """
         return (f"Yearbirder {self.mdiParent.versionNumber}"
-                f"  ·  Big Report generated "
+                f"  ·  Trip Report generated "
                 f"{_fmtReportDate(datetime.now())}")
 
 

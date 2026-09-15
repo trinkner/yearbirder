@@ -3,7 +3,7 @@
 # import the GUI forms that we create with Qt Creator
 import code_DataBase
 from code_Stylesheet import YBFont
-import code_BigReport
+import code_TripReport
 import code_Stats
 import code_MediaRefresh
 from shiboken6 import isValid
@@ -532,7 +532,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.actionDateTotals:     ":/icon_datetotals.png",
             self.actionLocationTotals: ":/icon_locationtotals.png",
             self.actionCompareLists:   ":/icon_compare.png",
-            self.actionBigReport:      ":/icon_tripreport.png",
+            self.actionTripReport:      ":/icon_tripreport.png",
             self.actionStats:          ":/icon_datetotals.png",
             self.actionPhotos:         ":/icon_camera.png",
             self.actionFind:           ":/icon_find.png",
@@ -553,7 +553,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.actionDateTotals:     QIcon(QPixmap(":/icon_datetotals_white.png")),
             self.actionLocationTotals: QIcon(QPixmap(":/icon_locationtotals_white.png")),
             self.actionCompareLists:   QIcon(QPixmap(":/icon_compare_white.png")),
-            self.actionBigReport:      QIcon(QPixmap(":/icon_tripreport_white.png")),
+            self.actionTripReport:      QIcon(QPixmap(":/icon_tripreport_white.png")),
             self.actionStats:          QIcon(QPixmap(":/icon_datetotals_white.png")),
             self.actionPhotos:         QIcon(QPixmap(":/icon_camera_white.png")),
             self.actionRecordingsToolbar: QIcon(QPixmap(":/icon_microphone_white.png")),
@@ -643,7 +643,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionPhotosGrid.triggered.connect(self.createPhotosGridReport)
         self.actionSpeciesGallery.triggered.connect(self.createSpeciesGallery)
         self.actionPhotosSpeciesGallery.triggered.connect(self.createPhotosBySpeciesBarChart)
-        self.actionBigReport.triggered.connect(self.CreateBigReport)
+        self.actionTripReport.triggered.connect(self.CreateTripReport)
         self.actionStats.triggered.connect(self.CreateStats)
         self.actionLocation.triggered.connect(self.CreateLocationReport)
         self.actionRegionalTaxonomy.triggered.connect(self.CreateRegionalTaxonomy)
@@ -3388,7 +3388,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             sub.show()
 
 
-    def CreateBigReport(self):
+    def CreateTripReport(self):
         # the Create Analysis Report button was clicked
         # spawn a new ChildAnalysis window and fill it
 
@@ -3418,8 +3418,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             QMessageBox.information(
                 self,
                 "No Filter Set",
-                "Please set a filter before generating a Big Report.\n\n"
-                "A Big Report with no filter will query your entire dataset and may take a very long time.",
+                "Please set a filter before generating a Trip Report.\n\n"
+                "A Trip Report with no filter will query your entire dataset and may take a very long time.",
                 QMessageBox.StandardButton.Ok
             )
             return
@@ -3443,7 +3443,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
         
         # create new Analysis child window
-        sub = code_BigReport.BigReport()
+        sub = code_TripReport.TripReport()
         
         # set the mdiParent variable in the child so it can know the 
         # object that called it (for later use in the child)
@@ -3593,7 +3593,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             "frmStats",
             "frmIndividual",
             "frmLocation",
-            "frmBigReport",
+            "frmTripReport",
             "frmSpeciesGallery",
             ]):
 
@@ -5841,7 +5841,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             "frmWeb",
             "frmIndividual",
             "frmLocation",
-            "frmBigReport",
+            "frmTripReport",
             "frmPhotos",
             "frmSpeciesGallery",
             ]):
