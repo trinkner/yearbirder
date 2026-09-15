@@ -55,6 +55,9 @@ class RecordingsGrid(code_Recordings.Recordings):
         round(CELL_W * code_ThumbnailCache.THUMB_DISPLAY_SIZE.height()
               / code_ThumbnailCache.THUMB_DISPLAY_SIZE.width()),
     )
+    # A few recordings sit on the opening row (DEFAULT_COLS wide), so the
+    # window can fit its height to that one row instead of opening tall.
+    FIT_TO_CONTENT_MAX = 3
 
     def __init__(self):
         super().__init__()
@@ -337,9 +340,12 @@ class RecordingsGrid(code_Recordings.Recordings):
 
     def scaleMe(self):
         """Open exactly DEFAULT_COLS columns wide.  Cells are a fixed pixel size,
-        so the width must not be multiplied by the UI scale factor."""
+        so the width must not be multiplied by the UI scale factor.
+        FIT_TO_CONTENT_MAX recordings or fewer open only as tall as their row."""
         super().scaleMe()
-        if len(self.audioList) == 1:
-            return
-        self.resize(self._widthForCols(DEFAULT_COLS),
-                    int(800 * self.mdiParent.scaleFactor))
+        width = self._widthForCols(DEFAULT_COLS)
+        if 0 < len(self.audioList) <= self.FIT_TO_CONTENT_MAX:
+            height = self._fittedHeight(width)
+        else:
+            height = int(800 * self.mdiParent.scaleFactor)
+        self.resize(width, height)

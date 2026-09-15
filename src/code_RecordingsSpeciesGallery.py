@@ -489,11 +489,13 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
         sub.mdiParent = self.mdiParent
         self.mdiParent.mdiArea.addSubWindow(sub)
         self.mdiParent.PositionChildWindow(sub, self)
-        sub.show()
         # Fallback: the filter passed sightings but no individual recording did.
+        # Fill hidden, then show: see MainWindow._createRecordingsWindow.
         if sub.FillRecordings(recordingFilter) is False:
             sub.close()
             self._noRecordingsMessage()
+            return
+        sub.show()
 
     def _noRecordingsMessage(self):
         QMessageBox.information(self.mdiParent, "No Recordings",

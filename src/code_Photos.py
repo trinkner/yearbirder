@@ -106,6 +106,10 @@ class Photos(QMdiSubWindow, form_Photos.Ui_frmPhotos):
     # re-arranging half of SortAndDisplayPhotos.
     THUMB_KIND = "photo"                                  # cache artifact to load
     CELL_SIZE  = code_ThumbnailCache.THUMB_DISPLAY_SIZE   # on-screen thumbnail box
+    # Results at or below this count open fitted to their content instead of
+    # the default tall window.  One card view card fills the width; Browse
+    # Grid raises it to what fits on its opening row.
+    FIT_TO_CONTENT_MAX = 1
 
     def __init__(self):
         super().__init__()
@@ -247,12 +251,28 @@ class Photos(QMdiSubWindow, form_Photos.Ui_frmPhotos):
             c.setFont(QFont(YBFont, fontSize))
 
         windowWidth =  int(800  * scaleFactor)
-        if len(self.photoList) == 1:
-            windowHeight = int(400 * scaleFactor)
+        if 0 < len(self.photoList) <= self.FIT_TO_CONTENT_MAX:
+            windowHeight = self._fittedHeight(windowWidth)
         else:
             windowHeight = int(800 * scaleFactor)
 
         self.resize(windowWidth, windowHeight)
+
+
+    def _fittedHeight(self, windowWidth):
+        """Window height showing the header banner and the cards with no dead
+        space below — measured, so it serves both the card and grid views.
+
+        Inverts resizeMe's chain: 27px title offset + header + scroll area +
+        8px bottom margin, the scroll area being exactly the content's height.
+        Call only after the cards are built.
+        """
+        headerHeight = max(self.headerFrame.sizeHint().height(), 60) + 16
+        contentWidth = windowWidth - 15
+        contentHeight = self.layLists.heightForWidth(contentWidth)
+        if contentHeight < 0:
+            contentHeight = self.layLists.sizeHint().height()
+        return 27 + headerHeight + contentHeight + 8
 
 
     def html(self):
@@ -399,8 +419,8 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
             self.mdiParent.progressOverlay.hide()
             self.close()
 
-        # resize to a smaller window if we only have one photo to show
-        if len(self.photoList) == 1:
+        # fit the window to its content if only a few photos are showing
+        if 0 < len(self.photoList) <= self.FIT_TO_CONTENT_MAX:
             self.scaleMe()
 
         # tell MainWindow that we succeeded filling the list

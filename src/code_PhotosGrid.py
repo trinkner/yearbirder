@@ -42,6 +42,9 @@ class PhotosGrid(code_Photos.Photos):
     # catalogs derive it from the big thumbnail on first view.
     THUMB_KIND = "photo_grid"
     CELL_SIZE  = code_ThumbnailCache.GRID_THUMB_SIZE
+    # A few photos sit on the opening row (DEFAULT_COLS wide), so the window
+    # can fit its height to that one row instead of opening tall.
+    FIT_TO_CONTENT_MAX = 3
 
     def __init__(self):
         super().__init__()
@@ -285,10 +288,13 @@ class PhotosGrid(code_Photos.Photos):
     def scaleMe(self):
         """Open exactly DEFAULT_COLS columns wide — cells are a fixed pixel
         size, so the width must not be multiplied by the UI scale factor or the
-        last column would no longer fit.  A single-photo window keeps the base
-        class's compact size."""
+        last column would no longer fit.  FIT_TO_CONTENT_MAX photos or fewer
+        open only as tall as their row; the height is measured at the final
+        width, so the rows it measures are the rows that will show."""
         super().scaleMe()
-        if len(self.photoList) == 1:
-            return
-        self.resize(self._widthForCols(DEFAULT_COLS),
-                    int(800 * self.mdiParent.scaleFactor))
+        width = self._widthForCols(DEFAULT_COLS)
+        if 0 < len(self.photoList) <= self.FIT_TO_CONTENT_MAX:
+            height = self._fittedHeight(width)
+        else:
+            height = int(800 * self.mdiParent.scaleFactor)
+        self.resize(width, height)

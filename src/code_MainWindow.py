@@ -3,7 +3,7 @@
 # import the GUI forms that we create with Qt Creator
 import code_DataBase
 from code_Stylesheet import YBFont
-import code_BigReport
+import code_TripReport
 import code_Stats
 import code_MediaRefresh
 from shiboken6 import isValid
@@ -77,7 +77,9 @@ from PySide6.QtCore import (
     Qt,
     QDate,
     QMarginsF,
+    QRectF,
     QSize,
+    QSizeF,
     QTimer,
     QEvent,
     QThread,
@@ -488,8 +490,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
     # About) and string-compared in _onUpdateCheckDone.  Letters are fine.
     # Avoid SPACES though — build_release.sh interpolates this into DMG
     # filenames and the disk-image volume name (Yearbirder_v${VERSION}.dmg).
-    versionNumber = "2.15"
-    versionDate = "September 5, 2026"
+    versionNumber = "2.16"
+    versionDate = "September 15, 2026"
     taxonomyYear = ""
 
     def __init__(self):
@@ -530,7 +532,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.actionDateTotals:     ":/icon_datetotals.png",
             self.actionLocationTotals: ":/icon_locationtotals.png",
             self.actionCompareLists:   ":/icon_compare.png",
-            self.actionBigReport:      ":/icon_tripreport.png",
+            self.actionTripReport:      ":/icon_tripreport.png",
             self.actionStats:          ":/icon_datetotals.png",
             self.actionPhotos:         ":/icon_camera.png",
             self.actionFind:           ":/icon_find.png",
@@ -551,7 +553,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.actionDateTotals:     QIcon(QPixmap(":/icon_datetotals_white.png")),
             self.actionLocationTotals: QIcon(QPixmap(":/icon_locationtotals_white.png")),
             self.actionCompareLists:   QIcon(QPixmap(":/icon_compare_white.png")),
-            self.actionBigReport:      QIcon(QPixmap(":/icon_tripreport_white.png")),
+            self.actionTripReport:      QIcon(QPixmap(":/icon_tripreport_white.png")),
             self.actionStats:          QIcon(QPixmap(":/icon_datetotals_white.png")),
             self.actionPhotos:         QIcon(QPixmap(":/icon_camera_white.png")),
             self.actionRecordingsToolbar: QIcon(QPixmap(":/icon_microphone_white.png")),
@@ -641,7 +643,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionPhotosGrid.triggered.connect(self.createPhotosGridReport)
         self.actionSpeciesGallery.triggered.connect(self.createSpeciesGallery)
         self.actionPhotosSpeciesGallery.triggered.connect(self.createPhotosBySpeciesBarChart)
-        self.actionBigReport.triggered.connect(self.CreateBigReport)
+        self.actionTripReport.triggered.connect(self.CreateTripReport)
         self.actionStats.triggered.connect(self.CreateStats)
         self.actionLocation.triggered.connect(self.CreateLocationReport)
         self.actionRegionalTaxonomy.triggered.connect(self.CreateRegionalTaxonomy)
@@ -819,7 +821,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.cboSpecies.setToolTip("Filter by species.")
         self.txtCommonNameSearch.setToolTip(
             "Filter by a word or phrase in the common name or subspecies name.\n"
-            "Use s: prefix to search scientific names instead (e.g., s:Buteo).")
+            "Use s: prefix to search scientific names instead (e.g., s:Buteo).\n"
+            "Use b: prefix to search banding codes (e.g., b:OSFL).")
         self.cboDateOptions.setToolTip(
             "Choose how to filter by date: use the calendars below, select a\n"
             "preset (Today, This Year, etc.), or apply no date filter.")
@@ -2669,8 +2672,11 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
         self.mdiArea.addSubWindow(sub)
         self.PositionChildWindow(sub, self)
-        sub.show()
 
+        # Fill while still hidden, then show: a browser with only a few
+        # recordings resizes itself to fit once its cards exist, and on a
+        # window that is already showing that reads as a flash (Photos builds
+        # hidden for the same reason).
         if sub.FillRecordings(filter) is False:
             sub.close()
             QMessageBox.information(
@@ -2679,6 +2685,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 "No recordings match the current filter.",
                 QMessageBox.StandardButton.Ok,
             )
+            return
+        sub.show()
 
     def createRenameMedia(self):
 
@@ -3380,7 +3388,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             sub.show()
 
 
-    def CreateBigReport(self):
+    def CreateTripReport(self):
         # the Create Analysis Report button was clicked
         # spawn a new ChildAnalysis window and fill it
 
@@ -3410,8 +3418,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             QMessageBox.information(
                 self,
                 "No Filter Set",
-                "Please set a filter before generating a Big Report.\n\n"
-                "A Big Report with no filter will query your entire dataset and may take a very long time.",
+                "Please set a filter before generating a Trip Report.\n\n"
+                "A Trip Report with no filter will query your entire dataset and may take a very long time.",
                 QMessageBox.StandardButton.Ok
             )
             return
@@ -3435,7 +3443,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
         
         # create new Analysis child window
-        sub = code_BigReport.BigReport()
+        sub = code_TripReport.TripReport()
         
         # set the mdiParent variable in the child so it can know the 
         # object that called it (for later use in the child)
@@ -3585,7 +3593,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             "frmStats",
             "frmIndividual",
             "frmLocation",
-            "frmBigReport",
+            "frmTripReport",
             "frmSpeciesGallery",
             ]):
 
@@ -3632,7 +3640,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 document.setHtml(html)
 
                 # create the PDF file by printing to the "printer" (which is set to PDF)
-                document.print_(printer)  
+                footer = (activeWindow.pdfFooter()
+                          if hasattr(activeWindow, "pdfFooter") else "")
+                self.PrintDocument(document, printer, footer)
 
                 if sys.platform == "win32":
                     os.startfile(filename[0])
@@ -3647,6 +3657,67 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 "Saving as PDF is not available for this window.",
                 QMessageBox.StandardButton.Ok,
             )
+
+
+    def PrintDocument(self, document, printer, footerText=""):
+        """Send a QTextDocument to a printer, optionally footing every page.
+
+        Without footer text this is just QTextDocument.print_().  With it the
+        document has to be painted page by page instead: print_() offers no
+        hook for page furniture, so the body is laid out in a page box short
+        enough to leave a footer band, and the painter is translated up by one
+        body height before each successive page is drawn.
+
+        A window opts in by defining pdfFooter(); one that doesn't prints
+        exactly as it always has.
+        """
+        if not footerText:
+            document.print_(printer)
+            return
+
+        # Work in device pixels: the painter maps 1:1 onto the printable area
+        # inside the margins, and point-sized fonts resolve against the
+        # printer's own DPI.
+        resolution = printer.resolution()
+        pageRect   = printer.pageLayout().paintRectPixels(resolution)
+        footerBand = int(resolution * 0.4)          # ~0.4in reserved at the foot
+        bodyHeight = pageRect.height() - footerBand
+        document.setPageSize(QSizeF(pageRect.width(), bodyHeight))
+
+        footerFont = QFont(QFontInfo(document.defaultFont()).family())
+        footerFont.setPointSizeF(7.5)
+
+        painter = QPainter()
+        if not painter.begin(printer):
+            return
+        pageCount = document.pageCount()
+        for page in range(pageCount):
+            if page > 0:
+                printer.newPage()
+
+            painter.save()
+            painter.translate(0, -page * bodyHeight)
+            document.drawContents(
+                painter,
+                QRectF(0, page * bodyHeight, pageRect.width(), bodyHeight))
+            painter.restore()
+
+            painter.save()
+            painter.setFont(footerFont)
+            painter.setPen(QColor("#9aa0ad"))
+            painter.drawLine(0, bodyHeight + footerBand // 3,
+                             pageRect.width(), bodyHeight + footerBand // 3)
+            painter.setPen(QColor("#5a6070"))
+            footerRect = QRectF(0, bodyHeight + footerBand // 3,
+                                pageRect.width(), footerBand - footerBand // 3)
+            painter.drawText(footerRect,
+                             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                             footerText)
+            painter.drawText(footerRect,
+                             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+                             f"Page {page + 1} of {pageCount}")
+            painter.restore()
+        painter.end()
 
 
     def CreateSpeciesList(self): 
@@ -5575,10 +5646,12 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             detailsText = detailsText + "; " + family
             
         if commonNameSearch != "":
-            if "s:" in commonNameSearch:
-                detailsText = detailsText + "; Scientific name includes '" +  commonNameSearch.split("s:",1)[1]  + "'"
-            else:
-                detailsText = detailsText + "; Common name includes '" +  commonNameSearch + "'"
+            searchMode, searchNeedle = code_DataBase._parse_name_search(commonNameSearch)
+            searchLabel = {"scientific": "Scientific name",
+                           "banding":    "Banding code",
+                           "common":     "Common name"}[searchMode]
+            detailsText = (detailsText + "; " + searchLabel + " includes '"
+                           + searchNeedle + "'")
 
         if sightingPhotographed == "Has photo":
             detailsText = detailsText + "; " + "Sightings with photos"
@@ -5768,7 +5841,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             "frmWeb",
             "frmIndividual",
             "frmLocation",
-            "frmBigReport",
+            "frmTripReport",
             "frmPhotos",
             "frmSpeciesGallery",
             ]):
@@ -5806,7 +5879,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             if dialog.exec():
 
                 # send the html to the physical printer
-                document.print_(printer)
+                footer = (activeWindow.pdfFooter()
+                          if hasattr(activeWindow, "pdfFooter") else "")
+                self.PrintDocument(document, printer, footer)
 
         else:
             QMessageBox.information(
@@ -7158,16 +7233,15 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             widget.setStyleSheet(f"QComboBox {{ color: {color}; }}")
 
         if widget.objectName()[0:3] == "cal":
-            red = str(code_Stylesheet.mdiAreaColor.red())
-            green = str(code_Stylesheet.mdiAreaColor.green())
-            blue = str(code_Stylesheet.mdiAreaColor.blue())
-            bg = "rgb(" + red + "," + green + "," + blue + ")"
             # The displayed date text lives in QDateTimeEdit's internal QLineEdit
             # (objectName "qt_spinbox_lineedit").  The global "QWidget { color }"
             # rule matches that line edit directly and out-specifies an inherited
             # "QDateTimeEdit { color }", so we must colour the line edit itself.
+            # Colour only, like the combos: the date edits share the combo fill
+            # from the stylesheet, and a highlight background made a set date
+            # read darker than a set combo beside it.
             widget.setStyleSheet(
-                "QDateTimeEdit { background-color: " + bg + "; color: " + color + "; }"
+                "QDateTimeEdit { color: " + color + "; }"
                 "QDateTimeEdit QLineEdit { color: " + color + "; background: transparent; }"
             )
 

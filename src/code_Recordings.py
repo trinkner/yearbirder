@@ -92,6 +92,10 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
     # the three layout hooks below plus the re-arranging half of
     # SortAndDisplayRecordings.
     SPECTRO_SIZE = code_ThumbnailCache.THUMB_DISPLAY_SIZE   # spectrogram display box
+    # Results at or below this count open fitted to their content instead of
+    # the default tall window.  One card view card fills the width; Browse
+    # Grid raises it to what fits on its opening row.
+    FIT_TO_CONTENT_MAX = 1
 
     def __init__(self):
         super().__init__()
@@ -285,11 +289,29 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
         for c in self.layLists.findChildren(QLabel):
             c.setFont(QFont(YBFont, fontSize))
         windowWidth = int(800 * scaleFactor)
-        if len(self.audioList) == 1:
-            windowHeight = int(400 * scaleFactor)
+        if 0 < len(self.audioList) <= self.FIT_TO_CONTENT_MAX:
+            windowHeight = self._fittedHeight(windowWidth)
         else:
             windowHeight = int(800 * scaleFactor)
         self.resize(windowWidth, windowHeight)
+
+    def _fittedHeight(self, windowWidth):
+        """Window height showing the header banner and the cards with no dead
+        space below — measured, so it serves both the card and grid views.
+
+        Inverts resizeMe's chain: 27px title offset + header + scroll area +
+        8px bottom margin, the scroll area being exactly the content's height.
+        Call only after _buildRows.  Callers now fill while hidden, but should
+        one fill a visible window, a cell added to it is left out of the
+        layout's size hint until the event loop runs — _buildRows processes
+        events, so the measurement holds either way.
+        """
+        headerHeight = max(self.headerFrame.sizeHint().height(), 60) + 16
+        contentWidth = windowWidth - 15
+        contentHeight = self.layLists.heightForWidth(contentWidth)
+        if contentHeight < 0:
+            contentHeight = self.layLists.sizeHint().height()
+        return 27 + headerHeight + contentHeight + 8
 
     # ------------------------------------------------------------------
     # Playback
@@ -501,6 +523,11 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
             self.mdiParent.progressOverlay.hide()
             self.close()
 
+        # Fit the window to its content if only a few recordings are showing, as
+        # Photos does.
+        if 0 < len(self.audioList) <= self.FIT_TO_CONTENT_MAX:
+            self.scaleMe()
+
         return True
 
     def FillSingleRecording(self, audioData, sightingData):
@@ -532,6 +559,8 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
         icon = QIcon()
         icon.addPixmap(QPixmap(":/icon_microphone_white.png"), QIcon.Normal, QIcon.Off)
         self.setWindowIcon(icon)
+
+        self.scaleMe()   # fit the window to its single card
 
         return True
 

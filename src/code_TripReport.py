@@ -1,5 +1,5 @@
 # import project files
-import form_BigReport
+import form_TripReport
 from code_Stylesheet import YBFont
 import code_Filter
 import code_Basemap
@@ -13,10 +13,13 @@ from code_Web import satellite_toggle_js
 # import basic Python libraries
 from copy import deepcopy
 from collections import defaultdict
+from datetime import datetime
+from html import escape
 from math import floor
 import base64
 
 from PySide6.QtGui import (
+    QColor,
     QCursor,
     QFont,
     QFontMetrics,
@@ -55,16 +58,151 @@ from PySide6.QtWebEngineCore import (
 )
 
 
-class BigReportMapBridge(QObject):
-    """Qt/JavaScript bridge for the Big Report map tab.
+# ---- PDF palette ---------------------------------------------------------
+# The printed report is rendered by QTextDocument, which understands only Qt's
+# rich-text subset of CSS — no flexbox, no columns, no borders on ordinary
+# blocks.  Everything structural below is therefore built from tables and cell
+# background colours, which that subset does support reliably.  The palette is
+# print-friendly: charcoal bands, light zebra rows, the app blue as the single
+# accent.
+_PDF_INK     = "#1f2430"   # body text
+_PDF_MUTED   = "#5a6070"   # subtitles, notes, secondary numbers
+_PDF_BAND    = "#2f3542"   # section header band
+_PDF_BAND_FG = "#ffffff"   # section header text
+_PDF_BAND_NOTE = "#c9ccd6"  # section header's right-hand count
+_PDF_SUBBAND = "#e8eaee"   # per-date / per-location header, table headers
+_PDF_ZEBRA   = "#f5f6f8"   # alternating row fill
+_PDF_WHITE   = "#ffffff"
+
+
+def _taxOrder(value):
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return 0.0
+
+
+def _fmtItineraryDate(dateString):
+    """'2025-05-09' -> 'Friday, May 9, 2025' (no %-d: Windows has no such flag)."""
+    try:
+        d = datetime.strptime(dateString, "%Y-%m-%d")
+    except (ValueError, TypeError):
+        return dateString
+    return f"{d.strftime('%A, %B')} {d.day}, {d.year}"
+
+
+def _fmtReportDate(d):
+    """'September 8, 2026' — spelled out, and no %-d (Windows has no such flag)."""
+    return f"{d.strftime('%B')} {d.day}, {d.year}"
+
+
+def _fmtItineraryTime(timeString):
+    """'17:24' -> '5:24 PM'.  Times are stored 24-hour by the CSV importer."""
+    if not timeString:
+        return ""
+    try:
+        hour = int(timeString[0:2])
+        minute = timeString[3:5]
+    except (ValueError, IndexError):
+        return timeString
+    suffix = "AM" if hour < 12 else "PM"
+    displayHour = hour % 12
+    if displayHour == 0:
+        displayHour = 12
+    return f"{displayHour}:{minute} {suffix}"
+
+
+def _fmtItineraryDuration(minutes):
+    if not minutes:
+        return ""
+    try:
+        total = int(round(float(minutes)))
+    except (ValueError, TypeError):
+        return ""
+    if total <= 0:
+        return ""
+    hours, mins = divmod(total, 60)
+    if hours == 0:
+        return f"{mins} min"
+    return f"{hours}h {mins}m" if mins else f"{hours}h"
+
+
+def _fmtItineraryDistance(km):
+    # eBird records distance in kilometers; the app reports both units
+    if not km:
+        return ""
+    try:
+        value = float(km)
+    except (ValueError, TypeError):
+        return ""
+    if value <= 0:
+        return ""
+    return f"{value:.2f} km ({value * 0.621371:.2f} mi)"
+
+
+def _itineraryDaySummary(dayStops):
+    """"3 checklists · 2 locations · 47 species" for one day's stops."""
+    locations = len(set(c["location"] for c in dayStops))
+    species = set()
+    for c in dayStops:
+        for entry in c["species"]:
+            if entry["isSpecies"]:
+                species.add(entry["commonName"])
+    return " · ".join([
+        f"{len(dayStops)} checklist{'' if len(dayStops) == 1 else 's'}",
+        f"{locations} location{'' if locations == 1 else 's'}",
+        f"{len(species)} species",
+        ])
+
+
+def _itineraryStopMeta(stop):
+    """One stop's effort — protocol, duration, distance — as plain text.
+
+    Deliberately just the intrinsic fields: each renderer appends what suits
+    it (the printed report adds a species count and the checklist number; the
+    tab shows the species themselves, so it needs neither).
+    """
+    return [stop[key] for key in ("protocol", "duration", "distance") if stop[key]]
+
+
+def _itinerarySpeciesCount(entry):
+    """The count to show beside a species — a number, eBird's "X", or nothing."""
+    if entry["count"] > 0:
+        return str(entry["count"])
+    return "X" if entry["uncounted"] else ""
+
+
+def _fmtItineraryProtocol(protocol):
+    """Name the checklist type the way Statistics and the eBird app do.
+
+    The CSV spells these "eBird - Traveling Count", "eBird - Casual
+    Observation", and so on; the same substring tests Statistics uses (see
+    code_Stats._computeStats) map them onto the four familiar names.  Anything
+    else — Area, Banding, a pelagic count — keeps its own name rather than
+    being flattened to Statistics' catch-all "Other", which would tell the
+    reader nothing about the stop.
+    """
+    protocol = (protocol or "").strip()
+    for name in ("Traveling", "Stationary", "Historical"):
+        if name in protocol:
+            return name
+    if "Casual" in protocol:
+        return "Incidental"
+    if protocol.startswith("eBird - "):
+        protocol = protocol[len("eBird - "):]
+    return protocol
+
+
+class TripReportMapBridge(QObject):
+    """Qt/JavaScript bridge for the Trip Report map tab.
 
     Registered on the page's QWebChannel as 'bridge'.  Clicking a location
     dot calls locationClicked(name) which opens the Location child window.
     """
 
-    def __init__(self, big_report):
+    def __init__(self, trip_report):
         super().__init__()
-        self._br = big_report
+        self._br = trip_report
 
     @Slot(str)
     def locationClicked(self, locationName):
@@ -78,7 +216,45 @@ class BigReportMapBridge(QObject):
         sub.scaleMe()
 
 
-class BigReport(QMdiSubWindow, form_BigReport.Ui_frmBigReport):
+class TripReportItineraryBridge(QObject):
+    """Qt/JavaScript bridge for the Trip Report Itinerary tab.
+
+    Registered on the page's QWebChannel as 'bridge'.  Clicking a stop's
+    location name opens the Location child window; clicking a species opens
+    the Individual child window.
+    """
+
+    def __init__(self, trip_report):
+        super().__init__()
+        self._br = trip_report
+
+    @Slot(str)
+    def locationClicked(self, locationName):
+        sub = code_Location.Location()
+        sub.mdiParent = self._br.mdiParent
+        sub.FillLocation(locationName)
+        self._br.mdiParent.mdiArea.addSubWindow(sub)
+        self._br.mdiParent.PositionChildWindow(sub, self._br)
+        sub.show()
+        QApplication.processEvents()
+        sub.scaleMe()
+
+    @Slot(str)
+    def speciesClicked(self, speciesName):
+        # spuh/slash taxa are not filed in speciesDict, so there is no
+        # Individual window to build for them
+        if speciesName not in self._br.mdiParent.db.speciesDict:
+            return
+        sub = code_Individual.Individual()
+        sub.mdiParent = self._br.mdiParent
+        sub.FillIndividual(speciesName)
+        self._br.mdiParent.mdiArea.addSubWindow(sub)
+        self._br.mdiParent.PositionChildWindow(sub, self._br)
+        sub.show()
+        sub.resizeMe()
+
+
+class TripReport(QMdiSubWindow, form_TripReport.Ui_frmTripReport):
 
     # create "resized" as a signal that the window can emit
     # we respond to this signal with the form's resizeMe method below
@@ -153,7 +329,18 @@ class BigReport(QMdiSubWindow, form_BigReport.Ui_frmBigReport):
         self.webMap = QWebEngineView(self.tabMap)
         self.webMap.setUrl(QUrl("about:blank"))
         self.webMap.setObjectName("webMap")
-        
+
+        # The Itinerary view lives in the tab's layout so it tracks the window
+        # size; its HTML is built lazily, once the tab is first shown, so the
+        # renderer has a real viewport to lay the report out in.
+        self.webItinerary = QWebEngineView(self.tabItinerary)
+        self.webItinerary.setObjectName("webItinerary")
+        # Chromium paints an unloaded page white, which flashes when the tab is
+        # first revealed — match the report's own background (as Stats and the
+        # Web reports do) so the reveal is seamless.
+        self.webItinerary.page().setBackgroundColor(QColor("#1e1f26"))
+        self.verticalLayout_Itinerary.addWidget(self.webItinerary)
+
         self.tabAnalysis.setCurrentIndex(0)
         self.speciesList = []
         self.filter = code_Filter.Filter()
@@ -162,6 +349,7 @@ class BigReport(QMdiSubWindow, form_BigReport.Ui_frmBigReport):
         self.newDatesLoaded = False
         self.newRegionsLoaded = False
         self.newLocationsLoaded = False
+        self.itineraryLoaded = False
         self.tabAnalysis.currentChanged.connect(self.onTabChanged)
         
         
@@ -245,6 +433,10 @@ class BigReport(QMdiSubWindow, form_BigReport.Ui_frmBigReport):
         # create subset of master sightings list for this filter
         self.filteredSightingList = deepcopy(self.mdiParent.db.GetSightings(filter))
         filteredSightingList = self.filteredSightingList
+
+        # a media refresh replays this method, so the itinerary built from the
+        # previous sighting list is now stale
+        self.itineraryLoaded = False
         
         # ****Setup Species page****
         # get species and first/last date data from db 
@@ -335,7 +527,7 @@ class BigReport(QMdiSubWindow, form_BigReport.Ui_frmBigReport):
         # set main location label, using "All Locations" if none others are selected
         self.mdiParent.SetChildDetailsLabels(self, filter)
 
-        self.setWindowTitle(self.filter.buildWindowTitle("Big Report", self.mdiParent.db, count=count, countUnit="Species"))
+        self.setWindowTitle(self.filter.buildWindowTitle("Trip Report", self.mdiParent.db, count=count, countUnit="Species"))
 
         if self.lblDetails.text() != "":
             self.lblDetails.setVisible(True)
@@ -344,6 +536,12 @@ class BigReport(QMdiSubWindow, form_BigReport.Ui_frmBigReport):
 
         self.resizeMe()
         self.scaleMe()
+
+        # onTabChanged only fires on a change, so rebuild the itinerary here if
+        # its tab is already the one on screen
+        if self.tabAnalysis.currentIndex() == self.tabAnalysis.indexOf(self.tabItinerary):
+            self.FillItinerary()
+            self.itineraryLoaded = True
 
         return(True)
 
@@ -364,6 +562,11 @@ class BigReport(QMdiSubWindow, form_BigReport.Ui_frmBigReport):
             QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
             self._fillNewLocations()
             self.newLocationsLoaded = True
+            QApplication.restoreOverrideCursor()
+        elif index == tabIndex(self.tabItinerary) and not self.itineraryLoaded:
+            QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+            self.FillItinerary()
+            self.itineraryLoaded = True
             QApplication.restoreOverrideCursor()
 
 
@@ -619,6 +822,23 @@ class BigReport(QMdiSubWindow, form_BigReport.Ui_frmBigReport):
         self.lblSpeciesSeen.setText(labelText) 
     
 
+    def _locationSequence(self):
+        """Number each location by when the filtered set first reaches it.
+
+        The map draws one dot per location, so a location revisited later in
+        the trip keeps the number of its first visit — the dots then read as
+        the route travelled, in step with the Itinerary tab's ordering.
+        """
+        firstVisit = {}
+        for s in self.filteredSightingList:
+            location = s.get("location", "")
+            when = (s.get("date", ""), s.get("time", "") or "")
+            if location not in firstVisit or when < firstVisit[location]:
+                firstVisit[location] = when
+        ordered = sorted(firstVisit.items(), key=lambda kv: (kv[1], kv[0]))
+        return {location: n for n, (location, _) in enumerate(ordered, start=1)}
+
+
     def FillMap(self):
         import folium, tempfile, re
         mapWidth = int(self.width() - 20)
@@ -657,22 +877,41 @@ class BigReport(QMdiSubWindow, form_BigReport.Ui_frmBigReport):
 
         location_map = folium.Map(location=center, zoom_start=zoom,
                                   tiles=code_Basemap.streetTiles())
+
+        # Numbered dots, in visit order.  A DivIcon replaces the plain
+        # CircleMarker because only real markup can carry a label; every dot
+        # gets the same diameter, sized to the widest number so the map keeps
+        # one consistent dot size.
+        sequence = self._locationSequence()
+        digits = len(str(max(sequence.values()))) if sequence else 1
+        diameter = {1: 20, 2: 22, 3: 26}.get(digits, 30)
+        fontSize = {1: 11, 2: 11, 3: 10}.get(digits, 9)
+
         for name, coords in coordinatesDict.items():
             lat, lon = float(coords[0]), float(coords[1])
-            marker = folium.CircleMarker(
+            number = sequence.get(name, 0)
+            icon = folium.DivIcon(
+                icon_size=(diameter, diameter),
+                icon_anchor=(diameter // 2, diameter // 2),
+                html=(
+                    f'<div style="width:{diameter}px;height:{diameter}px;'
+                    'border-radius:50%;background:#4f8ef7;opacity:0.9;'
+                    'border:1px solid #1e1f26;box-sizing:border-box;'
+                    'display:flex;align-items:center;justify-content:center;'
+                    f'color:#ffffff;font-family:sans-serif;font-size:{fontSize}px;'
+                    f'font-weight:700;line-height:1;">{number}</div>'
+                ),
+            )
+            marker = folium.Marker(
                 location=[lat, lon],
-                radius=6,
-                color="#4f8ef7",
-                fill=True,
-                fill_color="#4f8ef7",
-                fill_opacity=0.85,
-                tooltip=name,
+                icon=icon,
+                tooltip=f"{number}. {name}",
             )
             marker.options["locationName"] = name
             marker.add_to(location_map)
 
         # Wire up QWebChannel bridge for click-to-spawn-Location
-        self._mapBridge = BigReportMapBridge(self)
+        self._mapBridge = TripReportMapBridge(self)
         channel = QWebChannel(self.webMap.page())
         channel.registerObject("bridge", self._mapBridge)
         self.webMap.page().setWebChannel(channel)
@@ -720,6 +959,241 @@ document.addEventListener("DOMContentLoaded", function() {{
         
 
     
+    def _regionText(self, sighting):
+        # county arrives as "Boulder (US-CO)"; the state code is spelled out
+        # separately, so strip the parenthetical before joining the parts
+        db = self.mdiParent.db
+        parts = []
+        county = (sighting.get("county") or "").split(" (")[0]
+        if county:
+            parts.append(county)
+        state = sighting.get("state", "")
+        if state:
+            stateName = db.GetStateName(state)
+            if stateName and stateName not in parts:
+                parts.append(stateName)
+        country = sighting.get("country", "")
+        if country:
+            countryName = db.GetCountryName(country)
+            if countryName and countryName not in parts:
+                parts.append(countryName)
+        return ", ".join(parts)
+
+
+    def _buildItineraryStops(self):
+        """Group the filtered sightings into checklists, in chronological order.
+
+        Every stop carries only the species the report's filter let through, so
+        a species-filtered Trip Report yields an itinerary of just those birds.
+        """
+        stops = {}
+        seen = set()
+
+        for s in self.filteredSightingList:
+            # speciesDict files each sighting under both its common and its
+            # subspecies name, so a species-filtered list holds the same object
+            # twice whenever those names coincide — dedupe on identity
+            if id(s) in seen:
+                continue
+            seen.add(id(s))
+
+            checklistID = s.get("checklistID", "")
+            stop = stops.get(checklistID)
+            if stop is None:
+                stop = stops[checklistID] = {
+                    "checklistID": checklistID,
+                    "date":        s.get("date", ""),
+                    "time":        s.get("time", ""),
+                    "location":    s.get("location", ""),
+                    "region":      self._regionText(s),
+                    "protocol":    _fmtItineraryProtocol(s.get("protocol", "")),
+                    "duration":    _fmtItineraryDuration(s.get("duration", "")),
+                    "distance":    _fmtItineraryDistance(s.get("distance", "")),
+                    "comments":    (s.get("checklistComments") or "").strip(),
+                    "species":     {},
+                }
+
+            # show the full name the checklist used (subspecies included), but
+            # keep the top-level common name for the click-through to Individual
+            commonName = s.get("commonName", "")
+            name = s.get("subspeciesName") or commonName
+            entry = stop["species"].get(name)
+            if entry is None:
+                entry = stop["species"][name] = {
+                    "name":       name,
+                    "commonName": commonName,
+                    "tax":        _taxOrder(s.get("taxonomicOrder", 0)),
+                    "count":      0,
+                    "uncounted":  False,
+                    "isSpecies":  (" x " not in commonName and
+                                   "sp."  not in commonName and
+                                   "/"    not in commonName),
+                }
+            count = (s.get("count") or "").strip()
+            if count.isdigit():
+                entry["count"] += int(count)
+            else:
+                # eBird's "X" — present, but not counted
+                entry["uncounted"] = True
+
+        ordered = sorted(stops.values(),
+                         key=lambda c: (c["date"], c["time"] or "", c["checklistID"]))
+        for stop in ordered:
+            stop["species"] = sorted(stop["species"].values(), key=lambda e: e["tax"])
+
+        return ordered
+
+
+    def _itineraryHtml(self, stops):
+        primary = code_Stylesheet.CHART_PRIMARY
+
+        # Blue means "clickable" here — the location, the species, and the eBird
+        # link.  Everything else on a card is plain text.
+        css = """
+  body { margin:0; padding:0; background:#1e1f26; color:#e2e4ec;
+         font-family:sans-serif; font-size:13px; }
+  #report { padding:0 16px 24px; }
+  .day-head { position:sticky; top:0; background:#1e1f26; padding:12px 0 6px;
+              border-bottom:1px solid #2a2b35; margin-bottom:10px; z-index:2; }
+  .day-date { font-size:14px; font-weight:600; }
+  .day-sub { font-size:11px; color:#8b8fa8; margin-left:10px; }
+  .stop { background:CARD_BG; border-radius:5px; padding:10px 14px;
+          margin-bottom:10px; }
+  /* inline-block so the click target is the name, not the whole card width */
+  .stop-loc { display:inline-block; color:COLOR_PRIMARY; font-weight:600;
+              font-size:14px; cursor:pointer; }
+  .stop-loc:hover { text-decoration:underline; }
+  /* details left, species right; the species column wraps under on a
+     narrow window rather than crushing the prose measure */
+  .stop-body { display:flex; flex-wrap:wrap; align-items:flex-start;
+               gap:14px 32px; margin-top:7px; }
+  .stop-details { flex:0 1 620px; max-width:620px; }
+  .detail { font-size:12px; margin-bottom:3px; }
+  .comments { margin-top:7px; font-size:12px; line-height:1.45;
+              white-space:pre-wrap; }
+  /* narrow enough that a right-aligned count stays near its name — a wider
+     column strands short names an inch from their number */
+  .species { flex:0 0 250px; }
+  .sp { display:flex; justify-content:space-between; gap:14px;
+        padding:1px 0; font-size:12px; color:COLOR_PRIMARY; cursor:pointer; }
+  .sp:hover .nm { text-decoration:underline; }
+  .sp.taxon { color:#8b8fa8; cursor:default; }
+  .sp.taxon:hover .nm { text-decoration:none; }
+  .sp .ct { color:#e2e4ec; font-variant-numeric:tabular-nums; }
+  .none { color:#8b8fa8; padding:20px 0; }
+""".replace("COLOR_PRIMARY", primary).replace("CARD_BG", code_Stylesheet.mediaCardColor)
+
+        # No banner here — the window's own banner already carries the report's
+        # location, date range, and totals.
+        parts = ["<div id='report'>"]
+
+        if not stops:
+            parts.append("<div class='none'>No checklists match this filter.</div>")
+
+        stopsByDate = defaultdict(list)
+        for stop in stops:
+            stopsByDate[stop["date"]].append(stop)
+
+        # ---- one section per date, one card per checklist ----
+        currentDate = None
+        for stop in stops:
+            if stop["date"] != currentDate:
+                if currentDate is not None:
+                    parts.append("</div>")
+                currentDate = stop["date"]
+                daySub = _itineraryDaySummary(stopsByDate[currentDate])
+                parts.append(
+                    "<div class='day'><div class='day-head'>"
+                    f"<span class='day-date'>{escape(_fmtItineraryDate(currentDate))}</span>"
+                    f"<span class='day-sub'>{escape(daySub)}</span>"
+                    "</div>"
+                    )
+
+            # the location name leads the card on its own line
+            parts.append(
+                "<div class='stop'>"
+                f"<div class='stop-loc' data-loc=\"{escape(stop['location'])}\">"
+                f"{escape(stop['location'])}</div>"
+                "<div class='stop-body'><div class='stop-details'>"
+                )
+
+            where = [t for t in (_fmtItineraryTime(stop["time"]), stop["region"]) if t]
+            where.append(f"{len(stop['species'])} species")
+            parts.append(f"<div class='detail'>{escape('  ·  '.join(where))}</div>")
+
+            effort = _itineraryStopMeta(stop)
+            if effort:
+                parts.append(f"<div class='detail'>{escape('  ·  '.join(effort))}</div>")
+
+            if stop["comments"]:
+                parts.append(f"<div class='comments'>{escape(stop['comments'])}</div>")
+
+            parts.append("</div><div class='species'>")
+            for entry in stop["species"]:
+                countText = _itinerarySpeciesCount(entry)
+                countHtml = f"<span class='ct'>{countText}</span>" if countText else ""
+                if entry["isSpecies"]:
+                    parts.append(
+                        f"<div class='sp' data-sp=\"{escape(entry['commonName'])}\">"
+                        f"<span class='nm'>{escape(entry['name'])}</span>{countHtml}</div>"
+                        )
+                else:
+                    parts.append(
+                        "<div class='sp taxon'>"
+                        f"<span class='nm'>{escape(entry['name'])}</span>{countHtml}</div>"
+                        )
+            parts.append("</div></div></div>")
+
+        if currentDate is not None:
+            parts.append("</div>")
+        parts.append("</div>")
+
+        qwc_file = QFile(":/qtwebchannel/qwebchannel.js")
+        qwc_file.open(QIODevice.OpenModeFlag.ReadOnly)
+        qwc_js = bytes(qwc_file.readAll()).decode("utf-8")
+        qwc_file.close()
+
+        script = """
+%s
+new QWebChannel(qt.webChannelTransport, function(channel) {
+    window.bridge = channel.objects.bridge;
+});
+document.addEventListener('click', function(e) {
+    if (!window.bridge || !e.target.closest) { return; }
+    var el = e.target.closest('[data-loc]');
+    if (el) { window.bridge.locationClicked(el.getAttribute('data-loc')); return; }
+    el = e.target.closest('[data-sp]');
+    if (el) { window.bridge.speciesClicked(el.getAttribute('data-sp')); }
+});
+""" % qwc_js
+
+        return ("<!DOCTYPE html>\n<html><head><meta charset='utf-8'>\n<style>" +
+                css + "</style></head><body>\n" + "\n".join(parts) +
+                "\n<script>" + script + "</script>\n</body></html>")
+
+
+    def FillItinerary(self):
+        import tempfile
+
+        stops = self._buildItineraryStops()
+        html = self._itineraryHtml(stops)
+
+        # Wire up the QWebChannel bridge for click-through to Location,
+        # Individual, and the checklist on eBird
+        self._itineraryBridge = TripReportItineraryBridge(self)
+        channel = QWebChannel(self.webItinerary.page())
+        channel.registerObject("bridge", self._itineraryBridge)
+        self.webItinerary.page().setWebChannel(channel)
+
+        # a long itinerary easily exceeds setHtml's 2MB limit, so load from disk
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False,
+                                         encoding='utf-8') as f:
+            f.write(html)
+            tmp_path = f.name
+
+        self.webItinerary.setUrl(QUrl.fromLocalFile(tmp_path))
+
+
     def FillSpeciesForLocation(self):
         # create temporary filter for query with nothing but needed location
         location = self.lstLocations.currentItem().text()
@@ -843,6 +1317,260 @@ document.addEventListener("DOMContentLoaded", function() {{
         QApplication.restoreOverrideCursor()
         
 
+    def pdfFooter(self):
+        """Left-hand footer text stamped on every printed page.
+
+        MainWindow's print/PDF routines look for this method; a window that
+        defines it gets page furniture, one that doesn't prints as before.
+        """
+        return (f"Yearbirder {self.mdiParent.versionNumber}"
+                f"  ·  Trip Report generated "
+                f"{_fmtReportDate(datetime.now())}")
+
+
+    def _pdfBand(self, title, note="", pageBreak=False):
+        """A full-width section header: dark band, title left, count right."""
+        html = ""
+        if pageBreak:
+            # Qt honours page-break-before on a block; putting it on an empty
+            # paragraph ahead of the band is the reliable placement.
+            html += "<p style='page-break-before:always'></p>"
+        return html + (
+            f"<table width='100%' cellspacing='0' cellpadding='5' bgcolor='{_PDF_BAND}'>"
+            f"<tr><td><span class='band'>{escape(title)}</span></td>"
+            f"<td align='right'><span class='bandnote'>{escape(note)}</span></td>"
+            "</tr></table><p></p>"
+            )
+
+
+    def _pdfSubBand(self, title, note=""):
+        """A lighter band, for one date or one location inside a section."""
+        return (
+            f"<table width='100%' cellspacing='0' cellpadding='3' bgcolor='{_PDF_SUBBAND}'>"
+            f"<tr><td><span class='sub'>{escape(title)}</span></td>"
+            f"<td align='right'><span class='note'>{escape(note)}</span></td>"
+            "</tr></table>"
+            )
+
+
+    def _pdfGrid(self, entries, columns=3):
+        """Lay a list of names out in a striped, multi-column table."""
+        if not entries:
+            return "<p class='none'>None</p>"
+        width = int(100 / columns)
+        rows = []
+        for start in range(0, len(entries), columns):
+            chunk = entries[start:start + columns]
+            fill = _PDF_ZEBRA if (start // columns) % 2 else _PDF_WHITE
+            cells = "".join(
+                f"<td width='{width}%' bgcolor='{fill}'>{escape(e)}</td>" for e in chunk)
+            cells += f"<td bgcolor='{fill}'></td>" * (columns - len(chunk))
+            rows.append(f"<tr>{cells}</tr>")
+        return ("<table width='100%' cellspacing='0' cellpadding='4'>" +
+                "".join(rows) + "</table>")
+
+
+    def _pdfCountGrid(self, entries, columns=3):
+        """Species and their counts, in striped columns — name left, count right.
+
+        Each column is really a name/count pair of cells so the numbers line up
+        down the page instead of trailing their names.
+        """
+        if not entries:
+            return "<p class='none'>None</p>"
+        nameWidth = int(88 / columns)
+        countWidth = int(12 / columns)
+        rows = []
+        for start in range(0, len(entries), columns):
+            chunk = entries[start:start + columns]
+            fill = _PDF_ZEBRA if (start // columns) % 2 else _PDF_WHITE
+            cells = "".join(
+                f"<td width='{nameWidth}%' bgcolor='{fill}'>{escape(name)}</td>"
+                f"<td width='{countWidth}%' bgcolor='{fill}' align='right'>{escape(count)}</td>"
+                for name, count in chunk
+                )
+            cells += f"<td bgcolor='{fill}'></td><td bgcolor='{fill}'></td>" * (
+                columns - len(chunk))
+            rows.append(f"<tr>{cells}</tr>")
+        return ("<table width='100%' cellspacing='0' cellpadding='4'>" +
+                "".join(rows) + "</table>")
+
+
+    def _pdfItinerary(self, stops):
+        """The Itinerary tab's content, rendered for print."""
+        if not stops:
+            return "<p class='none'>No checklists match this filter.</p>"
+
+        stopsByDate = defaultdict(list)
+        for stop in stops:
+            stopsByDate[stop["date"]].append(stop)
+
+        html = []
+        currentDate = None
+        for stop in stops:
+            if stop["date"] != currentDate:
+                currentDate = stop["date"]
+                html.append("<p></p>")
+                html.append(self._pdfSubBand(
+                    _fmtItineraryDate(currentDate),
+                    _itineraryDaySummary(stopsByDate[currentDate])))
+            else:
+                # separate consecutive stops; the day band already does this
+                # for the first stop under it
+                html.append("<p></p>")
+
+            heading = stop["location"]
+            time = _fmtItineraryTime(stop["time"])
+            if time:
+                heading += "  ·  " + time
+            if stop["region"]:
+                heading += "  ·  " + stop["region"]
+
+            meta = _itineraryStopMeta(stop)
+            meta.append(f"{len(stop['species'])} species")
+            if stop["checklistID"]:
+                meta.append(stop["checklistID"])
+
+            html.append(
+                "<table width='100%' cellspacing='0' cellpadding='2'>"
+                f"<tr><td><span class='stop'>{escape(heading)}</span></td></tr>"
+                f"<tr><td><span class='note'>{escape('  ·  '.join(meta))}</span></td></tr>"
+                + (f"<tr><td><span class='comment'>{escape(stop['comments'])}"
+                   "</span></td></tr>" if stop["comments"] else "")
+                + "</table>"
+                )
+            html.append(self._pdfCountGrid(
+                [(e["name"], _itinerarySpeciesCount(e)) for e in stop["species"]]))
+
+        return "".join(html)
+
+
+    def _pdfPairTable(self, pairs, secondHeader):
+        """Two columns — species and the year/region/location it was new for."""
+        if not pairs:
+            return "<p class='none'>None</p>"
+        rows = [
+            f"<tr bgcolor='{_PDF_SUBBAND}'>"
+            "<th align='left' width='55%'>Species</th>"
+            f"<th align='left'>{escape(secondHeader)}</th></tr>"
+            ]
+        for n, (species, other) in enumerate(pairs):
+            fill = _PDF_ZEBRA if n % 2 else _PDF_WHITE
+            rows.append(
+                f"<tr><td bgcolor='{fill}'>{escape(species)}</td>"
+                f"<td bgcolor='{fill}'>{escape(other)}</td></tr>"
+                )
+        return ("<table width='100%' cellspacing='0' cellpadding='4'>" +
+                "".join(rows) + "</table>")
+
+
+    def _pdfPairsFromTable(self, table):
+        """Read a "new for ..." table widget into (species, context) pairs."""
+        pairs = []
+        for r in range(table.rowCount()):
+            if table.item(r, 1) is None or table.item(r, 0) is None:
+                continue
+            pairs.append((table.item(r, 1).text(), table.item(r, 0).text()))
+        return pairs
+
+
+    def _waitMs(self, milliseconds):
+        """Let the event loop run for a while — the compositor needs real time."""
+        loop = QEventLoop()
+        QTimer.singleShot(milliseconds, loop.quit)
+        loop.exec()
+
+
+    def _runMapJs(self, script, timeoutMs=2000):
+        """Run script in the map page and return its result synchronously."""
+        result = []
+        loop = QEventLoop()
+
+        def done(value):
+            result.append(value)
+            loop.quit()
+
+        self.webMap.page().runJavaScript(script, done)
+        QTimer.singleShot(timeoutMs, loop.quit)
+        loop.exec()
+        return result[0] if result else None
+
+
+    def _waitForTiles(self, timeoutMs=8000):
+        """Block until every visible map tile has loaded, or we give up.
+
+        Leaflet tags each tile 'leaflet-tile-loaded' as it arrives, so the two
+        counts converging means the map is whole.  Returns False on timeout —
+        the caller still grabs, since a partly drawn map beats no map at all.
+        """
+        waited = 0
+        while waited < timeoutMs:
+            loaded = self._runMapJs(
+                "(function(){"
+                "  var all = document.querySelectorAll('.leaflet-tile').length;"
+                "  var done = document.querySelectorAll('.leaflet-tile-loaded').length;"
+                "  return all > 0 && all === done;"
+                "})()")
+            if loaded:
+                return True
+            self._waitMs(150)
+            waited += 150
+        return False
+
+
+    def _pdfMapImage(self):
+        """Grab the Map tab and return it as an inline <img>, or "" on failure."""
+        # Switch to the map tab so the renderer has a real viewport, then wait
+        # for the tiles: grabbing on a fixed short delay caught them mid-load
+        # and printed a patchwork of blank squares.
+        previousTab = self.tabAnalysis.currentIndex()
+        self.tabAnalysis.setCurrentIndex(self.tabAnalysis.indexOf(self.tabMap))
+        self._waitMs(300)
+        self._waitForTiles()
+
+        # Leaflet's zoom control and the Satellite / Reset / Full Screen
+        # buttons are page furniture, not data — hide them for the grab.  The
+        # attribution stays: the tile provider requires it.
+        self._runMapJs(
+            "document.querySelectorAll('.leaflet-control').forEach(function(el){"
+            "  if (!el.classList.contains('leaflet-control-attribution'))"
+            "    el.style.visibility = 'hidden';"
+            "});")
+
+        # even with every tile loaded, Leaflet fades them in and the GPU
+        # compositor is async, so let the view settle before grabbing
+        self._waitMs(500)
+        myPixmap = self.webMap.grab()
+
+        self._runMapJs(
+            "document.querySelectorAll('.leaflet-control').forEach(function(el){"
+            "  el.style.visibility = '';"
+            "});")
+        self.tabAnalysis.setCurrentIndex(previousTab)
+        if myPixmap.isNull():
+            return ""
+
+        myPixmap = myPixmap.scaledToWidth(600, Qt.SmoothTransformation)
+        myByteArray = QByteArray()
+        myBuffer = QBuffer(myByteArray)
+        myBuffer.open(QIODevice.OpenModeFlag.WriteOnly)
+        myPixmap.save(myBuffer, "PNG")
+        encoded = base64.b64encode(bytes(myByteArray)).decode("ascii")
+
+        return (
+            # image and caption share one cell so they centre on the same axis
+            "<table width='100%' cellspacing='0' cellpadding='0'>"
+            "<tr><td align='center'>"
+            f"<img src='data:image/png;base64,{encoded}' width='600' /><br />"
+            "<span class='note'>"
+            "Locations visited, numbered in the order they were first birded"
+            # the in-map attribution does not survive the widget grab, and the
+            # tile provider's credit has to appear somewhere on the page
+            f"  ·  {escape(code_Basemap.TILE_ATTR)}"
+            "</span></td></tr></table>"
+            )
+
+
     def html(self):
 
         # Ensure all lazy-loaded tabs are populated before generating the PDF.
@@ -858,602 +1586,181 @@ document.addEventListener("DOMContentLoaded", function() {{
 
         QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
 
-        # create start to basic html format
-        html = """
-            <!DOCTYPE html>
-            <html>
-            <head>
-            </head>
-            <style>
-            * {
-                font-size: 75%;
-                font-family: "Times New Roman", Times, serif;
-                }
-            th {
-                text-align: left;
-            }
-            </style>
-            <body>
-            """
-        
-        # add title information
-        html = html + (
-            "<H1>" + 
-            self.lblLocation.text() + 
-            "</H1>"
+        db = self.mdiParent.db
+        speciesCount   = db.CountSpecies(self.speciesList)
+        taxaCount      = self.tblSpecies.rowCount() - speciesCount
+        locationCount  = self.lstLocations.count()
+        dateCount      = self.lstDates.count()
+        checklistCount = len({s["checklistID"] for s in self.filteredSightingList})
+
+        html = f"""<!DOCTYPE html>
+<html>
+<head>
+<style>
+body {{ font-family: Helvetica, Arial, sans-serif; font-size: 9pt; color: {_PDF_INK}; }}
+p, td, th, li {{ font-family: Helvetica, Arial, sans-serif; font-size: 9pt; color: {_PDF_INK}; }}
+th {{ text-align: left; font-weight: bold; }}
+.title {{ font-size: 20pt; font-weight: bold; color: {_PDF_INK}; }}
+.subtitle {{ font-size: 11pt; color: {_PDF_MUTED}; }}
+.band {{ font-size: 12pt; font-weight: bold; color: {_PDF_BAND_FG}; }}
+.bandnote {{ font-size: 9pt; color: {_PDF_BAND_NOTE}; }}
+.sub {{ font-size: 10pt; font-weight: bold; color: {_PDF_INK}; }}
+.stop {{ font-size: 9.5pt; font-weight: bold; color: {_PDF_INK}; }}
+.comment {{ font-size: 8.5pt; font-style: italic; color: {_PDF_INK}; }}
+.note {{ font-size: 8pt; color: {_PDF_MUTED}; }}
+.stat {{ font-size: 17pt; font-weight: bold; color: {_PDF_BAND}; }}
+.statlabel {{ font-size: 8pt; color: {_PDF_MUTED}; }}
+.none {{ font-size: 9pt; color: {_PDF_MUTED}; }}
+</style>
+</head>
+<body>
+"""
+
+        # ---- title block ----
+        html += f"<p class='title'>{escape(self.lblLocation.text())}</p>"
+        if self.lblDateRange.text():
+            html += f"<p class='subtitle'>{escape(self.lblDateRange.text())}</p>"
+        if self.lblDetails.text():
+            html += f"<p class='subtitle'>{escape(self.lblDetails.text())}</p>"
+
+        # A coloured rule: QTextDocument gives <hr> no colour, but a one-cell
+        # table filled with the accent does the same job.
+        html += ("<p></p>"
+                 f"<table width='100%' cellspacing='0' cellpadding='0' "
+                 f"bgcolor='{code_Stylesheet.CHART_PRIMARY}'>"
+                 "<tr><td style='font-size:2pt'>&nbsp;</td></tr></table>")
+
+        # ---- summary strip ----
+        stats = [(f"{speciesCount:,}", "Species")]
+        if taxaCount > 0:
+            stats.append((f"{taxaCount:,}", "Other Taxa"))
+        stats.extend([
+            (f"{checklistCount:,}", "Checklists"),
+            (f"{locationCount:,}",  "Locations"),
+            (f"{dateCount:,}",      "Dates"),
+            ])
+        cells = "".join(
+            f"<td width='{int(100 / len(stats))}%' align='center' bgcolor='{_PDF_SUBBAND}'>"
+            f"<span class='stat'>{value}</span><br />"
+            f"<span class='statlabel'>{label}</span></td>"
+            for value, label in stats
             )
-        
-        html = html + (
-            "<H3>" + 
-            self.lblDateRange.text() + 
-            "</H3>"
-            )        
+        html += ("<p></p><table width='100%' cellspacing='4' cellpadding='8'>"
+                 f"<tr>{cells}</tr></table><p></p>")
 
-        html = html + (
-            "<H3>" + 
-            self.lblDetails.text() + 
-            "</H3>"
-            )               
+        # ---- map ----
+        html += self._pdfMapImage()
 
-        html = html + (
-            "<H3>" + 
-            self.lblLocationsVisited.text() + 
-            "</H3>"
-            )   
+        # ---- itinerary ----
+        # First section after the map: the trip in order, before the analysis
+        # sections slice the same sightings by species, date, and location.
+        stops = self._buildItineraryStops()
+        html += self._pdfBand(
+            "Itinerary",
+            f"{len(stops):,} checklist{'' if len(stops) == 1 else 's'}",
+            pageBreak=True)
+        html += self._pdfItinerary(stops)
 
-        html = html + (
-            "<H3>" + 
-            self.lblTopSpeciesSeen.text() + 
-            "</H3>"
-            )    
-            
-        # Switch to the map tab and run the event loop briefly so Chromium's
-        # compositor has time to paint the QWebEngineView before we grab it.
-        # processEvents() alone is not enough — the GPU compositor is async.
-        previousTab = self.tabAnalysis.currentIndex()
-        mapTabIndex = self.tabAnalysis.indexOf(self.tabMap)
-        self.tabAnalysis.setCurrentIndex(mapTabIndex)
-        loop = QEventLoop()
-        QTimer.singleShot(600, loop.quit)
-        loop.exec()
+        # ---- species ----
+        note = f"{speciesCount:,} species"
+        if taxaCount > 0:
+            note += f" + {taxaCount:,} other taxa"
+        html += self._pdfBand("Species", note, pageBreak=True)
+        html += (f"<table width='100%' cellspacing='0' cellpadding='4'>"
+                 f"<tr bgcolor='{_PDF_SUBBAND}'>"
+                 "<th align='right' width='6%'>#</th>"
+                 "<th width='46%'>Species</th>"
+                 "<th align='right' width='12%'>Count</th>"
+                 "<th width='18%'>First</th>"
+                 "<th width='18%'>Last</th></tr>")
+        def cell(row, column, fill, align="left"):
+            item = self.tblSpecies.item(row, column)
+            text = escape(item.text()) if item is not None else ""
+            return f"<td bgcolor='{fill}' align='{align}'>{text}</td>"
 
-        # grab the map image from the map tab
-        # process it into a byte array and encode it
-        # so we can insert it inline into the html
-        myPixmap = self.webMap.grab()
-
-        self.tabAnalysis.setCurrentIndex(previousTab)
-        myPixmap = myPixmap.scaledToWidth(600, Qt.SmoothTransformation)
-
-        myByteArray = QByteArray()
-        myBuffer = QBuffer(myByteArray)
-        myBuffer.open(QIODevice.OpenModeFlag.WriteOnly)
-        myPixmap.save(myBuffer, "PNG")
-
-        encodedImage = base64.b64encode(myByteArray)
-        
-        html = html + ("""
-        <img src="data:image/png;base64, 
-        """)
-        
-        html = html + str(encodedImage)[1:]
-        
-        html = html + ("""        
-        "  />
-        """)
-
-        html = html + (
-            "<H4>" + 
-            "Species" +
-            "</H4>"
-            )    
-
-        html=html + (
-            "<font size='2'>" +
-            "<table width='100%'>" +
-            " <tr>"
-            )
-                    
-        html=html + (    
-            "<th>" + 
-            "Species" +
-            "</th>" +
-            "<th>" + 
-            "First" + 
-            "</th> " +
-            "<th></th> " +
-            "<th>" +
-            "Latest" +
-            "</th>" +
-            "</tr>"
-            )
-            
         for r in range(self.tblSpecies.rowCount()):
-            html = html + (
-            "<tr>" +
-            "<td>" +
-            self.tblSpecies.item(r, 1).text() +
-            "</td>" +
-            "<td>" +
-            self.tblSpecies.item(r, 2).text() +
-            "</td>" +
-            "<td>" +
-            "  " +
-            "</td>" +
-            "<td>" +
-            self.tblSpecies.item(r, 3).text() +
-            "</td>" +
-            "</tr>"
-            )
-        html = html + "</table>"
+            fill = _PDF_ZEBRA if r % 2 else _PDF_WHITE
+            html += ("<tr>" +
+                     cell(r, 0, fill, "right") +
+                     cell(r, 1, fill) +
+                     cell(r, 2, fill, "right") +
+                     cell(r, 3, fill) +
+                     cell(r, 4, fill) +
+                     "</tr>")
+        html += "</table>"
 
-        html= html + (
-            "<H4>" +
-            "Dates" +
-            "</H4>"
-            )
-
-        html=html + (
-            "<font size='2'>" +
-            "<p>"
-            )
-       
-        # loopthrough the dates listed in lstDates
-        # create a filter unique to each date
-        # and get species for that date
+        # ---- dates ----
+        html += self._pdfBand(
+            "Dates", f"{dateCount:,} date{'' if dateCount == 1 else 's'}", pageBreak=True)
         for r in range(self.lstDates.count()):
-            html= html + (
-                "<b>" +
-                self.lstDates.item(r).text() +
-                "</b>"                
-                )
- 
-            # create filter set to our current location
+            date = self.lstDates.item(r).text()
+
+            # create filter set to our current date
             filter = deepcopy(self.filter)
-            filter.setStartDate(self.lstDates.item(r).text())
-            filter.setEndDate(self.lstDates.item(r).text())
-            
-            species = self.mdiParent.db.GetSpecies(filter)
+            filter.setStartDate(date)
+            filter.setEndDate(date)
+            species = db.GetSpecies(filter)
 
-            html = html + (    
-                "<br>" +                   
-                "<table width='100%'>" +
-                "<tr>"
-                )
+            html += self._pdfSubBand(
+                _fmtItineraryDate(date),
+                f"{len(species)} species")
+            html += self._pdfGrid(species)
+            html += "<p></p>"
 
-            # set up counter R to start a new row after listing each 3 species
-            R = 1
-            for s in species:
-                html = html + (
-                    "<td>" +
-                    s + 
-                    "</td>"
-                    )
-                if R == 3:
-                    html = html + (
-                        "</tr>" +
-                        "<tr>"
-                        )
-                    R = 0
-                R = R + 1
-
-            html= html + (
-                "<br>" +
-                "<br>" +
-                "</table>"
-                )
-
-        html= html + (
-            "<H4>" +
-            "Locations" +
-            "</H4>" +
-            "<p>" +
-            "Asterisks indicate species seen only at listed location."
-            )
-
-        # loopthrough the locations listed in lstLocations
-        # create a filter unique to each location
-        # and get species for that date
+        # ---- locations ----
+        html += self._pdfBand(
+            "Locations",
+            f"{locationCount:,} location{'' if locationCount == 1 else 's'}",
+            pageBreak=True)
+        html += ("<p class='note'>An asterisk marks a species seen only at "
+                 "that location.</p><p></p>")
         for r in range(self.lstLocations.count()):
-            html= html + (
-                "<b>" +
-                self.lstLocations.item(r).text() +
-                "</b>"                
-                )
- 
+            location = self.lstLocations.item(r).text()
+
             # create filter set to our current location
             filter = deepcopy(self.filter)
             filter.setLocationType("Location")
-            filter.setLocationName(self.lstLocations.item(r).text())
-                        
-            species = self.mdiParent.db.GetSpecies(filter)
+            filter.setLocationName(location)
+            species = db.GetSpecies(filter)
 
-            uniqueSpecies = self.mdiParent.db.GetUniqueSpeciesForLocation(
+            uniqueSpecies = db.GetUniqueSpeciesForLocation(
                 self.filter,
-                self.lstLocations.item(r).text(),  
-                species,  
+                location,
+                species,
                 self.filteredSightingList
-                )            
-
-            html = html + (    
-                "<br>" +                       
-                "<table width='100%'>" +
-                "<tr>"
                 )
 
-            # set up counter R to start a new row after listing each 3 species
-            R = 1
-            for s in species:
-                
-                if s in uniqueSpecies:
-                    s = s + "*"
-                    
-                html = html + (
-                    "<td>" +
-                    s + 
-                    "</td>"
-                    )
-                if R == 3:
-                    html = html + (
-                        "</tr>" +
-                        "<tr>"
-                        )
-                    R = 0
-                R = R + 1
+            html += self._pdfSubBand(location, f"{len(species)} species")
+            html += self._pdfGrid(
+                [s + "*" if s in uniqueSpecies else s for s in species])
+            html += "<p></p>"
 
-            html= html + (
-                "<br>" +
-                "<br>" +
-                "</table>"
-                )
+        # ---- firsts ----
+        newLife = [self.lstNewLifeSpecies.item(r).text()
+                   for r in range(self.lstNewLifeSpecies.count())]
+        html += self._pdfBand(
+            "New Life Species",
+            f"{len(newLife):,} species" if newLife else "none",
+            pageBreak=True)
+        html += self._pdfGrid(newLife)
 
-        html= html + (
-            "<p>" +
-            "<H4>" +
-            "New Life Species" +
-            "</H4>" +
-            "<p>" +
-            "<table width='100%'>"
-            "<tr>"
-            )
+        for title, table, column in (
+                ("New Year Species",     self.tblNewYearSpecies,     "Year"),
+                ("New Month Species",    self.tblNewMonthSpecies,    "Month"),
+                ("New Country Species",  self.tblNewCountrySpecies,  "Country"),
+                ("New State Species",    self.tblNewStateSpecies,    "State"),
+                ("New County Species",   self.tblNewCountySpecies,   "County"),
+                ("New Location Species", self.tblNewLocationSpecies, "Location"),
+                ):
+            pairs = self._pdfPairsFromTable(table)
+            html += "<p></p>" + self._pdfBand(
+                title, f"{len(pairs):,} species" if pairs else "none")
+            html += self._pdfPairTable(pairs, column)
 
-        # set up counter R to start a new row after listing each 3 species
-        R = 1
+        html += "</body></html>"
 
-        if self.lstNewLifeSpecies.count() == 0:
-            html = html + (
-                "<td>" +
-                "None" +
-                "</td>"
-                )
-                
-        else:
-            
-            # loopthrough the species listed in lstNewLifeSpecies
-            for r in range(self.lstNewLifeSpecies.count()):
-                        
-                html = html + (
-                    "<td>" +
-                    self.lstNewLifeSpecies.item(r).text() +
-                    "</td>"
-                    )
-                    
-                if R == 3:
-                    html = html + (
-                        "</tr>" +
-                        "<tr>"
-                        )
-                    R = 0
-                    
-                R = R + 1
+        QApplication.restoreOverrideCursor()
 
-            html= html + (
-                "<br>" +
-                "<br>" +
-                "</table>"
-                    )
-                
-        # set up New Year Species
-        html= html + (
-            "<p>" +
-            "<H4>" +
-            "New Year Species" +
-            "</H4>" +
-            "<p>" +
-            "<table width='100%'>" +
-            "<tr>"
-            )
-
-        # set up counter R to start a new row after listing each 3 species
-        R = 1
-
-        if self.tblNewYearSpecies.rowCount() == 0:
-            html = html + (
-                "<td>" +
-                "None" +
-                "</td>"
-                )
-                
-        else:
-            # loopthrough the species listed in lstNewLifeSpecies
-            for r in range(self.tblNewYearSpecies.rowCount()):
-
-                if self.tblNewYearSpecies.item(r, 1) is None:
-                    continue
-
-                html = html + (
-                    "<td>" +
-                    self.tblNewYearSpecies.item(r, 1).text() +
-                    " (" + self.tblNewYearSpecies.item(r, 0).text() + ")" +
-                    "</td>"
-                    )
-                    
-                if R == 3:
-                    html = html + (
-                        "</tr>"
-                        "<tr>"
-                        )
-                    R = 0
-                    
-                R = R + 1
-
-            html= html + (
-                "</tr>" +
-                "</table>"
-                    )
-
-        # set up New Month Species
-        html= html + (
-            "<p>" +
-            "<H4>" +
-            "New Month Species" +
-            "</H4>" +
-            "<p>" +
-            "<table width='100%'>" +
-            "<tr>"
-            )
-
-        # set up counter R to start a new row after listing each 3 species
-        R = 1
-
-        if self.tblNewMonthSpecies.rowCount() == 0:
-            html = html + (
-                "<td>" +
-                "None" +
-                "</td>"
-                )
-                
-        else:
-        
-            # loopthrough the species listed in lstNewLifeSpecies
-            for r in range(self.tblNewMonthSpecies.rowCount()):
-
-                if self.tblNewMonthSpecies.item(r, 1) is None:
-                    continue
-
-                html = html + (
-                    "<td>" +
-                    self.tblNewMonthSpecies.item(r, 1).text() +
-                    " (" + self.tblNewMonthSpecies.item(r, 0).text() + ")" +
-                    "</td>"
-                    )
-                    
-                if R == 3:
-                    html = html + (
-                        "</tr>"
-                        "<tr>"
-                        )
-                    R = 0
-                    
-                R = R + 1
-
-            html= html + (
-                "</tr>" +
-                "</table>"
-                    )
-
-        # set up New Country Species
-        html= html + (
-            "<p>" +
-            "<H4>" +
-            "New Country Species" +
-            "</H4>" +
-            "<p>" +
-            "<table width='100%'>" +
-            "<tr>"
-            )
-
-        # set up counter R to start a new row after listing each 3 species
-        R = 1
-        
-        if self.tblNewCountrySpecies.rowCount() == 0:
-            html = html + (
-                "<td>" +
-                "None" +
-                "</td>"
-                )
-                
-        else:
-
-            # loopthrough the species listed in lstNewLifeSpecies
-            for r in range(self.tblNewCountrySpecies.rowCount()):
-            
-                html = html + (
-                    "<td>" +
-                    self.tblNewCountrySpecies.item(r, 1).text() +
-                    " (" + self.tblNewCountrySpecies.item(r, 0).text() + ")" +
-                    "</td>"
-                    )
-                    
-                if R == 2:
-                    html = html + (
-                        "</tr>"
-                        "<tr>"
-                        )
-                    R = 0
-                    
-                R = R + 1
-
-            html= html + (
-                "</tr>" +
-                "</table>"
-                    )
-                
-        html = html + (
-            "<font size>" +            
-            "</body>" +
-            "</html>"
-            )
-        
-        # set up New State Species
-        html= html + (
-            "<p>" +
-            "<H4>" +
-            "New State Species" +
-            "</H4>" +
-            "<p>" +
-            "<table width='100%'>" +
-            "<tr>"
-            )
-
-        # set up counter R to start a new row after listing each 3 species
-        R = 1
-
-        if self.tblNewStateSpecies.rowCount() == 0:
-            html = html + (
-                "<td>" +
-                "None" +
-                "</td>"
-                )
-                
-        else:
-            
-            # loopthrough the species listed in lstNewLifeSpecies
-            for r in range(self.tblNewStateSpecies.rowCount()):
-            
-                html = html + (
-                    "<td>" +
-                    self.tblNewStateSpecies.item(r, 1).text() +
-                    " (" + self.tblNewStateSpecies.item(r, 0).text() + ")" +
-                    "</td>"
-                    )
-                    
-                if R == 2:
-                    html = html + (
-                        "</tr>"
-                        "<tr>"
-                        )
-                    R = 0
-                    
-                R = R + 1
-
-            html= html + (
-                "</tr>" +
-                "</table>"
-                    )
-
-        # set up New County Species
-        html= html + (
-            "<p>" +
-            "<H4>" +
-            "New County Species" +
-            "</H4>" +
-            "<p>" +
-            "<table width='100%'>" +
-            "<tr>"
-            )
-
-        # set up counter R to start a new row after listing each 3 species
-        R = 1
-
-        if self.tblNewCountySpecies.rowCount() == 0:
-            html = html + (
-                "<td>" +
-                "None" +
-                "</td>"
-                )
-                
-        else:
-            
-            # loopthrough the species listed in lstNewLifeSpecies
-            for r in range(self.tblNewCountySpecies.rowCount()):
-            
-                html = html + (
-                    "<td>" +
-                    self.tblNewCountySpecies.item(r, 1).text() +
-                    " (" + self.tblNewCountySpecies.item(r, 0).text() + ")" +
-                    "</td>"
-                    )
-                    
-                if R == 2:
-                    html = html + (
-                        "</tr>"
-                        "<tr>"
-                        )
-                    R = 0
-                    
-                R = R + 1
-
-            html= html + (
-                "</tr>" +
-                "</table>"
-                    )
-     
-        # set up New Location Species
-        html= html + (
-            "<p>" +
-            "<H4>" +
-            "New Location Species" +
-            "</H4>" +
-            "<p>" +
-            "<table width='100%'>" +
-            "<tr>"
-            )
-
-        # set up counter R to start a new row after listing each 3 species
-        R = 1
-
-        if self.tblNewLocationSpecies.rowCount() == 0:
-            html = html + (
-                "<td>" +
-                "None" +
-                "</td>"
-                )
-                
-        else:
-            
-            # loopthrough the species listed in lstNewLifeSpecies
-            for r in range(self.tblNewLocationSpecies.rowCount()):
-            
-                html = html + (
-                    "<td>" +
-                    self.tblNewLocationSpecies.item(r, 1).text() +
-                    " (" + self.tblNewLocationSpecies.item(r, 0).text() + ")" +
-                    "</td>"
-                    )
-                    
-                if R == 2:
-                    html = html + (
-                        "</tr>"
-                        "<tr>"
-                        )
-                    R = 0
-                    
-                R = R + 1
-
-            html= html + (
-                "</tr>" +
-                "</table>"
-                )
-     
-        html = html + (
-            "<font size>" +            
-            "</body>" +
-            "</html>"
-            )       
-            
-        QApplication.restoreOverrideCursor()   
-        
         return(html)
 
 

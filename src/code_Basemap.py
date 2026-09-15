@@ -1,6 +1,6 @@
 """The street basemap used by every folium map in the app.
 
-One place, because 23 call sites across code_Web, code_BigReport and
+One place, because 23 call sites across code_Web, code_TripReport and
 code_Location build maps and the provider has now changed under us once.
 
 Why Esri and not CARTO: the maps used CARTO's Voyager basemap through folium's

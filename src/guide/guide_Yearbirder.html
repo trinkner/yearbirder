@@ -117,7 +117,7 @@
 <div class="toc">
   <p class="toc-group">What's New</p>
   <ul>
-    <li><a href="#whats-new">What's New in v2.15</a></li>
+    <li><a href="#whats-new">What's New in v2.16</a></li>
   </ul>
   <p class="toc-group">Quick Start</p>
   <ul>
@@ -135,7 +135,7 @@
     <li><a href="#families-window">Families Window</a></li>
     <li><a href="#date-totals">Date Totals</a></li>
     <li><a href="#location-totals">Location Totals</a></li>
-    <li><a href="#big-report">Big Report</a></li>
+    <li><a href="#trip-report">Trip Report</a></li>
     <li><a href="#compare-lists">Compare Lists</a></li>
     <li><a href="#statistics">Statistics</a></li>
     <li><a href="#regional-taxonomy">Species List</a></li>
@@ -196,7 +196,18 @@
 <hr>
 
 <h1 class="group-heading">What's New</h1>
-<h2 id="whats-new">What's New in v2.15</h2>
+<h2 id="whats-new">What's New in v2.16</h2>
+<ul>
+  <li><strong>Big Report is now the Trip Report</strong> — The report has a new name that says what it is for: <strong>Reports → Trip Report</strong>, or the <strong>Trip Report</strong> toolbar button. See <a href="#trip-report">Section 12 — Trip Report</a>.</li>
+  <li><strong>A day-by-day Itinerary</strong> — A new <strong>Itinerary</strong> tab in the Trip Report retells a trip in the order you birded it. Checklists are grouped by date, and each stop shows its time, location, protocol, duration, distance, and your checklist comments beside the species you recorded there. Click a location to open its Location window, or a species to open its Individual window. The <strong>Map</strong> tab now numbers each location by the order you first birded it, so the map and the Itinerary read together.</li>
+  <li><strong>A redesigned Trip Report PDF</strong> — <strong>Create PDF</strong> now produces a formatted report: a title block, a summary strip, clearly banded sections, striped tables, and the Itinerary as its own section. Every page carries a footer with the generation date and page number. The map in the PDF now waits for every map tile to load, so it no longer prints with blank patches, and the Species table now prints each species' count, first date, and last date under the right headings.</li>
+  <li><strong>Much better species guesses from file names</strong> — When you add photos or recordings, Yearbirder now reads a file name word by word, and gives the most weight to the words that tell the birds on that checklist apart. <em>LincolnSparrow</em> is decided by "Lincoln", not by the "Sparrow" every sparrow shares, so it is no longer mistaken for a House Sparrow. Common typos such as <em>Linclon</em> are forgiven, and when two species are equally likely Yearbirder now leaves the species for you to choose rather than guessing. Every American Goldfinch photo was being read as a Canada Goose, whose code CANG hides inside "AmeriCANGoldfinch"; that is fixed too. See <a href="#photo-settings-file">Section 20 — Adding Photos</a>.</li>
+  <li><strong>See how sure a guess is</strong> — Add Photos, Add Recordings, Manage Photos, and Manage Recordings now colour a species suggested from a file name: <strong>green</strong> when a species code or the whole name matched exactly, and <strong>amber</strong> when only part of the name matched or a typo had to be corrected. Amber marks the rows worth a second look.</li>
+  <li><strong>Search by banding code</strong> — Type <code>b:</code> in <strong>Name Search</strong> followed by a four-letter banding code, so <code>b:OSFL</code> finds the Olive-sided Flycatcher. It sits alongside <code>s:</code> for scientific names. See <a href="#standard-filter">Section 4 — The Sighting Filter</a>.</li>
+  <li><strong>Interface refinements</strong> — Drop-down menus throughout Yearbirder show a slim arrow that sits inside the control instead of a separate boxed button. The Sighting Filter's Start Date and End Date fields now match the menus above them, and a set date no longer turns darker than a set menu. Browsing just a few photos or recordings opens a window sized to fit them rather than a tall, mostly empty one, and a Recordings window no longer appears at full size and then visibly shrinks.</li>
+</ul>
+
+<h3>Earlier changes in v2.15</h3>
 <ul>
   <li><strong>Record which microphone you used</strong> — No recorder writes the microphone into an audio file, so the one piece of gear you most want to filter by was the one piece Yearbirder could never know. Define your <strong>rigs</strong> — a recording device paired with a microphone — in <strong>Preferences → Recording Gear</strong>, then assign one to your recordings in <strong>Add Recordings</strong> or <strong>Manage Recordings</strong>. When a file names a recording device you keep only one rig for, the microphone is filled in for you; when several rigs share that device, Yearbirder leaves the choice to you rather than guessing wrongly. A batch bar assigns one rig to every card at once, since a session is usually one outing with one rig. The Media Filter gains a <strong>Microphone</strong> setting, and the Recording Enlargement view lists the microphone below the recording device. See <a href="#adding-recordings">Section 26 — Adding Recordings</a> and <a href="#managing-recordings">Section 29 — Managing Your Recordings</a>.</li>
   <li><strong>Correct a recording device your file names wrongly</strong> — Some apps write the microphone into the field meant for the recorder, and a microphone that was not fully plugged in still gets named as though it were. Assigning a rig now sets both the recording device and the microphone, so you can put right whatever the file claims. Yearbirder never writes to your audio files — only to its own catalog — and <strong>Use each file's original metadata</strong> restores both fields whenever you want them back. A device you have changed is shown in plain text rather than green, so you can see at a glance which recordings no longer match their files.</li>
@@ -255,7 +266,7 @@
   <li><strong>Community → Species List</strong> — The Regional Taxonomy report has been renamed to <strong>Species List</strong> and is now found at <strong>Community → Species List</strong>.</li>
   <li><strong>Species List in Community Sightings Explorer</strong> — The Community Sightings Explorer now includes a <strong>Species List</strong> button. Click it to open the eBird species checklist for the selected region, showing which species you have seen and photographed there. Seen and photo badges reflect your own sightings in the selected country or state; if you have no sightings there, no badges are shown.</li>
   <li><strong>Full-screen maps</strong> — All Yearbirder maps now include a full-screen button. Click it to expand the map to fill the window; click again to return to the normal view.</li>
-  <li><strong>Satellite view on all maps</strong> — All Yearbirder maps now include a <strong>Satellite/Map</strong> toggle button. Click <strong>Satellite</strong> to switch to aerial imagery; click <strong>Map</strong> to return to the standard street map. The Location and Big Report maps have also gained this control along with a <strong>Reset</strong> button to return the map to its default view.</li>
+  <li><strong>Satellite view on all maps</strong> — All Yearbirder maps now include a <strong>Satellite/Map</strong> toggle button. Click <strong>Satellite</strong> to switch to aerial imagery; click <strong>Map</strong> to return to the standard street map. The Location and Trip Report maps have also gained this control along with a <strong>Reset</strong> button to return the map to its default view.</li>
   <li><strong>Improved PDF output for community reports</strong> — The <strong>Notable Community Sightings</strong>, <strong>All Community Sightings</strong>, and <strong>Species List</strong> reports now produce complete, text-based PDFs. Previously, saving a PDF captured only a screenshot of the visible portion of the window; the PDF now contains the full report with proper formatting regardless of window size.</li>
   <li><strong>User Guide keyboard shortcut</strong> — Press <strong>Cmd-?</strong> (Mac) or <strong>F1</strong> (Windows/Linux) to open the User Guide.</li>
   <li><strong>eBird button on checklists</strong> — The Checklists List now includes a green <strong>eBird</strong> button on every row. Click it to open that checklist directly on the eBird website in your browser. When viewing a single checklist's species list, an <strong>eBird</strong> button also appears in the sidebar. Requires an eBird API key in Preferences.</li>
@@ -367,7 +378,7 @@
     <tr><td>Date Totals</td><td>Open the Date Totals report</td></tr>
     <tr><td>Location Totals</td><td>Open the Location Totals report</td></tr>
     <tr><td>Compare Lists</td><td>Open the Compare Lists report</td></tr>
-    <tr><td>Big Report</td><td>Open the comprehensive Big Report</td></tr>
+    <tr><td>Trip Report</td><td>Open the comprehensive Trip Report</td></tr>
     <tr><td>Photos</td><td>Open the Photos gallery</td></tr>
     <tr><td>Find</td><td>Search for checklists by text</td></tr>
   </tbody>
@@ -427,7 +438,7 @@
     <tr><td>Order</td><td>Bird order (e.g., Passeriformes)</td></tr>
     <tr><td>Family</td><td>Bird family (e.g., Parulidae – Wood-Warblers)</td></tr>
     <tr><td>Species</td><td>A single species name</td></tr>
-    <tr><td>Name Search</td><td>Free-text search; matches any part of a species' common name</td></tr>
+    <tr><td>Name Search</td><td>Free-text search; matches any part of a species' common name. Prefix with <code>s:</code> to search scientific names (<code>s:Buteo</code>) or <code>b:</code> to search banding codes (<code>b:OSFL</code>)</td></tr>
   </tbody>
 </table>
 <p>The taxonomic filters also follow a hierarchy for the purposes of the window title: if a Species is selected, Family and Order are not shown in the title (they are implied). If only a Family is selected, Order is not shown. Only the most specific level selected is displayed.</p>
@@ -630,17 +641,21 @@
 
 <hr>
 
-<h2 id="big-report">12. Big Report</h2>
-<p>Open with <strong>Reports → Big Report</strong> or the <strong>Big Report</strong> toolbar button.</p>
-<p>The Big Report is the most comprehensive single report in Yearbirder. It combines multiple dimensions of your data into one window with multiple tabs:</p>
+<h2 id="trip-report">12. Trip Report</h2>
+<p>Open with <strong>Reports → Trip Report</strong> or the <strong>Trip Report</strong> toolbar button.</p>
+<p>The Trip Report is the most comprehensive single report in Yearbirder. It combines multiple dimensions of your data into one window with multiple tabs:</p>
 <ul>
   <li><strong>Species</strong> — Full species list with counts, first and last dates.</li>
-  <li><strong>Dates</strong> — Date-by-date breakdown of species seen.</li>
-  <li><strong>Locations</strong> — Location-by-location breakdown.</li>
-  <li><strong>New Species</strong> — Species seen for the first time at each location.</li>
-  <li><strong>Checklists</strong> — All checklists in the filtered set.</li>
+  <li><strong>Dates</strong> — Date-by-date breakdown; select a date to see the species seen on it.</li>
+  <li><strong>Locations</strong> — Location-by-location breakdown; select a location to see the species seen there, and the species seen <em>only</em> there.</li>
+  <li><strong>Map</strong> — Every location in the report, each numbered by the order you first birded it, matching the Itinerary.</li>
+  <li><strong>Itinerary</strong> — Every checklist in the filtered set, in chronological order, grouped by date. Each stop shows its time, location, protocol, duration, distance, and your checklist comments, with the species recorded there listed beside them. Click a location to open its Location window, or a species to open its Individual window.</li>
+  <li><strong>New for Dates</strong> — New life species, new year species, and new species for the month range.</li>
+  <li><strong>New for Regions</strong> — New country, state, and county species.</li>
+  <li><strong>New for Locations</strong> — Species new to each location.</li>
 </ul>
-<p>The window title includes a species count, e.g., <em>"Big Report: New York (87 Species)"</em>.</p>
+<p><strong>Create PDF</strong> turns the Trip Report into a formatted document: a title block and summary, the report's tables, the map, and the Itinerary as its own section, with the generation date and page number on every page.</p>
+<p>The window title includes a species count, e.g., <em>"Trip Report: New York (87 Species)"</em>.</p>
 
 <hr>
 
@@ -890,7 +905,7 @@
       <li><strong>Windows:</strong> hold <strong>Ctrl</strong> and click to select individual photos, or hold <strong>Shift</strong> and click to select a contiguous range.</li>
     </ul>
   </li>
-  <li>For each photo, Yearbirder asks you to confirm the associated bird species and checklist. To make this easier, it uses each photo's filename and EXIF date/time to suggest the most likely species — so in many cases you only need to confirm the suggestion. Yearbirder recognises eBird species codes in filenames (e.g. <code>rufhum_20240514.jpg</code>), BBL four-letter codes, and common-name words. If the correct sighting does not appear as an option, make sure that sighting is logged in eBird; you cannot associate a photo with a sighting that is not in your data.</li>
+  <li>For each photo, Yearbirder asks you to confirm the associated bird species and checklist. To make this easier, it uses each photo's filename and EXIF date/time to suggest the most likely species — so in many cases you only need to confirm the suggestion. Yearbirder recognises eBird species codes in filenames (e.g. <code>rufhum_20240514.jpg</code>), BBL four-letter codes, and common-name words. Names are read word by word — the capital letters in <em>LincolnsSparrow</em> mark where the words divide — and the words that tell the birds on that checklist apart count most, so "Lincoln" decides the species rather than "Sparrow". Small typos are forgiven, and when two species are equally likely Yearbirder leaves the choice to you rather than guessing. A suggested species is shown in <strong>green</strong> when a code or the whole name matched exactly, and in <strong>amber</strong> when only part of the name matched or a typo was corrected — amber suggestions are the ones worth checking. If the correct sighting does not appear as an option, make sure that sighting is logged in eBird; you cannot associate a photo with a sighting that is not in your data.</li>
   <li>Your associations are saved to the media catalog automatically as you make them. The first time you add media with no catalog open, Yearbirder prompts you to choose a name and location for a new catalog file (a <code>.jsonl</code> file); from then on it saves there automatically. Remember where you saved it — you will open it again the next time you use Yearbirder.</li>
 </ol>
 
@@ -1188,7 +1203,7 @@
 <ol>
   <li>Choose <strong>File → Add recordings…</strong>.</li>
   <li>A file dialog opens. Navigate to the folder containing your recordings and select one or more <strong>WAV</strong> files. You can select several at once (hold <strong>Command</strong> / <strong>Ctrl</strong> to pick individual files, or <strong>Shift</strong> to select a contiguous range).</li>
-  <li>For each recording, Yearbirder asks you to confirm the associated species, location, date, and time. As with photos, it uses each file's name and timestamp to suggest the most likely sighting, so you usually only need to confirm. The sighting must already exist in your eBird data.</li>
+  <li>For each recording, Yearbirder asks you to confirm the associated species, location, date, and time. As with photos, it uses each file's name and timestamp to suggest the most likely sighting, so you usually only need to confirm. Because one recording can capture several birds, each species appears as its own chip, coloured <strong>green</strong> or <strong>amber</strong> by how closely the file name matched it, just as for photos (see <a href="#photo-settings-file">Section 20</a>); a species you pick yourself is shown in blue. The sighting must already exist in your eBird data.</li>
   <li>Set an optional <strong>rating</strong> (your personal quality score) for each recording.</li>
   <li>Your additions are saved to the media catalog automatically. (If no catalog is open yet, Yearbirder prompts you to create one.)</li>
 </ol>
@@ -1554,6 +1569,7 @@
 
 <h3>Combining Name Search with other filters</h3>
 <p>The Name Search field accepts a partial name and filters the Species List in real time. This is the fastest way to find a species when you are not sure of its exact name — type "thrush" and all thrushes appear regardless of which family they belong to.</p>
+<p>Two prefixes switch which name is searched. <code>s:</code> searches scientific names, so <code>s:Buteo</code> finds every buteo hawk. <code>b:</code> searches the four-letter <strong>banding codes</strong>, so <code>b:OSFL</code> finds the Olive-sided Flycatcher — handy if you already think in banding codes. Both accept partial text: <code>b:OS</code> matches every code beginning or containing "OS". Species with no banding code on file are never returned by a <code>b:</code> search.</p>
 
 <h3>Using graphs to understand your birding patterns</h3>
 <ul>

@@ -3591,12 +3591,13 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         sub.mdiParent = self.mdiParent
         self.mdiParent.mdiArea.addSubWindow(sub)
         self.mdiParent.PositionChildWindow(sub, self.mdiParent)
-        sub.show()
-        ok = sub.FillRecordings(filter)
+        ok = sub.FillRecordings(filter)   # fill hidden, then show: see _createRecordingsWindow
         QApplication.restoreOverrideCursor()
         if ok is False:
             sub.close()
             self.mdiParent.CreateMessageNoResults()
+            return
+        sub.show()
 
     def _spawn_recordings_browser(self, filter):
         QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
@@ -3609,8 +3610,8 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         sub.mdiParent = self.mdiParent
         self.mdiParent.mdiArea.addSubWindow(sub)
         self.mdiParent.PositionChildWindow(sub, self.mdiParent)
+        sub.FillRecordings(filter)   # fill hidden, then show: see _createRecordingsWindow
         sub.show()
-        sub.FillRecordings(filter)
         QApplication.restoreOverrideCursor()
 
     # ------------------------------------------------------------------
