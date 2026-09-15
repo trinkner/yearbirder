@@ -598,6 +598,24 @@ _checkmark_path = os.path.join(tempfile.gettempdir(),
 with open(_checkmark_path, "w", encoding="utf-8") as _f:
     _f.write(_checkmark_svg)
 
+# Combo drop-down chevron, written the same way.  Without a ::drop-down rule
+# Fusion paints its own arrow button — a separate square-cornered box with a
+# divider line — on top of the combo's rounded border, which reads as a second
+# widget bolted onto the first.  A dimmer copy marks disabled combos.
+def _writeChevron(name, colour):
+    svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">
+  <polyline points="1.5,3.5 5,7 8.5,3.5"
+            stroke="{colour}" stroke-width="1.6"
+            fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>"""
+    path = os.path.join(tempfile.gettempdir(), name).replace("\\", "/")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(svg)
+    return path
+
+_chevron_path = _writeChevron("yearbirder_chevron.svg", "#b8bccb")
+_chevron_disabled_path = _writeChevron("yearbirder_chevron_disabled.svg", "#5c6070")
+
 stylesheetBase += f"""
     QCheckBox::indicator {{
         border: 2px solid #8b8fa8;
@@ -609,6 +627,22 @@ stylesheetBase += f"""
     QCheckBox::indicator:checked {{
         border-color: {CHART_PRIMARY};
         image: url({_checkmark_path});
+    }}
+
+    QComboBox::drop-down {{
+        subcontrol-origin: padding;
+        subcontrol-position: center right;
+        width: 18px;
+        border: none;
+        background: transparent;
+    }}
+    QComboBox::down-arrow {{
+        image: url({_chevron_path});
+        width: 10px;
+        height: 10px;
+    }}
+    QComboBox::down-arrow:disabled {{
+        image: url({_chevron_disabled_path});
     }}
 """
 

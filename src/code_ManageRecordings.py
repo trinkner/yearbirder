@@ -1132,9 +1132,10 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         cboRating.lineEdit().setFont(_panelFont)
         # Transparent line edit; the left padding offsets the drop-down arrow on
         # the right so the text sits centred under the full control, not just the
-        # area left of the arrow.
+        # area left of the arrow.  38px is measured against the global
+        # QComboBox::drop-down rule (18px wide) — change both together.
         cboRating.lineEdit().setStyleSheet(
-            "QLineEdit { background: transparent; border: none; padding-left: 30px; }")
+            "QLineEdit { background: transparent; border: none; padding-left: 38px; }")
         for _i in range(cboRating.count()):
             cboRating.setItemData(_i, Qt.AlignCenter, Qt.TextAlignmentRole)
         try:
