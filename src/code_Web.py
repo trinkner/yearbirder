@@ -372,8 +372,8 @@ class _AudioGalleryBridge(QObject):
         sub.mdiParent = main
         main.mdiArea.addSubWindow(sub)
         main.PositionChildWindow(sub, self._web)
+        sub.FillRecordings(new_filter)   # fill hidden, then show: see _createRecordingsWindow
         sub.show()
-        sub.FillRecordings(new_filter)
 
 
 class _PhotoGalleryBridge(QObject):
@@ -433,8 +433,8 @@ class GeolocatedRecordingsBridge(QObject):
         sub.mdiParent = main
         main.mdiArea.addSubWindow(sub)
         main.PositionChildWindow(sub, self._web)
+        sub.FillRecordings(new_filter)   # fill hidden, then show: see _createRecordingsWindow
         sub.show()
-        sub.FillRecordings(new_filter)
 
 
 class AnimatedRecordingsBridge(QObject):
@@ -465,8 +465,8 @@ class AnimatedRecordingsBridge(QObject):
         sub.mdiParent = main
         main.mdiArea.addSubWindow(sub)
         main.PositionChildWindow(sub, self._web)
+        sub.FillRecordings(new_filter)   # fill hidden, then show: see _createRecordingsWindow
         sub.show()
-        sub.FillRecordings(new_filter)
 
 
 class RegionalTaxonomyBridge(QObject):

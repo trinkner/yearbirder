@@ -705,8 +705,8 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
 
         self.parent().parent().addSubWindow(sub)
         self.mdiParent.PositionChildWindow(sub, self)
+        sub.FillRecordings(filter)   # fill hidden, then show: see MainWindow._createRecordingsWindow
         sub.show()
-        sub.FillRecordings(filter)
 
 
     def CreateWebPageForWikipedia(self):

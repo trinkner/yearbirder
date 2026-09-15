@@ -2672,8 +2672,11 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
         self.mdiArea.addSubWindow(sub)
         self.PositionChildWindow(sub, self)
-        sub.show()
 
+        # Fill while still hidden, then show: a browser with only a few
+        # recordings resizes itself to fit once its cards exist, and on a
+        # window that is already showing that reads as a flash (Photos builds
+        # hidden for the same reason).
         if sub.FillRecordings(filter) is False:
             sub.close()
             QMessageBox.information(
@@ -2682,6 +2685,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 "No recordings match the current filter.",
                 QMessageBox.StandardButton.Ok,
             )
+            return
+        sub.show()
 
     def createRenameMedia(self):
 
