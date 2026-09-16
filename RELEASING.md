@@ -40,11 +40,11 @@ workflow's `on:` triggers). The final **merge to `master`** is the one deliberat
    ```
 
 3. **Update the website** in `web/` — e.g. the version text and the macOS DMG link
-   in `web/download.html`, plus any new screenshots. (The Windows button points at
-   `releases/latest/download/Yearbirder_Setup.exe`, which always resolves to the newest
-   release, so it needs no edit. GitHub still counts downloads per release even though
-   the file name never changes — which is the point: it is the only per-version count
-   the Windows installer has.)
+   in `web/download.html`, plus any new screenshots. Both download buttons point at
+   this release's own assets — `download/vX.YY/Yearbirder_vX.YY.dmg` and
+   `download/vX.YY/Yearbirder_Setup.exe` — and step 14 of `build_release.sh` rewrites
+   both, so neither is edited by hand. GitHub counts downloads per asset per release,
+   which is the point: it is the only per-version count the Windows installer has.
 
 4. **Commit and push the branch:**
 

@@ -413,6 +413,9 @@ with open(html_path) as f:
 content = content.replace(f"v{old_v}/Yearbirder_v{old_v}.dmg",  f"v{new_v}/Yearbirder_v{new_v}.dmg")
 content = content.replace(f"Yearbirder_v{old_v}.dmg",           f"Yearbirder_v{new_v}.dmg")
 content = content.replace(f"refs/tags/v{old_v}.zip",            f"refs/tags/v{new_v}.zip")
+# The Windows installer's name never changes, so only the tag in its path moves.
+content = content.replace(f"download/v{old_v}/Yearbirder_Setup.exe",
+                          f"download/v{new_v}/Yearbirder_Setup.exe")
 content = re.sub(
     rf'v{re.escape(old_v)} &nbsp;·&nbsp; \S+ \d+',
     f'v{new_v} &nbsp;·&nbsp; {new_date}',
@@ -455,7 +458,7 @@ echo "    BOTH dist/Yearbirder_v${VERSION}.dmg and the tested"
 echo "    Yearbirder_Setup.exe."
 echo "    web/download.html links to"
 echo "    .../download/v${VERSION}/Yearbirder_v${VERSION}.dmg and to"
-echo "    .../releases/latest/download/Yearbirder_Setup.exe — both 404 from"
+echo "    .../download/v${VERSION}/Yearbirder_Setup.exe — both 404 from"
 echo "    the moment of merge until the release carries those assets, so do"
 echo "    not leave a gap between steps 11 and 12.  The master build"
 echo "    re-uploads the .exe and adds the .msix when it finishes."
