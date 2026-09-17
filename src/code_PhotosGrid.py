@@ -29,6 +29,7 @@ from functools import partial
 
 CELL_SPACING = 6     # gap between cells, and between rows of cells
 CAPTION_H    = 34    # room under the thumbnail for the species name (2 lines)
+DATE_H       = 16    # one line under the name for the capture date
 CELL_PADDING = 12    # card margins around the thumbnail (6 per side)
 DEFAULT_COLS = 4     # columns the window opens sized to
 
@@ -102,11 +103,17 @@ class PhotosGrid(code_Photos.Photos):
         nameLabel.setAlignment(Qt.AlignHCenter | Qt.AlignTop)
         nameLabel.setObjectName("mediaCaption")
 
+        dateLabel = QLabel(self.captureDate(p, s))
+        dateLabel.setFixedWidth(self.CELL_SIZE.width())
+        dateLabel.setFixedHeight(DATE_H)
+        dateLabel.setAlignment(Qt.AlignHCenter | Qt.AlignTop)
+        dateLabel.setObjectName("mediaCaptionDate")
+
         cell = QWidget()
         cell.setObjectName("mediaCard")
         cell.setAttribute(Qt.WA_StyledBackground, True)
         cell.setFixedSize(self.CELL_SIZE.width() + 12,
-                          self.CELL_SIZE.height() + CAPTION_H + 12)
+                          self.CELL_SIZE.height() + CAPTION_H + DATE_H + 12)
         cell.setCursor(Qt.PointingHandCursor)
         # The whole card is clickable, not just the thumbnail, so the caption
         # and the padding around it open the photo too.
@@ -123,6 +130,7 @@ class PhotosGrid(code_Photos.Photos):
         lay.setSpacing(0)
         lay.addWidget(imgLabel, 0, Qt.AlignHCenter)
         lay.addWidget(nameLabel, 0, Qt.AlignHCenter)
+        lay.addWidget(dateLabel, 0, Qt.AlignHCenter)
 
         self._cellWidgets.append(cell)
         self._photoButtons[row] = imgLabel   # the drain fills this

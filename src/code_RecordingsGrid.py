@@ -40,6 +40,7 @@ CELL_SPACING = 6
 # to one line reclaims ~13px per cell and truncates those names, so the second
 # line stays.
 CAPTION_H    = 34    # species name (2 lines)
+DATE_H       = 16    # one line under the name for the recording date
 CELL_PADDING = 12    # card margins around the contents (6 per side)
 PLAY_STRIP_H = 28    # Play button / scrubber height
 STRIP_GAP    = 7     # gap between spectrogram and the play strip
@@ -126,13 +127,19 @@ class RecordingsGrid(code_Recordings.Recordings):
         nameLabel.setAlignment(Qt.AlignHCenter | Qt.AlignTop)
         nameLabel.setObjectName("mediaCaption")
 
+        dateLabel = QLabel(self.captureDate(a, s))
+        dateLabel.setFixedWidth(CELL_W)
+        dateLabel.setFixedHeight(DATE_H)
+        dateLabel.setAlignment(Qt.AlignHCenter | Qt.AlignTop)
+        dateLabel.setObjectName("mediaCaptionDate")
+
         cell = QWidget()
         cell.setObjectName("mediaCard")
         cell.setAttribute(Qt.WA_StyledBackground, True)
         cell.setFixedSize(
             CELL_W + CELL_PADDING,
             self.SPECTRO_SIZE.height() + STRIP_GAP + PLAY_STRIP_H
-            + CAPTION_H + CELL_PADDING,
+            + CAPTION_H + DATE_H + CELL_PADDING,
         )
         # Full detail on hover — the card view's caption in tooltip form.  The
         # card itself is NOT click-to-open: the Play button and scrubber live
@@ -150,6 +157,7 @@ class RecordingsGrid(code_Recordings.Recordings):
         lay.addSpacing(STRIP_GAP)
         lay.addWidget(scrubRow)
         lay.addWidget(nameLabel, 0, Qt.AlignHCenter)
+        lay.addWidget(dateLabel, 0, Qt.AlignHCenter)
 
         self._cellWidgets.append(cell)
         self._spectroLabels[row] = spectroLabel

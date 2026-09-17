@@ -631,6 +631,16 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
         pass
 
     @staticmethod
+    def captureDate(p, s):
+        """"YYYY-MM-DD" for a photo — its own EXIF capture date when the
+        catalog has one, else the checklist's.  The date half of
+        captureDateLine, for callers with no room for a weekday and a time."""
+        exif_dt = p.get("exifDatetime")
+        if exif_dt and len(exif_dt) >= 10:
+            return exif_dt[0:4] + "-" + exif_dt[5:7] + "-" + exif_dt[8:10]
+        return s.get("date", "")
+
+    @staticmethod
     def captureDateLine(p, s):
         """"Weekday, YYYY-MM-DD HH:MM" for a photo — its own EXIF capture time
         when the catalog has one, else the checklist's date/time."""

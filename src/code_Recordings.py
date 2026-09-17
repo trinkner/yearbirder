@@ -796,6 +796,13 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
         pass
 
     @staticmethod
+    def captureDate(a, s):
+        """"YYYY-MM-DD" for a recording — its own embedded date when the file
+        carries one, else the checklist's.  The date half of captureDateLine,
+        for callers with no room for a weekday and a time."""
+        return a.get("metaDate") or s.get("date", "")
+
+    @staticmethod
     def captureDateLine(a, s):
         """Weekday, YYYY-MM-DD HH:MM for a recording — its own embedded
         date/time when the file carries one, else the checklist's."""
