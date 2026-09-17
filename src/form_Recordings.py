@@ -95,6 +95,12 @@ class Ui_frmRecordings(object):
         self.rdoSortDate.setObjectName("rdoSortDate")
         self.sortButtonGroup.addButton(self.rdoSortDate, 1)
 
+        # Same day-of-year ordering the list windows offer on their date
+        # columns (code_SeasonalSort), as a sort key rather than a right-click.
+        self.rdoSortSeasonal = QtWidgets.QRadioButton(self.frameLabels)
+        self.rdoSortSeasonal.setObjectName("rdoSortSeasonal")
+        self.sortButtonGroup.addButton(self.rdoSortSeasonal, 4)
+
         self.rdoSortRating = QtWidgets.QRadioButton(self.frameLabels)
         self.rdoSortRating.setObjectName("rdoSortRating")
         self.sortButtonGroup.addButton(self.rdoSortRating, 2)
@@ -123,12 +129,14 @@ class Ui_frmRecordings(object):
         self.sortRow.addWidget(self.lblSortBy)
         self.sortRow.addWidget(self.rdoSortSpecies)
         self.sortRow.addWidget(self.rdoSortDate)
+        self.sortRow.addWidget(self.rdoSortSeasonal)
         self.sortRow.addWidget(self.rdoSortRating)
         self.sortRow.addWidget(self.rdoSortTaxonomy)
-        self.sortRow.addSpacing(40)
+        # The stretch sits between the two groups, so the keys stay left and the
+        # direction pair rides the right edge of the banner.
+        self.sortRow.addStretch()
         self.sortRow.addWidget(self.rdoSortAscending)
         self.sortRow.addWidget(self.rdoSortDescending)
-        self.sortRow.addStretch()
         self.verticalLayoutLabels.addLayout(self.sortRow)
 
         self.horizontalLayoutHeader.addWidget(self.frameLabels, 1)
@@ -209,6 +217,7 @@ class Ui_frmRecordings(object):
         self.lblSortBy.setText(_translate("frmRecordings", "Sort by:"))
         self.rdoSortSpecies.setText(_translate("frmRecordings", "Alphabetical"))
         self.rdoSortDate.setText(_translate("frmRecordings", "Date"))
+        self.rdoSortSeasonal.setText(_translate("frmRecordings", "Seasonal Date"))
         self.rdoSortRating.setText(_translate("frmRecordings", "Rating"))
         self.rdoSortTaxonomy.setText(_translate("frmRecordings", "Taxonomy"))
         self.rdoSortAscending.setText(_translate("frmRecordings", "Ascending"))
