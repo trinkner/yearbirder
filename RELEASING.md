@@ -86,21 +86,25 @@ workflow's `on:` triggers). The final **merge to `master`** is the one deliberat
    ```
 
    Attaching the tested `.exe` yourself closes the window where the release exists but
-   the Windows asset does not. The master build re-uploads `Yearbirder_Setup.exe` and
-   `.msix` with `--clobber` when it finishes (~8 minutes), which is harmless: identical
-   code, and the `.msix` arrives that way.
+   the Windows asset does not. The master build (~8 minutes later) adds only what is
+   missing — in practice the `.msix` — and leaves your `.exe` untouched: it skips any
+   asset the release already carries, because re-uploading resets that asset's download
+   count to zero.
 
 ## Ship exactly what you tested
 
 The installer built from the branch and the one built after merging come from
-identical code, so promoting the tested artifact is safe. Attaching the branch-built
-artifact in step 8 ships the exact bytes you tested; the master build then overwrites
-that asset with its own copy. If you want the tested bytes to be the ones that stay,
-re-upload them after CI finishes:
+identical code, so either is safe to ship. Attaching the branch-built artifact in step 8
+means the bytes you tested are the bytes users get, and they stay that way: later builds
+skip an asset that is already attached.
+
+That also means a bad asset is never replaced automatically. To swap one deliberately:
 
 ```
-gh release upload vX.YY <the tested Yearbirder_Setup.exe> --clobber
+gh release upload vX.YY <file> --clobber
 ```
+
+which resets that asset's download count — the reason the workflow never does it.
 
 ## The R2 bucket
 

@@ -58,14 +58,22 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $tag = "v${{ steps.version.outputs.version }}"
-          $exists = gh release view $tag 2>&1
-          if ($LASTEXITCODE -eq 0) {
-            gh release upload $tag dist/Yearbirder_Setup.exe --clobber
-            Write-Host "Uploaded Yearbirder_Setup.exe to release $tag"
-          } else {
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -ne 0) {
             Write-Host "No release found for $tag — skipping upload"
             exit 0
           }
+          # Never --clobber: replacing an asset deletes and re-creates it, which
+          # resets its download count to zero.  Those counts are the only
+          # per-version measure of Windows downloads, and every push to master
+          # re-runs this build, so clobbering would wipe the tally each time.
+          $assets = @(gh release view $tag --json assets --jq '.assets[].name')
+          if ($assets -contains "Yearbirder_Setup.exe") {
+            Write-Host "Yearbirder_Setup.exe is already attached to $tag — leaving it alone (re-uploading would reset its download count)"
+            exit 0
+          }
+          gh release upload $tag dist/Yearbirder_Setup.exe
+          Write-Host "Uploaded Yearbirder_Setup.exe to release $tag"
 
       - name: Generate MSIX icon assets
         run: |
@@ -139,11 +147,19 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $tag = "v${{ steps.version.outputs.version }}"
-          $exists = gh release view $tag 2>&1
-          if ($LASTEXITCODE -eq 0) {
-            gh release upload $tag dist\Yearbirder_Setup.msix --clobber
-            Write-Host "Uploaded Yearbirder_Setup.msix to release $tag"
-          } else {
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -ne 0) {
             Write-Host "No release found for $tag — skipping upload"
             exit 0
           }
+          # Never --clobber: replacing an asset deletes and re-creates it, which
+          # resets its download count to zero.  Those counts are the only
+          # per-version measure of Windows downloads, and every push to master
+          # re-runs this build, so clobbering would wipe the tally each time.
+          $assets = @(gh release view $tag --json assets --jq '.assets[].name')
+          if ($assets -contains "Yearbirder_Setup.msix") {
+            Write-Host "Yearbirder_Setup.msix is already attached to $tag — leaving it alone (re-uploading would reset its download count)"
+            exit 0
+          }
+          gh release upload $tag dist\Yearbirder_Setup.msix
+          Write-Host "Uploaded Yearbirder_Setup.msix to release $tag"
