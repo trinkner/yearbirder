@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Page Not Found — Yearbirder</title>
+  <meta name="description" content="That page isn't here. Find Yearbirder's overview, features, and download page.">
+  <!-- A 404 should never be indexed; the status code says so too, but this is
+       belt and braces for crawlers that fetch the body first. -->
+  <meta name="robots" content="noindex">
+  <link rel="icon" type="image/x-icon" href="/images/favicon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css">
+
+  <!-- Every link on this page is root-relative, not "index.html" like the rest
+       of the site: Cloudflare Pages serves this file for ANY unknown path,
+       including deep ones such as /foo/bar, where relative links would resolve
+       against /foo/ and break. -->
+  <style>
+    .notfound-hero {
+      background: linear-gradient(160deg, var(--forest) 0%, var(--grove) 100%);
+      padding: 72px 0 60px;
+      text-align: center;
+      color: var(--white);
+    }
+    .notfound-hero h1 { color: var(--white); font-size: clamp(2rem, 4vw, 3rem); margin-bottom: 12px; }
+    .notfound-hero p  { color: rgba(255,255,255,.8); font-size: 1.05rem; }
+
+    .notfound-body { padding: 72px 0 96px; }
+
+    .notfound-content {
+      max-width: 720px;
+      margin: 0 auto;
+      text-align: center;
+    }
+    .notfound-content p {
+      font-size: 0.97rem;
+      color: var(--slate);
+      line-height: 1.75;
+      margin-bottom: 28px;
+    }
+
+    .notfound-links {
+      list-style: none;
+      margin: 0 auto;
+      padding: 0;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 14px;
+      text-align: left;
+    }
+    .notfound-links li a {
+      display: block;
+      padding: 14px 18px;
+      border: 1px solid var(--mist, #dcdcd4);
+      border-radius: 10px;
+      text-decoration: none;
+      color: var(--ink);
+      font-weight: 600;
+    }
+    .notfound-links li a:hover { border-color: var(--grove); }
+    .notfound-links li a span {
+      display: block;
+      font-weight: 400;
+      font-size: 0.9rem;
+      color: var(--slate);
+      margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Navigation ─────────────────────────────────────────────────── -->
+<nav>
+  <div class="nav-inner">
+    <a href="/" class="nav-brand">
+      <img src="/images/opt/icon.webp" alt="Yearbirder icon" width="90" height="90">
+      Yearbirder
+    </a>
+    <ul class="nav-links">
+      <li><a href="/">Overview</a></li>
+      <li><a href="/sighting-analysis">Sighting Analysis</a></li>
+      <li><a href="/photography">Photography</a></li>
+      <li><a href="/recordings">Recordings</a></li>
+      <li><a href="/community">Community</a></li>
+      <li><a href="/download" class="nav-download">Download</a></li>
+      <li><a href="/history">Version History</a></li>
+      <li><a href="https://github.com/trinkner/yearbirder" target="_blank" rel="noopener">GitHub</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- ── Hero ───────────────────────────────────────────────────────── -->
+<section class="notfound-hero">
+  <div class="container">
+    <h1>That page isn't here</h1>
+    <p>The link may be out of date, or the address may have a typo in it.</p>
+  </div>
+</section>
+
+<!-- ── Content ────────────────────────────────────────────────────── -->
+<section class="notfound-body">
+  <div class="container">
+    <div class="notfound-content">
+
+      <p>Everything on the site is one click away:</p>
+
+      <ul class="notfound-links">
+        <li><a href="/download">Download Yearbirder<span>macOS, Windows, or run from source on Linux</span></a></li>
+        <li><a href="/">Overview<span>What Yearbirder is, and who it is for</span></a></li>
+        <li><a href="/sighting-analysis">Sighting Analysis<span>Lists, totals, charts, maps, and the Trip Report</span></a></li>
+        <li><a href="/photography">Photography<span>Your bird photos, filtered the way a birder thinks</span></a></li>
+        <li><a href="/recordings">Recordings<span>Spectrograms, playback, and recording gear</span></a></li>
+        <li><a href="/community">Community Sightings<span>What other birders are reporting near you</span></a></li>
+        <li><a href="/history">Version History<span>What changed in each release</span></a></li>
+        <li><a href="https://github.com/trinkner/yearbirder">Yearbirder on GitHub<span>Source code, releases, and issues</span></a></li>
+      </ul>
+
+    </div>
+  </div>
+</section>
+
+<!-- ── Footer ─────────────────────────────────────────────────────── -->
+<footer>
+  <div class="container footer-inner">
+    <p>© 2026 Richard Trinkner &nbsp;·&nbsp; Free software under the <a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" rel="noopener">GNU GPL v3</a></p>
+    <ul class="footer-links">
+      <li><a href="/">Overview</a></li>
+      <li><a href="/sighting-analysis">Sighting Analysis</a></li>
+      <li><a href="/photography">Photography</a></li>
+      <li><a href="/recordings">Recordings</a></li>
+      <li><a href="/community">Community</a></li>
+      <li><a href="/download">Download</a></li>
+      <li><a href="/history">Version History</a></li>
+      <li><a href="https://github.com/trinkner/yearbirder" target="_blank" rel="noopener">GitHub</a></li>
+      <li><a href="https://ebird.org" target="_blank" rel="noopener">eBird</a></li>
+      <li><a href="/privacy">Privacy Policy</a></li>
+    </ul>
+  </div>
+</footer>
+
+</body>
+</html>
