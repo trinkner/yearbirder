@@ -63,10 +63,12 @@ class PhotosGrid(code_Photos.Photos):
     # ── Layout ────────────────────────────────────────────────────────────────
 
     def _captionHeight(self):
-        """One line of the caption font plus the stylesheet's 3px padding."""
+        """One line of the caption font, plus 6px so the descenders clear the
+        date line below.  mediaCaptionName has no vertical padding, so that
+        slack sits under the text rather than above it."""
         if self._captionH is None:
             probe = QLabel()
-            probe.setObjectName("mediaCaption")
+            probe.setObjectName("mediaCaptionName")
             self._captionH = QFontMetrics(probe.font()).height() + 6
         return self._captionH
 
@@ -116,7 +118,7 @@ class PhotosGrid(code_Photos.Photos):
         nameLabel.setFixedWidth(self.CELL_SIZE.width())
         nameLabel.setFixedHeight(captionH)
         nameLabel.setAlignment(Qt.AlignHCenter | Qt.AlignTop)
-        nameLabel.setObjectName("mediaCaption")
+        nameLabel.setObjectName("mediaCaptionName")
         nameLabel.setText(QFontMetrics(nameLabel.font()).elidedText(
             s["commonName"], Qt.ElideRight, self.CELL_SIZE.width() - 6))
 

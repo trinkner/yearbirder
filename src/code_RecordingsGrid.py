@@ -35,13 +35,10 @@ from functools import partial
 # the scrubber needs usable travel beside it.
 CELL_W       = 260
 CELL_SPACING = 6
-# Species name: TWO lines.  Plain common names fit one 15px line at this width,
-# but hybrid and subspecies forms do not — "Greater White-fronted x Canada Goose
-# (hybrid)" and "Yellow-rumped Warbler (Myrtle x Audubon's)" both wrap.  Sizing
-# to one line reclaims ~13px per cell and truncates those names, so the second
-# line stays.
-# One measured line for the species name — see code_PhotosGrid for why, and
-# for what happens to the rare name too wide to fit.
+# One measured line for the species name — see code_PhotosGrid for why, and for
+# what happens to the rare name too wide to fit.  At this width that is 10 of
+# 1,323 species: hybrid and subspecies forms such as "Greater White-fronted x
+# Canada Goose (hybrid)".
 DATE_H       = 16    # one line under the name for the recording date
 CELL_PADDING = 12    # card margins around the contents (6 per side)
 PLAY_STRIP_H = 28    # Play button / scrubber height
@@ -72,10 +69,12 @@ class RecordingsGrid(code_Recordings.Recordings):
     # ── Layout ────────────────────────────────────────────────────────────────
 
     def _captionHeight(self):
-        """One line of the caption font plus the stylesheet's 3px padding."""
+        """One line of the caption font, plus 6px so the descenders clear the
+        date line below.  mediaCaptionName has no vertical padding, so that
+        slack sits under the text rather than above it."""
         if self._captionH is None:
             probe = QLabel()
-            probe.setObjectName("mediaCaption")
+            probe.setObjectName("mediaCaptionName")
             self._captionH = QFontMetrics(probe.font()).height() + 6
         return self._captionH
 
@@ -136,7 +135,7 @@ class RecordingsGrid(code_Recordings.Recordings):
         nameLabel.setFixedWidth(CELL_W)
         nameLabel.setFixedHeight(captionH)
         nameLabel.setAlignment(Qt.AlignHCenter | Qt.AlignTop)
-        nameLabel.setObjectName("mediaCaption")
+        nameLabel.setObjectName("mediaCaptionName")
         nameLabel.setText(QFontMetrics(nameLabel.font()).elidedText(
             s["commonName"], Qt.ElideRight, CELL_W - 6))
 

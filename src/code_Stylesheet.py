@@ -291,6 +291,11 @@ stylesheetBase = """
     QWidget#cardTransparent { background: transparent; }
     SpeciesTagStrip { background: transparent; }
     QLabel#mediaCaption { background: transparent; color: silver; padding: 3px; }
+    /* The grid cards' species name.  Same colour as the card view's caption but
+       no vertical padding: the name is given exactly one line there, and 3px
+       above it pushed the descenders into the date line below.  The measured
+       line height leaves the slack underneath instead. */
+    QLabel#mediaCaptionName { background: transparent; color: silver; padding: 0px 3px; }
     /* The grid cards' capture date, under the species name: dimmer, so the
        name still leads and the date reads as a subtitle. */
     QLabel#mediaCaptionDate { background: transparent; color: #8b8fa8; padding: 0px; }
