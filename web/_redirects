@@ -1,0 +1,35 @@
+# Cloudflare Pages redirects.  One rule per line: <from> <to> <status>.
+#
+# These catch the near-misses worth catching — mistyped and plausible-but-wrong
+# addresses that a person might type or an old link might carry.  Anything not
+# listed here falls through to 404.html, which is the point: a wrong address
+# should say so rather than silently becoming the homepage.
+#
+# 301 is permanent, so browsers and Google remember it.
+
+# Download page — the one people type from memory, and the likeliest typo.
+/dwnload          /download            301
+/downlaod         /download            301
+/downloads        /download            301
+/get              /download            301
+/install          /download            301
+
+# Section names in their other plausible spellings.
+/photos           /photography         301
+/photo            /photography         301
+/recording        /recordings          301
+/audio            /recordings          301
+/sightings        /sighting-analysis   301
+/analysis         /sighting-analysis   301
+/analyze          /sighting-analysis   301
+
+# Version history, under the names release notes usually go by.
+/changelog        /history             301
+/releases         /history             301
+/whats-new        /history             301
+/versions         /history             301
+
+# Odds and ends.
+/home             /                    301
+/index            /                    301
+/privacy-policy   /privacy             301
