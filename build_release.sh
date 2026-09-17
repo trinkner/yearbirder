@@ -413,9 +413,15 @@ with open(html_path) as f:
 content = content.replace(f"v{old_v}/Yearbirder_v{old_v}.dmg",  f"v{new_v}/Yearbirder_v{new_v}.dmg")
 content = content.replace(f"Yearbirder_v{old_v}.dmg",           f"Yearbirder_v{new_v}.dmg")
 content = content.replace(f"refs/tags/v{old_v}.zip",            f"refs/tags/v{new_v}.zip")
-# The Windows installer's name never changes, so only the tag in its path moves.
+# The Windows installer carries its version too, so the tag AND the filename
+# move.  The first rule migrates the pre-2.17 unversioned link, the second is
+# the ordinary release-to-release case, and the third catches the unversioned
+# name where the page spells it out in prose.
 content = content.replace(f"download/v{old_v}/Yearbirder_Setup.exe",
-                          f"download/v{new_v}/Yearbirder_Setup.exe")
+                          f"download/v{new_v}/Yearbirder_Setup_v{new_v}.exe")
+content = content.replace(f"Yearbirder_Setup_v{old_v}.exe",
+                          f"Yearbirder_Setup_v{new_v}.exe")
+content = content.replace("Yearbirder_Setup.exe", f"Yearbirder_Setup_v{new_v}.exe")
 content = re.sub(
     rf'v{re.escape(old_v)} &nbsp;·&nbsp; \S+ \d+',
     f'v{new_v} &nbsp;·&nbsp; {new_date}',
@@ -447,7 +453,8 @@ echo "    and test the installer on the Windows VM."
 echo ""
 echo " 9. Update README.md for v${VERSION} and commit to the branch."
 echo ""
-echo "10. Keep the tested Yearbirder_Setup.exe — you attach it to the release"
+echo "10. Keep the tested Yearbirder_Setup_v${VERSION}.exe — you attach it"
+echo "    to the release"
 echo "    in step 12.  Both download buttons are served from the GitHub"
 echo "    release now, so nothing needs uploading to Cloudflare R2."
 echo ""
@@ -455,10 +462,11 @@ echo "11. Merge release/v${VERSION} to master (this takes the website live)."
 echo ""
 echo "12. Immediately create tag v${VERSION} and a GitHub release, attaching"
 echo "    BOTH dist/Yearbirder_v${VERSION}.dmg and the tested"
-echo "    Yearbirder_Setup.exe."
+echo "    Yearbirder_Setup_v${VERSION}.exe."
 echo "    web/download.html links to"
 echo "    .../download/v${VERSION}/Yearbirder_v${VERSION}.dmg and to"
-echo "    .../download/v${VERSION}/Yearbirder_Setup.exe — both 404 from"
+echo "    .../download/v${VERSION}/Yearbirder_Setup_v${VERSION}.exe — both"
+echo "    404 from"
 echo "    the moment of merge until the release carries those assets, so do"
 echo "    not leave a gap between steps 11 and 12.  The master build"
 echo "    re-uploads the .exe and adds the .msix when it finishes."
