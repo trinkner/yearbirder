@@ -752,7 +752,8 @@ class DataBase():
             "USL":"USA Lower 48",
             "AUA":"Australasia (ABA)",
             "AUE":"Australasia (eBird)",
-            "AUS":"Australia and Territories"
+            "AUS":"Australia and Territories",
+            "ATL":"Atlantic"
             }) 
         self.regionCodeDict = ({
             "ABA Area":"ABA",
