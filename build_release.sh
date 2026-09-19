@@ -81,16 +81,34 @@ fi
 
 echo ""
 echo " 3. User Guide (${GUIDE_HTML}) — ships inside the .app"
-GUIDE_HITS=$(grep -c "What's New in v${VERSION}" "$GUIDE_HTML" 2>/dev/null || true)
-if [ "${GUIDE_HITS:-0}" -ge 2 ]; then
-    ok "What's New heading and table-of-contents entry both name v${VERSION}"
-elif [ "${GUIDE_HITS:-0}" -eq 1 ]; then
-    warn "only one of the What's New heading / TOC entry says v${VERSION} — the other is stale"
+# The guide carries no changelog: history.html (checked above) is the only one.
+# What matters here is that the published copy on the website matches the copy
+# about to be built into the app — publish_guide.py regenerates it, so a
+# difference means it was never re-run after the guide changed.
+WEB_GUIDE="web/guide/index.html"
+if [ ! -f "$WEB_GUIDE" ]; then
+    warn "$WEB_GUIDE does not exist — run ./publish_guide.py"
 else
-    warn "no \"What's New in v${VERSION}\" section"
+    venv/bin/python3 publish_guide.py > /tmp/publish_guide_check.txt 2>&1
+    if git diff --quiet -- "$WEB_GUIDE" 2>/dev/null; then
+        ok "published guide matches the one shipping in the app"
+    else
+        warn "$WEB_GUIDE was out of date and has been regenerated — commit it"
+    fi
 fi
-if [ -n "$PREV_VERSION" ] && ! grep -q "Earlier changes in v${PREV_VERSION}" "$GUIDE_HTML"; then
-    warn "v${PREV_VERSION} was never demoted to \"Earlier changes in v${PREV_VERSION}\""
+if grep -q "What's New" "$GUIDE_HTML"; then
+    warn "the guide mentions What's New — that section moved to the website"
+fi
+
+echo ""
+echo " 3b. Offline What's New (src/guide/whatsnew.html) — ships inside the .app"
+# Regenerated from history.html below, at Step 0, before PyInstaller bundles
+# src/guide.  Checked here so a missing v${VERSION} entry in history.html is
+# reported with the other pre-flight problems rather than mid-build.
+if grep -q "release-version\">v${VERSION}<" "$HISTORY_HTML" 2>/dev/null; then
+    ok "history.html has a v${VERSION} entry to build it from"
+else
+    warn "history.html has no v${VERSION} entry — the app's What's New will stop at the previous release"
 fi
 
 echo ""
@@ -170,6 +188,14 @@ codesign_retry() {
 sign_file() {
     codesign_retry "$1" --options runtime --entitlements "$ENTS"
 }
+
+echo "=== Step 0: Regenerate the bundled docs ==="
+# src/guide is copied into the app by the spec, so both of these must be
+# current BEFORE PyInstaller runs.  publish_whatsnew.py cuts the changelog off
+# at this version; publish_guide.py refreshes the website's copy of the guide.
+venv/bin/python3 publish_whatsnew.py "${VERSION}"
+venv/bin/python3 publish_guide.py
+echo ""
 
 echo "=== Step 1: PyInstaller build ==="
 venv/bin/python3 -m PyInstaller Yearbirder.spec --noconfirm

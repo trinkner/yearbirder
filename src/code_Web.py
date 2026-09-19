@@ -186,6 +186,12 @@ class _ExternalLinkPage(QWebEnginePage):
         return super().acceptNavigationRequest(url, nav_type, is_main_frame)
 
 
+# The live changelog, linked from the update dialog and from the foot of the
+# app's own offline copy.  The app does NOT show this page directly: it would
+# describe releases the user may not be running (see publish_whatsnew.py).
+WHATS_NEW_URL = "https://yearbirder.org/history"
+
+
 class _FullScreenPage(QWebEnginePage):
     """QWebEnginePage that intercepts yearbirder://togglefullscreen navigation
     requests and routes them to the Web window's fullscreen toggle method."""
@@ -1303,6 +1309,31 @@ td {{ border-bottom:1px solid #e8e8e8; vertical-align:middle; }}
         self.resizeMe()
         self.scaleMe()
         self.setWindowTitle("User Guide")
+        return True
+
+
+    def loadWhatsNew(self):
+        """Show the changelog that shipped with THIS build.
+
+        Local, not the live history page: a user running an older version would
+        otherwise read about features their build does not have.  The file is
+        generated from web/history.html at build time by publish_whatsnew.py,
+        cut off at the version being built, and its footer links to the live
+        page for anything newer.
+        """
+        self.title = "What's New"
+        self.contentType = "What's New"
+        if getattr(sys, 'frozen', False):
+            base_path = sys._MEIPASS
+        else:
+            base_path = os.path.dirname(os.path.abspath(__file__))
+        page_path = os.path.join(base_path, "guide", "whatsnew.html")
+        self._whatsNewPage = _ExternalLinkPage(self.webView)
+        self.webView.setPage(self._whatsNewPage)
+        self.webView.load(QUrl.fromLocalFile(page_path))
+        self.resizeMe()
+        self.scaleMe()
+        self.setWindowTitle("What's New")
         return True
 
 
