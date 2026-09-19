@@ -7,8 +7,8 @@ does not have and go hunting for menus that are not there.  So the build writes
 a snapshot into src/guide/whatsnew.html containing the releases up to and
 including the version being built, and the app loads that from disk.
 
-The page says which version it runs through, so it never implies it is current,
-and links to the live history for anyone who wants the rest.
+Its footer names the newest release it contains and links to the live history,
+so it never implies it is current.
 
 Run it whenever history.html changes; build_release.sh runs it before the
 PyInstaller step, since src/guide is bundled into the app.
@@ -87,9 +87,8 @@ PAGE = """<!DOCTYPE html>
       border-bottom: 2px solid #2D6A4F;
       padding-bottom: 0.4rem;
       color: #1A2B1C;
-      margin-bottom: 0.3rem;
+      margin-bottom: 1.6rem;
     }}
-    .through {{ color: #5A6E5B; font-size: 0.95rem; margin: 0 0 2rem; }}
     h2 {{
       font-size: 1.3rem;
       color: #1B4332;
@@ -117,7 +116,6 @@ PAGE = """<!DOCTYPE html>
 <body>
 
 <h1>What's New in Yearbirder</h1>
-<p class="through">Everything through v{newest}, the newest release in this build of Yearbirder (v{version}).</p>
 
 {body}
 
@@ -155,11 +153,10 @@ def main():
         date_html = f'<span class="date">{html.escape(date)}</span>' if date else ""
         blocks.append(f'<h2>v{ver} {date_html}</h2>\n{feats}')
 
-    # The heading names the newest release actually included, not the version
+    # The footer names the newest release actually included, not the version
     # being built: with 2.17-dev in hand and no 2.17 entry written yet, saying
-    # "through v2.17" would promise entries the page does not have.
-    out = PAGE.format(version=version,
-                      newest=kept[0][0],
+    # "after v2.17" would misdescribe what the page holds.
+    out = PAGE.format(newest=kept[0][0],
                       body="\n\n".join(blocks),
                       site=SITE_HISTORY)
     os.makedirs(os.path.dirname(DEST), exist_ok=True)
