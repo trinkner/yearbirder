@@ -30,7 +30,12 @@ body {
   background: var(--white);
 }
 
-img { display: block; max-width: 100%; }
+/* height:auto is load-bearing: the screenshots carry width/height attributes,
+   and rules like .showcase img set width:100%.  Without it the browser uses
+   the attribute's height with the constrained width, stretching every
+   screenshot vertically.  The home page hero escaped this only because it
+   sets its own height:auto inline. */
+img { display: block; max-width: 100%; height: auto; }
 a   { color: var(--grove); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
