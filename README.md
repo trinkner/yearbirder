@@ -11,7 +11,7 @@
 
 # Yearbirder
 
-**Current release: v2.16** (September 2026)
+**Current release: v2.17** (September 2026)
 
 A desktop application for exploring and analysing your personal [eBird](https://ebird.org) data, bird photos, and sound recordings.
 
@@ -20,6 +20,14 @@ Yearbirder lets you filter, browse, and visualise your personal eBird sightings 
 Full version history and downloads: [yearbirder.org](https://yearbirder.org)
 
 ---
+
+## What's New in v2.17
+
+- **Sort photos and recordings by season** — a new **Seasonal Date** sort orders your media by where in the year it was taken, ignoring the year, so several springs of the same species sit side by side. The same ordering the lists offer on their date columns, now a sort key.
+- **The date on every grid card** — Browse Grid shows each photo's and recording's capture date beneath the species name.
+- **Sort direction moved to the right** — Ascending and Descending sit at the right-hand end of the browse banner, separated from the sort keys.
+- **What's New, in the app** — a What's New item joins the User Guide menu, showing the notes for the version you are running rather than the newest published, so it never describes features your build lacks.
+- **The User Guide is on the web** — the complete guide now lives at [yearbirder.org/guide](https://yearbirder.org/guide), readable and searchable without opening the app.
 
 ## What's New in v2.16
 
@@ -198,7 +206,7 @@ Later 2.0x releases refined this work; see the [full version history](https://ye
 
 ## Download
 
-**macOS** — download the signed and notarized `Yearbirder_v2.16.dmg` from the [Releases page](https://github.com/trinkner/yearbirder/releases/latest), open it, and drag Yearbirder to your Applications folder.
+**macOS** — download the signed and notarized `Yearbirder_v2.17.dmg` from the [Releases page](https://github.com/trinkner/yearbirder/releases/latest), open it, and drag Yearbirder to your Applications folder.
 
 **Windows** — download the installer from [yearbirder.org/download](https://yearbirder.org/download) and run it.
 
