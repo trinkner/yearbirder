@@ -29,7 +29,7 @@ photos, preferences).
 | A built MSIX | Yes — CI produces `Yearbirder_Setup_vX.YY.msix` every push |
 | Package tested | Yes — v2.17 installs and runs when signed |
 | Privacy policy URL | Yes — https://yearbirder.org/privacy |
-| Support URL | Yes — https://yearbirder.org or the GitHub issues page |
+| Support contact | Yes — support@yearbirder.org (iCloud+ custom domain, live 2026-09-20) |
 | Screenshots | Yes — reuse `web/images/demo_*.png` (1366x768 minimum) |
 | Description text | Yes — adapt `web/index.html` or the BirdForum post |
 
@@ -88,7 +88,7 @@ Four sections need attention:
 - Category: *Utilities & tools*, or *Education* — Utilities is the better fit
 - Privacy policy URL: `https://yearbirder.org/privacy` (**required**, and a real
   policy — yours qualifies)
-- Support contact info: `https://github.com/trinkner/yearbirder/issues`
+- Support contact info: `support@yearbirder.org`
 - Website: `https://yearbirder.org`
 
 **Age ratings**
