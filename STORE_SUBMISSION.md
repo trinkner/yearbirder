@@ -1,11 +1,16 @@
 # Submitting Yearbirder to the Microsoft Store
 
-You are not starting a submission — you are finishing one. A publisher identity
-already exists (`CN=E6F8B083-B39A-48F6-89D9-2B9B2585BC32` in
-`yearbirder.appxmanifest` is *yours*, issued by Partner Center), so somewhere in
-that account an app reservation is already waiting. **Find it. Do not create a
-second one**, or the identity in the manifest stops matching and every upload is
-rejected.
+**Verified in Partner Center on 2026-09-19** (account rtrinkner@icloud.com):
+
+- The developer account is **enrolled** — Account settings → Identifiers shows
+  Windows publisher ID `CN=E6F8B083-B39A-48F6-89D9-2B9B2585BC32`, which is where
+  the manifest's value came from.
+- The app **is now reserved**: "Yearbirder", MSIX or PWA app, status *In draft*.
+  (It was not reserved before; the earlier attempt stopped at enrolment.)
+- Partner Center assigned **Package/Identity/Name = `RichardTrinkner.Yearbirder`**
+  — it prefixes the reserved name with the publisher display name. The manifest
+  has been corrected to match. Do not change it back.
+- Store ID: `9PKH7PL7F5G2`.  PFN: `RichardTrinkner.Yearbirder_5cnfkv8ek8hyr`.
 
 The point of all this: the Store signs the package. An unsigned MSIX cannot be
 installed by anyone — the whole reason the `.msix` has been useless for eight
@@ -20,7 +25,7 @@ photos, preferences).
 | Needed | Status |
 |---|---|
 | Partner Center account | Yes — you have the login |
-| Reserved app identity | Yes — `Name="Yearbirder"`, publisher GUID in the manifest |
+| Reserved app identity | Yes — `RichardTrinkner.Yearbirder`, Store ID 9PKH7PL7F5G2 |
 | A built MSIX | Yes — CI produces `Yearbirder_Setup_vX.YY.msix` every push |
 | Package tested | Yes — v2.17 installs and runs when signed |
 | Privacy policy URL | Yes — https://yearbirder.org/privacy |
@@ -32,23 +37,19 @@ So the work tomorrow is navigation and form-filling, not production.
 
 ---
 
-## Step 1 — Find the existing app
+## Step 1 — Identity (DONE, but re-check after any manifest edit)
 
-1. Sign in at **partner.microsoft.com/dashboard**.
-2. Left nav: **Apps and games**. Your reserved app should be listed.
-3. Open it, then **Product management → Product identity** (older label: *App
-   management → App identity*).
-4. Write down these three values:
-   - **Package/Identity/Name** — must equal `Yearbirder`
-   - **Package/Identity/Publisher** — must equal
-     `CN=E6F8B083-B39A-48F6-89D9-2B9B2585BC32`
-   - **Package/Properties/PublisherDisplayName** — must equal `Richard Trinkner`
-5. Compare against `yearbirder.appxmanifest`. If any differs, **change the
-   manifest to match Partner Center**, not the other way round — Partner Center
-   is authoritative and cannot be edited.
+Partner Center → the Yearbirder app → **Product management → Product Identity**.
+These three must match `yearbirder.appxmanifest` exactly:
 
-If no app is listed, the reservation was never completed: **Apps and games → New
-product → MSIX or PWA app**, reserve the name "Yearbirder", then redo step 4.
+| Partner Center | Manifest |
+|---|---|
+| `RichardTrinkner.Yearbirder` | `<Identity Name=...>` |
+| `CN=E6F8B083-B39A-48F6-89D9-2B9B2585BC32` | `<Identity Publisher=...>` |
+| `Richard Trinkner` | `<PublisherDisplayName>` |
+
+All three verified matching on 2026-09-19. Partner Center is authoritative and
+cannot be edited — if they ever diverge, change the manifest.
 
 ## Step 2 — Check the account is ready to publish
 

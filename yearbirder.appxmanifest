@@ -2,9 +2,12 @@
 <!--
   MSIX package manifest for Yearbirder.
 
-  Before submitting to the Microsoft Store, verify that the Identity Name
-  below matches the Package/Identity Name shown in Partner Center under
-  App management → App identity.  The Publisher must stay as-is.
+  Identity Name and Publisher below are the values Partner Center assigns —
+  verified 2026-09-19 against Product management → Product Identity for the
+  reserved app.  Partner Center prefixes the reserved name with the publisher
+  display name, hence RichardTrinkner.Yearbirder rather than plain Yearbirder.
+  Neither value may be edited here: a mismatch makes the Store reject the
+  package on upload.
 -->
 <Package
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
@@ -13,7 +16,7 @@
   IgnorableNamespaces="uap rescap">
 
   <Identity
-    Name="Yearbirder"
+    Name="RichardTrinkner.Yearbirder"
     Publisher="CN=E6F8B083-B39A-48F6-89D9-2B9B2585BC32"
     Version="VERSION_PLACEHOLDER"
     ProcessorArchitecture="x64" />
