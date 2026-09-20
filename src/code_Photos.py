@@ -3,6 +3,7 @@ import form_Photos
 from code_Stylesheet import YBFont
 import code_Enlargement
 import code_Filter
+import code_SeasonalSort
 import code_ThumbnailCache
 
 import datetime
@@ -140,6 +141,7 @@ class Photos(QMdiSubWindow, form_Photos.Ui_frmPhotos):
         self._photoButtons = {}
         self.rdoSortSpecies.toggled.connect(lambda checked: self._sortKeyChanged() if checked else None)
         self.rdoSortDate.toggled.connect(lambda checked: self._sortKeyChanged() if checked else None)
+        self.rdoSortSeasonal.toggled.connect(lambda checked: self._sortKeyChanged() if checked else None)
         self.rdoSortRating.toggled.connect(lambda checked: self._sortKeyChanged() if checked else None)
         self.rdoSortTaxonomy.toggled.connect(lambda checked: self._sortKeyChanged() if checked else None)
         self.rdoSortAscending.toggled.connect(lambda checked: self.SortAndDisplayPhotos() if checked else None)
@@ -242,6 +244,7 @@ class Photos(QMdiSubWindow, form_Photos.Ui_frmPhotos):
         self.lblSortBy.setFont(QFont(YBFont, fontSize))
         self.rdoSortSpecies.setFont(QFont(YBFont, fontSize))
         self.rdoSortDate.setFont(QFont(YBFont, fontSize))
+        self.rdoSortSeasonal.setFont(QFont(YBFont, fontSize))
         self.rdoSortRating.setFont(QFont(YBFont, fontSize))
         self.rdoSortTaxonomy.setFont(QFont(YBFont, fontSize))
         self.rdoSortAscending.setFont(QFont(YBFont, fontSize))
@@ -476,6 +479,17 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
             self.rdoSortDescending.blockSignals(False)
         self.SortAndDisplayPhotos()
 
+    def _captureDateTime(self, i):
+        """The photo's own capture datetime as "YYYY-MM-DD HH:MM" — what the
+        caption shows, not the checklist's start time, which every photo on a
+        checklist would share, losing their within-checklist order.  Normalised
+        so EXIF-derived and checklist-fallback keys compare cleanly."""
+        p, s = self.photoList[i]
+        dt = p.get("exifDatetime") or ""
+        if len(dt) >= 16:
+            return dt[0:4] + "-" + dt[5:7] + "-" + dt[8:10] + " " + dt[11:16]
+        return s.get("date", "") + " " + s.get("time", "")
+
     def _sortPhotoList(self):
         """Sort photoList by the checked radio, in the checked direction;
         returns the permutation (new position -> old index) so row widgets and
@@ -492,19 +506,16 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
             order = sorted(idx, key=lambda i: self.photoList[i][1]["commonName"],
                            reverse=reverse)
         elif self.rdoSortDate.isChecked():
-            # Sort by the photo's own capture datetime (what the caption
-            # shows), not the checklist's start time — photos on the same
-            # checklist would otherwise all share one key and lose their
-            # within-checklist time order.  Normalised to "YYYY-MM-DD HH:MM"
-            # so EXIF-derived and checklist-fallback keys compare cleanly.
-            def _capture_dt(i):
-                p, s = self.photoList[i]
-                dt = p.get("exifDatetime") or ""
-                if len(dt) >= 16:
-                    return (dt[0:4] + "-" + dt[5:7] + "-" + dt[8:10]
-                            + " " + dt[11:16])
-                return s.get("date", "") + " " + s.get("time", "")
-            order = sorted(idx, key=_capture_dt, reverse=reverse)
+            order = sorted(idx, key=self._captureDateTime, reverse=reverse)
+        elif self.rdoSortSeasonal.isChecked():
+            # Day of year, ignoring which year: every January photo together,
+            # then February, and so on.  seasonalKey returns "MM-DD-YYYY", so
+            # photos sharing a day fall into year order, and the full datetime
+            # breaks the remaining ties into time-of-day order.
+            def _seasonal(i):
+                dt = self._captureDateTime(i)
+                return (code_SeasonalSort.seasonalKey(dt), dt)
+            order = sorted(idx, key=_seasonal, reverse=reverse)
         elif self.rdoSortRating.isChecked():
             def _rating(i):
                 try:
@@ -618,6 +629,16 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
     def _endLayout(self):
         """Called once every cell has been added (grid flushes its last row)."""
         pass
+
+    @staticmethod
+    def captureDate(p, s):
+        """"YYYY-MM-DD" for a photo — its own EXIF capture date when the
+        catalog has one, else the checklist's.  The date half of
+        captureDateLine, for callers with no room for a weekday and a time."""
+        exif_dt = p.get("exifDatetime")
+        if exif_dt and len(exif_dt) >= 10:
+            return exif_dt[0:4] + "-" + exif_dt[5:7] + "-" + exif_dt[8:10]
+        return s.get("date", "")
 
     @staticmethod
     def captureDateLine(p, s):

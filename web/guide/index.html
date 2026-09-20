@@ -1,6 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Yearbirder User Guide</title>
@@ -128,8 +133,57 @@
       font-size: 0.9rem;
     }
   </style>
+  <meta name="description" content="The complete Yearbirder user guide: filtering your eBird sightings, lists and totals, charts and maps, the Trip Report, photos, sound recordings, and community sightings.">
+  <link rel="canonical" href="https://yearbirder.org/guide">
+  <link rel="icon" type="image/x-icon" href="/images/favicon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32.png">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Yearbirder">
+  <meta property="og:url" content="https://yearbirder.org/guide">
+  <meta property="og:title" content="Yearbirder User Guide">
+  <meta property="og:description" content="The complete Yearbirder user guide: filtering your eBird sightings, lists and totals, charts and maps, the Trip Report, photos, sound recordings, and community sightings.">
+  <meta property="og:image" content="https://yearbirder.org/images/og_yearbirder.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Yearbirder User Guide">
+  <meta name="twitter:description" content="The complete Yearbirder user guide: filtering your eBird sightings, lists and totals, charts and maps, the Trip Report, photos, sound recordings, and community sightings.">
+  <meta name="twitter:image" content="https://yearbirder.org/images/og_yearbirder.jpg">
+  <style>
+    /* Web-only: the guide centres its own 860px column via body, which would
+       pen the site's navigation into that column too.  Hand the column to a
+       wrapper instead and let body span the window. */
+    body { max-width: none; margin: 0; padding: 0; background: #fff; }
+    .guide-page { max-width: 860px; margin: 0 auto; padding: 2rem 2rem 4rem; }
+    /* The bar matches the other pages, typeface included; the guide's own
+       system-font stack would otherwise reach it through inheritance. */
+    nav, nav * { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+    @media (max-width: 600px) { .guide-page { padding: 1rem; } }
+  </style>
 </head>
 <body>
+
+<nav>
+  <div class="nav-inner">
+    <a href="/" class="nav-brand">
+      <img src="/images/opt/icon.webp" alt="Yearbirder icon" width="90" height="90">
+      Yearbirder
+    </a>
+    <ul class="nav-links">
+      <li><a href="/">Overview</a></li>
+      <li><a href="/sighting-analysis">Sighting Analysis</a></li>
+      <li><a href="/photography">Photography</a></li>
+      <li><a href="/recordings">Recordings</a></li>
+      <li><a href="/community">Community</a></li>
+      <li><a href="/download" class="nav-download">Download</a></li>
+      <li><a href="/history">Version History</a></li>
+      <li><a href="/guide" class="active">User Guide</a></li>
+    </ul>
+  </div>
+</nav>
+
+<div class="guide-page">
+
 
 <h1 id="top">Yearbirder User Guide</h1>
 <p><em>A desktop application for exploring and analysing your personal eBird data</em></p>
@@ -1602,6 +1656,8 @@
 <div class="footer">
   <p>Yearbirder is free, open-source software licensed under the GNU General Public License v3.<br>
   Created by Richard Trinkner.</p>
+</div>
+
 </div>
 
 </body>

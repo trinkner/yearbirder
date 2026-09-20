@@ -7,12 +7,12 @@ the public website goes live**.
 
 A push to `master` triggers two independent things at once:
 
-1. **GitHub Actions** (`.github/workflows/build-windows.yml`) builds `Yearbirder_Setup.exe`.
+1. **GitHub Actions** (`.github/workflows/build-windows.yml`) builds `Yearbirder_Setup_vX.YY.exe`.
 2. **Cloudflare Pages** redeploys the production site (`yearbirder.org`) — this only
    happens for the production branch, `master`.
 
 The Windows binary is never published automatically either: the workflow uploads
-`Yearbirder_Setup.exe` to the GitHub **Release** for the matching tag, and only if
+`Yearbirder_Setup_vX.YY.exe` to the GitHub **Release** for the matching tag, and only if
 that release already exists. No release, no public download. So the only thing that
 goes public on its own is the website, and only on `master`.
 
@@ -42,7 +42,7 @@ workflow's `on:` triggers). The final **merge to `master`** is the one deliberat
 3. **Update the website** in `web/` — e.g. the version text and the macOS DMG link
    in `web/download.html`, plus any new screenshots. Both download buttons point at
    this release's own assets — `download/vX.YY/Yearbirder_vX.YY.dmg` and
-   `download/vX.YY/Yearbirder_Setup.exe` — and step 14 of `build_release.sh` rewrites
+   `download/vX.YY/Yearbirder_Setup_vX.YY.exe` — and step 14 of `build_release.sh` rewrites
    both, so neither is edited by hand. GitHub counts downloads per asset per release,
    which is the point: it is the only per-version count the Windows installer has.
 
@@ -82,7 +82,7 @@ workflow's `on:` triggers). The final **merge to `master`** is the one deliberat
    git tag vX.YY
    git push origin vX.YY
    gh release create vX.YY --title "Yearbirder vX.YY" --notes-file <notes> \
-       dist/Yearbirder_vX.YY.dmg <the tested Yearbirder_Setup.exe>
+       dist/Yearbirder_vX.YY.dmg <the tested Yearbirder_Setup_vX.YY.exe>
    ```
 
    Attaching the tested `.exe` yourself closes the window where the release exists but
@@ -112,7 +112,8 @@ which resets that asset's download count — the reason the workflow never does 
 installer until v2.16. Nothing advertises it now, but old links and anything written
 about the app before then may still point at it, so the bucket is kept as a fallback —
 refresh it when convenient rather than as a release step, or redirect the hostname to
-`releases/latest/download/Yearbirder_Setup.exe` at the Cloudflare edge.
+the current release's installer at the Cloudflare edge.  The bucket's own object
+keeps the unversioned name, since that fixed URL is the whole point of it.
 
 Why the move: R2 serves one fixed URL, so the file and the page advertising it went
 stale independently, and the manual upload had to happen *before* the merge or the site

@@ -81,16 +81,34 @@ fi
 
 echo ""
 echo " 3. User Guide (${GUIDE_HTML}) — ships inside the .app"
-GUIDE_HITS=$(grep -c "What's New in v${VERSION}" "$GUIDE_HTML" 2>/dev/null || true)
-if [ "${GUIDE_HITS:-0}" -ge 2 ]; then
-    ok "What's New heading and table-of-contents entry both name v${VERSION}"
-elif [ "${GUIDE_HITS:-0}" -eq 1 ]; then
-    warn "only one of the What's New heading / TOC entry says v${VERSION} — the other is stale"
+# The guide carries no changelog: history.html (checked above) is the only one.
+# What matters here is that the published copy on the website matches the copy
+# about to be built into the app — publish_guide.py regenerates it, so a
+# difference means it was never re-run after the guide changed.
+WEB_GUIDE="web/guide/index.html"
+if [ ! -f "$WEB_GUIDE" ]; then
+    warn "$WEB_GUIDE does not exist — run ./publish_guide.py"
 else
-    warn "no \"What's New in v${VERSION}\" section"
+    venv/bin/python3 publish_guide.py > /tmp/publish_guide_check.txt 2>&1
+    if git diff --quiet -- "$WEB_GUIDE" 2>/dev/null; then
+        ok "published guide matches the one shipping in the app"
+    else
+        warn "$WEB_GUIDE was out of date and has been regenerated — commit it"
+    fi
 fi
-if [ -n "$PREV_VERSION" ] && ! grep -q "Earlier changes in v${PREV_VERSION}" "$GUIDE_HTML"; then
-    warn "v${PREV_VERSION} was never demoted to \"Earlier changes in v${PREV_VERSION}\""
+if grep -q "What's New" "$GUIDE_HTML"; then
+    warn "the guide mentions What's New — that section moved to the website"
+fi
+
+echo ""
+echo " 3b. Offline What's New (src/guide/whatsnew.html) — ships inside the .app"
+# Regenerated from history.html below, at Step 0, before PyInstaller bundles
+# src/guide.  Checked here so a missing v${VERSION} entry in history.html is
+# reported with the other pre-flight problems rather than mid-build.
+if grep -q "release-version\">v${VERSION}<" "$HISTORY_HTML" 2>/dev/null; then
+    ok "history.html has a v${VERSION} entry to build it from"
+else
+    warn "history.html has no v${VERSION} entry — the app's What's New will stop at the previous release"
 fi
 
 echo ""
@@ -170,6 +188,14 @@ codesign_retry() {
 sign_file() {
     codesign_retry "$1" --options runtime --entitlements "$ENTS"
 }
+
+echo "=== Step 0: Regenerate the bundled docs ==="
+# src/guide is copied into the app by the spec, so both of these must be
+# current BEFORE PyInstaller runs.  publish_whatsnew.py cuts the changelog off
+# at this version; publish_guide.py refreshes the website's copy of the guide.
+venv/bin/python3 publish_whatsnew.py "${VERSION}"
+venv/bin/python3 publish_guide.py
+echo ""
 
 echo "=== Step 1: PyInstaller build ==="
 venv/bin/python3 -m PyInstaller Yearbirder.spec --noconfirm
@@ -413,9 +439,15 @@ with open(html_path) as f:
 content = content.replace(f"v{old_v}/Yearbirder_v{old_v}.dmg",  f"v{new_v}/Yearbirder_v{new_v}.dmg")
 content = content.replace(f"Yearbirder_v{old_v}.dmg",           f"Yearbirder_v{new_v}.dmg")
 content = content.replace(f"refs/tags/v{old_v}.zip",            f"refs/tags/v{new_v}.zip")
-# The Windows installer's name never changes, so only the tag in its path moves.
+# The Windows installer carries its version too, so the tag AND the filename
+# move.  The first rule migrates the pre-2.17 unversioned link, the second is
+# the ordinary release-to-release case, and the third catches the unversioned
+# name where the page spells it out in prose.
 content = content.replace(f"download/v{old_v}/Yearbirder_Setup.exe",
-                          f"download/v{new_v}/Yearbirder_Setup.exe")
+                          f"download/v{new_v}/Yearbirder_Setup_v{new_v}.exe")
+content = content.replace(f"Yearbirder_Setup_v{old_v}.exe",
+                          f"Yearbirder_Setup_v{new_v}.exe")
+content = content.replace("Yearbirder_Setup.exe", f"Yearbirder_Setup_v{new_v}.exe")
 content = re.sub(
     rf'v{re.escape(old_v)} &nbsp;·&nbsp; \S+ \d+',
     f'v{new_v} &nbsp;·&nbsp; {new_date}',
@@ -447,7 +479,8 @@ echo "    and test the installer on the Windows VM."
 echo ""
 echo " 9. Update README.md for v${VERSION} and commit to the branch."
 echo ""
-echo "10. Keep the tested Yearbirder_Setup.exe — you attach it to the release"
+echo "10. Keep the tested Yearbirder_Setup_v${VERSION}.exe — you attach it"
+echo "    to the release"
 echo "    in step 12.  Both download buttons are served from the GitHub"
 echo "    release now, so nothing needs uploading to Cloudflare R2."
 echo ""
@@ -455,10 +488,11 @@ echo "11. Merge release/v${VERSION} to master (this takes the website live)."
 echo ""
 echo "12. Immediately create tag v${VERSION} and a GitHub release, attaching"
 echo "    BOTH dist/Yearbirder_v${VERSION}.dmg and the tested"
-echo "    Yearbirder_Setup.exe."
+echo "    Yearbirder_Setup_v${VERSION}.exe."
 echo "    web/download.html links to"
 echo "    .../download/v${VERSION}/Yearbirder_v${VERSION}.dmg and to"
-echo "    .../download/v${VERSION}/Yearbirder_Setup.exe — both 404 from"
+echo "    .../download/v${VERSION}/Yearbirder_Setup_v${VERSION}.exe — both"
+echo "    404 from"
 echo "    the moment of merge until the release carries those assets, so do"
 echo "    not leave a gap between steps 11 and 12.  The master build"
 echo "    re-uploads the .exe and adds the .msix when it finishes."

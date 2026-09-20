@@ -22,13 +22,20 @@ import code_Photos
 import code_ThumbnailCache
 
 from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QFontMetrics
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from functools import partial
 
 
 CELL_SPACING = 6     # gap between cells, and between rows of cells
-CAPTION_H    = 34    # room under the thumbnail for the species name (2 lines)
+# The species name gets one line, measured from the caption font rather than
+# assumed: a platform with a taller system font would otherwise clip it.  Only
+# 5% of the names in a 1,300-species dataset are wider than a cell at this
+# width — hybrids and subspecies forms — and those are elided, with the full
+# name still in the card's tooltip.  A second line would put a blank one above
+# every ordinary card's date.
+DATE_H       = 16    # one line under the name for the capture date
 CELL_PADDING = 12    # card margins around the thumbnail (6 per side)
 DEFAULT_COLS = 4     # columns the window opens sized to
 
@@ -49,10 +56,21 @@ class PhotosGrid(code_Photos.Photos):
     def __init__(self):
         super().__init__()
         self._numCols   = 4     # recomputed from the viewport before each build
+        self._captionH  = None  # measured on first use (see _captionHeight)
         self._cellWidgets = []  # cell container per photo, in photoList order
         self._rowContainers = []
 
     # ── Layout ────────────────────────────────────────────────────────────────
+
+    def _captionHeight(self):
+        """One line of the caption font, plus 6px so the descenders clear the
+        date line below.  mediaCaptionName has no vertical padding, so that
+        slack sits under the text rather than above it."""
+        if self._captionH is None:
+            probe = QLabel()
+            probe.setObjectName("mediaCaptionName")
+            self._captionH = QFontMetrics(probe.font()).height() + 6
+        return self._captionH
 
     def _calcCols(self):
         """Columns that fit the scroll-area viewport at the current width.
@@ -95,18 +113,26 @@ class PhotosGrid(code_Photos.Photos):
         imgLabel.setCursor(Qt.PointingHandCursor)
         imgLabel.mousePressEvent = partial(self._photoClicked, row)
 
-        nameLabel = QLabel(s["commonName"])
+        captionH = self._captionHeight()
+        nameLabel = QLabel()
         nameLabel.setFixedWidth(self.CELL_SIZE.width())
-        nameLabel.setFixedHeight(CAPTION_H)
-        nameLabel.setWordWrap(True)
+        nameLabel.setFixedHeight(captionH)
         nameLabel.setAlignment(Qt.AlignHCenter | Qt.AlignTop)
-        nameLabel.setObjectName("mediaCaption")
+        nameLabel.setObjectName("mediaCaptionName")
+        nameLabel.setText(QFontMetrics(nameLabel.font()).elidedText(
+            s["commonName"], Qt.ElideRight, self.CELL_SIZE.width() - 6))
+
+        dateLabel = QLabel(self.captureDate(p, s))
+        dateLabel.setFixedWidth(self.CELL_SIZE.width())
+        dateLabel.setFixedHeight(DATE_H)
+        dateLabel.setAlignment(Qt.AlignHCenter | Qt.AlignTop)
+        dateLabel.setObjectName("mediaCaptionDate")
 
         cell = QWidget()
         cell.setObjectName("mediaCard")
         cell.setAttribute(Qt.WA_StyledBackground, True)
         cell.setFixedSize(self.CELL_SIZE.width() + 12,
-                          self.CELL_SIZE.height() + CAPTION_H + 12)
+                          self.CELL_SIZE.height() + captionH + DATE_H + 12)
         cell.setCursor(Qt.PointingHandCursor)
         # The whole card is clickable, not just the thumbnail, so the caption
         # and the padding around it open the photo too.
@@ -123,6 +149,7 @@ class PhotosGrid(code_Photos.Photos):
         lay.setSpacing(0)
         lay.addWidget(imgLabel, 0, Qt.AlignHCenter)
         lay.addWidget(nameLabel, 0, Qt.AlignHCenter)
+        lay.addWidget(dateLabel, 0, Qt.AlignHCenter)
 
         self._cellWidgets.append(cell)
         self._photoButtons[row] = imgLabel   # the drain fills this

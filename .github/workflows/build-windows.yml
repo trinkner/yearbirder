@@ -50,7 +50,7 @@ jobs:
         uses: actions/upload-artifact@v4.6.2
         with:
           name: Yearbirder-Windows-Setup
-          path: dist/Yearbirder_Setup.exe
+          path: dist/Yearbirder_Setup_v${{ steps.version.outputs.version }}.exe
           retention-days: 30
 
       - name: Attach installer to GitHub Release
@@ -67,13 +67,14 @@ jobs:
           # resets its download count to zero.  Those counts are the only
           # per-version measure of Windows downloads, and every push to master
           # re-runs this build, so clobbering would wipe the tally each time.
+          $asset = "Yearbirder_Setup_v${{ steps.version.outputs.version }}.exe"
           $assets = @(gh release view $tag --json assets --jq '.assets[].name')
-          if ($assets -contains "Yearbirder_Setup.exe") {
-            Write-Host "Yearbirder_Setup.exe is already attached to $tag — leaving it alone (re-uploading would reset its download count)"
+          if ($assets -contains $asset) {
+            Write-Host "$asset is already attached to $tag — leaving it alone (re-uploading would reset its download count)"
             exit 0
           }
-          gh release upload $tag dist/Yearbirder_Setup.exe
-          Write-Host "Uploaded Yearbirder_Setup.exe to release $tag"
+          gh release upload $tag "dist/$asset"
+          Write-Host "Uploaded $asset to release $tag"
 
       - name: Generate MSIX icon assets
         run: |
@@ -132,14 +133,15 @@ jobs:
           if (-not $makeappx) { Write-Error "makeappx.exe not found"; exit 1 }
           Write-Host "Using: $makeappx"
 
-          & $makeappx pack /d msix_staging /p dist\Yearbirder_Setup.msix /nv
-          Write-Host "MSIX built: dist\Yearbirder_Setup.msix"
+          $msixName = "Yearbirder_Setup_v${{ steps.version.outputs.version }}.msix"
+          & $makeappx pack /d msix_staging /p "dist\$msixName" /nv
+          Write-Host "MSIX built: dist\$msixName"
 
       - name: Upload MSIX artifact
         uses: actions/upload-artifact@v4.6.2
         with:
           name: Yearbirder-Windows-MSIX
-          path: dist/Yearbirder_Setup.msix
+          path: dist/Yearbirder_Setup_v${{ steps.version.outputs.version }}.msix
           retention-days: 30
 
       - name: Attach MSIX to GitHub Release
@@ -156,10 +158,11 @@ jobs:
           # resets its download count to zero.  Those counts are the only
           # per-version measure of Windows downloads, and every push to master
           # re-runs this build, so clobbering would wipe the tally each time.
+          $asset = "Yearbirder_Setup_v${{ steps.version.outputs.version }}.msix"
           $assets = @(gh release view $tag --json assets --jq '.assets[].name')
-          if ($assets -contains "Yearbirder_Setup.msix") {
-            Write-Host "Yearbirder_Setup.msix is already attached to $tag — leaving it alone (re-uploading would reset its download count)"
+          if ($assets -contains $asset) {
+            Write-Host "$asset is already attached to $tag — leaving it alone (re-uploading would reset its download count)"
             exit 0
           }
-          gh release upload $tag dist\Yearbirder_Setup.msix
-          Write-Host "Uploaded Yearbirder_Setup.msix to release $tag"
+          gh release upload $tag "dist\$asset"
+          Write-Host "Uploaded $asset to release $tag"

@@ -490,8 +490,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
     # About) and string-compared in _onUpdateCheckDone.  Letters are fine.
     # Avoid SPACES though — build_release.sh interpolates this into DMG
     # filenames and the disk-image volume name (Yearbirder_v${VERSION}.dmg).
-    versionNumber = "2.16"
-    versionDate = "September 15, 2026"
+    versionNumber = "2.17"
+    versionDate = "September 19, 2026"
     taxonomyYear = ""
 
     def __init__(self):
@@ -602,6 +602,14 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         _aboutAction = QAction("About Yearbirder", self)
         _aboutAction.setMenuRole(QAction.MenuRole.NoRole)
         _aboutAction.triggered.connect(self.CreateAboutYearbirder)
+        # The changelog lives on the website now, not in the guide; this opens
+        # it in a child window rather than the browser, so it reads like part
+        # of the app.
+        _whatsNewAction = QAction("What's New", self)
+        _whatsNewAction.setMenuRole(QAction.MenuRole.NoRole)
+        _whatsNewAction.triggered.connect(self.CreateWhatsNew)
+        self.menuHelp.addAction(_whatsNewAction)
+
         _checkUpdatesAction = QAction("Check for Updates…", self)
         _checkUpdatesAction.setMenuRole(QAction.MenuRole.NoRole)
         _checkUpdatesAction.triggered.connect(self.CheckForUpdates)
@@ -3862,6 +3870,17 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         sub.show()
 
 
+    def CreateWhatsNew(self):
+
+        sub = code_Web.Web()
+        sub.mdiParent = self
+        sub.loadWhatsNew()
+
+        self.mdiArea.addSubWindow(sub)
+        self.PositionChildWindow(sub, self)
+        sub.show()
+
+
     def CheckForUpdates(self):
         self._updateThread = _UpdateCheckThread()
         self._updateThread.done.connect(self._onUpdateCheckDone)
@@ -3889,10 +3908,16 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             msg.setText(f"Yearbirder v{latest} is available.")
             msg.setInformativeText(f"You are running v{current}. Click Download to open the download page in your browser.")
             download_btn = msg.addButton("Download…", QMessageBox.ButtonRole.AcceptRole)
+            whats_new_btn = msg.addButton(f"See what's new in v{latest}",
+                                          QMessageBox.ButtonRole.ActionRole)
             msg.addButton("Not Now", QMessageBox.ButtonRole.RejectRole)
             msg.exec()
             if msg.clickedButton() is download_btn:
                 QDesktopServices.openUrl(QUrl("https://github.com/trinkner/yearbirder/releases/latest"))
+            elif msg.clickedButton() is whats_new_btn:
+                # The browser, not a child window: the dialog is modal, and a
+                # window opened behind it could not be read until it closed.
+                QDesktopServices.openUrl(QUrl(code_Web.WHATS_NEW_URL))
 
 
     def CreateMap(self):   

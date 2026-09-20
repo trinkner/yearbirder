@@ -2,6 +2,7 @@ import form_Recordings
 from code_Stylesheet import YBFont
 from code_ManageRecordings import SpectrogramLabel   # UI widget stays in its module
 import code_Filter
+import code_SeasonalSort
 from code_Audio import (
     render_spectrogram_qimage as _render_spectrogram_qimage,
     paint_spectro_axes as _paint_spectro_axes,
@@ -125,6 +126,7 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
 
         self.rdoSortSpecies.toggled.connect(lambda checked: self._sortKeyChanged() if checked else None)
         self.rdoSortDate.toggled.connect(lambda checked: self._sortKeyChanged() if checked else None)
+        self.rdoSortSeasonal.toggled.connect(lambda checked: self._sortKeyChanged() if checked else None)
         self.rdoSortRating.toggled.connect(lambda checked: self._sortKeyChanged() if checked else None)
         self.rdoSortTaxonomy.toggled.connect(lambda checked: self._sortKeyChanged() if checked else None)
         self.rdoSortAscending.toggled.connect(lambda checked: self.SortAndDisplayRecordings() if checked else None)
@@ -282,6 +284,7 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
         self.lblSortBy.setFont(QFont(YBFont, fontSize))
         self.rdoSortSpecies.setFont(QFont(YBFont, fontSize))
         self.rdoSortDate.setFont(QFont(YBFont, fontSize))
+        self.rdoSortSeasonal.setFont(QFont(YBFont, fontSize))
         self.rdoSortRating.setFont(QFont(YBFont, fontSize))
         self.rdoSortTaxonomy.setFont(QFont(YBFont, fontSize))
         self.rdoSortAscending.setFont(QFont(YBFont, fontSize))
@@ -579,6 +582,15 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
             self.rdoSortDescending.blockSignals(False)
         self.SortAndDisplayRecordings()
 
+    def _captureDateTime(self, i):
+        """The recording's own embedded datetime (what the caption shows),
+        falling back to the checklist's date/time — see the Photos browser's
+        _captureDateTime for the rationale."""
+        a, s = self.audioList[i]
+        if a.get("metaDate"):
+            return a["metaDate"] + " " + a.get("metaTime", "")
+        return s.get("date", "") + " " + s.get("time", "")
+
     def _sortAudioList(self):
         """Sort audioList by the checked radio, in the checked direction;
         returns the permutation (new position -> old index) so row widgets and
@@ -595,15 +607,14 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
             order = sorted(idx, key=lambda i: self.audioList[i][1]["commonName"],
                            reverse=reverse)
         elif self.rdoSortDate.isChecked():
-            # Sort by the recording's own embedded datetime (what the caption
-            # shows), falling back to the checklist's date/time (see the
-            # Photos browser's _capture_dt for the rationale).
-            def _capture_dt(i):
-                a, s = self.audioList[i]
-                if a.get("metaDate"):
-                    return a["metaDate"] + " " + a.get("metaTime", "")
-                return s.get("date", "") + " " + s.get("time", "")
-            order = sorted(idx, key=_capture_dt, reverse=reverse)
+            order = sorted(idx, key=self._captureDateTime, reverse=reverse)
+        elif self.rdoSortSeasonal.isChecked():
+            # Day of year, ignoring which year — see the Photos browser's
+            # seasonal key for the ordering this produces.
+            def _seasonal(i):
+                dt = self._captureDateTime(i)
+                return (code_SeasonalSort.seasonalKey(dt), dt)
+            order = sorted(idx, key=_seasonal, reverse=reverse)
         elif self.rdoSortRating.isChecked():
             def _rating(i):
                 try:
@@ -783,6 +794,13 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
     def _endLayout(self):
         """Called once every cell has been added (the grid flushes its last row)."""
         pass
+
+    @staticmethod
+    def captureDate(a, s):
+        """"YYYY-MM-DD" for a recording — its own embedded date when the file
+        carries one, else the checklist's.  The date half of captureDateLine,
+        for callers with no room for a weekday and a time."""
+        return a.get("metaDate") or s.get("date", "")
 
     @staticmethod
     def captureDateLine(a, s):

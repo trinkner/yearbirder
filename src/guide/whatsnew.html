@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>What's New in Yearbirder</title>
+  <style>
+    /* Matches the User Guide, which mirrors the website's palette:
+       forest #1B4332  grove #2D6A4F  meadow #D8F3DC
+       mist #F2FAF5    border #B7DFC3  ink #1A2B1C  slate #5A6E5B */
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 15px;
+      line-height: 1.6;
+      color: #1A2B1C;
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 2rem 2rem 4rem;
+      background: #fff;
+    }
+    h1 {
+      font-size: 2rem;
+      border-bottom: 2px solid #2D6A4F;
+      padding-bottom: 0.4rem;
+      color: #1A2B1C;
+      margin-bottom: 1.6rem;
+    }
+    h2 {
+      font-size: 1.3rem;
+      color: #1B4332;
+      background: #D8F3DC;
+      border: 1px solid #B7DFC3;
+      border-radius: 6px;
+      padding: 0.45rem 0.9rem;
+      margin: 2.2rem 0 1rem;
+    }
+    h2 .date { font-weight: 400; color: #5A6E5B; font-size: 0.9rem; float: right; }
+    .feat { margin: 0 0 1.1rem; }
+    .feat-title { font-weight: 600; color: #1A2B1C; }
+    .feat p { margin: 0.25rem 0 0; }
+    a { color: #2D6A4F; }
+    code { background: #F2FAF5; padding: 1px 4px; border-radius: 3px; }
+    .footer {
+      margin-top: 3rem;
+      border-top: 1px solid #B7DFC3;
+      padding-top: 1rem;
+      color: #5A6E5B;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+
+<h1>What's New in Yearbirder</h1>
+
+<h2>v2.17 <span class="date">September 19, 2026</span></h2>
+  <div class="feat"><span class="feat-title">Sort photos and recordings by season</span>
+    <p>Both browse views for photos and recordings gain a <strong>Seasonal Date</strong> sort, which orders your media by <em>where in the year</em> it was taken, ignoring which year that was. Every January photo comes first and every December photo last, so five springs of warbler photographs sit side by side instead of a year apart. Within a single day of the year they run oldest year first. It is the same ordering the lists have long offered on their date columns, now available as a sort key.</p></div>
+  <div class="feat"><span class="feat-title">The date on every grid card</span>
+    <p>In <strong>Browse Grid</strong>, each photo and recording now shows its capture date beneath the species name, so a grid can be read chronologically without hovering for the tooltip.</p></div>
+  <div class="feat"><span class="feat-title">Sort direction moved to the right</span>
+    <p>The <strong>Ascending</strong> and <strong>Descending</strong> buttons now sit at the right-hand end of the browse window banner, separated from the sort keys on the left, so the two choices read as the separate things they are.</p></div>
+  <div class="feat"><span class="feat-title">What's New, in the app</span>
+    <p>A <strong>What's New</strong> item joins the User Guide menu, showing the release notes for the version you are running — not the newest one published, so it never describes features your build does not have. <strong>Check for Updates</strong> also offers to show what is in the release it found.</p></div>
+  <div class="feat"><span class="feat-title">The User Guide is on the web</span>
+    <p>The complete user guide now lives at <a href="/guide">yearbirder.org/guide</a>, so you can read it — and search it — without opening the app. Every numbered section ends with a link back to the contents.</p></div>
+
+<h2>v2.16 <span class="date">September 15, 2026</span></h2>
+  <div class="feat"><span class="feat-title">Big Report is now the Trip Report</span>
+    <p>The report has a new name that says what it is for. Open it from <strong>Reports → Trip Report</strong> or the <strong>Trip Report</strong> toolbar button.</p></div>
+  <div class="feat"><span class="feat-title">A day-by-day Itinerary</span>
+    <p>A new <strong>Itinerary</strong> tab retells a trip in the order you birded it. Checklists are grouped by date, and each stop shows its time, location, protocol, duration, distance, and your checklist comments beside the species you recorded there. Click a location to open its Location window, or a species to open its Individual window. The <strong>Map</strong> tab now numbers each location by the order you first birded it, so the map and the Itinerary read together.</p></div>
+  <div class="feat"><span class="feat-title">A redesigned Trip Report PDF</span>
+    <p><strong>Create PDF</strong> now produces a formatted report: a title block, a summary strip, clearly banded sections, striped tables, and the Itinerary as its own section, with the generation date and page number on every page. The map waits for every tile to load, so it no longer prints with blank patches, and the Species table prints each species' count, first date, and last date under the right headings.</p></div>
+  <div class="feat"><span class="feat-title">Much better species guesses from file names</span>
+    <p>When you add photos or recordings, Yearbirder now reads a file name word by word and gives the most weight to the words that tell the birds on that checklist apart. <em>LincolnSparrow</em> is decided by "Lincoln", not by the "Sparrow" every sparrow shares, so it is no longer mistaken for a House Sparrow. Common typos such as <em>Linclon</em> are forgiven, and when two species are equally likely Yearbirder leaves the choice to you rather than guessing. American Goldfinch photos are no longer read as Canada Goose, whose code CANG hides inside "AmeriCANGoldfinch".</p></div>
+  <div class="feat"><span class="feat-title">See how sure a guess is</span>
+    <p>Add Photos, Add Recordings, Manage Photos, and Manage Recordings now colour a species suggested from a file name: <strong>green</strong> when a species code or the whole name matched exactly, <strong>amber</strong> when only part of the name matched or a typo had to be corrected. Amber marks the rows worth a second look.</p></div>
+  <div class="feat"><span class="feat-title">Search by banding code</span>
+    <p>Type <code>b:</code> in <strong>Name Search</strong> followed by a four-letter banding code — <code>b:OSFL</code> finds the Olive-sided Flycatcher — alongside <code>s:</code> for scientific names.</p></div>
+  <div class="feat"><span class="feat-title">Interface refinements</span>
+    <p>Drop-down menus show a slim arrow inside the control instead of a separate boxed button, the Sighting Filter's date fields match the menus above them, and browsing just a few photos or recordings opens a window sized to fit them rather than a tall, mostly empty one.</p></div>
+
+<h2>v2.15 <span class="date">September 5, 2026</span></h2>
+  <div class="feat"><span class="feat-title">Record which microphone you used</span>
+    <p>No recorder writes the microphone into an audio file — so the one piece of gear you most want to filter by was the one piece Yearbirder could never know. Define your <strong>rigs</strong> in <strong>Preferences → Recording Gear</strong>, each a recording device paired with a microphone, then assign one to your recordings in <strong>Add Recordings</strong> or <strong>Manage Recordings</strong>. When a file names a device you keep only one rig for, the microphone is filled in for you; when several rigs share that device, Yearbirder leaves the choice to you rather than guessing wrongly. A batch bar assigns a rig to every recording in the window at once, since a session is usually one outing with one rig. The Media Filter gains a <strong>Microphone</strong> setting, and the Recording Enlargement view lists the microphone below the recording device.</p></div>
+  <div class="feat"><span class="feat-title">Correct a recording device your file names wrongly</span>
+    <p>Some recording apps write the microphone into the field meant for the recorder, and a microphone that was not fully plugged in still gets named in the file as though it had been used. Assigning a rig now sets both the recording device and the microphone, so you can put right whatever the file claims. Yearbirder never modifies your audio files — only its own catalog — and <strong>Use each file's original metadata</strong> restores both fields whenever you want them back.</p></div>
+  <div class="feat"><span class="feat-title">Better species guesses from file names</span>
+    <p>When you add photos or recordings, Yearbirder reads the file name to guess the species. A banding or eBird code now always outranks a chance word match, so a photo named <em>BHGR_BoulderCommunityGarden</em> is recognised as a Black-headed Grosbeak rather than a Common Grackle matched on the "Comm" of "Community". Short fragments of a species name no longer count as a match at all.</p></div>
+  <div class="feat"><span class="feat-title">The Explorer remembers where you were</span>
+    <p>The <strong>Community Sightings Explorer</strong> now reopens on the region and past-days setting you last used instead of resetting every time, and a <strong>My County</strong> button jumps straight to your home county.</p></div>
+
+<h2>v2.14 <span class="date">September 1, 2026</span></h2>
+  <div class="feat"><span class="feat-title">Open a hotspot's sightings straight from the map</span>
+    <p>Clicking a dot on the <strong>Hotspot Map</strong> now opens an <strong>All Community Sightings</strong> report for that hotspot, so you can go from spotting a promising location on the map to reading what has been seen there without setting the filter yourself. Hovering a dot still shows its name, species count and last observation date. Clicking through was always meant to work and never did — the same fix revives it on the species maps too.</p></div>
+
+<h2>v2.13 <span class="date">August 29, 2026</span></h2>
+  <div class="feat"><span class="feat-title">Sort dates by day of year</span>
+    <p>Right-click any date column header in a list and choose <strong>Sort by day of year (seasonal)</strong> to reorder the rows by where each date falls in the year, ignoring which year it was — every January date first, every December date last. It answers a different question from an ordinary date sort: not <em>when did this happen</em> but <em>when in the year do I see this</em>. Sort your Species List by <strong>First</strong> this way and your species lay themselves out in the order they arrive through the season, resident birds and early migrants at the top, late-autumn arrivals at the bottom. Available on every date column in the Species, Locations, Checklists and Find Results lists, and on the Date tab of Date Totals. While seasonal, the header reads <strong>First (seasonal)</strong> so you always know which ordering you are looking at.</p></div>
+  <div class="feat"><span class="feat-title">Street maps no longer show a watermark</span>
+    <p>The service supplying Yearbirder's street map tiles began requiring a paid key and started stamping <em>"API KEY REQUIRED"</em> across every map. Yearbirder now draws its street maps from Esri — the same provider that has always supplied the satellite view — so maps are clean again and the app relies on one map service instead of two. The map looks slightly different, a little warmer and softer, but works exactly as before, including the Satellite toggle, Reset and Full Screen buttons. Nothing to set up, and no key needed.</p></div>
+  <div class="feat"><span class="feat-title">Fix a photo's species or location without leaving it</span>
+    <p>The photo Enlargement view's right-click menu gains <strong>Edit species or location assignment…</strong>, which opens Manage Photos on just the photo you are looking at. When you spot a misfiled photo while browsing, you can correct it there and then instead of hunting for it in a Manage Photos window full of everything else.</p></div>
+  <div class="feat"><span class="feat-title">Come back to the photo you were viewing</span>
+    <p>Switching to another app while viewing a photo or recording full screen, then switching back, used to return you to the main window with no way to reach the full-screen view again — it was still open, just unreachable. Yearbirder now brings you back to what you were actually looking at.</p></div>
+  <div class="feat"><span class="feat-title">Interface refinements</span>
+    <p>Window and table borders now meet cleanly at their corners rather than leaving a small gap, the Preferences window gains the same thin border as every other window, and clearing the filters no longer leaves a stray highlight on whichever control you touched last.</p></div>
+
+<h2>v2.12 <span class="date">August 14, 2026</span></h2>
+  <div class="feat"><span class="feat-title">Sort in either direction</span>
+    <p>Both browse views for photos and recordings — <strong>Browse Cards</strong> and <strong>Browse Grid</strong> — now sort in either direction. A pair of <strong>Ascending</strong> and <strong>Descending</strong> buttons sits beside the four sort options, so you can finally see your newest photos first, work up from your lowest-rated recordings, or run the taxonomy backwards. Each sort option still opens the way it always did: Rating starts with your best, everything else starts at the beginning, so nothing changes until you ask it to.</p></div>
+  <div class="feat"><span class="feat-title">Spectrograms on the recording growth curve</span>
+    <p>Hovering a point on <strong>Recordings → Recorded Species Growth Over Time</strong> now shows a spectrogram of each species you recorded for the first time that day, the way the photography chart shows thumbnails. Clicking that point opens those recordings in a <strong>Browse Grid</strong> window, ready to play — previously it listed every species you had seen that day, recorded or not.</p></div>
+  <div class="feat"><span class="feat-title">My County and My Patch, always at hand</span>
+    <p>The <strong>My County</strong> and <strong>My Patch</strong> buttons now sit at the top of the Sighting Filter whether or not you have set them. Click one before it is set and Yearbirder explains what it does and offers to take you straight to the right tab of Preferences; right-click either one to go there any time. Previously the buttons stayed hidden until configured, so there was nothing to discover.</p></div>
+  <div class="feat"><span class="feat-title">Lists show which column they are sorted by</span>
+    <p>Species, Checklists, Locations and Find Results windows now open with the sort arrow visible on the column they are already sorted by — a hint that every column header is clickable. The rows themselves are unchanged; the arrow simply tells you what was previously left unsaid.</p></div>
+  <div class="feat"><span class="feat-title">Clearer wording when renaming media</span>
+    <p>The <strong>Cancel</strong> button in the Rename Media window is now labelled <strong>Close</strong>, since renames are applied as they run and closing the window never undoes them.</p></div>
+
+<h2>v2.11 <span class="date">August 11, 2026</span></h2>
+  <div class="feat"><span class="feat-title">Browse your photos as a grid</span>
+    <p>A second way to browse: <strong>Photos → Browse Grid</strong> shows the photos matching your filters as a grid of thumbnails rather than one card per row. It is built for large results — a filter returning a thousand images, or the hundred-odd photos you may have of a single species, is far quicker to scan several across at a time. Each cell shows the species name, with the full details on hover, and clicking one opens the enlargement view as before.</p></div>
+  <div class="feat"><span class="feat-title">Browse your recordings as a grid</span>
+    <p><strong>Recordings → Browse Grid</strong> does the same for your sound recordings, laying them out as a grid of spectrograms. Every cell keeps its own <strong>Play</strong> button and scrubber, so you can audition a recording without leaving the grid, and the red cursor line tracks the sound across the cell exactly as it does on a card.</p></div>
+  <div class="feat"><span class="feat-title">Two browse views, side by side</span>
+    <p>The original browsers are unchanged but renamed <strong>Browse Cards</strong>, so each menu now offers the pair: <strong>Browse Grid</strong> for scanning many at once, <strong>Browse Cards</strong> for reading the full details of one at a time. Both views share the same four sorting options, the same Slideshow button, and the same live updates when media is deleted, removed from the catalog, or reassigned. The <strong>Photos</strong> and <strong>Recordings</strong> toolbar buttons open the grid views, and the two windows are independent — keep a grid open for scanning and a cards window alongside it.</p></div>
+  <div class="feat"><span class="feat-title">Grids reflow to your window</span>
+    <p>Widen or narrow a grid window and it re-lays its cells to fit as many columns as the space allows, without reloading a single thumbnail or re-rendering a spectrogram. Photo grids open four columns wide, recording grids three.</p></div>
+  <div class="feat"><span class="feat-title">macOS app icon</span>
+    <p>On the Mac, Yearbirder's icon now matches the size and rounded-square shape of every other app in the Dock and the ⌘-Tab switcher, instead of appearing as an oversized square beside them.</p></div>
+
+<h2>v2.10 <span class="date">August 7, 2026</span></h2>
+  <div class="feat"><span class="feat-title">Instant previews for new recordings</span>
+    <p>The spectrogram views a recording needs are now pre-rendered when you add it to your catalog, so newly added recordings open instantly in both the browser and the enlargement view instead of rendering on first use.</p></div>
+  <div class="feat"><span class="feat-title">Compact catalog and cache</span>
+    <p>A new command tidies your media catalog and sweeps cached previews that no longer belong to it, reclaiming disk space. Removing a photo or recording from the catalog now frees its cached previews automatically.</p></div>
+  <div class="feat"><span class="feat-title">Single-species filter opens the Individual window</span>
+    <p>Asking for a species list when your Sighting Filter names just one species now opens that species' Individual window — its dates, locations, and media — instead of a one-row list.</p></div>
+  <div class="feat"><span class="feat-title">Refresh camera and recording data respects your filters</span>
+    <p>Re-reading technical data from your files now honors both the Sighting and Media filters, so you can refresh a chosen subset rather than the whole catalog, and each item keeps its rating and notes. The confirmation names the scope it acted on.</p></div>
+  <div class="feat"><span class="feat-title">Choose how far back community sightings reach</span>
+    <p>The Community Sightings Explorer has a new slider that sets how many days of eBird history the Notable Community Sightings, All Community Sightings, and Notable Sightings Map reports cover — anywhere from a single day to a full month, in place of the fixed three-day window.</p></div>
+  <div class="feat"><span class="feat-title">Quicker ways around your photos and recordings</span>
+    <p>Double-click an enlarged photo to snap it back to best fit after zooming with the scroll wheel, and press the space bar in a recording enlargement to start or pause playback wherever the keyboard focus sits. In the Media filter, setting only the top of a rating range now fills in the bottom for you.</p></div>
+  <div class="feat"><span class="feat-title">Interface refinements and fixes</span>
+    <p>Find results now show the terms you searched for, the Manage Photos and Manage Recordings windows label their confirm button "Save", and enlarged photos open at their final size instead of resizing after they appear. Windows users no longer see a flash when clicking a spectrogram, and the Yearbirder icon now appears in the main window's title bar. This release also brings a range of smaller stability and correctness fixes across the media views.</p></div>
+
+<h2>v2.06 <span class="date">July 22, 2026</span></h2>
+  <div class="feat"><span class="feat-title">Bird recordings</span>
+    <p>Yearbirder now catalogs your bird recordings alongside your sightings and photos. Import your WAV files and the app reads their embedded recorder timestamps to match each one to a checklist and species — and a single recording can be assigned to several species at once. Add, browse, rate, filter, map, and rename your recordings just as you do your photos.</p></div>
+  <div class="feat"><span class="feat-title">Spectrograms and synchronized playback</span>
+    <p>Every recording appears as a spectrogram. Open one in the enlargement view to zoom both the frequency (kHz) and time axes and adjust the contrast, then play it back with a cursor that tracks the sound in real time so you can follow a song note by note. High-quality playback resamples to your output device's preferred rate.</p></div>
+  <div class="feat"><span class="feat-title">Per-device audio calibration</span>
+    <p>Because different audio hardware introduces different latency between what you hear and where the playback cursor sits, a new per-device calibration lets you align the two once. Yearbirder remembers the setting for each output device.</p></div>
+  <div class="feat"><span class="feat-title">Recordings on maps and in charts</span>
+    <p>Plot your recordings on an interactive map with spectrogram previews, or play them back in sequence on an animated map. The Audio Species Gallery shows your best recording per species, and new recording charts track your totals, year-to-date pace, accumulation, and family breakdown.</p></div>
+  <div class="feat"><span class="feat-title">Filter recordings by audio properties</span>
+    <p>Beyond species, region, date, and season, you can now filter recordings by rating, duration, sample rate, bit depth, channels, and recording device.</p></div>
+  <div class="feat"><span class="feat-title">Redesigned photo and recording browsers</span>
+    <p>The Browse Photos and Browse Recordings windows share a new media-card design, with instant sorting by species, date, rating, or taxonomy. The enlargement view has a redesigned details pane showing the full sighting, media, and technical information at a glance.</p></div>
+  <div class="feat"><span class="feat-title">Dramatically faster media display</span>
+    <p>A new caching system pre-renders photo thumbnails and recording spectrograms and stores them on disk, so browsers, galleries, and maps open dramatically faster — and stay fast between sessions instead of rebuilding every preview from scratch.</p></div>
+  <div class="feat"><span class="feat-title">Live updates when your media changes</span>
+    <p>Open browsers, maps, charts, and lists now update on the fly when you delete, re-tag, or edit a photo or recording — no need to close and reopen them.</p></div>
+  <div class="feat"><span class="feat-title">Species List media icons, Notes search, and smarter matching</span>
+    <p>Species lists now show photo and recording icons next to each species you've captured, so you can see your media coverage at a glance. Media Notes are now searchable, and photo-to-species matching includes a banding-code fallback for more reliable results.</p></div>
+  <div class="feat"><span class="feat-title">Explorer region tree-picker</span>
+    <p>The Community Sightings Explorer now uses a drill-down region tree — country to state to county — in place of the cascading dropdowns, making it easier to navigate to any region in the world.</p></div>
+  <div class="feat"><span class="feat-title">Windows display fixes</span>
+    <p>Resolved Windows-only issues that could produce stretched or mis-rendered text and brief flashes during startup.</p></div>
+  <div class="feat"><span class="feat-title">Numerous interface improvements and bug fixes</span>
+    <p>This release also brings many smaller refinements across the app — polished layouts and typography, smoother window behavior, and a wide range of stability and correctness fixes.</p></div>
+
+<h2>v1.492 <span class="date">May 18, 2026</span></h2>
+  <div class="feat"><span class="feat-title">Windows: eBird API fixed</span>
+    <p>Resolved a Windows-only issue where all Community features (Community Sightings Explorer, Notable and All Community Sightings, Regional Taxonomy, Hotspot Map) silently failed to contact the eBird API in the installer build due to SSL certificate handling in the bundled runtime.</p></div>
+  <div class="feat"><span class="feat-title">Windows: map tile backgrounds fixed</span>
+    <p>Resolved a Windows-only issue where sightings maps, hotspot maps, animated maps, and choropleth maps displayed dots and region outlines correctly but showed a plain grey background instead of the map tile layer.</p></div>
+
+<h2>v1.49 <span class="date">May 16, 2026</span></h2>
+  <div class="feat"><span class="feat-title">Community menu</span>
+    <p>A new <strong>Community</strong> menu consolidates the reports that contact eBird's servers: Regional Taxonomy, Notable Community Sightings (Past 3 days), All Community Sightings (Past 3 days), Hotspot Map, and Community Sightings Explorer. All community features require a free eBird API key (set in Preferences).</p></div>
+  <div class="feat"><span class="feat-title">Hotspot Map</span>
+    <p>A new <strong>Community → Hotspot Map</strong> command displays all public eBird hotspots in the selected region as bubble markers, with each bubble sized by checklist count. Also accessible from the Community Sightings Explorer. Requires an eBird API key.</p></div>
+  <div class="feat"><span class="feat-title">Regional Taxonomy improvements</span>
+    <p>The former "Regional Species" report has been renamed <strong>Regional Taxonomy</strong> and moved to <strong>Community → Regional Taxonomy</strong>. When a specific eBird location is selected in the Sighting Filter, the report now queries that exact location's species list instead of falling back to the county level. Private eBird locations are automatically detected and labelled "(Personal Location)" in the report header.</p></div>
+  <div class="feat"><span class="feat-title">"(Past 3 days)" labelling</span>
+    <p>The Notable Community Sightings and All Community Sightings menu items and their corresponding buttons in the Community Sightings Explorer now include "(Past 3 days)" to make the reporting window explicit.</p></div>
+  <div class="feat"><span class="feat-title">Single-location All Community Sightings</span>
+    <p>When a specific eBird location is selected, the All Community Sightings report now shows <strong>All-time List</strong> and <strong>Map</strong> buttons in the header, opening the Regional Taxonomy and Hotspot Map respectively for that location — even when no checklists have been submitted in the past three days.</p></div>
+  <div class="feat"><span class="feat-title">Community Sightings Explorer</span>
+    <p>The Explorer now includes a <strong>Hotspot Map</strong> button alongside the existing Notable and All Community Sightings buttons.</p></div>
+  <div class="feat"><span class="feat-title">Photo Filter keyboard shortcut</span>
+    <p>Press <strong>Cmd-P</strong> (Mac) or <strong>Ctrl-P</strong> (Windows) to show or hide the Photo Filter panel without using the mouse.</p></div>
+  <div class="feat"><span class="feat-title">Badge display fixes</span>
+    <p>Corrected several bugs where Life, State, County, and Year badges on the Notable Community Sightings and All Community Sightings reports showed incorrect results, including cases where the wrong region's data was used to evaluate firsts.</p></div>
+
+<h2>v1.48 <span class="date">May 2026</span></h2>
+  <div class="feat"><span class="feat-title">Community Sightings Explorer</span>
+    <p>A new <strong>Reports → Community Sightings Explorer…</strong> window lets you browse Notable and All Community Sightings for any region in the world — independently of the Sighting Filter. Pick a country from a live eBird API list (United States and Canada sorted to the top), then optionally narrow to a state/province and county. Click <strong>Notable Community Sightings</strong> or <strong>All Community Sightings</strong> to open the corresponding report for that region. Requires a free eBird API key.</p></div>
+  <div class="feat"><span class="feat-title">Clickable species names in community reports</span>
+    <p>In both Notable Community Sightings and All Community Sightings, species common names are now clickable blue links. Clicking a name opens an <strong>Individual Species</strong> window showing your full sighting history, location breakdowns, monthly patterns, and photo thumbnails for that species. If the species is not in your own data, clicking it does nothing. Hybrid species remain non-clickable.</p></div>
+  <div class="feat"><span class="feat-title">Lifer sort fixed in All Community Sightings</span>
+    <p>Life-bird species now appear in correct taxonomic position in the All Community Sightings report. Previously, species you had never recorded anywhere sorted to the bottom of the list instead of their correct taxonomic position.</p></div>
+  <div class="feat"><span class="feat-title">Removed redundant Reports count</span>
+    <p>The All Community Sightings header no longer shows a separate Reports count. Since the eBird API returns one report per species, that number always equalled the species count and provided no additional information.</p></div>
+
+<h2>v1.47 <span class="date">May 2026</span></h2>
+  <div class="feat"><span class="feat-title">Notable Community Sightings</span>
+    <p><strong>Community → Notable Community Sightings (Past 3 days)</strong> queries the eBird API for species flagged as notable in the selected region over the past three days, sorted taxonomically. Colour-coded badge bubbles mark Life, State, County, and Year firsts relative to your own data. Click <strong>+</strong> to expand each species' checklist entries; duplicate entries (same location, time, and observer) are removed automatically. Hybrid species appear in grey without badges. Requires an eBird API key.</p></div>
+  <div class="feat"><span class="feat-title">All Community Sightings</span>
+    <p><strong>Community → All Community Sightings (Past 3 days)</strong> shows every species reported in the selected region over the past three days, one row per species showing the most recent sighting. An <strong>All Locations</strong> button opens a new window listing all sightings of that species across the region. The same taxonomic ordering, badge bubbles, and filter bar from Notable Sightings apply here too. Requires an eBird API key.</p></div>
+  <div class="feat"><span class="feat-title">Regional Taxonomy report</span>
+    <p><strong>Community → Regional Taxonomy</strong> generates an interactive species checklist for the currently selected region using live eBird API data. Seen species are marked with a checkmark; unseen species appear in grey. When a media catalog is open, a blue dot marks each species you have photographed. Filter buttons let you focus on seen, unseen, photographed, or not-yet-photographed species. Requires a free eBird API key.</p></div>
+  <div class="feat"><span class="feat-title">eBird API key in Preferences</span>
+    <p>A new field in Preferences stores your personal eBird API key, required for community reports. Get a free key at <a href="https://ebird.org/api/keygen" target="_blank" rel="noopener">ebird.org/api/keygen</a>.</p></div>
+
+<h2>v1.44 <span class="date">2026</span></h2>
+  <div class="feat"><span class="feat-title">Animated First Sightings Map</span>
+    <p>A new animated map that plays back the first sighting of each species under the current filter. Unlike the Animated Lifer Map (which always shows life lifers), this map respects your active filter, so you can watch your county firsts, year firsts, or any filtered species list accumulate chronologically.</p></div>
+  <div class="feat"><span class="feat-title">Animated map tooltips</span>
+    <p>During playback of either animated map, a tooltip tracks each newly plotted species, showing its name, rank, date, and location.</p></div>
+  <div class="feat"><span class="feat-title">Fix — Animated Sequence Map crash</span>
+    <p>Resolved a crash that occurred in the Animated Sequence Map with large photo collections.</p></div>
+
+<h2>v1.41 <span class="date">2026</span></h2>
+  <div class="feat"><span class="feat-title">Media catalog safeguards</span>
+    <p>A series of fixes prevents accidental data loss when opening, switching, or closing media catalogs. The app now guards against overwriting an existing catalog when a new eBird data file is opened.</p></div>
+  <div class="feat"><span class="feat-title">No catalog, no problem</span>
+    <p>Adding photos without a catalog open now prompts you to create one before saving. If you cancel, your in-progress work is preserved and you can try again.</p></div>
+  <div class="feat"><span class="feat-title">Unsaved-changes protection</span>
+    <p>Closing the Manage Photos window or the media catalog while changes are pending now asks whether to save or discard, rather than silently discarding.</p></div>
+  <div class="feat"><span class="feat-title">Catalog-switching guard</span>
+    <p>Opening a different media catalog while Manage Photos is open is blocked to prevent conflicts. Switching catalogs with unsaved changes prompts to save first.</p></div>
+  <div class="feat"><span class="feat-title">CSV catalog conversion required</span>
+    <p>Legacy CSV media catalogs must now be converted to the <code>.jsonl</code> format before they can be used. The app guides you through the conversion and will not open a CSV without it.</p></div>
+  <div class="feat"><span class="feat-title">Default catalog tracking fixed</span>
+    <p>Declining "Set as default catalog?" now correctly preserves the previous default. The Preferences dialog always shows the stored default rather than the currently open catalog.</p></div>
+  <div class="feat"><span class="feat-title">Menu visibility improvements</span>
+    <p>The Photos menu, Close eBird Data File, and catalog-related File menu items are now shown and hidden based on what is actually open, reducing clutter.</p></div>
+
+<h2>v1.4 <span class="date">2025</span></h2>
+  <div class="feat"><span class="feat-title">eBird species code in Rename Photos</span>
+    <p>The Species Name Format picker now includes <em>eBird Species Code</em> (e.g. <code>gretit1</code>) alongside Common Name and Scientific Name.</p></div>
+  <div class="feat"><span class="feat-title">Smarter photo-to-species matching</span>
+    <p>When adding photos to the catalog, filename matching now checks eBird codes, BBL banding codes, common names, and scientific names as substrings, handling arbitrary filename patterns from any camera or workflow. Previously only whole-word token matching was used.</p></div>
+  <div class="feat"><span class="feat-title">Duration-aware checklist matching</span>
+    <p>Photo EXIF timestamps are now matched to the checklist whose window (start time + duration) is closest, so a photo taken mid-checklist correctly matches that checklist rather than the next one to start.</p></div>
+  <div class="feat"><span class="feat-title">Sighting Filter label</span>
+    <p>The filter panel is now labelled <em>Sighting Filter</em> to distinguish it from the Photo Filter.</p></div>
+  <div class="feat"><span class="feat-title">Chart names updated</span>
+    <p>Photo-related charts are now named <em>Families &amp; Orders by Photos</em>, <em>Total Photos</em>, <em>New Species Photographed Each Year</em>, and <em>Photographed Species Growth Over Time</em>.</p></div>
+
+<div class="footer">
+  <p>Any release after v2.17 is listed at
+     <a href="https://yearbirder.org/history">yearbirder.org/history</a>.</p>
+</div>
+
+</body>
+</html>

@@ -23,6 +23,7 @@ import code_Recordings
 import code_ThumbnailCache
 
 from PySide6.QtCore import Qt, QSize, QTimer
+from PySide6.QtGui import QFontMetrics
 from PySide6.QtWidgets import (
     QHBoxLayout, QLabel, QPushButton, QSlider, QVBoxLayout, QWidget,
 )
@@ -34,12 +35,11 @@ from functools import partial
 # the scrubber needs usable travel beside it.
 CELL_W       = 260
 CELL_SPACING = 6
-# Species name: TWO lines.  Plain common names fit one 15px line at this width,
-# but hybrid and subspecies forms do not — "Greater White-fronted x Canada Goose
-# (hybrid)" and "Yellow-rumped Warbler (Myrtle x Audubon's)" both wrap.  Sizing
-# to one line reclaims ~13px per cell and truncates those names, so the second
-# line stays.
-CAPTION_H    = 34    # species name (2 lines)
+# One measured line for the species name — see code_PhotosGrid for why, and for
+# what happens to the rare name too wide to fit.  At this width that is 10 of
+# 1,323 species: hybrid and subspecies forms such as "Greater White-fronted x
+# Canada Goose (hybrid)".
+DATE_H       = 16    # one line under the name for the recording date
 CELL_PADDING = 12    # card margins around the contents (6 per side)
 PLAY_STRIP_H = 28    # Play button / scrubber height
 STRIP_GAP    = 7     # gap between spectrogram and the play strip
@@ -62,10 +62,21 @@ class RecordingsGrid(code_Recordings.Recordings):
     def __init__(self):
         super().__init__()
         self._numCols = DEFAULT_COLS
+        self._captionH = None   # measured on first use (see _captionHeight)
         self._cellWidgets = []      # cell container per recording, in audioList order
         self._rowContainers = []
 
     # ── Layout ────────────────────────────────────────────────────────────────
+
+    def _captionHeight(self):
+        """One line of the caption font, plus 6px so the descenders clear the
+        date line below.  mediaCaptionName has no vertical padding, so that
+        slack sits under the text rather than above it."""
+        if self._captionH is None:
+            probe = QLabel()
+            probe.setObjectName("mediaCaptionName")
+            self._captionH = QFontMetrics(probe.font()).height() + 6
+        return self._captionH
 
     def _calcCols(self):
         """Columns that fit the scroll-area viewport at the current width."""
@@ -119,12 +130,20 @@ class RecordingsGrid(code_Recordings.Recordings):
         scrubLayout.addWidget(playBtn)
         scrubLayout.addWidget(scrubber)
 
-        nameLabel = QLabel(s["commonName"])
+        captionH = self._captionHeight()
+        nameLabel = QLabel()
         nameLabel.setFixedWidth(CELL_W)
-        nameLabel.setFixedHeight(CAPTION_H)
-        nameLabel.setWordWrap(True)
+        nameLabel.setFixedHeight(captionH)
         nameLabel.setAlignment(Qt.AlignHCenter | Qt.AlignTop)
-        nameLabel.setObjectName("mediaCaption")
+        nameLabel.setObjectName("mediaCaptionName")
+        nameLabel.setText(QFontMetrics(nameLabel.font()).elidedText(
+            s["commonName"], Qt.ElideRight, CELL_W - 6))
+
+        dateLabel = QLabel(self.captureDate(a, s))
+        dateLabel.setFixedWidth(CELL_W)
+        dateLabel.setFixedHeight(DATE_H)
+        dateLabel.setAlignment(Qt.AlignHCenter | Qt.AlignTop)
+        dateLabel.setObjectName("mediaCaptionDate")
 
         cell = QWidget()
         cell.setObjectName("mediaCard")
@@ -132,7 +151,7 @@ class RecordingsGrid(code_Recordings.Recordings):
         cell.setFixedSize(
             CELL_W + CELL_PADDING,
             self.SPECTRO_SIZE.height() + STRIP_GAP + PLAY_STRIP_H
-            + CAPTION_H + CELL_PADDING,
+            + captionH + DATE_H + CELL_PADDING,
         )
         # Full detail on hover — the card view's caption in tooltip form.  The
         # card itself is NOT click-to-open: the Play button and scrubber live
@@ -150,6 +169,7 @@ class RecordingsGrid(code_Recordings.Recordings):
         lay.addSpacing(STRIP_GAP)
         lay.addWidget(scrubRow)
         lay.addWidget(nameLabel, 0, Qt.AlignHCenter)
+        lay.addWidget(dateLabel, 0, Qt.AlignHCenter)
 
         self._cellWidgets.append(cell)
         self._spectroLabels[row] = spectroLabel
