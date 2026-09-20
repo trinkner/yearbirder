@@ -137,32 +137,15 @@ jobs:
           & $makeappx pack /d msix_staging /p "dist\$msixName" /nv
           Write-Host "MSIX built: dist\$msixName"
 
+      # The MSIX is deliberately NOT attached to the GitHub release: it is
+      # unsigned, and an unsigned MSIX cannot be installed by anyone — Windows
+      # refuses it with 0x800B010A and no override. Publishing it only offers
+      # the public a file that cannot work. It stays a CI artifact (30 days),
+      # which is what gets uploaded to Partner Center, where the Microsoft
+      # Store signs it. See STORE_SUBMISSION.md.
       - name: Upload MSIX artifact
         uses: actions/upload-artifact@v4.6.2
         with:
           name: Yearbirder-Windows-MSIX
           path: dist/Yearbirder_Setup_v${{ steps.version.outputs.version }}.msix
           retention-days: 30
-
-      - name: Attach MSIX to GitHub Release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          $tag = "v${{ steps.version.outputs.version }}"
-          gh release view $tag *> $null
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "No release found for $tag — skipping upload"
-            exit 0
-          }
-          # Never --clobber: replacing an asset deletes and re-creates it, which
-          # resets its download count to zero.  Those counts are the only
-          # per-version measure of Windows downloads, and every push to master
-          # re-runs this build, so clobbering would wipe the tally each time.
-          $asset = "Yearbirder_Setup_v${{ steps.version.outputs.version }}.msix"
-          $assets = @(gh release view $tag --json assets --jq '.assets[].name')
-          if ($assets -contains $asset) {
-            Write-Host "$asset is already attached to $tag — leaving it alone (re-uploading would reset its download count)"
-            exit 0
-          }
-          gh release upload $tag "dist\$asset"
-          Write-Host "Uploaded $asset to release $tag"
