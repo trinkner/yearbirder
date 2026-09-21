@@ -490,8 +490,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
     # About) and string-compared in _onUpdateCheckDone.  Letters are fine.
     # Avoid SPACES though — build_release.sh interpolates this into DMG
     # filenames and the disk-image volume name (Yearbirder_v${VERSION}.dmg).
-    versionNumber = "2.17"
-    versionDate = "September 19, 2026"
+    versionNumber = "2.18-dev"
+    versionDate = "September 21, 2026"
     taxonomyYear = ""
 
     def __init__(self):
@@ -717,12 +717,10 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionIndia_States.triggered.connect(self.createChoroplethIndiaStates)
         self.actionGB_Counties.triggered.connect(self.createChoroplethGBCounties)
         self.actionWorld_Countries.triggered.connect(self.createChoroplethWorldCountries)
-        self.actionUS_States_Checklists.triggered.connect(self.createChoroplethUSStatesChecklists)
-        self.actionUS_Counties_Checklists.triggered.connect(self.createChoroplethUSCountiesChecklists)
-        self.actionCanada_Provinces_Checklists.triggered.connect(self.createChoroplethCanadaProvincesChecklists)
-        self.actionIndia_States_Checklists.triggered.connect(self.createChoroplethIndiaStatesChecklists)
-        self.actionGB_Counties_Checklists.triggered.connect(self.createChoroplethGBCountiesChecklists)
-        self.actionWorld_Countries_Checklists.triggered.connect(self.createChoroplethWorldCountriesChecklists)
+
+        # The Europe submenu's countries are data-driven, so they are created in
+        # code rather than in form_MDIMain.
+        self.buildEuropeChoroplethMenu()
         self.actionGeolocatedPhotos.triggered.connect(self.createGeolocatedPhotosMap)
         self.actionAnimatedPhotoSequence.triggered.connect(self.createAnimatedPhotoSequenceMap)
         self.actionSlideshow.triggered.connect(self.createSlideshow)
@@ -3103,11 +3101,28 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             # sibling when the child closes — intermittently leaving the sibling
             # at its small showNormal()/scaleMe() size (e.g. a Browse Recordings
             # window shrinking after its Recording Enlargement closes).  Restore
-            # it explicitly when the child is destroyed.
+            # it explicitly when the child is destroyed — but ONLY while the
+            # child is still maximized itself.  If the user restores the child,
+            # Qt takes the whole MDI area out of maximized mode and every window
+            # shows restored; re-maximizing the sibling when the child then
+            # closes would resize a window the user never asked to resize.  A
+            # child window's size must only change when the user clicks its own
+            # maximize/minimize/restore button.
+            #
+            # destroyed fires after the C++ object is gone, so track the
+            # maximized bit as it changes rather than querying it at close time.
+            # Closing a subwindow clears WindowActive but leaves WindowMaximized
+            # set, so a child closed while still maximized is correctly seen as
+            # maximized here and does hand the state back.
             if displaced_maximized is not None:
+                childMaximized = [True]
+                child.windowStateChanged.connect(
+                    lambda _old, newState, flag=childMaximized:
+                        flag.__setitem__(
+                            0, bool(newState & Qt.WindowState.WindowMaximized)))
                 child.destroyed.connect(
-                    lambda *_a, w=displaced_maximized:
-                        self._restoreDisplacedMaximized(w))
+                    lambda *_a, w=displaced_maximized, flag=childMaximized:
+                        self._restoreDisplacedMaximized(w) if flag[0] else None)
             # The deferred showMaximized above is this window's FIRST appearance.
             # Signal the caller not to show() it now: showing it here would flash
             # the window at its small pre-maximize size for one frame before it
@@ -3293,6 +3308,10 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             bblCodeFile = code_DataBase.resource_path("eBird_BBLCodes.csv")
             if os.path.isfile(bblCodeFile):
                 MainWindow.db.ReadBBLCodeFile(bblCodeFile)
+
+            # The Europe choropleth submenu lists only countries present in the
+            # data that was just loaded.
+            self.refreshEuropeChoroplethMenu()
 
 
 
@@ -5921,6 +5940,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
         self.CloseAllWindows()
         self.clearAllFilters()
+        # No data, so no country has a regional map to offer.
+        self.refreshEuropeChoroplethMenu()
         self.hideStandardFilter()
         self.hideMediaFilter()
         self.actionClose.setVisible(False)
@@ -6761,6 +6782,103 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.highlightRecordingFilterElement(self.cboRecordingsMicrophone)
 
 
+    # Countries with a regional choropleth in europe-regions.json, in menu order
+    # (alphabetical by the label shown).  Great Britain is listed but reuses the
+    # existing counties action: eBird's four GB subnational1 regions are far too
+    # coarse to shade, so its map is at county level instead.
+    EUROPE_CHOROPLETH_MENU = [
+        ("AT", "Austria"),     ("CZ", "Czech Republic"), ("FR", "France"),
+        ("DE", "Germany"),     ("GB", None),          ("GR", "Greece"),
+        ("IT", "Italy"),
+        ("NL", "Netherlands"), ("NO", "Norway"),      ("PL", "Poland"),
+        ("PT", "Portugal"),    ("RO", "Romania"),     ("ES", "Spain"),
+        ("SE", "Sweden"),      ("CH", "Switzerland"),
+        ]
+
+
+    def buildEuropeChoroplethMenu(self):
+        """Create the Europe submenu's country actions once, at startup.
+
+        Built here rather than laid out in form_MDIMain so the labels stay beside
+        the country codes they have to match.
+        """
+        self._europeChoroplethActions = {}
+
+        for code, label in self.EUROPE_CHOROPLETH_MENU:
+            if label is None:
+                # Great Britain keeps its own counties action, positioned
+                # alphabetically among the country names.
+                self.menuChoroEurope.addAction(self.actionGB_Counties)
+                self._europeChoroplethActions[code] = self.actionGB_Counties
+                continue
+
+            action = QAction(label, self)
+            action.setObjectName(f"actionChoroEurope_{code}")
+            action.triggered.connect(
+                lambda checked=False, cc=code:
+                    self.createChoroplethCountryRegions(cc))
+            self.menuChoroEurope.addAction(action)
+            self._europeChoroplethActions[code] = action
+
+        self.refreshEuropeChoroplethMenu()
+
+
+    def refreshEuropeChoroplethMenu(self):
+        """Show only the countries the loaded data actually covers.
+
+        A fixed list of fourteen would mostly be entries that open an empty map,
+        so each country appears only once there are sightings for it, and the
+        Europe submenu itself disappears when there are none.
+        """
+        actions = getattr(self, "_europeChoroplethActions", None)
+        if not actions:
+            return
+
+        # Read the codes off masterLocationList rather than db.countryList: that
+        # list holds two-letter codes after ReadDataFile but is REBUILT with long
+        # country names by ReadCountryStateCodeFile, which runs afterwards.  Using
+        # it here would compare "DE" against "Germany" and hide every country.
+        if MainWindow.db.eBirdFileOpenFlag:
+            present = {l.get("countryCode")
+                       for l in MainWindow.db.masterLocationList}
+        else:
+            present = set()
+
+        anyVisible = False
+        for code, action in actions.items():
+            visible = code in present
+            action.setVisible(visible)
+            anyVisible = anyVisible or visible
+
+        self.menuChoroEurope.menuAction().setVisible(anyVisible)
+
+
+    def createChoroplethCountryRegions(self, countryCode):
+        """Open the regional choropleth for one European country."""
+
+        # if no data file is currently open, abort
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
+
+        sub = code_Web.Web()
+        sub.mdiParent = self
+
+        if sub.loadChoroplethCountryRegions(filter, countryCode) is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+
+        else:
+            # abort if the filter found no sightings for the map
+            self.CreateMessageNoResults()
+            sub.close()
+
+
     def createChoroplethUSStates(self):
         
         # if no data file is currently open, abort        
@@ -6925,114 +7043,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoResults()
             sub.close()
 
-
-
-    def createChoroplethUSStatesChecklists(self):
-        if MainWindow.db.eBirdFileOpenFlag is not True:
-            self.CreateMessageNoFile()
-            return
-        filter = self.GetGeneralFilter()
-        if filter is None:
-            return
-        sub = code_Web.Web()
-        sub.mdiParent = self
-        if sub.loadChoroplethUSStates(filter, mode='checklists') is True:
-            self.mdiArea.addSubWindow(sub)
-            self.PositionChildWindow(sub, self)
-            sub.show()
-        else:
-            self.CreateMessageNoResults()
-            sub.close()
-
-
-    def createChoroplethUSCountiesChecklists(self):
-        if MainWindow.db.eBirdFileOpenFlag is not True:
-            self.CreateMessageNoFile()
-            return
-        filter = self.GetGeneralFilter()
-        if filter is None:
-            return
-        sub = code_Web.Web()
-        sub.mdiParent = self
-        if sub.loadChoroplethUSCounties(filter, mode='checklists') is True:
-            self.mdiArea.addSubWindow(sub)
-            self.PositionChildWindow(sub, self)
-            sub.show()
-        else:
-            self.CreateMessageNoResults()
-            sub.close()
-
-
-    def createChoroplethCanadaProvincesChecklists(self):
-        if MainWindow.db.eBirdFileOpenFlag is not True:
-            self.CreateMessageNoFile()
-            return
-        filter = self.GetGeneralFilter()
-        if filter is None:
-            return
-        sub = code_Web.Web()
-        sub.mdiParent = self
-        if sub.loadChoroplethCanadaProvinces(filter, mode='checklists') is True:
-            self.mdiArea.addSubWindow(sub)
-            self.PositionChildWindow(sub, self)
-            sub.show()
-        else:
-            self.CreateMessageNoResults()
-            sub.close()
-
-
-    def createChoroplethIndiaStatesChecklists(self):
-        if MainWindow.db.eBirdFileOpenFlag is not True:
-            self.CreateMessageNoFile()
-            return
-        filter = self.GetGeneralFilter()
-        if filter is None:
-            return
-        sub = code_Web.Web()
-        sub.mdiParent = self
-        if sub.loadChoroplethIndiaStates(filter, mode='checklists') is True:
-            self.mdiArea.addSubWindow(sub)
-            self.PositionChildWindow(sub, self)
-            sub.show()
-        else:
-            self.CreateMessageNoResults()
-            sub.close()
-
-
-    def createChoroplethGBCountiesChecklists(self):
-        if MainWindow.db.eBirdFileOpenFlag is not True:
-            self.CreateMessageNoFile()
-            return
-        filter = self.GetGeneralFilter()
-        if filter is None:
-            return
-        sub = code_Web.Web()
-        sub.mdiParent = self
-        if sub.loadChoroplethGBCounties(filter, mode='checklists') is True:
-            self.mdiArea.addSubWindow(sub)
-            self.PositionChildWindow(sub, self)
-            sub.show()
-        else:
-            self.CreateMessageNoResults()
-            sub.close()
-
-
-    def createChoroplethWorldCountriesChecklists(self):
-        if MainWindow.db.eBirdFileOpenFlag is not True:
-            self.CreateMessageNoFile()
-            return
-        filter = self.GetGeneralFilter()
-        if filter is None:
-            return
-        sub = code_Web.Web()
-        sub.mdiParent = self
-        if sub.loadChoroplethWorldCountries(filter, mode='checklists') is True:
-            self.mdiArea.addSubWindow(sub)
-            self.PositionChildWindow(sub, self)
-            sub.show()
-        else:
-            self.CreateMessageNoResults()
-            sub.close()
 
 
     def createGeolocatedPhotosMap(self):

@@ -775,27 +775,35 @@
 <hr>
 
 <h2 id="choropleth-maps">18. Shaded Region Maps</h2>
-<p>Shaded region maps are accessed via <strong>Maps → Shaded Regions</strong>. Six geographic regions are available, each with two modes selectable from the <strong>By Species</strong> and <strong>By Checklists</strong> submenus.</p>
-<p>All shaded region maps respond to the Sighting Filter — for example, set a Family filter to see which states you have recorded warblers in. Clicking a shaded region opens a Species List (By Species mode) or a Checklists List (By Checklists mode) filtered to that region.</p>
+<p>Shaded region maps are accessed via <strong>Maps → Shaded Regions</strong>. <strong>World Countries</strong> sits at the top as the worldwide overview; below it, maps are grouped into <strong>Asia</strong>, <strong>Europe</strong>, and <strong>North America</strong> submenus.</p>
+<p>All shaded region maps respond to the Sighting Filter — for example, set a Family filter to see which states you have recorded warblers in. Clicking a shaded region opens a Species List or a Checklists List filtered to that region, depending on which view the map is showing.</p>
 
-<h3>By Species mode</h3>
-<p>Each region is shaded according to the number of distinct species you have recorded there under the current filter. Darker shading = more species. Hover over a region to see its name, species count, and a list of the most recently recorded species.</p>
-
-<h3>By Checklists mode</h3>
-<p>Each region is shaded according to the number of checklists you have submitted there. Hover over a region to see its name, checklist count, and the dates of your most recent visits (newest first).</p>
+<h3>Species and Checklists views</h3>
+<p>Every shaded region map offers both views, switched with the <strong>Species</strong> and <strong>Checklists</strong> buttons in the top-right corner of the map itself. The switch is instant — the map does not reload.</p>
+<ul>
+  <li><strong>Species</strong> — each region is shaded by the number of distinct species you have recorded there under the current filter. Darker shading = more species. Hover over a region to see its name, species count, and a list of the most recently recorded species.</li>
+  <li><strong>Checklists</strong> — each region is shaded by the number of checklists you have submitted there. Hover to see its name, checklist count, and the dates of your most recent visits (newest first).</li>
+</ul>
+<p>Regions where you have no records are shaded pale grey. Hovering one still names it and shows a zero, so you can identify anywhere you have not yet birded; clicking it does nothing, as there are no records to list.</p>
 
 <h3>Available regions</h3>
 <table>
   <thead><tr><th>Menu entry</th><th>Coverage</th></tr></thead>
   <tbody>
-    <tr><td>US States</td><td>Contiguous United States, shaded by state</td></tr>
-    <tr><td>Canada Provinces</td><td>Canadian provinces and territories</td></tr>
-    <tr><td>India States</td><td>States and union territories of India</td></tr>
-    <tr><td>Great Britain Counties</td><td>Counties of England, Scotland, and Wales</td></tr>
-    <tr><td>US Lower 48 Counties</td><td>County-level detail for the contiguous US</td></tr>
     <tr><td>World Countries</td><td>All countries worldwide</td></tr>
+    <tr><td>Asia → India States</td><td>States and union territories of India</td></tr>
+    <tr><td>Europe → <em>country</em></td><td>Regions, states, provinces or counties of the chosen country (see below)</td></tr>
+    <tr><td>North America → US States</td><td>Contiguous United States, shaded by state</td></tr>
+    <tr><td>North America → US Lower 48 Counties</td><td>County-level detail for the contiguous US</td></tr>
+    <tr><td>North America → Canada Provinces</td><td>Canadian provinces and territories</td></tr>
   </tbody>
 </table>
+
+<h3>European countries</h3>
+<p>The <strong>Europe</strong> submenu lists only the countries you actually have sightings in, so it stays short and relevant; it does not appear at all until you have European records. Fifteen countries are currently supported:</p>
+<p>Austria, Czech Republic, France, Germany, Great Britain, Greece, Italy, Netherlands, Norway, Poland, Portugal, Romania, Spain, Sweden, and Switzerland.</p>
+<p>Each country is shaded at the level eBird uses for its regions — French <em>régions</em>, German <em>Länder</em>, Italian <em>regioni</em>, Greek peripheries, Spanish autonomous communities, Swiss cantons, and so on. Great Britain is shaded by county instead, because eBird divides it into only four regions.</p>
+<p>The map zooms to fit the regions you have birded rather than the whole country, so a Spanish map will frame the mainland unless you have Canary Islands records, and a Portuguese map will frame the mainland unless you have recorded in the Azores or Madeira.</p>
 
 <p class="back-to-top"><a href="#top">Back to top &uarr;</a></p>
 
