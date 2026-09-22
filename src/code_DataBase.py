@@ -2,6 +2,7 @@
 import os
 import re
 import csv
+import unicodedata
 import json
 import zipfile
 import io
@@ -346,6 +347,73 @@ def _species_name_words(name):
             forms.add(word[:-2])            # "lincoln's" -> "lincoln"
         words.append((plain, forms))
     return words
+
+
+def _ascii_fold(text):
+    """Lower-case, strip accents, keep only a-z.
+
+    A code is typed on a keyboard: nobody types the umlaut in Rüppell's Warbler,
+    so "RUWA" has to reach the same code "RüWa" would.  Without the fold the
+    accented initial is simply deleted, leaving a three-letter code that fails
+    the four-letter test and matches nothing at all.
+    """
+    decomposed = unicodedata.normalize("NFKD", text.lower())
+    return re.sub(r"[^a-z]", "",
+                  decomposed.encode("ascii", "ignore").decode("ascii"))
+
+
+def _species_code_variants(name):
+    """Every 4-letter code a birder might reasonably type for this species.
+
+    The official BBL code is not enough, and neither is any single generated
+    one, because a hyphenated name has two defensible readings and birders use
+    both.  "Common Wood-Pigeon" is three words to a parser but two to a person,
+    who writes COWP; the parser's reading gives CWPI.  Both are returned, and
+    the caller decides between them by seeing which one the filename contains.
+
+    The same split explains why this matters far more outside North America:
+    for a hyphenated MODIFIER ("Black-headed Gull" -> BHGU) splitting is what a
+    person does anyway, so the codes agree.  It is hyphenated COMPOUND NOUNS —
+    Scops-Owl, Bee-eater, Crag-Martin, Penduline-Tit, Night Heron — that
+    disagree, and European lists are full of them.
+
+    Returns a set of lower-case 4-letter codes, accents folded.  Empty for
+    hybrids, spuhs and slashes, which have no meaningful code.
+    """
+    base = name.split(" (")[0]
+    if " x " in base or "sp." in base or "/" in base:
+        return set()
+
+    codes = set()
+    for joinHyphens in (True, False):
+        words = [w for w in (base if joinHyphens
+                             else base.replace("-", " ")).split(" ") if w]
+
+        def initials(word, count):
+            # Within a kept hyphenated compound, take one letter per part
+            # ("Wood-Pigeon" -> "WP"), which is what a person writing COWP does.
+            parts = [p for p in word.split("-") if p]
+            if len(parts) > 1:
+                return "".join(p[0] for p in parts)[:count]
+            return word[:count]
+
+        if len(words) == 1:
+            code = initials(words[0], 4)
+        elif len(words) == 2:
+            code = initials(words[0], 2) + initials(words[1], 2)
+        elif len(words) == 3:
+            code = (initials(words[0], 1) + initials(words[1], 1)
+                    + initials(words[2], 2))
+        elif len(words) == 4:
+            code = "".join(initials(w, 1) for w in words)
+        else:
+            continue
+
+        code = _ascii_fold(code)
+        if len(code) == 4:
+            codes.add(code)
+
+    return codes
 
 
 def _word_credit(forms, tokens):
@@ -4856,6 +4924,21 @@ class DataBase():
             winners = [pcn for s, pcn in scores if s == best]
             if len(winners) == 1:
                 if best >= _CODE_MATCH_BONUS:
+                    # An official code is only decisive while no OTHER bird on
+                    # this checklist would be written the same way.  Eurasian
+                    # Jackdaw holds the BBL code EUJA, and EUJA is also what a
+                    # person writes for a Eurasian Jay; with both on the list,
+                    # a filename saying EUJA does not say which was meant.  The
+                    # official code used to win outright and report itself as
+                    # certain, so the Jay came back as a Jackdaw with nothing to
+                    # suggest checking it.  Ambiguity is judged on the checklist,
+                    # so this costs nothing on the lists where only one of the
+                    # pair occurs.
+                    owners = [pcn for pcn in possibleNames
+                              if any(code in filename_alnum
+                                     for code in _species_code_variants(pcn))]
+                    if len(owners) > 1:
+                        return "", SPECIES_MATCH_NONE
                     return winners[0], SPECIES_MATCH_HIGH
                 if best >= _WORD_MATCH_BONUS:
                     # Coverage reaches 1.0 only when every word of the name was
@@ -4929,19 +5012,24 @@ class DataBase():
     def _quickEntryCodeMatch(self, possibleNames, filename_alnum):
         """Last-resort filename-matching fallback, tried only once the eBird
         code / BBL code / common name / scientific name pass finds nothing:
-        some users type an intuitive-but-wrong 4-letter code instead of the
-        official BBL one (e.g. "BASW" for Barn Swallow instead of "BARS").
-        GetQuickEntryCode() generates that same intuitive code from the
-        species name. Since two species can generate the same code (Barn
-        Swallow and Bank Swallow both -> BASW), a match only counts if
-        exactly one checklist candidate's generated code is found in the
-        filename — if more than one matches, it's ambiguous and neither wins.
+        some users type an intuitive 4-letter code rather than the official BBL
+        one (e.g. "BASW" for Barn Swallow instead of "BARS").
+
+        Every spelling a birder might plausibly use is accepted, not one
+        generated code — see _species_code_variants for why a hyphenated name
+        has two defensible readings and why that matters chiefly outside North
+        America.  A species with no BBL code at all is reached here too, so
+        this tier is what makes European names work.
+
+        Ambiguity is judged against THIS CHECKLIST, which is the whole point of
+        scoring candidates rather than the taxonomy: COCH is Common Chaffinch
+        and Common Chiffchaff, but only on a list holding both is it actually
+        ambiguous.  When two candidates could own the code, neither wins and
+        the user chooses.
         """
-        matches = []
-        for pcn in possibleNames:
-            quick = re.sub(r'[^a-z]', '', self.GetQuickEntryCode(pcn).lower())
-            if len(quick) == 4 and quick in filename_alnum:
-                matches.append(pcn)
+        matches = [pcn for pcn in possibleNames
+                   if any(code in filename_alnum
+                          for code in _species_code_variants(pcn))]
         if len(matches) == 1:
             return matches[0]
         return ""
