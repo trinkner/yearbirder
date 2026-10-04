@@ -240,6 +240,10 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
         
         theseYears = list(theseYears)
         theseYears.sort()
+        # Counted here rather than at the label: theseYears is reused as a
+        # working set inside the By Month loop below, so by then it no longer
+        # holds this species' years.
+        yearCount = len(theseYears)
         
         dateCount = 0
         for y in theseYears:
@@ -289,6 +293,7 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
         
         theseMonths = list(theseMonths)
         theseMonths.sort()
+        monthCount = len(theseMonths)
         
         dateCount = 0
         for m in theseMonths:
@@ -329,7 +334,9 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
 
                 dateCount = dateCount + len(theseDates)
 
-        self.lblLocations.setText("Locations: " + str(locationCount))  
+        self.lblLocations.setText("Locations: " + str(locationCount))
+        self.lblDates.setText("Years: " + str(yearCount))
+        self.lblMonthDates.setText("Months: " + str(monthCount))
             
         # Load best-rated photo into the center pane, and add a Photos button
         filter = code_Filter.Filter()

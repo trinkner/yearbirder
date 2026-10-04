@@ -377,10 +377,10 @@ class Ui_frmIndividual(object):
         self.lblDatesForLocation.setText(_translate("frmIndividual", "Dates for the selected Locations"))
         self.lstDates.setSortingEnabled(True)
         self.tabIndividual.setTabText(self.tabIndividual.indexOf(self.tab), _translate("frmIndividual", "By Location"))
-        self.lblDates.setText(_translate("frmIndividual", "Dates"))
+        self.lblDates.setText(_translate("frmIndividual", "Years"))
         self.lblLocationsForDate.setText(_translate("frmIndividual", "Locations for the selected date"))
         self.tabIndividual.setTabText(self.tabIndividual.indexOf(self.tab_2), _translate("frmIndividual", "By Year"))
-        self.lblMonthDates.setText(_translate("frmIndividual", "Dates"))
+        self.lblMonthDates.setText(_translate("frmIndividual", "Months"))
         self.lblMonthLocationsForDate.setText(_translate("frmIndividual", "Locations for the selected date"))
         self.tabIndividual.setTabText(self.tabIndividual.indexOf(self.tab_3), _translate("frmIndividual", "By Month"))
 import icons_rc
