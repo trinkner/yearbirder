@@ -3284,6 +3284,34 @@ class DataBase():
         return(uniqueSpeciesList)
 
 
+    def GetUniqueSpeciesForDate(self, filter, date, speciesList, filteredSightingList=[],):
+        """Species from speciesList recorded on this date and on no other date
+        within the filtered set — the date-tab counterpart of
+        GetUniqueSpeciesForLocation.
+        """
+        uniqueSpeciesList = []
+
+        # set filteredSightingList to master list if no filteredSightingList specified
+        if filteredSightingList == []:
+            filteredSightingList = self.GetMinimalFilteredSightings(filter)
+
+        # for each species, look for the same bird on any other date in the set
+        cf = self.CompileFilter(filter)
+        for species in speciesList:
+            isSeenOnNoOtherDate = True
+            for s in filteredSightingList:
+                if self.TestSightingCompiled(s, cf) is True:
+                    if s["commonName"] == species and s["date"] != date:
+                        isSeenOnNoOtherDate = False
+                        break
+
+            if isSeenOnNoOtherDate == True:
+                if species not in uniqueSpeciesList:
+                    uniqueSpeciesList.append(species)
+
+        return(uniqueSpeciesList)
+
+
     def TestIndividualPhoto(self, photoData, filter):
 
         filterCamera = filter.getCamera()

@@ -277,11 +277,13 @@ class TripReport(QMdiSubWindow, form_TripReport.Ui_frmTripReport):
         self.lstSpecies.doubleClicked.connect(lambda: self.CreateIndividual(self.lstSpecies))
         self.lstLocationSpecies.doubleClicked.connect(lambda: self.CreateIndividual(self.lstLocationSpecies))
         self.lstLocationUniqueSpecies.doubleClicked.connect(lambda: self.CreateIndividual(self.lstLocationUniqueSpecies))
+        self.lstDateUniqueSpecies.doubleClicked.connect(lambda: self.CreateIndividual(self.lstDateUniqueSpecies))
         self.lstNewLifeSpecies.doubleClicked.connect(lambda: self.CreateIndividual(self.lstNewLifeSpecies))
         # Match the lighter-gray table background (#252730) on the Dates,
         # Locations, and "New for Dates" tabs (default QListWidget bg is darker).
         for lst in (self.lstNewLifeSpecies, self.lstDates, self.lstSpecies,
-                    self.lstLocations, self.lstLocationSpecies, self.lstLocationUniqueSpecies):
+                    self.lstLocations, self.lstLocationSpecies, self.lstLocationUniqueSpecies,
+                    self.lstDateUniqueSpecies):
             lst.setStyleSheet("QListWidget { background: #252730; }")
         self.tblNewYearSpecies.doubleClicked.connect(lambda: self.CreateIndividual(self.tblNewYearSpecies))
         self.tblNewMonthSpecies.doubleClicked.connect(lambda: self.CreateIndividual(self.tblNewMonthSpecies))
@@ -300,6 +302,7 @@ class TripReport(QMdiSubWindow, form_TripReport.Ui_frmTripReport):
         self.lstSpecies.addAction(self.actionSetSpeciesFilter)        
         self.lstLocationSpecies.addAction(self.actionSetSpeciesFilter)
         self.lstLocationUniqueSpecies.addAction(self.actionSetSpeciesFilter)
+        self.lstDateUniqueSpecies.addAction(self.actionSetSpeciesFilter)
         self.lstNewLifeSpecies.addAction(self.actionSetSpeciesFilter)
         self.tblNewYearSpecies.addAction(self.actionSetSpeciesFilter)
         self.tblNewYearSpecies.addAction(self.actionSetDateFilterToYear)
@@ -374,10 +377,12 @@ class TripReport(QMdiSubWindow, form_TripReport.Ui_frmTripReport):
     
     
     def CreateIndividual(self,  callingWidget):
+        species = None
         QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
         if callingWidget.objectName() in (["lstSpecies", 
                                                                             "lstLocationSpecies", 
                                                                             "lstLocationUniqueSpecies", 
+                                                                            "lstDateUniqueSpecies", 
                                                                             "lstNewLifeSpecies"
                                                                             ]):
             species = callingWidget.currentItem().text()
@@ -392,6 +397,9 @@ class TripReport(QMdiSubWindow, form_TripReport.Ui_frmTripReport):
                 QApplication.restoreOverrideCursor()
                 return
             species = callingWidget.item(callingWidget.currentRow(),  1).text()
+        if species is None:
+            QApplication.restoreOverrideCursor()
+            return
         sub = code_Individual.Individual()
         sub.mdiParent = self.mdiParent
         sub.FillIndividual(species)
@@ -780,6 +788,7 @@ class TripReport(QMdiSubWindow, form_TripReport.Ui_frmTripReport):
     def FillSpeciesForDate(self):
         # create temporary filter for query with nothing but needed date
         self.lstSpecies.clear()
+        self.lstDateUniqueSpecies.clear()
         date = self.lstDates.currentItem().text()
         
         tempFilter = code_Filter.Filter()
@@ -791,6 +800,16 @@ class TripReport(QMdiSubWindow, form_TripReport.Ui_frmTripReport):
         
         self.lstSpecies.addItems(speciesList)
         self.lstSpecies.setSpacing(2)
+
+        uniqueSpecies = self.mdiParent.db.GetUniqueSpeciesForDate(
+            self.filter,
+            date,
+            speciesList,
+            self.filteredSightingList
+            )
+
+        self.lstDateUniqueSpecies.addItems(uniqueSpecies)
+        self.lstDateUniqueSpecies.setSpacing(2)
         
         count = 0
         nonSpeciesTaxaCount = 0
@@ -819,7 +838,34 @@ class TripReport(QMdiSubWindow, form_TripReport.Ui_frmTripReport):
         if nonSpeciesTaxaCount > 0:
             labelText = labelText + " + " + str(nonSpeciesTaxaCount) + " taxa"
                 
-        self.lblSpeciesSeen.setText(labelText) 
+        self.lblSpeciesSeen.setText(labelText)
+
+        # reset counts
+        count = 0
+        nonSpeciesTaxaCount = 0
+
+        for R in range(self.lstDateUniqueSpecies.count()):
+
+            # set font to bold for all entries
+            self.lstDateUniqueSpecies.item(R).setFont(font)
+
+            # color code the entry: stylesheet colour for full species, gray if
+            # the entry is a hybrid, spuh or slash
+            speciesName = self.lstDateUniqueSpecies.item(R).text()
+
+            if " x " in speciesName or "sp." in speciesName or "/" in speciesName:
+                self.lstDateUniqueSpecies.item(R).setForeground(Qt.gray)
+                nonSpeciesTaxaCount += 1
+            else:
+                self.lstDateUniqueSpecies.item(R).setForeground(code_Stylesheet.speciesColor)
+                count += 1
+
+        labelText = "Observed only on this date: " + str(count)
+
+        if nonSpeciesTaxaCount > 0:
+            labelText = labelText + " + " + str(nonSpeciesTaxaCount) + " taxa"
+
+        self.lblDateUniqueSpecies.setText(labelText)
     
 
     def _locationSequence(self):
