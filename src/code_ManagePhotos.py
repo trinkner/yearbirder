@@ -939,6 +939,30 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         detailsLayout.addLayout(bodyRow)
         self._refreshRowLabels(row)
 
+    @staticmethod
+    def _redrawCheckbox(chk):
+        """Force a Remove/Skip box to redraw after its checked state changes.
+
+        The indicator is painted entirely by the stylesheet
+        (QCheckBox::indicator and ::indicator:checked), and the box sits on a
+        transparent background inside a WA_StyledBackground media card.  A state
+        change repaints the checkbox but not the card surface underneath it, so
+        the previously drawn indicator can survive on screen — the box reads as
+        unchecked while the model, the greyed species line and the save all
+        agree it is checked.  Re-polishing makes the style re-evaluate which
+        sub-control rule applies, and invalidating the parent region clears the
+        stale pixels beneath the transparent widget.
+        """
+        if chk is None:
+            return
+        chk.style().unpolish(chk)
+        chk.style().polish(chk)
+        parent = chk.parentWidget()
+        if parent is not None:
+            parent.update(chk.geometry())
+        chk.update()
+
+
     def _refreshRowLabels(self, row):
         md = self.metaDataByRow[row]
         lbls = self._rowLabels.get(row)
@@ -997,6 +1021,7 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
             chk.blockSignals(True)
             chk.setChecked(False)
             chk.blockSignals(False)
+            self._redrawCheckbox(chk)
         self._refreshRowLabels(row)
         self.saveNewMetaData(row)
 
@@ -1007,6 +1032,7 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
             md["newCommonName"] = _SKIP_SENTINEL
         else:
             md["newCommonName"] = md.get("selectedCommonName", "")
+        self._redrawCheckbox(self._rowLabels.get(row, {}).get("skip"))
         self._refreshRowLabels(row)
         self.saveNewMetaData(row)
 
@@ -1045,6 +1071,7 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
             chk.blockSignals(True)
             chk.setChecked(False)
             chk.blockSignals(False)
+            self._redrawCheckbox(chk)
         cbo = lbls.get("rating")
         if cbo is not None:
             try:
