@@ -259,6 +259,17 @@ class Photos(QMdiSubWindow, form_Photos.Ui_frmPhotos):
         else:
             windowHeight = int(800 * scaleFactor)
 
+        # Never resize while maximized.  Qt honours the resize but leaves the
+        # subwindow reporting isMaximized() == True, so it ends up small while
+        # the MDI still believes it is in maximized mode — the siblings then
+        # draw their restored frames around a stunted window.  This is not
+        # hypothetical ordering: FillPhotos calls processEvents as it builds,
+        # which lets PositionChildWindow's deferred showMaximized fire part way
+        # through, so scaleMe can and does run on an already-maximized window.
+        # A maximized window is already the size it should be.
+        if self.isMaximized():
+            return
+
         self.resize(windowWidth, windowHeight)
 
 

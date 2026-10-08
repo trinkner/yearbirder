@@ -102,6 +102,12 @@ class Stats(QMdiSubWindow, form_Stats.Ui_frmStats):
         # a scrollbar in it would briefly flash on screen before the renderer
         # catches up.
         windowHeight = int((830 if sys.platform == "win32" else 760) * scaleFactor)
+        # Never resize while maximized: Qt honours it but leaves the window
+        # reporting isMaximized(), so it ends up small inside an MDI that
+        # still believes it is maximized.  A maximized window is already the
+        # size it should be.
+        if self.isMaximized():
+            return
         self.resize(windowWidth, windowHeight)
 
 
