@@ -126,6 +126,127 @@ class Ui_frmGraphs(object):
         self.frmPieMode.setVisible(False)
         self.verticalLayout.addWidget(self.frmPieMode)
 
+        # Exposure-mode row: which setting the distribution shows (Exposure
+        # Settings chart only)
+        self.frmExposureMode = QtWidgets.QFrame(self.layGraphs)
+        self.frmExposureMode.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+        self.frmExposureMode.setObjectName("frmExposureMode")
+        self.hLayoutExposureMode = QtWidgets.QHBoxLayout(self.frmExposureMode)
+        self.hLayoutExposureMode.setContentsMargins(0, 0, 0, 0)
+        self.hLayoutExposureMode.setSpacing(16)
+        self.hLayoutExposureMode.setObjectName("hLayoutExposureMode")
+
+        self.rdoExpIso = QtWidgets.QRadioButton(self.frmExposureMode)
+        self.rdoExpIso.setChecked(True)
+        self.rdoExpIso.setObjectName("rdoExpIso")
+        self.hLayoutExposureMode.addWidget(self.rdoExpIso)
+
+        self.rdoExpAperture = QtWidgets.QRadioButton(self.frmExposureMode)
+        self.rdoExpAperture.setObjectName("rdoExpAperture")
+        self.hLayoutExposureMode.addWidget(self.rdoExpAperture)
+
+        self.rdoExpShutter = QtWidgets.QRadioButton(self.frmExposureMode)
+        self.rdoExpShutter.setObjectName("rdoExpShutter")
+        self.hLayoutExposureMode.addWidget(self.rdoExpShutter)
+
+        self.rdoExpFocal = QtWidgets.QRadioButton(self.frmExposureMode)
+        self.rdoExpFocal.setObjectName("rdoExpFocal")
+        self.hLayoutExposureMode.addWidget(self.rdoExpFocal)
+
+        self.hLayoutExposureMode.addStretch(1)
+
+        # What the bars measure, right-justified on the same row.
+        self.rdoExpCount = QtWidgets.QRadioButton(self.frmExposureMode)
+        self.rdoExpCount.setChecked(True)
+        self.rdoExpCount.setObjectName("rdoExpCount")
+        self.hLayoutExposureMode.addWidget(self.rdoExpCount)
+
+        self.rdoExpRating = QtWidgets.QRadioButton(self.frmExposureMode)
+        self.rdoExpRating.setObjectName("rdoExpRating")
+        self.hLayoutExposureMode.addWidget(self.rdoExpRating)
+
+        # Two independent choices on one row: radio buttons sharing a parent
+        # are auto-exclusive, so without a group of its own, picking Average
+        # Rating would clear whichever setting was selected to its left.
+        self.grpExposureField = QtWidgets.QButtonGroup(self.frmExposureMode)
+        for _b in (self.rdoExpIso, self.rdoExpAperture,
+                   self.rdoExpShutter, self.rdoExpFocal):
+            self.grpExposureField.addButton(_b)
+        self.grpExposureMetric = QtWidgets.QButtonGroup(self.frmExposureMode)
+        for _b in (self.rdoExpCount, self.rdoExpRating):
+            self.grpExposureMetric.addButton(_b)
+
+        self.frmExposureMode.setVisible(False)
+        self.verticalLayout.addWidget(self.frmExposureMode)
+
+        # Compare Settings: one variable per axis, a row each so it is always
+        # clear which choice goes where.
+        self.frmCompareMode = QtWidgets.QFrame(self.layGraphs)
+        self.frmCompareMode.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+        self.frmCompareMode.setObjectName("frmCompareMode")
+        self.vLayoutCompareMode = QtWidgets.QVBoxLayout(self.frmCompareMode)
+        self.vLayoutCompareMode.setContentsMargins(0, 0, 0, 0)
+        self.vLayoutCompareMode.setSpacing(2)
+        self.vLayoutCompareMode.setObjectName("vLayoutCompareMode")
+
+        self.lblCompareX = QtWidgets.QLabel(self.frmCompareMode)
+        self.lblCompareX.setObjectName("lblCompareX")
+        self.lblCompareY = QtWidgets.QLabel(self.frmCompareMode)
+        self.lblCompareY.setObjectName("lblCompareY")
+
+        self.grpCompareX = QtWidgets.QButtonGroup(self.frmCompareMode)
+        self.grpCompareY = QtWidgets.QButtonGroup(self.frmCompareMode)
+        self.rdoCmpX = {}
+        self.rdoCmpY = {}
+
+        for axis, label, group, store in (
+                ("X", self.lblCompareX, self.grpCompareX, self.rdoCmpX),
+                ("Y", self.lblCompareY, self.grpCompareY, self.rdoCmpY)):
+            row = QtWidgets.QHBoxLayout()
+            row.setContentsMargins(0, 0, 0, 0)
+            row.setSpacing(16)
+            label.setMinimumWidth(80)
+            row.addWidget(label)
+            for field in ("iso", "aperture", "shutter", "focal"):
+                rdo = QtWidgets.QRadioButton(self.frmCompareMode)
+                rdo.setObjectName(f"rdoCmp{axis}{field.capitalize()}")
+                group.addButton(rdo)
+                store[field] = rdo
+                row.addWidget(rdo)
+            row.addStretch(1)
+            self.vLayoutCompareMode.addLayout(row)
+
+        self.frmCompareMode.setVisible(False)
+        self.verticalLayout.addWidget(self.frmCompareMode)
+
+        # Time-of-day row: what the bars measure (that chart's x-axis is the
+        # hour, so there is no variable to choose on the left).
+        self.frmHourMode = QtWidgets.QFrame(self.layGraphs)
+        self.frmHourMode.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+        self.frmHourMode.setObjectName("frmHourMode")
+        self.hLayoutHourMode = QtWidgets.QHBoxLayout(self.frmHourMode)
+        self.hLayoutHourMode.setContentsMargins(0, 0, 0, 0)
+        self.hLayoutHourMode.setSpacing(16)
+        self.hLayoutHourMode.setObjectName("hLayoutHourMode")
+
+        self.rdoHourCount = QtWidgets.QRadioButton(self.frmHourMode)
+        self.rdoHourCount.setChecked(True)
+        self.rdoHourCount.setObjectName("rdoHourCount")
+        self.hLayoutHourMode.addWidget(self.rdoHourCount)
+
+        self.rdoHourRating = QtWidgets.QRadioButton(self.frmHourMode)
+        self.rdoHourRating.setObjectName("rdoHourRating")
+        self.hLayoutHourMode.addWidget(self.rdoHourRating)
+
+        self.grpHourMetric = QtWidgets.QButtonGroup(self.frmHourMode)
+        for _b in (self.rdoHourCount, self.rdoHourRating):
+            self.grpHourMetric.addButton(_b)
+
+        self.hLayoutHourMode.addStretch(1)
+
+        self.frmHourMode.setVisible(False)
+        self.verticalLayout.addWidget(self.frmHourMode)
+
         # Chart widget — expands to fill all remaining vertical space
         self.chartWidget = QtWidgets.QWidget(self.layGraphs)
         sizePolicy3 = QtWidgets.QSizePolicy(
@@ -154,6 +275,21 @@ class Ui_frmGraphs(object):
             "⚠  Too many days to display clearly — narrow the date filter."))
         self.rdoPieFamily.setText(_translate("frmGraphs", "Families"))
         self.rdoPieOrder.setText(_translate("frmGraphs", "Orders"))
+        self.rdoExpIso.setText(_translate("frmGraphs", "ISO"))
+        self.rdoExpAperture.setText(_translate("frmGraphs", "Aperture"))
+        self.rdoExpShutter.setText(_translate("frmGraphs", "Shutter Speed"))
+        self.rdoExpFocal.setText(_translate("frmGraphs", "Focal Length"))
+        self.rdoExpCount.setText(_translate("frmGraphs", "Photographs"))
+        self.rdoExpRating.setText(_translate("frmGraphs", "Average Rating"))
+        self.rdoHourCount.setText(_translate("frmGraphs", "Photographs"))
+        self.rdoHourRating.setText(_translate("frmGraphs", "Average Rating"))
+        self.lblCompareX.setText(_translate("frmGraphs", "Horizontal:"))
+        self.lblCompareY.setText(_translate("frmGraphs", "Vertical:"))
+        for _store in (self.rdoCmpX, self.rdoCmpY):
+            _store["iso"].setText(_translate("frmGraphs", "ISO"))
+            _store["aperture"].setText(_translate("frmGraphs", "Aperture"))
+            _store["shutter"].setText(_translate("frmGraphs", "Shutter Speed"))
+            _store["focal"].setText(_translate("frmGraphs", "Focal Length"))
 
 
 import icons_rc

@@ -1124,22 +1124,21 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
                 fname += ".jsonl"
             self.mdiParent.db.photoDataFile = fname
             self.mdiParent.db.photoDataFileOpenFlag = True
-            reply = QMessageBox.question(
+            # The app's own question dialog, not QMessageBox.question: the
+            # native question icon is a dim grey glyph that all but vanishes
+            # against the dark theme.
+            reply = code_Stylesheet.question(
                 self,
                 "Set as Default Catalog?",
                 f"Would you like Yearbirder to open\n\"{os.path.basename(fname)}\"\n"
                 "automatically each time it starts?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                default=QMessageBox.StandardButton.Yes,
             )
             if reply == QMessageBox.StandardButton.Yes:
                 self.mdiParent.db.photoDataFileDefault = fname
                 self.mdiParent.db.writePreferences()
-            self.mdiParent._updateMediaMenuVisibility()
+            self.mdiParent._updateActionStates()
             self.mdiParent._showPhotoCatalogMenuItems()
-            self.mdiParent.actionGeolocatedPhotos.setVisible(True)
-            self.mdiParent.actionGeolocatedPhotosSeparator.setVisible(True)
-            self.mdiParent.actionAnimatedPhotoSequence.setVisible(True)
-            self.mdiParent.actionSlideshow.setVisible(True)
 
         # Collect files successfully added so their thumbnails can be cached.
         added_photo_files = set()
@@ -1284,7 +1283,7 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
 
         self.mdiParent.fillPhotoComboBoxes()
         # Reveal the Photos menu if this added the first photo to the catalog.
-        self.mdiParent._updateMediaMenuVisibility()
+        self.mdiParent._updateActionStates()
         self._changesSaved = True
 
         # close the window (closeEvent will refresh any open Stats windows)

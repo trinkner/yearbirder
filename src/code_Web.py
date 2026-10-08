@@ -3850,7 +3850,7 @@ document.addEventListener("DOMContentLoaded", function() {{
         import tempfile
         import json
 
-        self.title = "Geolocated Recordings"
+        self.title = "Recording Map"
         self.filter = deepcopy(filter)
 
         recordingSightings = self.mdiParent.db.GetSightingsWithRecordings(filter)
@@ -3981,7 +3981,7 @@ document.addEventListener("DOMContentLoaded", function() {{
             tmp_path = f.name
 
         self.webView.setUrl(QUrl.fromLocalFile(tmp_path))
-        self._buildFilterTitle(filter, "Geolocated Recordings",
+        self._buildFilterTitle(filter, "Recording Map",
                                count=len(markers), countUnit="Recordings")
         return True
 
@@ -3993,7 +3993,7 @@ document.addEventListener("DOMContentLoaded", function() {{
         import json
         import tempfile
 
-        self.title = "Animated Recording Sequence Map"
+        self.title = "Animated Recording Map"
         self.filter = deepcopy(filter)
 
         recordingSightings = self.mdiParent.db.GetSightingsWithRecordings(filter)
@@ -4224,7 +4224,7 @@ document.addEventListener("DOMContentLoaded", function() {{
             tmp_path = f.name
 
         self.webView.setUrl(QUrl.fromLocalFile(tmp_path))
-        self._buildFilterTitle(filter, "Animated Recording Sequence Map",
+        self._buildFilterTitle(filter, "Animated Recording Map",
                                count=total, countUnit="Recordings")
         return True
 
@@ -4237,7 +4237,7 @@ document.addEventListener("DOMContentLoaded", function() {{
         from copy import deepcopy
         import json
 
-        self.title = "Recordings by Species"
+        self.title = "Total Recordings per Species"
         self.filter = deepcopy(filter)
 
         recordingSightings = self.mdiParent.db.GetSightingsWithRecordings(filter)
@@ -4304,7 +4304,7 @@ document.addEventListener("DOMContentLoaded", function() {{
 </style>
 </head><body>
 <div id="header">
-  <h2>Recordings by Species</h2>
+  <h2>Total Recordings per Species</h2>
   <span class="sub">{total_species} species &nbsp;·&nbsp; {total_recs} recordings</span>
 </div>
 <table>
@@ -4390,7 +4390,7 @@ applySort();
         from PySide6.QtGui import QColor
         self.webView.page().setBackgroundColor(QColor("#1e1f26"))
         self.webView.setHtml(html)
-        self._buildFilterTitle(filter, "Recordings by Species",
+        self._buildFilterTitle(filter, "Total Recordings per Species",
                                count=total_species, countUnit="Species")
         return True
 
@@ -4403,7 +4403,7 @@ applySort();
         from copy import deepcopy
         import json
 
-        self.title = "Photos by Species"
+        self.title = "Total Photos per Species"
         self.filter = deepcopy(filter)
 
         photoSightings = self.mdiParent.db.GetSightingsWithPhotos(filter)
@@ -4477,7 +4477,7 @@ applySort();
 </style>
 </head><body>
 <div id="header">
-  <h2>Photos by Species</h2>
+  <h2>Total Photos per Species</h2>
   <span class="sub">{total_species} species &nbsp;·&nbsp; {total_photos} photos</span>
 </div>
 <table>
@@ -4563,7 +4563,7 @@ applySort();
         from PySide6.QtGui import QColor
         self.webView.page().setBackgroundColor(QColor("#1e1f26"))
         self.webView.setHtml(html)
-        self._buildFilterTitle(filter, "Photos by Species",
+        self._buildFilterTitle(filter, "Total Photos per Species",
                                count=total_species, countUnit="Species")
         return True
 

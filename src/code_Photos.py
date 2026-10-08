@@ -365,7 +365,16 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
         return html
 
 
-    def FillPhotos(self, filter):
+    def FillPhotos(self, filter, photoTest=None, titleText=None):
+        """Fill the browser with every photo matching `filter`.
+
+        photoTest is an optional extra per-photo predicate, photoTest(p, s) ->
+        bool, applied on top of the Media Filter.  It exists for selections the
+        Media Filter cannot express — "photos with no ISO recorded", say, which
+        is a missing value rather than a range — so Catalog Health can show the
+        files behind one of its counts.  titleText then names that selection in
+        the window title in place of the generic "Photos".
+        """
 
         self.scaleMe()
         self.resizeMe()
@@ -408,6 +417,8 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
         for i, s in enumerate(photoSightings):
             for p in s["photos"]:
                 if self.mdiParent.db.TestIndividualPhoto(p, filter):
+                    if photoTest is not None and not photoTest(p, s):
+                        continue
                     photoCount += 1
                     species.add(s["commonName"])
                     self.photoList.append([p, s])
@@ -417,9 +428,18 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
             if i % 200 == 0:
                 QApplication.processEvents()
 
+        # An extra predicate can empty a set the Media Filter alone would have
+        # filled, so bail out the same way an empty query does rather than
+        # building an empty window.
+        if photoCount == 0:
+            overlay.hide()
+            return False
+
         self.lblSpecies.setText("Species: " + str(len(species)) + ". Photos: " + str(photoCount))
         self.mdiParent.SetChildDetailsLabels(self, filter)
-        self.setWindowTitle(filter.buildWindowTitle("Photos", self.mdiParent.db, count=photoCount, countUnit="Photos"))
+        self.setWindowTitle(filter.buildWindowTitle(
+            titleText or "Photos", self.mdiParent.db,
+            count=photoCount, countUnit="Photos"))
 
         # Sort and populate the grid (shows its own "Preparing photos…" progress)
         self._buildRows()

@@ -1614,22 +1614,21 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
                 fname += ".jsonl"
             self.mdiParent.db.photoDataFile = fname
             self.mdiParent.db.photoDataFileOpenFlag = True
-            reply = QMessageBox.question(
+            # The app's own question dialog, not QMessageBox.question: the
+            # native question icon is a dim grey glyph that all but vanishes
+            # against the dark theme.
+            reply = code_Stylesheet.question(
                 self,
                 "Set as Default Catalog?",
                 f"Would you like Yearbirder to open\n\"{os.path.basename(fname)}\"\n"
                 "automatically each time it starts?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                default=QMessageBox.StandardButton.Yes,
             )
             if reply == QMessageBox.StandardButton.Yes:
                 self.mdiParent.db.photoDataFileDefault = fname
                 self.mdiParent.db.writePreferences()
-            self.mdiParent._updateMediaMenuVisibility()
+            self.mdiParent._updateActionStates()
             self.mdiParent._showPhotoCatalogMenuItems()
-            self.mdiParent.actionGeolocatedPhotos.setVisible(True)
-            self.mdiParent.actionGeolocatedPhotosSeparator.setVisible(True)
-            self.mdiParent.actionAnimatedPhotoSequence.setVisible(True)
-            self.mdiParent.actionSlideshow.setVisible(True)
 
         # Collect files successfully added so their spectrograms can be cached.
         added_recording_files = set()
@@ -1732,7 +1731,7 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         self.mdiParent.db.refreshRecordingsLists()
         self.mdiParent.fillRecordingsComboBoxes()
         # Reveal the Recordings menu if this added the first recording to the catalog.
-        self.mdiParent._updateMediaMenuVisibility()
+        self.mdiParent._updateActionStates()
         self.mdiParent.db.photosNeedSaving = True
         self._changesSaved = True
         self.close()

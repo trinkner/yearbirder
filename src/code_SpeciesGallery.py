@@ -444,10 +444,13 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
         species_filter.speciesName = s["commonName"]
         species_filter.speciesList = []
 
-        self._openPhotos(species_filter)
+        self._openPhotos(species_filter, grid=True)
 
-    def _openPhotos(self, photoFilter):
-        """Spawn a Browse Photos window, pre-checking that it will have content.
+    def _openPhotos(self, photoFilter, grid=False):
+        """Spawn a photo browser, pre-checking that it will have content.
+
+        grid=True opens Browse Grid (a species click, where the result is many
+        photos of one bird); otherwise Browse Cards.
         PositionChildWindow restores any maximized sibling, so adding a subwindow
         and immediately removing it again flashes an empty child — validate the
         query before touching the MDI area, as MainWindow.createPhotos does."""
@@ -455,6 +458,14 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
 
         if not self.mdiParent.db.GetSightingsWithPhotos(photoFilter):
             self._noPhotosMessage()
+            return
+
+        if grid:
+            # Hand Browse Grid to MainWindow rather than building it here: its
+            # path assembles the cells while the window is hidden and reveals
+            # it once they are in place, which matters far more for a grid of
+            # thumbnails than for the card view below.
+            self.mdiParent.createPhotosGridForFilter(photoFilter)
             return
 
         sub = code_Photos.Photos()

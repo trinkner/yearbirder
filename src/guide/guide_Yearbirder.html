@@ -169,13 +169,15 @@
       <ul>
         <li><a href="#browse-cards">Browse Cards</a></li>
         <li><a href="#browse-grid">Browse Grid</a></li>
-        <li><a href="#animated-photo-sequence">Animated Photo Sequence Map</a></li>
+        <li><a href="#animated-photo-sequence">Animated Photo Map</a></li>
         <li><a href="#slideshow">Slideshow</a></li>
         <li><a href="#ytd-photos">Year to Date by Photographs</a></li>
         <li><a href="#photo-pie">Families &amp; Orders by Photos</a></li>
         <li><a href="#photo-bar">Total Photos</a></li>
         <li><a href="#photo-accumulation">New Species Photographed Each Year</a></li>
         <li><a href="#cumulative-photos">Photographed Species Growth Over Time</a></li>
+        <li><a href="#photo-coverage">Photo Coverage of Species</a></li>
+        <li><a href="#photo-statistics">Technical Statistics</a></li>
       </ul></li>
     <li><a href="#enlargement-view">Working with the Enlargement View</a></li>
     <li><a href="#rating-photos">Rating Your Photos</a></li>
@@ -768,7 +770,7 @@
 <p>A bubble map where bubble area is proportional to the <strong>total number of individual birds tallied</strong> at each location. Sightings recorded with an unknown count ("X" in eBird) contribute 1 to the total. The tooltip notes how many checklists contain at least one uncounted species.</p>
 <p>Hover over a bubble to see the location name, individual count, and any caveat about uncounted entries. Click a bubble to open the Location window for that site.</p>
 
-<p><em>The Geolocated Photos map has moved to the <strong>Photos</strong> menu. See <a href="#photos">Section 21</a>.</em></p>
+<p><em>The Photo Map map has moved to the <strong>Photos</strong> menu. See <a href="#photos">Section 21</a>.</em></p>
 
 <p class="back-to-top"><a href="#top">Back to top &uarr;</a></p>
 
@@ -891,6 +893,8 @@
 <h2 id="photos">21. Viewing Photos</h2>
 <p>Yearbirder can associate your personal bird photos with your eBird sightings. This unlocks several photo views and lets you filter by camera, lens, and exposure settings using the Media Filter panel on the right of the screen.</p>
 
+<p>Until you have added photos, the <strong>Photos</strong> menu and its submenus still open, with every entry greyed out and a tooltip explaining what is missing — so you can see everything the photo system offers before committing to it. <strong>Add photos…</strong> stays available at the top of the menu as the way to get started. The <strong>Recordings</strong> menu behaves the same way.</p>
+
 <h3>Overview of the photo system</h3>
 <ul>
   <li>Your photos remain in their original folders on your computer. Yearbirder stores <strong>references</strong> to them, not copies.</li>
@@ -934,12 +938,12 @@
   <li><strong>Delete a photo from disk</strong> — permanently removes the file from your drive and its entry from the media catalog. All other open Photos, Enlargement, Manage Photos, and Rename Media windows update immediately to reflect the deletion.</li>
 </ul>
 
-<h3>Geolocated Photos</h3>
-<p>Open with <strong>Photos → Geolocated Photos</strong>. Available only when a media catalog is loaded.</p>
+<h3>Photo Map</h3>
+<p>Open with <strong>Photos → Photo Map</strong>. Available only when a media catalog is loaded.</p>
 <p>Plots your geotagged photos on an interactive clustered marker map. Markers group together at lower zoom levels and spread apart as you zoom in. Hovering over a marker shows a thumbnail preview of the photo along with the species name, date, and location. Click a marker to open the <strong>Enlargement</strong> view for that photo. Multiple photos taken at exactly the same GPS coordinates are automatically fanned into a spiral so each remains individually clickable.</p>
 
-<h3 id="animated-photo-sequence">Animated Photo Sequence Map</h3>
-<p>Open with <strong>Photos → Animated Photo Sequence Map</strong>. Available only when a media catalog is loaded.</p>
+<h3 id="animated-photo-sequence">Animated Photo Map</h3>
+<p>Open with <strong>Photos → Animated Photo Map</strong>. Available only when a media catalog is loaded.</p>
 <p>Animates your geotagged photos in chronological order on an interactive map, showing where and when each photo was taken. Each photo appears as a callout bubble whose triangular tail points to the exact GPS location, so the underlying map detail remains visible. The bubble displays the photo thumbnail, species name, date, and location.</p>
 <p>As the animation progresses, a small blue dot is permanently placed at each visited location, building up a breadcrumb trail of your photographic journey.</p>
 <p>Playback is controlled by the bar at the bottom of the map:</p>
@@ -1002,12 +1006,38 @@
 <p>This is the photographic equivalent of the Species Growth Over Time graph — the final point tells you the total number of distinct species you have photographed.</p>
 <p>Hover over the curve to see the date, cumulative total, and a tooltip that shows a photo thumbnail for each new species first photographed on that date (up to six thumbnails, stacked vertically; the thumbnail is the highest-rated photo of that species taken on that day). Click a point to open a <strong>Species Gallery</strong> showing only the species first photographed on that date, filtered to photos taken on that day.</p>
 
+<h3 id="photo-coverage">Photo Coverage of Species</h3>
+<p>Open with <strong>Photos &rarr; Birding Statistics &rarr; Photo Coverage of Species</strong>. Available only when a media catalog is loaded, and it respects the current Sighting Filter.</p>
+<p>How many of the species you have seen you have also photographed, your most-photographed species, a <strong>Most Wanted</strong> table of species you have seen but never photographed (ordered by how often you have seen them), and the species resting on a single photo. The species-seen totals ignore the Media Filter on purpose: a camera, lens or rating constraint would hide every sighting without a matching photo, which is exactly what this report is looking for.</p>
+
+<p class="back-to-top"><a href="#top">Back to top &uarr;</a></p>
+
+<h3 id="photo-statistics">Technical Statistics</h3>
+<p>Open with <strong>Photos &rarr; Technical Statistics</strong>. Available only when a media catalog is loaded. The Photos menu itself holds only ways of looking at your photographs; its two submenus hold the reports. <strong>Birding Statistics</strong> reports on the birds, the places and the dates — and opens with <strong>Photo Overview</strong>, the summary of your whole collection. <strong>Technical Statistics</strong>, described here, reports on the photographs themselves — the gear, the settings and the conditions. Every report in it respects the current Sighting Filter and Media Filter, so you can narrow any of them to a year, a region, a single lens, or an ISO range before opening it.</p>
+
+<p>It opens with one tabular report:</p>
+<ul>
+  <li><strong>Camera Gear</strong> — one table per camera body and one per lens, each with photo count, share of your catalog, how many species it has taken, and the first and last date you used it. Below them sit your typical settings, your ISO reach, and a <strong>Practical Limits</strong> table.</li>
+</ul>
+
+<p><strong>Photos &amp; Ratings by Setting</strong> shows where your photographs actually sit across each camera setting. Radio buttons above the chart switch between <strong>ISO</strong>, <strong>Aperture</strong>, <strong>Shutter Speed</strong> and <strong>Focal Length</strong> without reopening the window. A second pair on the right of the same row chooses what the bars measure: <strong>Photographs</strong>, how many you took at each setting, or <strong>Average Rating</strong>, how those photos turned out. The rating axis is fixed at one to five stars so the bars stay comparable as you move between settings, and unrated photos are left out of the average rather than counted as zero. Hover a bar to see how the photos taken at that setting turned out, broken down by rating; click one to open Browse Grid showing exactly the photos that bar counted. (If no photo in the chart carries a rating, the hover lists the species in the bar instead.) ISO and focal length are grouped into bands (ISO by stops, focal length in 50&nbsp;mm steps) because cameras record them in fine increments; aperture and shutter speed appear as recorded. If some photos do not record a setting, a note at the foot of the chart says how many were left out.</p>
+
+<p><strong>Setting Combinations</strong> plots any one exposure variable against any other. Two rows of radio buttons above the chart choose what runs along the bottom and what runs up the side — ISO, aperture, shutter speed or focal length. Choosing the same variable for both draws a diagonal line and tells you nothing, but it is allowed, so that swapping the two axes takes a click on each row rather than a detour through a third variable. It opens on focal length against shutter speed, the pair that shows how slow a shutter each focal length has held. ISO and shutter speed get logarithmic axes, because each step doubles; focal length and aperture are read linearly.</p>
+
+<p>Because cameras record these values in steps rather than continuously, photos stack rather than scatter: each dot is one combination of the two variables. Its <strong>size</strong> is how many of your photos share that combination, on a logarithmic scale since a few combinations usually hold far more photos than the rest; its <strong>colour</strong> is the average rating of those photos, running from gold at one star to deep magenta at five, with the key below the chart. So size tells you how often you shoot there and colour tells you how well it tends to go. A combination whose photos are all unrated is drawn in grey, and the note under the chart says how many those are. Hovering a dot gives its exact count and the full spread of its ratings; clicking one opens those photos in Browse Grid.</p>
+
+<p>Some pairings say more than others. Shutter speed against focal length is about holding the camera steady; shutter speed against ISO is the exposure trade-off, and reads as a record of the light you have worked in. Aperture against focal length traces your zoom’s own variable-aperture curve, since a lens that opens to f/4.5 at the short end cannot do so at the long one.</p>
+
+<p><strong>Time of Day</strong> breaks your photos down by the hour they were taken, from each photo's own EXIF timestamp. As on Photos &amp; Ratings by Setting, a pair of radio buttons above the chart chooses what the bars measure: <strong>Photographs</strong>, how many you took in each hour, or <strong>Average Rating</strong>, how those photos turned out — which can separate the hour you shoot most from the hour you shoot best. Hovering an hour lists the species photographed in it, and clicking one opens that hour's photos in Browse Grid. It answers which part of the day your photographs actually come from, which is often not the part you would guess.</p>
+
+<p>Camera Gear, and Photo Overview and Photo Coverage of Species under Birding Statistics, can all be saved with <strong>File &rarr; Save as PDF</strong>.</p>
+
 <p class="back-to-top"><a href="#top">Back to top &uarr;</a></p>
 
 <hr>
 
 <h2 id="enlargement-view">22. Working with the Enlargement View</h2>
-<p>The Enlargement view opens whenever you click a photo thumbnail anywhere in Yearbirder — in Browse Cards or Browse Grid, the Species Gallery, the Individual Species window, the Geolocated Photos map, or the Animated Photo Sequence Map. It shows your photo at full resolution against a dark background and doubles as a photo management tool: you can navigate your collection, rate images, inspect EXIF data, and perform file operations all without leaving the view.</p>
+<p>The Enlargement view opens whenever you click a photo thumbnail anywhere in Yearbirder — in Browse Cards or Browse Grid, the Species Gallery, the Individual Species window, the Photo Map map, or the Animated Photo Map. It shows your photo at full resolution against a dark background and doubles as a photo management tool: you can navigate your collection, rate images, inspect EXIF data, and perform file operations all without leaving the view.</p>
 
 <h3>Navigating between photos</h3>
 <p>Use the <strong>left and right arrow keys</strong> (or <strong>Page Up / Page Down</strong>) to step through the photos in your current set. The <strong>Space bar</strong> advances to the next photo; <strong>Backspace</strong> goes back. You can also right-click and choose <strong>Next photo</strong> or <strong>Previous photo</strong> from the context menu.</p>
@@ -1288,15 +1318,13 @@
 <hr>
 
 <h2 id="recordings-reports">30. Recordings Charts and Reports</h2>
-<p>The <strong>Recordings</strong> menu provides a set of charts and reports that mirror the photo reports, but count your sound recordings instead of photos. They appear once a media catalog is open, and are rendered in a <strong>green</strong> colour palette to distinguish them from the yellow photo charts. Each respects the current Sighting Filter and Media Filter.</p>
+<p>The <strong>Recordings</strong> menu mirrors the Photos menu: the menu itself holds the ways of listening to your recordings — Browse Grid, Browse Cards, Species Gallery, Recording Map and Animated Recording Map — and its <strong>Birding Statistics</strong> submenu holds the charts and reports described here. They count your sound recordings instead of photos, appear once a media catalog is open, and are rendered in a <strong>green</strong> colour palette to distinguish them from the yellow photo charts. Each respects the current Sighting Filter and Media Filter. There is no Technical Statistics submenu for recordings: the gear and exposure reports photos have do not apply to audio.</p>
 <ul>
-  <li><strong>Recordings by Species</strong> — a gallery grouped by species, showing a representative spectrogram for each species you have recorded.</li>
-  <li><strong>Geolocated Recordings</strong> — plots your geotagged recordings on an interactive clustered map. Click a marker to open that recording's Enlargement view.</li>
-  <li><strong>Animated Recording Sequence Map</strong> — animates your geotagged recordings in chronological order on a map, building a breadcrumb trail of where and when you recorded each one.</li>
+  <li><strong>Total Recordings per Species</strong> — a gallery grouped by species, showing a representative spectrogram for each species you have recorded.</li>
   <li><strong>Year to Date by Recordings</strong> — a horizontal bar chart comparing your year-to-date recording count against your full-year totals for every year in your data.</li>
   <li><strong>Families &amp; Orders by Recordings</strong> — a pie chart where each wedge is a bird family (or order), sized by the total number of recordings you have of species in that group. Toggle between Families and Orders with the radio buttons.</li>
-  <li><strong>Total Recordings</strong> — a bar chart of your total recording count per time period (By Year, By Month, By Month-Year, or By Day).</li>
-  <li><strong>New Species Recorded Each Year</strong> — a stacked bar chart showing how many species you recorded for the first time in each year, separating new species from repeats.</li>
+  <li><strong>Recordings per Time Period</strong> — a bar chart of your total recording count per time period (By Year, By Month, By Month-Year, or By Day).</li>
+  <li><strong>New Species Recorded per Year</strong> — a stacked bar chart showing how many species you recorded for the first time in each year, separating new species from repeats.</li>
   <li><strong>Recorded Species Growth Over Time</strong> — a cumulative line curve tracking the total number of distinct species you have recorded over time.</li>
 </ul>
 <p>As with the photo charts, hovering over a bar, wedge, or point shows details, and clicking opens a filtered window or gallery for that selection.</p>

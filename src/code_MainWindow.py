@@ -20,6 +20,7 @@ import code_LocationTotals
 import code_DateTotals
 import code_Graphs
 import code_Photos
+import code_PhotoStats
 import code_PhotosGrid
 import code_Recordings
 import code_RecordingsGrid
@@ -692,11 +693,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionBrowseRecordings.triggered.connect(self.createRecordingsBrowser)
         self.actionRecordingsGrid.triggered.connect(self.createRecordingsGridBrowser)
         self.actionEditPhotosByFilter.triggered.connect(self.createEditPhotosByFilter)
-        self.actionEditPhotosByFilter.setVisible(False)
         self.actionUpdateEXIFDataForAllPhotos.triggered.connect(self.updateEXIFDataForAllPhotos)
-        self.actionUpdateEXIFDataForAllPhotos.setVisible(False)
-        self.actionUpdateRecordingData.triggered.connect(self.updateRecordingDataForAll)
-        self.actionUpdateRecordingData.setVisible(False)
         self.actionRenameMedia.triggered.connect(self.createRenameMedia)
         self.actionRenameMedia.setVisible(False)
 
@@ -726,6 +723,18 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionSlideshow.triggered.connect(self.createSlideshow)
         self.actionYTDPhotos.triggered.connect(self.CreateYTDPhotos)
         self.actionPhotoPie.triggered.connect(self.CreatePhotoPieChart)
+        self.actionPhotoStatsOverview.triggered.connect(
+            lambda: self.CreatePhotoStats("overview"))
+        self.actionPhotoStatsGear.triggered.connect(
+            lambda: self.CreatePhotoStats("gear"))
+        self.actionPhotoStatsCoverage.triggered.connect(
+            lambda: self.CreatePhotoStats("coverage"))
+        self.actionExposureSettings.triggered.connect(
+            lambda: self.CreatePhotoSettingChart("exposuresettings"))
+        self.actionCompareSettings.triggered.connect(
+            lambda: self.CreatePhotoSettingChart("comparesettings"))
+        self.actionPhotoTimeOfDay.triggered.connect(
+            lambda: self.CreatePhotoSettingChart("photohour"))
         self.actionPhotoBar.triggered.connect(self.CreatePhotoBarChart)
         self.actionPhotoAccumulation.triggered.connect(self.CreatePhotoAccumulationChart)
         self.actionCumulativePhotos.triggered.connect(self.CreateCumulativePhotosChart)
@@ -1224,20 +1233,126 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             if isinstance(w, code_ManageRecordings.ManageRecordings):
                 w.refreshRigPickers()
 
-    def _updateMediaMenuVisibility(self):
-        """Show the Photos menu only when the open media catalog actually contains
-        photos, and the Recordings menu only when it contains recordings.  Both
-        hide when no catalog is open.  (File-menu items like Add photos / Add
-        recordings stay available whenever an eBird data file is open, so you can
-        add the first item of a kind — but Manage recordings needs an existing
-        recording to manage, so it tracks the same condition as the Recordings
-        menu.)"""
-        has_catalog = self.db.photoDataFileOpenFlag
-        self.menuPhotos.menuAction().setVisible(has_catalog and self.db.hasPhotos())
-        self.menuRecordings.menuAction().setVisible(has_catalog and self.db.hasRecordings())
-        self.actionManageRecordings.setVisible(has_catalog and self.db.hasRecordings())
-        # Toolbar Recordings button tracks the same condition as the menu.
-        self.actionRecordingsToolbar.setVisible(has_catalog and self.db.hasRecordings())
+    # Menus whose every entry needs an open eBird data file.  File, Windows
+    # and the help menus are deliberately absent: opening a file and reading
+    # the guide must work when nothing is loaded.
+    _DATA_MENU_NAMES = ("menuFilter", "menuLists", "menuReports", "menuGraphs",
+                        "menuMaps", "menuCommunity")
+    # Toolbar buttons likewise, minus Open.  Photos and Recordings are left
+    # out because the media logic below governs them more strictly.
+    _DATA_TOOLBAR_NAMES = ("actionPrint", "actionCreatePDF", "actionClearAllFilters",
+                           "actionSpecies", "actionLocations", "actionChecklists",
+                           "actionMap", "actionFamilies", "actionDateTotals",
+                           "actionLocationTotals", "actionCompareLists",
+                           "actionTripReport", "actionFind")
+
+    def _updateActionStates(self):
+        """Enable or grey out the app's actions for the data currently loaded.
+
+        One cascade governs everything, each level a precondition of the next:
+
+            data file open?  ->  media catalog open?  ->  any photos?
+                                                      ->  any recordings?
+
+        Deriving each level from the one above means no close path can leave
+        an inconsistent pair of flags behind — ClearDatabase happens to clear
+        both today, but one error path clears the data-file flag alone.
+
+        Photos and Recordings keep their contents greyed rather than hidden.
+
+        These menus used to be hidden outright, which told a new user nothing:
+        a catalog with no photos simply had no Photos menu, so browsing,
+        galleries, maps and every report were invisible to anyone who had not
+        already found them.  Disabled entries advertise what the app can do,
+        the tooltip says what is missing, and Add photos / Add recordings sits
+        at the top of each menu still enabled — so the menu is a route in
+        rather than a dead end.
+
+        This is a deliberate exception to the hide-don't-disable convention
+        used elsewhere in the app; it is made here because these two features
+        are the ones a user cannot otherwise discover.
+        """
+        has_file       = bool(self.db.eBirdFileOpenFlag)
+        has_catalog    = bool(has_file and self.db.photoDataFileOpenFlag)
+        has_photos     = bool(has_catalog and self.db.hasPhotos())
+        has_recordings = bool(has_catalog and self.db.hasRecordings())
+
+        # Everything that needs data at all.  The menus stay openable so the
+        # app still shows what it can do before a file is loaded; only their
+        # entries grey out.
+        no_file_why = "Open an eBird data file to use this"
+        for name in self._DATA_MENU_NAMES:
+            menu = getattr(self, name, None)
+            if menu is not None:
+                self._setMenuEntriesEnabled(menu, has_file, no_file_why)
+        for name in self._DATA_TOOLBAR_NAMES:
+            action = getattr(self, name, None)
+            if action is not None:
+                action.setEnabled(has_file)
+
+        for menu, ready, addAction, noun in (
+                (self.menuPhotos, has_photos, self.actionAddPhotos, "photos"),
+                (self.menuRecordings, has_recordings, self.actionAddRecordings,
+                 "recordings")):
+            # Always present, in every state.  The whole point is that a user
+            # who has not set up media can still look inside and see what the
+            # app offers, so there is no condition under which these vanish.
+            menu.menuAction().setVisible(True)
+            # The two empty states need different advice, since the remedy
+            # differs: there may be no catalog at all, or a catalog with
+            # nothing of this kind in it yet.
+            if not has_file:
+                why = f"Open an eBird data file, then add {noun}"
+            elif not has_catalog:
+                why = f"Open or create a media catalog, then add {noun}"
+            else:
+                why = f"Add {noun} to your catalog to use these reports"
+            self._setMenuEntriesEnabled(menu, ready, why, skip=addAction)
+            # Adding media is how you get out of the empty state, so it keeps
+            # its place in the menu always, and is live whenever there is a
+            # data file to attach media to.
+            addAction.setVisible(True)
+            addAction.setEnabled(bool(has_file))
+
+        # The File menu's media maintenance entries follow the same rule as
+        # the menus: present always, live only when there is something for
+        # them to act on.  Managing or refreshing recordings needs at least
+        # one recording to work with.
+        for action, ready in ((self.actionManageRecordings, has_recordings),
+                              (self.actionEditPhotosByFilter, has_photos),
+                              (self.actionUpdateEXIFDataForAllPhotos, has_photos)):
+            action.setVisible(True)
+            action.setEnabled(ready)
+        # Toolbar buttons follow the menus: shown always, greyed until usable.
+        self.actionPhotos.setVisible(True)
+        self.actionPhotos.setEnabled(has_photos)
+        self.actionRecordingsToolbar.setVisible(True)
+        self.actionRecordingsToolbar.setEnabled(has_recordings)
+
+    def _setMenuEntriesEnabled(self, menu, ready, why, skip=None):
+        """Enable or grey out everything in a menu, submenus included.
+
+        Submenus themselves stay ENABLED so they can still be opened: the
+        point of greying rather than hiding is that a user can look inside
+        and see what the app offers, and a disabled submenu cannot be opened
+        at all.  Their contents are greyed instead, one level down.
+        """
+        for action in menu.actions():
+            if action is skip or action.isSeparator():
+                continue
+            submenu = action.menu()
+            if submenu is not None:
+                action.setEnabled(True)
+                self._setMenuEntriesEnabled(submenu, ready, why)
+                continue
+            action.setEnabled(ready)
+            # Stash each action's own tooltip the first time through, or
+            # swapping in the explanation would destroy it: these entries
+            # carry descriptions written for them, and an emptied tooltip
+            # cannot be recovered once overwritten.
+            if action.property("ybTooltip") is None:
+                action.setProperty("ybTooltip", action.toolTip())
+            action.setToolTip(action.property("ybTooltip") if ready else why)
 
     def finishedProcessingPreferences(self):
         self.updateMyLocationButtons()
@@ -1253,8 +1368,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.actionAddPhotos.setVisible(True)
             self.actionAddRecordings.setVisible(True)
             self.actionRebuildThumbnailCache.setVisible(True)
-            # Photos/Recordings menus appear only if the catalog has that media.
-            self._updateMediaMenuVisibility()
+            # A data file is open, so everything that needs one wakes up; this
+            # runs before the catalog check so it applies either way.
+            self._updateActionStates()
 
             #show photo filter if an ebird file has been read and a photo file has been opened
             if self.db.photoDataFileOpenFlag == True:
@@ -1262,18 +1378,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 self.fillRecordingsComboBoxes()
                 self.showMediaFilter()
                 self._showPhotoCatalogMenuItems()
-                self.actionGeolocatedPhotos.setVisible(True)
-                self.actionGeolocatedPhotosSeparator.setVisible(True)
-                self.actionAnimatedPhotoSequence.setVisible(True)
-                self.actionSlideshow.setVisible(True)
-                self.actionYTDPhotos.setVisible(True)
-                self.actionPhotoPie.setVisible(True)
-                self.actionPhotoBar.setVisible(True)
-                self.actionPhotoAccumulation.setVisible(True)
-                self.actionCumulativePhotos.setVisible(True)
-                self.actionEditPhotosByFilter.setVisible(True)
-                self.actionUpdateEXIFDataForAllPhotos.setVisible(True)
-                self.actionUpdateRecordingData.setVisible(True)
                 self.actionRenameMedia.setVisible(True)
                 self.actionOptimizePhotoSettings.setVisible(True)
 
@@ -1586,19 +1690,10 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
         self.showMediaFilter()
 
-        # Photos/Recordings menus appear only if the catalog has that media.
-        self._updateMediaMenuVisibility()
+        # Photos/Recordings menu entries are enabled only for media the
+        # catalog actually holds.
+        self._updateActionStates()
         self._showPhotoCatalogMenuItems()
-        self.actionGeolocatedPhotos.setVisible(True)
-        self.actionGeolocatedPhotosSeparator.setVisible(True)
-        self.actionAnimatedPhotoSequence.setVisible(True)
-        self.actionSlideshow.setVisible(True)
-        self.actionYTDPhotos.setVisible(True)
-        self.actionPhotoPie.setVisible(True)
-        self.actionPhotoBar.setVisible(True)
-        self.actionEditPhotosByFilter.setVisible(True)
-        self.actionUpdateEXIFDataForAllPhotos.setVisible(True)
-        self.actionUpdateRecordingData.setVisible(True)
         self.actionRenameMedia.setVisible(True)
         self.actionOptimizePhotoSettings.setVisible(True)
 
@@ -1633,26 +1728,19 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
 
     def _showPhotoCatalogMenuItems(self):
-        self.actionPhotos.setVisible(True)
         self.actionOpenPhotoSettings.setVisible(True)
         self.actionClosePhotoSettings.setVisible(True)
         self.actionSavePhotoSettings.setVisible(True)
         self.menuFileCatalogSeparator.setVisible(True)
-        self.actionEditPhotosByFilter.setVisible(True)
-        self.actionUpdateEXIFDataForAllPhotos.setVisible(True)
         self.actionRenameMedia.setVisible(True)
         self.actionOptimizePhotoSettings.setVisible(True)
 
     def _hidePhotoCatalogMenuItems(self):
-        self.actionPhotos.setVisible(False)
         self.actionClosePhotoSettings.setVisible(False)
         self.actionSavePhotoSettings.setVisible(False)
         # menuFileCatalogSeparator stays visible: "Open media catalog..." is
         # always shown, so the separator after it always has something to
         # separate from "Add photos..." below it.
-        self.actionEditPhotosByFilter.setVisible(False)
-        self.actionUpdateEXIFDataForAllPhotos.setVisible(False)
-        self.actionUpdateRecordingData.setVisible(False)
         self.actionRenameMedia.setVisible(False)
         self.actionOptimizePhotoSettings.setVisible(False)
 
@@ -1670,18 +1758,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         for w in list(self.mdiArea.subWindowList()):
             if w.objectName() == "frmStats":
                 w.close()
-        # Catalog is now closed — hide both media menus.
-        self._updateMediaMenuVisibility()
+        # Catalog is now closed — both media menus grey out.
+        self._updateActionStates()
         self._hidePhotoCatalogMenuItems()
-        self.actionGeolocatedPhotos.setVisible(False)
-        self.actionGeolocatedPhotosSeparator.setVisible(False)
-        self.actionAnimatedPhotoSequence.setVisible(False)
-        self.actionSlideshow.setVisible(False)
-        self.actionYTDPhotos.setVisible(False)
-        self.actionPhotoPie.setVisible(False)
-        self.actionPhotoBar.setVisible(False)
-        self.actionPhotoAccumulation.setVisible(False)
-        self.actionCumulativePhotos.setVisible(False)
 
 
     def addPhotos(self):
@@ -2209,19 +2288,34 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         """Photos > Browse Grid — the same photos as a thumbnail grid."""
         self._createPhotosWindow(code_PhotosGrid.PhotosGrid)
 
-    def _createPhotosWindow(self, viewClass):
-        """Spawn a photo browser of the given class for the current filter.
+    def createPhotosGridForFilter(self, filter, photoTest=None, titleText=None):
+        """Browse Grid for an explicit filter.
+
+        Used where a report has already narrowed the photos itself — clicking
+        one dot on the Shutter Speed vs Focal Length chart, say — so the
+        current Media Filter must not be re-read over the top of it.
+        photoTest and titleText are passed through to FillPhotos for selections
+        the Media Filter cannot express (see Photos.FillPhotos).
+        """
+        self._createPhotosWindow(code_PhotosGrid.PhotosGrid, filter,
+                                 photoTest=photoTest, titleText=titleText)
+
+    def _createPhotosWindow(self, viewClass, filter=None, photoTest=None,
+                            titleText=None):
+        """Spawn a photo browser of the given class.
 
         Both browse views differ only in layout (PhotosGrid subclasses Photos),
         so the guards, the no-results messaging and the build-hidden-then-reveal
-        dance live here once.
+        dance live here once.  `filter` defaults to the current Media Filter;
+        callers pass one explicitly when they have already narrowed it.
         """
         # if no data file is currently open, abort
         if MainWindow.db.eBirdFileOpenFlag is not True:
             self.CreateMessageNoFile()
             return
 
-        filter = self.GetPhotoFilter()
+        if filter is None:
+            filter = self.GetPhotoFilter()
 
         # Pre-check before touching the MDI area — PositionChildWindow restores
         # any maximized sibling, so adding then immediately removing a window
@@ -2255,7 +2349,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             sub.setFocus()
         sub.contentReady.connect(_revealPhotos)
 
-        if sub.FillPhotos(filter) is False:
+        if sub.FillPhotos(filter, photoTest=photoTest,
+                          titleText=titleText) is False:
 
             # Fallback: filter passed sightings but no individual photos matched
             sub.close()
@@ -3186,6 +3281,10 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.actionAddPhotos.setVisible(True)
             self.actionAddRecordings.setVisible(True)
             self.actionRebuildThumbnailCache.setVisible(True)
+            # A data file is open now, so everything that needs one wakes up.
+            # This must happen outside the catalog check below: opening a data
+            # file with no media catalog still has to ungrey the rest of the app.
+            self._updateActionStates()
 
             self._autoOpenDefaultCatalog()
 
@@ -3193,21 +3292,10 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 self.fillPhotoComboBoxes()
                 self.fillRecordingsComboBoxes()
                 self.showMediaFilter()
-                # Photos/Recordings menus appear only if the catalog has that media.
-                self._updateMediaMenuVisibility()
+                # Re-run now that the catalog is open too, so the media menus
+                # reflect what it holds.
+                self._updateActionStates()
                 self._showPhotoCatalogMenuItems()
-                self.actionGeolocatedPhotos.setVisible(True)
-                self.actionGeolocatedPhotosSeparator.setVisible(True)
-                self.actionAnimatedPhotoSequence.setVisible(True)
-                self.actionSlideshow.setVisible(True)
-                self.actionYTDPhotos.setVisible(True)
-                self.actionPhotoPie.setVisible(True)
-                self.actionPhotoBar.setVisible(True)
-                self.actionPhotoAccumulation.setVisible(True)
-                self.actionCumulativePhotos.setVisible(True)
-                self.actionEditPhotosByFilter.setVisible(True)
-                self.actionUpdateEXIFDataForAllPhotos.setVisible(True)
-                self.actionUpdateRecordingData.setVisible(True)
                 self.actionRenameMedia.setVisible(True)
                 self.actionOptimizePhotoSettings.setVisible(True)
 
@@ -3618,6 +3706,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             "frmGraphs",
             "frmPhotos",
             "frmStats",
+            "frmPhotoStats",
             "frmIndividual",
             "frmLocation",
             "frmTripReport",
@@ -4294,6 +4383,44 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         sub.mdiParent = self
 
         if sub.FillGraph(self.GetPhotoFilter(), "ytdphotos") is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+            QTimer.singleShot(0, sub.scaleMe)
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+
+
+    def CreatePhotoStats(self, mode):
+        """Open one of the Photos > Statistics tabular reports."""
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+
+        sub = code_PhotoStats.PhotoStats()
+        sub.mdiParent = self
+
+        if sub.FillPhotoStats(self.GetPhotoFilter(), mode) is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+            QTimer.singleShot(0, sub.scaleMe)
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+
+
+    def CreatePhotoSettingChart(self, chartType):
+        """Open one of the Photos > Statistics EXIF charts."""
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+
+        sub = code_Graphs.Graphs()
+        sub.mdiParent = self
+
+        if sub.FillGraph(self.GetPhotoFilter(), chartType) is True:
             self.mdiArea.addSubWindow(sub)
             self.PositionChildWindow(sub, self)
             sub.show()
@@ -5481,47 +5608,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         )
         
         
-    def updateRecordingDataForAll(self):
-        # Respect the current Sighting Filter and Recording (Media) Filter so the
-        # user can refresh just a subset of recordings. The photo side of the
-        # media filter is irrelevant here, so clear it to avoid the media-conflict
-        # prompt in GetGeneralFilter.
-        filter = self.GetFilter()
-        filter.clearPhotoFilter()
-
-        sightings = self.db.GetSightingsWithRecordings(filter)
-
-        updated = 0
-        skipped = 0
-        for s in sightings:
-            for i, a in enumerate(s["audio"]):
-                fn = a["fileName"]
-                if not os.path.isfile(fn):
-                    skipped += 1
-                    continue
-                fresh = self.db.getRecordingData(fn)
-                # preserve the user's rating and notes (getRecordingData blanks them)
-                fresh["rating"] = a.get("rating", "0")
-                fresh["notes"] = a.get("notes", "")
-                s["audio"][i] = fresh
-                updated += 1
-
-        self.db.refreshRecordingsLists()
-        self.fillRecordingsComboBoxes()
-
-        self.db.photosNeedSaving = True
-        self.checkIfPhotoDataNeedSaving()
-        self.notifyMediaChanged()
-
-        msg = (f"Updated recording data for {updated} recording(s)."
-               f"\n\nFilter: {filter.describeScope(self.db)}")
-        if skipped:
-            msg += f"\n\n{skipped} file(s) were not found on disk and were not updated."
-        QMessageBox.information(
-            self, "Updated Recording Data", msg, QMessageBox.StandardButton.Ok
-        )
-
-
     def SeasonalRangeClicked(self):
         self.cboSeasonalRangeOptions.setCurrentIndex(1)
         
@@ -5592,14 +5678,11 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.dckMediaFilter.setVisible(False)
         self.actionClose.setVisible(False)
         self.actionOpenPhotoSettings.setVisible(False)
-        self.actionAddPhotos.setVisible(False)
-        self.actionAddRecordings.setVisible(False)
         self.actionRebuildThumbnailCache.setVisible(False)
-        self.menuPhotos.menuAction().setVisible(False)
-        self.menuRecordings.menuAction().setVisible(False)
-        self.actionManageRecordings.setVisible(False)
-        self.actionRecordingsToolbar.setVisible(False)
         self._hidePhotoCatalogMenuItems()
+        # The Photos and Recordings menus stay in the menu bar with their
+        # entries greyed, rather than disappearing with the data file.
+        self._updateActionStates()
 
 
     def ShowMainWindowOptions(self):
@@ -5946,14 +6029,11 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.hideMediaFilter()
         self.actionClose.setVisible(False)
         self.actionOpenPhotoSettings.setVisible(False)
-        self.actionAddPhotos.setVisible(False)
-        self.actionAddRecordings.setVisible(False)
         self.actionRebuildThumbnailCache.setVisible(False)
-        self.menuPhotos.menuAction().setVisible(False)
-        self.menuRecordings.menuAction().setVisible(False)
-        self.actionManageRecordings.setVisible(False)
         self._hidePhotoCatalogMenuItems()
         self.db.ClearDatabase()
+        # After the database is cleared, so the greyed state reflects it.
+        self._updateActionStates()
 
 
     def _refillTaxonomyCombosForFilter(self, f):
