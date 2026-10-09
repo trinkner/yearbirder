@@ -228,7 +228,7 @@ class RenameMedia(QMdiSubWindow, form_RenameMedia.Ui_frmRenameMedia):
         _hdr.setSortIndicator(col, self._sortOrder)
 
     def closeEvent(self, event):
-        self.mdiParent.db.compactJsonlFile()
+        # No compaction — each rename is journalled as it happens (see _rename).
         super(self.__class__, self).closeEvent(event)
 
 
@@ -991,7 +991,10 @@ class RenameMedia(QMdiSubWindow, form_RenameMedia.Ui_frmRenameMedia):
                 )
                 return
 
-        # ── Step 3: compact any pending session changes ───────────────────────
+        # ── Step 3: flush anything a legacy CSV catalog is still holding ──────
+        # On a .jsonl catalog this is a no-op (every edit is already journalled);
+        # on a CSV one it raises the migration prompt, which is the only way
+        # these edits get saved at all.
         self.mdiParent.checkIfPhotoDataNeedSaving()
 
         # ── Step 4: confirm ───────────────────────────────────────────────────
@@ -1146,9 +1149,10 @@ class RenameMedia(QMdiSubWindow, form_RenameMedia.Ui_frmRenameMedia):
             self._frozen_paths.add(new_path)
             succeeded += 1
 
-        # ── Final compact ─────────────────────────────────────────────────────
-        if succeeded > 0:
-            db.compactJsonlFile()
+        # Nothing to flush at the end: every rename above appended its own new
+        # record and a deletion marker for the old path as it went, so the work
+        # is already durable.  Compacting here would rewrite the whole catalog
+        # from memory and lose anything the open eBird export cannot see.
 
         # Re-key the row index to the new paths so a later option change can find
         # each renamed row's data and recompute a fresh proposed name.

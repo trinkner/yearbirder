@@ -193,7 +193,11 @@ class Photos(QMdiSubWindow, form_Photos.Ui_frmPhotos):
             except queue.Empty:
                 break
         self.mdiParent.progressOverlay.hide()
-        self.mdiParent.db.compactJsonlFile()
+        # No compaction here.  Every edit this window can make was journalled to
+        # the catalog as it happened, so there is nothing to flush — and a
+        # compaction rewrites the file from memory, which silently drops any
+        # record the open eBird export cannot see.  Compacting is the File menu's
+        # Compact Media Catalog, where the user chooses it.
         # Keep the on-disk thumbnail cache bounded (off the load path).
         code_ThumbnailCache.enforce_cap()
         super().closeEvent(event)

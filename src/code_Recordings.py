@@ -197,7 +197,7 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
             except queue.Empty:
                 break
         self.mdiParent.progressOverlay.hide()
-        self.mdiParent.db.compactJsonlFile()
+        # No compaction here — see the note in code_Photos.closeEvent.
         code_ThumbnailCache.enforce_cap()   # keep the on-disk cache bounded
         super().closeEvent(event)
 

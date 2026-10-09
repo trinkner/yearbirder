@@ -3291,11 +3291,17 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         if self.db.photosNeedSaving is True:
 
             if self.db.photoDataFile and self.db.photoDataFile.lower().endswith(".jsonl"):
-                # JSONL file already set — compact silently, no dialog needed
-                self.db.compactJsonlFile()
+                # Nothing to do: the catalog is a journal, and every edit was
+                # appended to it as it was made, so the work is already on disk.
+                # This used to compact silently here, which rewrote the file from
+                # memory — and so deleted every record the open eBird data file
+                # could not account for.  Compaction is now only ever the user's
+                # own choice, from File → Compact media catalog and cache.
+                self.db.photosNeedSaving = False
 
             else:
-                # No JSONL file yet (first save or legacy CSV) — use the standard migration prompt
+                # No JSONL file yet (first save or legacy CSV) — appends are a
+                # no-op for those, so the migration prompt is the only save path.
                 self._promptJsonlMigrationIfNeeded()
 
         return(True)
@@ -5612,6 +5618,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         # loop through the filtered photos, and refresh each photo's EXIF data
         updated = 0
         skipped = 0
+        failed = []
         for s in sightings:
             for pCount, p in enumerate(s["photos"]):
                 # skip files no longer on disk so we don't wipe good EXIF data
@@ -5624,6 +5631,14 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 photoData["notes"] = p.get("notes", "")
                 s["photos"][pCount] = photoData
                 updated += 1
+                # Journal each refreshed photo as it is rewritten.  This used to
+                # rely on the compaction at the end to reach disk, which made the
+                # whole routine a no-op whenever compaction was skipped — and
+                # silently discarded anything the open eBird export couldn't see.
+                try:
+                    self.db.appendPhotoToJsonl(s, photoData)
+                except IOError as exc:
+                    failed.append((p["fileName"], exc))
 
         # rebuild the photo (and recording) filter metadata lists from the full
         # catalog so values for photos outside this subset are retained
@@ -5632,8 +5647,10 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         # clear and repopulate photo filter cbo boxes with updated data
         self.fillPhotoComboBoxes()
 
-        # Persist to JSONL: compact rewrites all in-memory photo data.
-        # If no JSONL file is open, checkIfPhotoDataNeedSaving prompts the user to create one.
+        # Each photo above was journalled as it was refreshed, so the work is
+        # already on disk.  The flag still goes up for a legacy CSV catalog,
+        # where appendPhotoToJsonl is a no-op and the migration prompt in
+        # checkIfPhotoDataNeedSaving is the only way these edits get saved.
         self.db.photosNeedSaving = True
         self.checkIfPhotoDataNeedSaving()
 
@@ -5641,6 +5658,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                f"\n\nFilter: {filter.describeScope(self.db)}")
         if skipped:
             msg += f"\n\n{skipped} file(s) were not found on disk and were not updated."
+        if failed:
+            msg += (f"\n\n{len(failed)} photo(s) were updated in memory but could "
+                    f"not be written to the media catalog:\n{failed[0][1]}")
         QMessageBox.information(
             self, "Updated EXIF Data", msg, QMessageBox.StandardButton.Ok,
         )
