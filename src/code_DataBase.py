@@ -1853,28 +1853,32 @@ class DataBase():
             with open(fileName, mode='r', encoding='utf-8') as photoDataFile:
                 csv_reader = csv.DictReader(photoDataFile)
                 for row in csv_reader:
-                    if any(f not in row for f in self._CSV_REQUIRED_FIELDS):
+                    try:
+                        if any(f not in row for f in self._CSV_REQUIRED_FIELDS):
+                            self.csvSkippedRows += 1
+                            continue
+                        photoData = {}
+                        filter = code_Filter.Filter()
+                        filter.setChecklistID(row["ChecklistID"])
+                        filter.setSpeciesName(row["CommonName"])
+                        photoData["fileName"] = row["FileName"]
+                        photoData["camera"] = row["Camera"]
+                        photoData["lens"] = row["Lens"]
+                        photoData["shutterSpeed"] = row["ShutterSpeed"]
+                        photoData["aperture"] = row["Aperture"]
+                        photoData["iso"] = row["ISO"]
+                        photoData["focalLength"] = row["FocalLength"]
+                        rating = row.get("Rating", "0")
+                        photoData["rating"] = rating if rating in ["0","1","2","3","4","5"] else "0"
+                        photoData["notes"] = row.get("Notes", "")
+                        if "ExifDateTime" in row:
+                            photoData["exifDatetime"] = row.get("ExifDateTime") or None
+                            photoData["exifSubsec"] = row.get("ExifSubSec") or None
+                            photoData["exifDateInvalid"] = bool(row.get("ExifDateInvalid"))
+                        self.addPhotoToDatabase(filter, photoData, skip_file_check=True)
+                    except Exception:
+                        # One unusable row must not cost the rest of the catalog.
                         self.csvSkippedRows += 1
-                        continue
-                    photoData = {}
-                    filter = code_Filter.Filter()
-                    filter.setChecklistID(row["ChecklistID"])
-                    filter.setSpeciesName(row["CommonName"])
-                    photoData["fileName"] = row["FileName"]
-                    photoData["camera"] = row["Camera"]
-                    photoData["lens"] = row["Lens"]
-                    photoData["shutterSpeed"] = row["ShutterSpeed"]
-                    photoData["aperture"] = row["Aperture"]
-                    photoData["iso"] = row["ISO"]
-                    photoData["focalLength"] = row["FocalLength"]
-                    rating = row.get("Rating", "0")
-                    photoData["rating"] = rating if rating in ["0","1","2","3","4","5"] else "0"
-                    photoData["notes"] = row.get("Notes", "")
-                    if "ExifDateTime" in row:
-                        photoData["exifDatetime"] = row.get("ExifDateTime") or None
-                        photoData["exifSubsec"] = row.get("ExifSubSec") or None
-                        photoData["exifDateInvalid"] = bool(row.get("ExifDateInvalid"))
-                    self.addPhotoToDatabase(filter, photoData, skip_file_check=True)
         except Exception:
             pass
 
@@ -1918,7 +1922,19 @@ class DataBase():
                 sum(1 for v in photo_state.values() if v is not None) + len(recordings_state)
             )
 
-            for fn, row in photo_state.items():
+        except Exception:
+            # Unreadable or unparseable file: nothing to attach.
+            self.jsonlSkippedLines += 1
+            return
+
+        # Attach the records outside the file guard, one at a time, so one
+        # unusable record costs one record.  This loop used to sit inside a
+        # blanket `except Exception: pass` covering the entire read, where any
+        # failure stopped the load where it stood and said nothing — and since
+        # every photo is written before the first recording, a failure among the
+        # photos silently cost every recording in the catalog.
+        for fn, row in photo_state.items():
+            try:
                 if row is None:
                     continue
                 filter = code_Filter.Filter()
@@ -1943,7 +1959,12 @@ class DataBase():
                     photoData["exifDateInvalid"] = bool(row.get("ExifDateInvalid"))
                 self.addPhotoToDatabase(filter, photoData, skip_file_check=True)
 
-            for (fn, checklistID, commonName), row in recordings_state.items():
+            except Exception:
+                # One unusable record must not cost the rest of the catalog.
+                self.jsonlSkippedLines += 1
+
+        for (fn, checklistID, commonName), row in recordings_state.items():
+            try:
                 filter = code_Filter.Filter()
                 filter.setChecklistID(checklistID)
                 filter.setSpeciesName(commonName)
@@ -1980,8 +2001,9 @@ class DataBase():
                     recordingData["metaDate"] = row.get("MetaDate") or ""
                     recordingData["metaTime"] = row.get("MetaTime") or ""
                 self.addRecordingToDatabase(filter, recordingData, skip_file_check=True)
-        except Exception:
-            pass
+            except Exception:
+                # One unusable record must not cost the rest of the catalog.
+                self.jsonlSkippedLines += 1
 
 
     def refreshPhotoLists(self):
@@ -3114,14 +3136,19 @@ class DataBase():
         if "sp." in speciesName or "/" in speciesName:
             return(self.sightingList)
 
-        # use narrowest subset possible, according to filter
+        # use narrowest subset possible, according to filter.  A checklist the
+        # export doesn't contain narrows to nothing rather than raising: delete a
+        # checklist on the eBird web site and every media record pointing at it
+        # is orphaned, which is the state Compact Media Catalog exists to clean
+        # up.  A bare subscript here raised KeyError instead, which the catalog
+        # reader swallowed whole — so Compact could never run on an orphan.
         if checklistID != "":
-            returnList = self.checklistDict[checklistID]
+            returnList = self.checklistDict.get(checklistID, [])
         elif speciesName != "" and speciesName in self.speciesDict:
             returnList = self.speciesDict[speciesName]
         elif speciesList != []:
             for sp in speciesList:
-                for s in self.speciesDict[sp]:
+                for s in self.speciesDict.get(sp, []):
                     returnList.append(s)
         elif startDate != "" and startDate == endDate:
             if startDate in self.dateDict:

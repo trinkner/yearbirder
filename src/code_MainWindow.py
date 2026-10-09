@@ -1748,14 +1748,18 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.db.ClearPhotoSettings()
             return
 
-        filter = code_Filter.Filter()
+        # The catalog holds records but not one of them attached to a sighting:
+        # it belongs to a different eBird data file.  Both media kinds count —
+        # testing photos alone closed a perfectly good recordings-only catalog,
+        # since photoRecordsInCatalog counts photos and recordings together.
         if (self.db.photoRecordsInCatalog > 0
-                and not self.db.GetSightingsWithPhotos(filter)):
+                and not self.db.hasPhotos()
+                and not self.db.hasRecordings()):
             QMessageBox.warning(
                 self,
                 "Media Catalog Mismatch",
-                "The photos in the catalog don't match the open eBird data file. "
-                "The catalog will be closed.\n\n"
+                "The media in the catalog doesn't match the open eBird data "
+                "file. The catalog will be closed.\n\n"
                 + default_catalog,
             )
             self.db.ClearPhotoSettings()
