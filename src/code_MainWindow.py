@@ -395,6 +395,40 @@ class _OptimizePhotoSettingsDialog(QDialog):
         self.missing = missing
         self._showResults()
 
+    def _fitToContents(self):
+        """Resize to fit after the layout has changed.
+
+        adjustSize on its own measures stale hints here: the progress bar has
+        just been hidden and a button box added, and until the layouts are
+        activated the dialog sizes itself for the content it had a moment ago
+        — one button row short, which draws the first line of the message
+        clipped off the top.  The deferred second pass catches the
+        word-wrapped label, whose height is only known once its real width is.
+        """
+        self._layout.activate()
+        if self.layout() is not None:
+            self.layout().activate()
+        self.adjustSize()
+        QTimer.singleShot(0, self._pinLabelHeight)
+
+    def _pinLabelHeight(self):
+        """Give the wrapped message the height its real width demands.
+
+        A word-wrapped QLabel's sizeHint is for a notional width; at the
+        width the layout actually hands it, the text can need another line,
+        and the dialog has already sized itself without it.  Once the label
+        has a real width, pin its minimum height to the true requirement and
+        measure again.
+        """
+        label = self._statusLabel
+        width = label.width()
+        if width > 0 and label.hasHeightForWidth():
+            label.setMinimumHeight(label.heightForWidth(width))
+        self._layout.activate()
+        if self.layout() is not None:
+            self.layout().activate()
+        self.adjustSize()
+
     def _showResults(self):
         self._progress.setVisible(False)
 
@@ -422,7 +456,7 @@ class _OptimizePhotoSettingsDialog(QDialog):
             btn_box.accepted.connect(self.accept)
             btn_box.rejected.connect(self.reject)
             self._layout.addWidget(btn_box)
-            self.adjustSize()
+            self._fitToContents()
             return
 
         n_photos = sum(1 for m in self.missing if m["kind"] == "photo")
@@ -462,7 +496,7 @@ class _OptimizePhotoSettingsDialog(QDialog):
         self._buttonBox.rejected.connect(self.reject)
         self._buttonBox.setVisible(True)
 
-        self.adjustSize()
+        self._fitToContents()
 
 
 class _UpdateCheckThread(QThread):
