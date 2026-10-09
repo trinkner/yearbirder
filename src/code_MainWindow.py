@@ -649,8 +649,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
     # About) and string-compared in _onUpdateCheckDone.  Letters are fine.
     # Avoid SPACES though — build_release.sh interpolates this into DMG
     # filenames and the disk-image volume name (Yearbirder_v${VERSION}.dmg).
-    versionNumber = "2.18-dev"
-    versionDate = "September 21, 2026"
+    versionNumber = "2.18"
+    versionDate = "October 9, 2026"
     taxonomyYear = ""
 
     def __init__(self):

@@ -223,13 +223,15 @@
       <ul>
         <li><a href="#browse-cards">Browse Cards</a></li>
         <li><a href="#browse-grid">Browse Grid</a></li>
-        <li><a href="#animated-photo-sequence">Animated Photo Sequence Map</a></li>
+        <li><a href="#animated-photo-sequence">Animated Photo Map</a></li>
         <li><a href="#slideshow">Slideshow</a></li>
         <li><a href="#ytd-photos">Year to Date by Photographs</a></li>
         <li><a href="#photo-pie">Families &amp; Orders by Photos</a></li>
         <li><a href="#photo-bar">Total Photos</a></li>
         <li><a href="#photo-accumulation">New Species Photographed Each Year</a></li>
         <li><a href="#cumulative-photos">Photographed Species Growth Over Time</a></li>
+        <li><a href="#photo-coverage">Photo Coverage of Species</a></li>
+        <li><a href="#photo-statistics">Technical Statistics</a></li>
       </ul></li>
     <li><a href="#enlargement-view">Working with the Enlargement View</a></li>
     <li><a href="#rating-photos">Rating Your Photos</a></li>
@@ -822,34 +824,42 @@
 <p>A bubble map where bubble area is proportional to the <strong>total number of individual birds tallied</strong> at each location. Sightings recorded with an unknown count ("X" in eBird) contribute 1 to the total. The tooltip notes how many checklists contain at least one uncounted species.</p>
 <p>Hover over a bubble to see the location name, individual count, and any caveat about uncounted entries. Click a bubble to open the Location window for that site.</p>
 
-<p><em>The Geolocated Photos map has moved to the <strong>Photos</strong> menu. See <a href="#photos">Section 21</a>.</em></p>
+<p><em>The Photo Map map has moved to the <strong>Photos</strong> menu. See <a href="#photos">Section 21</a>.</em></p>
 
 <p class="back-to-top"><a href="#top">Back to top &uarr;</a></p>
 
 <hr>
 
 <h2 id="choropleth-maps">18. Shaded Region Maps</h2>
-<p>Shaded region maps are accessed via <strong>Maps → Shaded Regions</strong>. Six geographic regions are available, each with two modes selectable from the <strong>By Species</strong> and <strong>By Checklists</strong> submenus.</p>
-<p>All shaded region maps respond to the Sighting Filter — for example, set a Family filter to see which states you have recorded warblers in. Clicking a shaded region opens a Species List (By Species mode) or a Checklists List (By Checklists mode) filtered to that region.</p>
+<p>Shaded region maps are accessed via <strong>Maps → Shaded Regions</strong>. <strong>World Countries</strong> sits at the top as the worldwide overview; below it, maps are grouped into <strong>Asia</strong>, <strong>Europe</strong>, and <strong>North America</strong> submenus.</p>
+<p>All shaded region maps respond to the Sighting Filter — for example, set a Family filter to see which states you have recorded warblers in. Clicking a shaded region opens a Species List or a Checklists List filtered to that region, depending on which view the map is showing.</p>
 
-<h3>By Species mode</h3>
-<p>Each region is shaded according to the number of distinct species you have recorded there under the current filter. Darker shading = more species. Hover over a region to see its name, species count, and a list of the most recently recorded species.</p>
-
-<h3>By Checklists mode</h3>
-<p>Each region is shaded according to the number of checklists you have submitted there. Hover over a region to see its name, checklist count, and the dates of your most recent visits (newest first).</p>
+<h3>Species and Checklists views</h3>
+<p>Every shaded region map offers both views, switched with the <strong>Species</strong> and <strong>Checklists</strong> buttons in the top-right corner of the map itself. The switch is instant — the map does not reload.</p>
+<ul>
+  <li><strong>Species</strong> — each region is shaded by the number of distinct species you have recorded there under the current filter. Darker shading = more species. Hover over a region to see its name, species count, and a list of the most recently recorded species.</li>
+  <li><strong>Checklists</strong> — each region is shaded by the number of checklists you have submitted there. Hover to see its name, checklist count, and the dates of your most recent visits (newest first).</li>
+</ul>
+<p>Regions where you have no records are shaded pale grey. Hovering one still names it and shows a zero, so you can identify anywhere you have not yet birded; clicking it does nothing, as there are no records to list.</p>
 
 <h3>Available regions</h3>
 <table>
   <thead><tr><th>Menu entry</th><th>Coverage</th></tr></thead>
   <tbody>
-    <tr><td>US States</td><td>Contiguous United States, shaded by state</td></tr>
-    <tr><td>Canada Provinces</td><td>Canadian provinces and territories</td></tr>
-    <tr><td>India States</td><td>States and union territories of India</td></tr>
-    <tr><td>Great Britain Counties</td><td>Counties of England, Scotland, and Wales</td></tr>
-    <tr><td>US Lower 48 Counties</td><td>County-level detail for the contiguous US</td></tr>
     <tr><td>World Countries</td><td>All countries worldwide</td></tr>
+    <tr><td>Asia → India States</td><td>States and union territories of India</td></tr>
+    <tr><td>Europe → <em>country</em></td><td>Regions, states, provinces or counties of the chosen country (see below)</td></tr>
+    <tr><td>North America → US States</td><td>Contiguous United States, shaded by state</td></tr>
+    <tr><td>North America → US Lower 48 Counties</td><td>County-level detail for the contiguous US</td></tr>
+    <tr><td>North America → Canada Provinces</td><td>Canadian provinces and territories</td></tr>
   </tbody>
 </table>
+
+<h3>European countries</h3>
+<p>The <strong>Europe</strong> submenu lists only the countries you actually have sightings in, so it stays short and relevant; it does not appear at all until you have European records. Fifteen countries are currently supported:</p>
+<p>Austria, Czech Republic, France, Germany, Great Britain, Greece, Italy, Netherlands, Norway, Poland, Portugal, Romania, Spain, Sweden, and Switzerland.</p>
+<p>Each country is shaded at the level eBird uses for its regions — French <em>régions</em>, German <em>Länder</em>, Italian <em>regioni</em>, Greek peripheries, Spanish autonomous communities, Swiss cantons, and so on. Great Britain is shaded by county instead, because eBird divides it into only four regions.</p>
+<p>The map zooms to fit the regions you have birded rather than the whole country, so a Spanish map will frame the mainland unless you have Canary Islands records, and a Portuguese map will frame the mainland unless you have recorded in the Azores or Madeira.</p>
 
 <p class="back-to-top"><a href="#top">Back to top &uarr;</a></p>
 
@@ -886,7 +896,7 @@
       <li><strong>Windows:</strong> hold <strong>Ctrl</strong> and click to select individual photos, or hold <strong>Shift</strong> and click to select a contiguous range.</li>
     </ul>
   </li>
-  <li>For each photo, Yearbirder asks you to confirm the associated bird species and checklist. To make this easier, it uses each photo's filename and EXIF date/time to suggest the most likely species — so in many cases you only need to confirm the suggestion. Yearbirder recognises eBird species codes in filenames (e.g. <code>rufhum_20240514.jpg</code>), BBL four-letter codes, and common-name words. Names are read word by word — the capital letters in <em>LincolnsSparrow</em> mark where the words divide — and the words that tell the birds on that checklist apart count most, so "Lincoln" decides the species rather than "Sparrow". Small typos are forgiven, and when two species are equally likely Yearbirder leaves the choice to you rather than guessing. A suggested species is shown in <strong>green</strong> when a code or the whole name matched exactly, and in <strong>amber</strong> when only part of the name matched or a typo was corrected — amber suggestions are the ones worth checking. If the correct sighting does not appear as an option, make sure that sighting is logged in eBird; you cannot associate a photo with a sighting that is not in your data.</li>
+  <li>For each photo, Yearbirder asks you to confirm the associated bird species and checklist. To make this easier, it uses each photo's filename and EXIF date/time to suggest the most likely species — so in many cases you only need to confirm the suggestion. Yearbirder recognises eBird species codes in filenames (e.g. <code>rufhum_20240514.jpg</code>), four-letter alpha codes, and common-name words. Both readings of a hyphenated name are accepted, so a Common Wood-Pigeon is found by <code>COWP</code> as well as <code>CWPI</code>, and accents need not be typed (<code>RUWA</code> finds R&uuml;ppell's Warbler). Species with no official banding code &mdash; most birds outside North America &mdash; are matched from their names the same way. Names are read word by word — the capital letters in <em>LincolnsSparrow</em> mark where the words divide — and the words that tell the birds on that checklist apart count most, so "Lincoln" decides the species rather than "Sparrow". Small typos are forgiven, and when two species are equally likely Yearbirder leaves the choice to you rather than guessing. Whether a code is ambiguous depends on the checklist, not on birds in general: <code>COCH</code> means Common Chaffinch on a list holding only that bird, and is left for you to settle on a list holding Common Chiffchaff too. A suggested species is shown in <strong>green</strong> when a code or the whole name matched exactly, and in <strong>amber</strong> when only part of the name matched or a typo was corrected — amber suggestions are the ones worth checking. If the correct sighting does not appear as an option, make sure that sighting is logged in eBird; you cannot associate a photo with a sighting that is not in your data.</li>
   <li>Your associations are saved to the media catalog automatically as you make them. The first time you add media with no catalog open, Yearbirder prompts you to choose a name and location for a new catalog file (a <code>.jsonl</code> file); from then on it saves there automatically. Remember where you saved it — you will open it again the next time you use Yearbirder.</li>
 </ol>
 
@@ -911,8 +921,14 @@
 
 <h3>Cleaning up missing references and unused cache</h3>
 <p>If photos or recordings have been moved or deleted from your hard drive, Yearbirder may show broken references. Use <strong>File → Compact catalog and cache…</strong> to scan for and remove any associations pointing to files that no longer exist.</p>
-<p>The same command also clears unused images from Yearbirder's on-disk <strong>cache</strong> — the thumbnails and spectrograms it renders once and reuses so media appears instantly. Any cached image that no longer matches a file in the currently open catalog is deleted, reclaiming disk space left behind by media you have removed. Your original photo and recording files are never touched; only Yearbirder's preview images are affected, and any that are still needed are re-created automatically the next time you view that media.</p>
+<p>The same command also clears unused images from Yearbirder's on-disk <strong>cache</strong> — the thumbnails and spectrograms it renders once and reuses so media appears instantly. Any cached image that no longer matches a file in the currently open catalog is deleted, reclaiming disk space left behind by media you have removed. Media you chose to keep counts as being in the catalog, so its thumbnails and spectrograms are kept too. Your original photo and recording files are never touched; only Yearbirder's preview images are affected, and any that are still needed are re-created automatically the next time you view that media.</p>
 <p>Because the cache is shared across catalogs, running this command while one catalog is open will also clear cached images belonging to a <em>different</em> catalog. This is harmless — nothing is lost — but the other catalog's photos and recordings may take a moment to re-cache the first time you browse them after switching back to it.</p>
+
+<p>Compacting rewrites the catalog from what Yearbirder currently has loaded, so it can only keep records it can see. A record is only visible when the open eBird data file contains both the checklist and the species it is attached to. If some records aren't matched, Yearbirder shows you exactly which media is affected &mdash; file, species, date and location &mdash; and asks what to do, with <strong>Keep them</strong> as the default. The same check runs before <strong>File &rarr; Backup media catalog&hellip;</strong>, so a backup can never quietly come out smaller than the catalog it was made from.</p>
+<p>Media can go unmatched for more than one reason, and the <em>date</em> and <em>location</em> columns are the quickest way to tell which you are looking at. Media from the last few weeks points to an out-of-date eBird file &mdash; download a current one and it all comes back. A cluster on one date and place points to an outing you deleted on the eBird web site, in which case those records really are dead. Media whose species no longer appears on its checklist usually means the identification was refined or eBird revised its taxonomy; reassign that media to the species the checklist now lists rather than removing it.</p>
+<p>In a catalog created by an older version of Yearbirder the location may not have been recorded yet, in which case the column shows the eBird checklist number instead &mdash; you can look that up on the eBird web site. Compacting once with a current eBird data file open fills in the missing locations for good.</p>
+<p>Choosing <strong>Keep them</strong> writes the unmatched records back out untouched, so nothing is lost and you can decide later. <strong>Remove them</strong> takes them out of the catalog permanently, and is only the right answer when you know those checklists are gone from eBird for good. Either way your photo and recording files are left alone on your computer &mdash; only the catalog's record of which sighting they belong to is affected.</p>
+<p>Nothing else in Yearbirder rewrites the catalog. Every rating, note, assignment, removal and rename is written to the catalog the moment you make it, so your work is safe without compacting and safe if the app closes unexpectedly. Compacting is housekeeping you choose: it collapses the file to one line per record and reclaims the space superseded entries leave behind.</p>
 
 <h3>What the media catalog contains</h3>
 <p>The catalog stores one record per photo, including:</p>
@@ -936,6 +952,8 @@
 
 <h2 id="photos">21. Viewing Photos</h2>
 <p>Yearbirder can associate your personal bird photos with your eBird sightings. This unlocks several photo views and lets you filter by camera, lens, and exposure settings using the Media Filter panel on the right of the screen.</p>
+
+<p>Until you have added photos, the <strong>Photos</strong> menu and its submenus still open, with every entry greyed out and a tooltip explaining what is missing — so you can see everything the photo system offers before committing to it. <strong>Add photos…</strong> stays available at the top of the menu as the way to get started. The <strong>Recordings</strong> menu behaves the same way.</p>
 
 <h3>Overview of the photo system</h3>
 <ul>
@@ -980,12 +998,12 @@
   <li><strong>Delete a photo from disk</strong> — permanently removes the file from your drive and its entry from the media catalog. All other open Photos, Enlargement, Manage Photos, and Rename Media windows update immediately to reflect the deletion.</li>
 </ul>
 
-<h3>Geolocated Photos</h3>
-<p>Open with <strong>Photos → Geolocated Photos</strong>. Available only when a media catalog is loaded.</p>
+<h3>Photo Map</h3>
+<p>Open with <strong>Photos → Photo Map</strong>. Available only when a media catalog is loaded.</p>
 <p>Plots your geotagged photos on an interactive clustered marker map. Markers group together at lower zoom levels and spread apart as you zoom in. Hovering over a marker shows a thumbnail preview of the photo along with the species name, date, and location. Click a marker to open the <strong>Enlargement</strong> view for that photo. Multiple photos taken at exactly the same GPS coordinates are automatically fanned into a spiral so each remains individually clickable.</p>
 
-<h3 id="animated-photo-sequence">Animated Photo Sequence Map</h3>
-<p>Open with <strong>Photos → Animated Photo Sequence Map</strong>. Available only when a media catalog is loaded.</p>
+<h3 id="animated-photo-sequence">Animated Photo Map</h3>
+<p>Open with <strong>Photos → Animated Photo Map</strong>. Available only when a media catalog is loaded.</p>
 <p>Animates your geotagged photos in chronological order on an interactive map, showing where and when each photo was taken. Each photo appears as a callout bubble whose triangular tail points to the exact GPS location, so the underlying map detail remains visible. The bubble displays the photo thumbnail, species name, date, and location.</p>
 <p>As the animation progresses, a small blue dot is permanently placed at each visited location, building up a breadcrumb trail of your photographic journey.</p>
 <p>Playback is controlled by the bar at the bottom of the map:</p>
@@ -1048,12 +1066,38 @@
 <p>This is the photographic equivalent of the Species Growth Over Time graph — the final point tells you the total number of distinct species you have photographed.</p>
 <p>Hover over the curve to see the date, cumulative total, and a tooltip that shows a photo thumbnail for each new species first photographed on that date (up to six thumbnails, stacked vertically; the thumbnail is the highest-rated photo of that species taken on that day). Click a point to open a <strong>Species Gallery</strong> showing only the species first photographed on that date, filtered to photos taken on that day.</p>
 
+<h3 id="photo-coverage">Photo Coverage of Species</h3>
+<p>Open with <strong>Photos &rarr; Birding Statistics &rarr; Photo Coverage of Species</strong>. Available only when a media catalog is loaded, and it respects the current Sighting Filter.</p>
+<p>How many of the species you have seen you have also photographed, your most-photographed species, a <strong>Most Wanted</strong> table of species you have seen but never photographed (ordered by how often you have seen them), and the species resting on a single photo. The species-seen totals ignore the Media Filter on purpose: a camera, lens or rating constraint would hide every sighting without a matching photo, which is exactly what this report is looking for.</p>
+
+<p class="back-to-top"><a href="#top">Back to top &uarr;</a></p>
+
+<h3 id="photo-statistics">Technical Statistics</h3>
+<p>Open with <strong>Photos &rarr; Technical Statistics</strong>. Available only when a media catalog is loaded. The Photos menu itself holds only ways of looking at your photographs; its two submenus hold the reports. <strong>Birding Statistics</strong> reports on the birds, the places and the dates — and opens with <strong>Photo Overview</strong>, the summary of your whole collection. <strong>Technical Statistics</strong>, described here, reports on the photographs themselves — the gear, the settings and the conditions. Every report in it respects the current Sighting Filter and Media Filter, so you can narrow any of them to a year, a region, a single lens, or an ISO range before opening it.</p>
+
+<p>It opens with one tabular report:</p>
+<ul>
+  <li><strong>Camera Gear</strong> — one table per camera body and one per lens, each with photo count, share of your catalog, how many species it has taken, and the first and last date you used it. Below them sit your typical settings, your ISO reach, and a <strong>Practical Limits</strong> table.</li>
+</ul>
+
+<p><strong>Photos &amp; Ratings by Setting</strong> shows where your photographs actually sit across each camera setting. Radio buttons above the chart switch between <strong>ISO</strong>, <strong>Aperture</strong>, <strong>Shutter Speed</strong> and <strong>Focal Length</strong> without reopening the window. A second pair on the right of the same row chooses what the bars measure: <strong>Photographs</strong>, how many you took at each setting, or <strong>Average Rating</strong>, how those photos turned out. The rating axis is fixed at one to five stars so the bars stay comparable as you move between settings, and unrated photos are left out of the average rather than counted as zero. Hover a bar to see how the photos taken at that setting turned out, broken down by rating; click one to open Browse Grid showing exactly the photos that bar counted. (If no photo in the chart carries a rating, the hover lists the species in the bar instead.) ISO and focal length are grouped into bands (ISO by stops, focal length in 50&nbsp;mm steps) because cameras record them in fine increments; aperture and shutter speed appear as recorded. If some photos do not record a setting, a note at the foot of the chart says how many were left out.</p>
+
+<p><strong>Setting Combinations</strong> plots any one exposure variable against any other. Two rows of radio buttons above the chart choose what runs along the bottom and what runs up the side — ISO, aperture, shutter speed or focal length. Choosing the same variable for both draws a diagonal line and tells you nothing, but it is allowed, so that swapping the two axes takes a click on each row rather than a detour through a third variable. It opens on focal length against shutter speed, the pair that shows how slow a shutter each focal length has held. ISO and shutter speed get logarithmic axes, because each step doubles; focal length and aperture are read linearly.</p>
+
+<p>Because cameras record these values in steps rather than continuously, photos stack rather than scatter: each dot is one combination of the two variables. Its <strong>size</strong> is how many of your photos share that combination, on a logarithmic scale since a few combinations usually hold far more photos than the rest; its <strong>colour</strong> is the average rating of those photos, running from gold at one star to deep magenta at five, with the key below the chart. So size tells you how often you shoot there and colour tells you how well it tends to go. A combination whose photos are all unrated is drawn in grey, and the note under the chart says how many those are. Hovering a dot gives its exact count and the full spread of its ratings; clicking one opens those photos in Browse Grid.</p>
+
+<p>Some pairings say more than others. Shutter speed against focal length is about holding the camera steady; shutter speed against ISO is the exposure trade-off, and reads as a record of the light you have worked in. Aperture against focal length traces your zoom’s own variable-aperture curve, since a lens that opens to f/4.5 at the short end cannot do so at the long one.</p>
+
+<p><strong>Time of Day</strong> breaks your photos down by the hour they were taken, from each photo's own EXIF timestamp. As on Photos &amp; Ratings by Setting, a pair of radio buttons above the chart chooses what the bars measure: <strong>Photographs</strong>, how many you took in each hour, or <strong>Average Rating</strong>, how those photos turned out — which can separate the hour you shoot most from the hour you shoot best. Hovering an hour lists the species photographed in it, and clicking one opens that hour's photos in Browse Grid. It answers which part of the day your photographs actually come from, which is often not the part you would guess.</p>
+
+<p>Camera Gear, and Photo Overview and Photo Coverage of Species under Birding Statistics, can all be saved with <strong>File &rarr; Save as PDF</strong>.</p>
+
 <p class="back-to-top"><a href="#top">Back to top &uarr;</a></p>
 
 <hr>
 
 <h2 id="enlargement-view">22. Working with the Enlargement View</h2>
-<p>The Enlargement view opens whenever you click a photo thumbnail anywhere in Yearbirder — in Browse Cards or Browse Grid, the Species Gallery, the Individual Species window, the Geolocated Photos map, or the Animated Photo Sequence Map. It shows your photo at full resolution against a dark background and doubles as a photo management tool: you can navigate your collection, rate images, inspect EXIF data, and perform file operations all without leaving the view.</p>
+<p>The Enlargement view opens whenever you click a photo thumbnail anywhere in Yearbirder — in Browse Cards or Browse Grid, the Species Gallery, the Individual Species window, the Photo Map map, or the Animated Photo Map. It shows your photo at full resolution against a dark background and doubles as a photo management tool: you can navigate your collection, rate images, inspect EXIF data, and perform file operations all without leaving the view.</p>
 
 <h3>Navigating between photos</h3>
 <p>Use the <strong>left and right arrow keys</strong> (or <strong>Page Up / Page Down</strong>) to step through the photos in your current set. The <strong>Space bar</strong> advances to the next photo; <strong>Backspace</strong> goes back. You can also right-click and choose <strong>Next photo</strong> or <strong>Previous photo</strong> from the context menu.</p>
@@ -1334,15 +1378,13 @@
 <hr>
 
 <h2 id="recordings-reports">30. Recordings Charts and Reports</h2>
-<p>The <strong>Recordings</strong> menu provides a set of charts and reports that mirror the photo reports, but count your sound recordings instead of photos. They appear once a media catalog is open, and are rendered in a <strong>green</strong> colour palette to distinguish them from the yellow photo charts. Each respects the current Sighting Filter and Media Filter.</p>
+<p>The <strong>Recordings</strong> menu mirrors the Photos menu: the menu itself holds the ways of listening to your recordings — Browse Grid, Browse Cards, Species Gallery, Recording Map and Animated Recording Map — and its <strong>Birding Statistics</strong> submenu holds the charts and reports described here. They count your sound recordings instead of photos, appear once a media catalog is open, and are rendered in a <strong>green</strong> colour palette to distinguish them from the yellow photo charts. Each respects the current Sighting Filter and Media Filter. There is no Technical Statistics submenu for recordings: the gear and exposure reports photos have do not apply to audio.</p>
 <ul>
-  <li><strong>Recordings by Species</strong> — a gallery grouped by species, showing a representative spectrogram for each species you have recorded.</li>
-  <li><strong>Geolocated Recordings</strong> — plots your geotagged recordings on an interactive clustered map. Click a marker to open that recording's Enlargement view.</li>
-  <li><strong>Animated Recording Sequence Map</strong> — animates your geotagged recordings in chronological order on a map, building a breadcrumb trail of where and when you recorded each one.</li>
+  <li><strong>Total Recordings per Species</strong> — a gallery grouped by species, showing a representative spectrogram for each species you have recorded.</li>
   <li><strong>Year to Date by Recordings</strong> — a horizontal bar chart comparing your year-to-date recording count against your full-year totals for every year in your data.</li>
   <li><strong>Families &amp; Orders by Recordings</strong> — a pie chart where each wedge is a bird family (or order), sized by the total number of recordings you have of species in that group. Toggle between Families and Orders with the radio buttons.</li>
-  <li><strong>Total Recordings</strong> — a bar chart of your total recording count per time period (By Year, By Month, By Month-Year, or By Day).</li>
-  <li><strong>New Species Recorded Each Year</strong> — a stacked bar chart showing how many species you recorded for the first time in each year, separating new species from repeats.</li>
+  <li><strong>Recordings per Time Period</strong> — a bar chart of your total recording count per time period (By Year, By Month, By Month-Year, or By Day).</li>
+  <li><strong>New Species Recorded per Year</strong> — a stacked bar chart showing how many species you recorded for the first time in each year, separating new species from repeats.</li>
   <li><strong>Recorded Species Growth Over Time</strong> — a cumulative line curve tracking the total number of distinct species you have recorded over time.</li>
 </ul>
 <p>As with the photo charts, hovering over a bar, wedge, or point shows details, and clicking opens a filtered window or gallery for that selection.</p>
