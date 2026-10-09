@@ -95,6 +95,8 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QListWidget,
     QMdiArea,
+    QTreeWidget,
+    QTreeWidgetItem,
     QMessageBox,
     QMainWindow,
     QFileDialog,
@@ -302,6 +304,128 @@ class _WhiteIconToolbarStyle(QProxyStyle):
                 super().drawControl(element, opt, painter, widget)
                 return
         super().drawControl(element, option, painter, widget)
+
+
+class _UnmatchedRecordsDialog(QDialog):
+    """Shown before anything rewrites the catalog, when records would be lost.
+
+    Every rewrite — compacting and backing up alike — is built from what is in
+    memory, and a record that never attached to a sighting on load is not in
+    memory.  Dropping it silently is the one outcome nobody wants, so the user
+    is shown exactly what is at stake and chooses.
+
+    Keep (the default) writes the records back out untouched.  Remove is the
+    right answer only when the checklists really are gone from eBird for good.
+    The rows carry the capture date wherever the catalog cached one, because
+    that is usually what reveals which case this is: media from the last few
+    weeks means the eBird data file is simply older than the catalog, while a
+    cluster on one old date means that outing was deleted.
+
+    The wording is deliberately the same for compacting and for backing up: a
+    backup becomes the open catalog once written, so removing records there
+    drops them from the catalog going forward just the same.
+
+    The list is flat: every row is a sighting the open eBird data file does not
+    account for, whether the whole checklist is missing or only that species,
+    so there is nothing useful to group by.  _noteUnmatchedRecord still records
+    which it was, should that ever be worth showing.
+    """
+
+    KEEP, DELETE = 1, 2
+
+    def __init__(self, parent, unmatched):
+        super().__init__(parent)
+        self.setWindowTitle("Media Not In This eBird File")
+        self.choice = None
+
+        n_photo = sum(1 for u in unmatched if u["kind"] == "photo")
+        n_rec = len(unmatched) - n_photo
+
+        # Name only the kinds actually present, so this never reads
+        # "0 photos and 18 recordings" or "1 photos".
+        parts = []
+        if n_photo:
+            parts.append(f"{n_photo} photo{'s' if n_photo != 1 else ''}")
+        if n_rec:
+            parts.append(f"{n_rec} recording{'s' if n_rec != 1 else ''}")
+
+        # A single unmatched record is perfectly possible — one species removed
+        # from one checklist — so the verb and the nouns have to agree.
+        one = len(unmatched) == 1
+        is_are = "is" if one else "are"
+        these = "this media item" if one else "these media items"
+        them = "it" if one else "them"
+
+        head = QLabel(
+            f"{' and '.join(parts)} in your media catalog {is_are} not "
+            "associated with sightings in the currently open eBird data file. "
+            "This can happen if you have opened an old eBird data file or if "
+            "you used the eBird web site to delete or change sightings you "
+            "previously associated with media.<BR><BR>"
+            f"You can remove {these} from your catalog, or you can keep {them}. "
+            f"If the currently open eBird data file is old, you can keep "
+            f"{these} in your catalog for use with a more recent data file."
+            "<BR><BR>"
+            "Removing items from the Yearbirder media catalog will not delete "
+            "the media files from your computer."
+        )
+        # The text carries its own <BR> breaks; be explicit rather than relying
+        # on Qt sniffing the string for markup.
+        head.setTextFormat(Qt.TextFormat.RichText)
+        head.setWordWrap(True)
+
+        # One flat list: every row is a sighting the open eBird data file does
+        # not account for, so there is nothing to group by and no need for the
+        # expand arrows.  The header above already explains how it happens.
+        tree = QTreeWidget()
+        tree.setColumnCount(4)
+        tree.setHeaderLabels(["Media", "Species", "Date", "Location"])
+        tree.setRootIsDecorated(False)
+        tree.setAlternatingRowColors(True)
+        tree.setMinimumHeight(260)
+        tree.setMinimumWidth(720)
+
+        # Chronological, with undated rows last: the dates are the whole point
+        # of the list, so they should not be pushed down the page by the
+        # records that have none.
+        for u in sorted(unmatched, key=lambda r: (not r["date"], r["date"],
+                                                  r["fileName"])):
+            # Records written before catalogs carried a location have none to
+            # show, and the sighting that knew it is exactly what has gone.
+            # The checklist number is a poor substitute but it is at least
+            # actionable — it can be looked up on the eBird web site.
+            where = u["location"]
+            if not where:
+                where = (f"Checklist {u['checklistID']}"
+                         if u["checklistID"] else "\u2014")
+            QTreeWidgetItem(tree, [os.path.basename(u["fileName"]),
+                                   u["commonName"],
+                                   u["date"] or "\u2014",
+                                   where])
+
+        for col in range(3):
+            tree.resizeColumnToContents(col)
+        tree.header().setStretchLastSection(True)
+
+        buttons = QDialogButtonBox()
+        keep = buttons.addButton("Keep them", QDialogButtonBox.ButtonRole.AcceptRole)
+        drop = buttons.addButton("Remove them", QDialogButtonBox.ButtonRole.DestructiveRole)
+        buttons.addButton("Cancel", QDialogButtonBox.ButtonRole.RejectRole)
+        keep.setDefault(True)
+        keep.clicked.connect(lambda: self._choose(self.KEEP))
+        drop.clicked.connect(lambda: self._choose(self.DELETE))
+        buttons.rejected.connect(self.reject)
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(12, 12, 12, 12)
+        outer.setSpacing(12)
+        outer.addWidget(head)
+        outer.addWidget(tree)
+        outer.addWidget(buttons)
+
+    def _choose(self, choice):
+        self.choice = choice
+        self.accept()
 
 
 class _OptimizePhotoSettingsDialog(QDialog):
@@ -1987,12 +2111,16 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             suggested = f"{base}_Backup_{datestamp}{ext}"
             dialog_title = "Backup Media Catalog"
 
+        preserve = self._confirmUnmatchedRecords()
+        if preserve is None:
+            return
+
         fname = QFileDialog.getSaveFileName(self, dialog_title, suggested, "Yearbirder Media Catalog (*.jsonl)")
 
         if fname[0] == "":
             return
 
-        self.db.writePhotoDataToFile(fname[0])
+        self.db.writePhotoDataToFile(fname[0], preserveUnmatched=preserve)
         self.db.photoDataFile = fname[0]
         self.db.photosNeedSaving = False
 
@@ -2228,18 +2356,38 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         sighting references it any more, so removing media from the catalog
         reclaims its cache.  Must be called while the file still exists on disk —
         the cache key derives from its path+mtime+size — so a permanent delete
-        must call this BEFORE unlinking the file."""
-        if not self.db.isMediaFileReferenced(fileName):
-            code_ThumbnailCache.evict(fileName)
+        must call this BEFORE unlinking the file.
+
+        A record that never attached to a sighting still counts as a reference:
+        it is in the catalog, just not visible under the open eBird data file.
+        A recording assigned to several species can lose one of them and still
+        be held by an unmatched record, and evicting then would throw away a
+        spectrogram the catalog still wants.
+        """
+        if self.db.isMediaFileReferenced(fileName):
+            return
+        if any(u.get("fileName") == fileName
+               for u in self.db.unmatchedCatalogRecords):
+            return
+        code_ThumbnailCache.evict(fileName)
 
 
-    def _liveCatalogMedia(self):
+    def _liveCatalogMedia(self, includeUnmatched=True):
         """(source_path, kinds) for every distinct media file in the open catalog:
         photos carry both photo cache kinds (the browser thumbnail and Browse
         Grid's small one), recordings the three spectro_* kinds.  Feeds
         code_ThumbnailCache.prune_to_catalog to sweep orphaned cache files — a
         kind missing here is swept as an orphan, so both photo kinds must be
-        listed."""
+        listed.
+
+        Records that never attached to a sighting are included by default.
+        They are not in sightingList — that is what makes them unmatched — so
+        leaving them out told the sweep their cache was orphaned and it deleted
+        every thumbnail and spectrogram for media the user had just chosen to
+        keep. Pass includeUnmatched=False only when those records have actually
+        been removed from the catalog, which is the one case where their cache
+        really is dead.
+        """
         _PHOTO_KINDS = ["photo", "photo_grid"]
         _REC_KINDS = ["spectro_thumb", "spectro_overview", "spectro_ribbon"]
         media = []
@@ -2255,6 +2403,13 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 if fn and fn not in seen:
                     seen.add(fn)
                     media.append((fn, _REC_KINDS))
+        if includeUnmatched:
+            for u in self.db.unmatchedCatalogRecords:
+                fn = u.get("fileName", "")
+                if fn and fn not in seen:
+                    seen.add(fn)
+                    media.append((fn, _PHOTO_KINDS if u["kind"] == "photo"
+                                  else _REC_KINDS))
         return media
 
 
@@ -2998,6 +3153,22 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             code_ThumbnailCache.enforce_cap()   # keep the cache bounded
 
 
+    def _confirmUnmatchedRecords(self):
+        """Ask before a rewrite that would drop records the eBird file can't see.
+
+        Returns None to abort, or the preserveUnmatched flag to rewrite with.
+        With nothing unmatched there is nothing to ask about, so the common
+        case shows no dialog at all.
+        """
+        unmatched = self.db.unmatchedCatalogRecords
+        if not unmatched:
+            return True
+        dlg = _UnmatchedRecordsDialog(self, unmatched)
+        if dlg.exec() != QDialog.DialogCode.Accepted or dlg.choice is None:
+            return None
+        return dlg.choice == _UnmatchedRecordsDialog.KEEP
+
+
     def optimizePhotoSettings(self):
 
         if not MainWindow.db.photoDataFileOpenFlag:
@@ -3011,6 +3182,10 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
         dlg = _OptimizePhotoSettingsDialog(self, MainWindow.db)
         if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        preserve = self._confirmUnmatchedRecords()
+        if preserve is None:
             return
 
         missing = dlg.missing
@@ -3037,14 +3212,17 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             if not sighting["audio"]:
                 del sighting["audio"]
 
-        MainWindow.db.compactJsonlFile()
+        MainWindow.db.compactJsonlFile(preserveUnmatched=preserve)
 
         # Sweep the on-disk cache: delete every cached thumbnail/spectrogram that
         # does not correspond to a media file in the now-compacted catalog. This
         # reclaims cache for files removed above and any earlier orphans. The
         # cache is shared across catalogs, so another catalog's media re-caches
         # on next view (no data or files are lost).
-        cache_removed = code_ThumbnailCache.prune_to_catalog(self._liveCatalogMedia())
+        # Keep the cache for records the user chose to keep; sweep it only for
+        # the ones actually removed above.
+        cache_removed = code_ThumbnailCache.prune_to_catalog(
+            self._liveCatalogMedia(includeUnmatched=preserve))
 
         n_photos = sum(1 for m in missing if m["kind"] == "photo")
         n_recordings  = sum(1 for m in missing if m["kind"] == "recording")

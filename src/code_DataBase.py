@@ -756,6 +756,10 @@ class DataBase():
         self.photoDataFileDefault = ""
         self.jsonlSkippedLines = 0
         self.csvSkippedRows = 0
+        # Catalog records that found no sighting on load — see
+        # _noteUnmatchedRecord.  Anything that rewrites the catalog would drop
+        # these, so they are kept to carry forward and to show the user.
+        self.unmatchedCatalogRecords = []
         self.photoRecordsInCatalog = 0
         self.startupFolder = ""
         self.ebirdApiKey = ""
@@ -1635,11 +1639,14 @@ class DataBase():
 
         return None
 
-    def writePhotoDataToFile(self, fileName):
+    def writePhotoDataToFile(self, fileName, preserveUnmatched=True):
 
         filter = code_Filter.Filter()
         photoSightings = self.GetSightingsWithPhotos(filter)
         recordingSightings = self.GetSightingsWithRecordings(filter)
+
+        written_photos = set()
+        written_audio = set()
 
         try:
             with open(fileName, mode='w', encoding='utf-8') as f:
@@ -1650,6 +1657,8 @@ class DataBase():
                             "type":        "photo",
                             "ChecklistID": s["checklistID"],
                             "CommonName":  s["commonName"],
+                            "Location":    s.get("location", ""),
+                            "Date":        s.get("date", ""),
                             "FileName":    p["fileName"],
                             "Camera":      p["camera"],
                             "Lens":        p["lens"],
@@ -1662,6 +1671,7 @@ class DataBase():
                         }
                         record.update(_photo_exif_fields(p))
                         f.write(json.dumps(record) + '\n')
+                        written_photos.add(p["fileName"])
                 # Wave 2: audio
                 for s in recordingSightings:
                     for a in s["audio"]:
@@ -1669,6 +1679,8 @@ class DataBase():
                             "type":        "audio",
                             "ChecklistID": s["checklistID"],
                             "CommonName":  s["commonName"],
+                            "Location":    s.get("location", ""),
+                            "Date":        s.get("date", ""),
                             "FileName":    a["fileName"],
                             "Duration":    a.get("duration", ""),
                             "SampleRate":  a.get("sampleRate", ""),
@@ -1681,6 +1693,29 @@ class DataBase():
                         }
                         record.update(_recording_meta_fields(a))
                         f.write(json.dumps(record) + '\n')
+                        written_audio.add((a["fileName"], s["checklistID"],
+                                           s["commonName"]))
+
+                # Wave 3: records that never attached on load.  They are
+                # invisible to the two waves above — that is the whole problem
+                # — so without this the rewrite deletes them.  Written last and
+                # verbatim, minus any the waves above have already claimed: the
+                # loader lets the last line for a key win, so a preserved record
+                # must never be allowed to shadow a live one.  (A photo's key is
+                # its filename alone; a recording's is file + checklist +
+                # species.)
+                if preserveUnmatched:
+                    for item in self.unmatchedCatalogRecords:
+                        raw = item["raw"]
+                        if item["kind"] == "photo":
+                            if item["fileName"] in written_photos:
+                                continue
+                        else:
+                            key = (item["fileName"], item["checklistID"],
+                                   item["commonName"])
+                            if key in written_audio:
+                                continue
+                        f.write(json.dumps(raw) + '\n')
         except IOError as err:
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Icon.Warning)
@@ -1697,6 +1732,11 @@ class DataBase():
             "type":        "photo",
             "ChecklistID": sighting["checklistID"],
             "CommonName":  sighting["commonName"],
+            # Where and when the sighting was: carried in the record so it can
+            # still be identified to the user if the sighting ever drops out of
+            # the open eBird data file.
+            "Location":    sighting.get("location", ""),
+            "Date":        sighting.get("date", ""),
             "FileName":    photoData["fileName"],
             "Camera":      photoData["camera"],
             "Lens":        photoData["lens"],
@@ -1798,6 +1838,8 @@ class DataBase():
         record = {
             "type": "audio",
             "ChecklistID": sighting["checklistID"],
+            "Location":    sighting.get("location", ""),
+            "Date":        sighting.get("date", ""),
             "CommonName":  sighting["commonName"],
             "FileName":    recordingData["fileName"],
             "Duration":    recordingData.get("duration", ""),
@@ -1825,15 +1867,83 @@ class DataBase():
         with open(self.photoDataFile, mode='a', encoding='utf-8') as f:
             f.write(json.dumps(record) + '\n')
 
-    def compactJsonlFile(self):
+    def _noteUnmatchedRecord(self, record, kind):
+        """Remember a catalog record that found no sighting on load.
+
+        Everything that rewrites the catalog does so from memory, so a record
+        that never attached is invisible to the writer and would be dropped.
+        Capturing it here — at the one place that knows it failed — keeps the
+        raw line so it can be written back out, and lets the user be shown
+        exactly what is at stake before anything rewrites the file.
+
+        Three situations produce one of these, and they want different
+        remedies, so the reason is recorded alongside:
+
+        * the open eBird data file is older than the catalog;
+        * the checklist was deleted on the eBird web site;
+        * the checklist is still there but its species list changed — a
+          refined identification ("jaeger sp." becoming "Pomarine Jaeger"), an
+          eBird taxonomy revision, or that one species being removed.
+
+        The first two are indistinguishable from the file alone and both leave
+        the checklist missing; the third leaves it present, so that much can be
+        told apart and is worth telling apart — deleting a renamed species'
+        media is almost always wrong.
+        """
+        checklistID = record.get("ChecklistID", "")
+        peers = self.checklistDict.get(checklistID, [])
+
+        # Where and when — what a birder recognises a sighting by, never the
+        # checklist number.  Three sources, best first:
+        #  1. the record itself, for anything written since records began
+        #     carrying Location/Date;
+        #  2. any surviving sighting on the same checklist, which covers the
+        #     species-changed case and older records alike;
+        #  3. the photo's cached EXIF date (a recording's embedded one), which
+        #     at least dates it when the checklist is gone altogether.
+        # No disk access either way: this runs inside the catalog load.
+        location = record.get("Location", "")
+        date = record.get("Date", "")
+        if peers:
+            location = location or peers[0].get("location", "")
+            date = date or peers[0].get("date", "")
+        if not date:
+            # EXIF writes YYYY:MM:DD; normalise so the column reads as a date.
+            # Harmless for MetaDate, which is already hyphenated.
+            date = (record.get("ExifDateTime") or "" if kind == "photo"
+                    else record.get("MetaDate") or "")[:10].replace(":", "-")
+
+        self.unmatchedCatalogRecords.append({
+            "raw":         record,          # written back verbatim if preserved
+            "kind":        kind,            # "photo" | "audio"
+            "reason":      "species" if checklistID in self.checklistDict else "checklist",
+            "fileName":    record.get("FileName", ""),
+            "commonName":  record.get("CommonName", ""),
+            "checklistID": checklistID,
+            "location":    location,
+            "date":        date,
+        })
+
+
+    def compactJsonlFile(self, preserveUnmatched=True):
+        """Rewrite the catalog as one line per record.
+
+        preserveUnmatched=False discards the records that never attached on
+        load — only ever at the user's explicit say-so, having been shown
+        exactly which ones (see _noteUnmatchedRecord).
+        """
         if self.photoDataFile and self.photoDataFile.lower().endswith(".jsonl"):
-            self.writePhotoDataToFile(self.photoDataFile)
+            self.writePhotoDataToFile(self.photoDataFile,
+                                      preserveUnmatched=preserveUnmatched)
             self.photosNeedSaving = False
+            if not preserveUnmatched:
+                self.unmatchedCatalogRecords = []
 
 
     def readPhotoDataFromFile(self, fileName):
 
         self.photoDataFile = fileName
+        self.unmatchedCatalogRecords = []
 
         if fileName.lower().endswith(".csv"):
             self._readPhotoDataFromCsv(fileName)
@@ -1875,7 +1985,9 @@ class DataBase():
                             photoData["exifDatetime"] = row.get("ExifDateTime") or None
                             photoData["exifSubsec"] = row.get("ExifSubSec") or None
                             photoData["exifDateInvalid"] = bool(row.get("ExifDateInvalid"))
-                        self.addPhotoToDatabase(filter, photoData, skip_file_check=True)
+                        if self.addPhotoToDatabase(filter, photoData,
+                                                   skip_file_check=True) is None:
+                            self._noteUnmatchedRecord(dict(row), "photo")
                     except Exception:
                         # One unusable row must not cost the rest of the catalog.
                         self.csvSkippedRows += 1
@@ -1957,7 +2069,8 @@ class DataBase():
                     photoData["exifDatetime"] = row.get("ExifDateTime") or None
                     photoData["exifSubsec"] = row.get("ExifSubSec") or None
                     photoData["exifDateInvalid"] = bool(row.get("ExifDateInvalid"))
-                self.addPhotoToDatabase(filter, photoData, skip_file_check=True)
+                if self.addPhotoToDatabase(filter, photoData, skip_file_check=True) is None:
+                    self._noteUnmatchedRecord(row, "photo")
 
             except Exception:
                 # One unusable record must not cost the rest of the catalog.
@@ -2000,7 +2113,9 @@ class DataBase():
                 if "MetaDate" in row:
                     recordingData["metaDate"] = row.get("MetaDate") or ""
                     recordingData["metaTime"] = row.get("MetaTime") or ""
-                self.addRecordingToDatabase(filter, recordingData, skip_file_check=True)
+                if self.addRecordingToDatabase(filter, recordingData,
+                                               skip_file_check=True) is None:
+                    self._noteUnmatchedRecord(row, "audio")
             except Exception:
                 # One unusable record must not cost the rest of the catalog.
                 self.jsonlSkippedLines += 1
@@ -4276,6 +4391,7 @@ class DataBase():
         self.photoDataFileOpenFlag = False
         self.photoDataFile = ""
         self.photoRecordsInCatalog = 0
+        self.unmatchedCatalogRecords = []
         self.countryStateCodeFileFound = False
         self.allSpeciesList = []
         self.familyList = []
@@ -4305,6 +4421,10 @@ class DataBase():
 
         self.jsonlSkippedLines = 0
         self.csvSkippedRows = 0
+        # Catalog records that found no sighting on load — see
+        # _noteUnmatchedRecord.  Anything that rewrites the catalog would drop
+        # these, so they are kept to carry forward and to show the user.
+        self.unmatchedCatalogRecords = []
         self.photoRecordsInCatalog = 0
         self.cameraList = []
         self.lensList = []
