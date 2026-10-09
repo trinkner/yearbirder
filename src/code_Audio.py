@@ -472,6 +472,8 @@ class PcmAudioPlayer(QObject):
         self._playing     = False     # feeding real audio (vs keep-alive silence)
         self._io          = None      # the sink's push endpoint
         self._silence     = b'\x00' * 8192
+        self._sink        = None
+        self._rebuilding  = False     # True while the sink is being swapped
 
         self._buildSink()
 
@@ -512,7 +514,8 @@ class PcmAudioPlayer(QObject):
     def _feed(self):
         """Top up the sink's buffer: real audio while playing, else silence."""
         io = self._io
-        if io is None or self._bytesPerFrame <= 0:
+        if (io is None or self._sink is None or self._rebuilding
+                or self._bytesPerFrame <= 0):
             return
         free = self._sink.bytesFree()
         free -= free % self._bytesPerFrame
@@ -612,7 +615,7 @@ class PcmAudioPlayer(QObject):
         this, so compensation applies everywhere at once."""
         try:
             queued = max(0, self._sink.bufferSize() - self._sink.bytesFree())
-        except Exception:
+        except Exception:        # sink absent or mid-swap
             queued = 0
         latBytes = int(self._outFs * self.outputLatencyMs() / 1000) * self._bytesPerFrame
         return max(0, min(self._posBytes - queued - latBytes, len(self._pcm)))
@@ -629,9 +632,23 @@ class PcmAudioPlayer(QObject):
             self.playbackStateChanged.emit(state)
 
     def _onDeviceChanged(self):
-        """Default output device (or its preferred rate) changed: rebuild the
-        sink for the new device and reload the current clip in the new format,
-        preserving playback position and state."""
+        """Default output device changed — rebuild, but not from in here.
+
+        audioOutputsChanged is emitted from inside the platform backend's own
+        device-change handling.  Stopping or destroying the QAudioSink while
+        that is still on the stack leaves the backend delivering a posted
+        event to a half-torn-down sink, and the process segfaults inside
+        QtMultimedia — switching off a Bluetooth headset while a sink was
+        open used to kill the app outright.  Handing the work to the next
+        turn of the event loop lets the notification unwind first.
+        """
+        QTimer.singleShot(0, self._rebuildForDeviceChange)
+
+    def _rebuildForDeviceChange(self):
+        """Rebuild the sink for the new default output, preserving the clip,
+        its position and whether it was playing."""
+        if self._rebuilding or self._sink is None:
+            return
         dev  = QMediaDevices.defaultAudioOutput()
         pref = dev.preferredFormat()
         new_fs = pref.sampleRate() if pref.sampleRate() > 0 else 48000
@@ -642,15 +659,26 @@ class PcmAudioPlayer(QObject):
         wasPlaying = (self._state == QMediaPlayer.PlaybackState.PlayingState)
         path       = self._currentPath
 
-        self._io = None
-        self._playing = False
+        # Hold the feed timer off the sink while it is being swapped, so a
+        # tick cannot land on the one being destroyed.
+        self._rebuilding = True
+        self._feedTimer.stop()
         try:
-            self._sink.stop()
-        except Exception:
-            pass
-        self._sink.deleteLater()
+            self._io = None
+            self._playing = False
+            old = self._sink
+            self._sink = None
+            try:
+                old.stop()
+            except Exception:
+                pass
+            old.deleteLater()
 
-        self._buildSink()                   # new sink + push endpoint
+            self._buildSink()               # new sink + push endpoint
+        finally:
+            self._rebuilding = False
+            self._feedTimer.start()
+
         if path:
             if self.setSourceWav(path):     # re-decodes to the new output format
                 self.setPosition(pos)
