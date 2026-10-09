@@ -2095,12 +2095,14 @@ class DataBase():
         self.deviceList = sorted(device_set)
         if has_unknown_device:
             self.deviceList.append("Unknown")
-        # Microphones assigned via rigs, same shape as deviceList.  "Unknown"
-        # covers everything not yet assigned — which is every recording until
-        # the user sets up rigs, so this combo stays hidden until then (see
-        # fillRecordingsComboBoxes).
+        # Microphones assigned via rigs, exactly the same shape as deviceList:
+        # "Unknown" covers everything not yet assigned.  It is listed even when
+        # nothing has a microphone yet, so the combo appears as soon as there
+        # are recordings at all — hiding it hid its own tooltip, which is what
+        # tells the user that rigs in Add or Manage Recordings are how a
+        # microphone gets assigned.
         self.micList = sorted(mic_set)
-        if mic_set and has_unknown_mic:
+        if has_unknown_mic:
             self.micList.append("Unknown")
 
 

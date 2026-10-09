@@ -2124,9 +2124,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.cboRecordingsDevice.setVisible(bool(self.db.deviceList))
         self.lblRecordingsDevice.setVisible(bool(self.db.deviceList))
 
-        # Microphone combo: same shape, but the list is empty until the user
-        # assigns a rig to at least one recording, so it stays hidden until
-        # there is something to filter on.
+        # Microphone combo: same shape as the device combo, and shown on the
+        # same terms — as soon as the catalog holds any recording, even if none
+        # has a rig assigned yet.
         self.cboRecordingsMicrophone.blockSignals(True)
         self.cboRecordingsMicrophone.clear()
         self.cboRecordingsMicrophone.addItem("All")
