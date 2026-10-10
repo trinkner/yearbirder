@@ -439,11 +439,21 @@ with open(html_path) as f:
 content = content.replace(f"v{old_v}/Yearbirder_v{old_v}.dmg",  f"v{new_v}/Yearbirder_v{new_v}.dmg")
 content = content.replace(f"Yearbirder_v{old_v}.dmg",           f"Yearbirder_v{new_v}.dmg")
 content = content.replace(f"refs/tags/v{old_v}.zip",            f"refs/tags/v{new_v}.zip")
-# The Windows installer carries its version too, so the tag AND the filename
-# move.  The first rule migrates the pre-2.17 unversioned link, the second is
-# the ordinary release-to-release case, and the third catches the unversioned
-# name where the page spells it out in prose.
+# The Windows installer carries its version in BOTH the release tag and the
+# filename, so both have to move — exactly as for the .dmg above, which is why
+# the path-qualified rule comes first here too.  Rule 1 migrates the pre-2.17
+# unversioned link, rule 2 is the ordinary release-to-release case and must
+# rewrite the tag as well, rule 3 is a safety net for a bare filename, and
+# rule 4 catches the unversioned name where the page spells it out in prose.
+#
+# Rule 2 used to rewrite only the filename, leaving the previous release's tag
+# in the path.  Nothing caught it until v2.18, because v2.17 was the first
+# versioned .exe and every release before it took rule 1 — which does move the
+# tag.  The link it produced, download/v2.17/Yearbirder_Setup_v2.18.exe, is a
+# 404 on a page whose whole job is to hand people the installer.
 content = content.replace(f"download/v{old_v}/Yearbirder_Setup.exe",
+                          f"download/v{new_v}/Yearbirder_Setup_v{new_v}.exe")
+content = content.replace(f"download/v{old_v}/Yearbirder_Setup_v{old_v}.exe",
                           f"download/v{new_v}/Yearbirder_Setup_v{new_v}.exe")
 content = content.replace(f"Yearbirder_Setup_v{old_v}.exe",
                           f"Yearbirder_Setup_v{new_v}.exe")
