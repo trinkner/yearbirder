@@ -102,6 +102,12 @@ class Stats(QMdiSubWindow, form_Stats.Ui_frmStats):
         # a scrollbar in it would briefly flash on screen before the renderer
         # catches up.
         windowHeight = int((830 if sys.platform == "win32" else 760) * scaleFactor)
+        # Never resize while maximized: Qt honours it but leaves the window
+        # reporting isMaximized(), so it ends up small inside an MDI that
+        # still believes it is maximized.  A maximized window is already the
+        # size it should be.
+        if self.isMaximized():
+            return
         self.resize(windowWidth, windowHeight)
 
 
@@ -114,6 +120,7 @@ class Stats(QMdiSubWindow, form_Stats.Ui_frmStats):
 
         has_photos = self.mdiParent.db.photoDataFileOpenFlag
         self._stats = self._computeStats(sightings, has_photos)
+        had_photos = getattr(self, "_has_photos", None)
         self._has_photos = has_photos
 
         # Lazy-create the QWebEngineView the first time it's needed.
@@ -135,6 +142,14 @@ class Stats(QMdiSubWindow, form_Stats.Ui_frmStats):
             windowHeight = self.frameGeometry().height()
             self.webView.setGeometry(5, 27, windowWidth - 10, windowHeight - 35)
             self.webView.loadFinished.connect(self._fitToContent)
+
+        elif had_photos is not None and had_photos != has_photos:
+            # The report gains a third column the moment a media catalog
+            # appears, and loses it again when one closes — but scaleMe only
+            # runs when the view is first built, so a refresh would keep the
+            # old width and clip the media section off the right-hand edge.
+            self.scaleMe()
+            self.resizeMe()
 
         self.setWindowTitle(filter.buildWindowTitle("Statistics", self.mdiParent.db))
         self.webView.setHtml(self._generateHtml(self._stats, self._has_photos, dark=True))

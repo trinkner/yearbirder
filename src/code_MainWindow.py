@@ -20,6 +20,7 @@ import code_LocationTotals
 import code_DateTotals
 import code_Graphs
 import code_Photos
+import code_PhotoStats
 import code_PhotosGrid
 import code_Recordings
 import code_RecordingsGrid
@@ -94,6 +95,8 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QListWidget,
     QMdiArea,
+    QTreeWidget,
+    QTreeWidgetItem,
     QMessageBox,
     QMainWindow,
     QFileDialog,
@@ -303,6 +306,128 @@ class _WhiteIconToolbarStyle(QProxyStyle):
         super().drawControl(element, option, painter, widget)
 
 
+class _UnmatchedRecordsDialog(QDialog):
+    """Shown before anything rewrites the catalog, when records would be lost.
+
+    Every rewrite — compacting and backing up alike — is built from what is in
+    memory, and a record that never attached to a sighting on load is not in
+    memory.  Dropping it silently is the one outcome nobody wants, so the user
+    is shown exactly what is at stake and chooses.
+
+    Keep (the default) writes the records back out untouched.  Remove is the
+    right answer only when the checklists really are gone from eBird for good.
+    The rows carry the capture date wherever the catalog cached one, because
+    that is usually what reveals which case this is: media from the last few
+    weeks means the eBird data file is simply older than the catalog, while a
+    cluster on one old date means that outing was deleted.
+
+    The wording is deliberately the same for compacting and for backing up: a
+    backup becomes the open catalog once written, so removing records there
+    drops them from the catalog going forward just the same.
+
+    The list is flat: every row is a sighting the open eBird data file does not
+    account for, whether the whole checklist is missing or only that species,
+    so there is nothing useful to group by.  _noteUnmatchedRecord still records
+    which it was, should that ever be worth showing.
+    """
+
+    KEEP, DELETE = 1, 2
+
+    def __init__(self, parent, unmatched):
+        super().__init__(parent)
+        self.setWindowTitle("Media Not In This eBird File")
+        self.choice = None
+
+        n_photo = sum(1 for u in unmatched if u["kind"] == "photo")
+        n_rec = len(unmatched) - n_photo
+
+        # Name only the kinds actually present, so this never reads
+        # "0 photos and 18 recordings" or "1 photos".
+        parts = []
+        if n_photo:
+            parts.append(f"{n_photo} photo{'s' if n_photo != 1 else ''}")
+        if n_rec:
+            parts.append(f"{n_rec} recording{'s' if n_rec != 1 else ''}")
+
+        # A single unmatched record is perfectly possible — one species removed
+        # from one checklist — so the verb and the nouns have to agree.
+        one = len(unmatched) == 1
+        is_are = "is" if one else "are"
+        these = "this media item" if one else "these media items"
+        them = "it" if one else "them"
+
+        head = QLabel(
+            f"{' and '.join(parts)} in your media catalog {is_are} not "
+            "associated with sightings in the currently open eBird data file. "
+            "This can happen if you have opened an old eBird data file or if "
+            "you used the eBird web site to delete or change sightings you "
+            "previously associated with media.<BR><BR>"
+            f"You can remove {these} from your catalog, or you can keep {them}. "
+            f"If the currently open eBird data file is old, you can keep "
+            f"{these} in your catalog for use with a more recent data file."
+            "<BR><BR>"
+            "Removing items from the Yearbirder media catalog will not delete "
+            "the media files from your computer."
+        )
+        # The text carries its own <BR> breaks; be explicit rather than relying
+        # on Qt sniffing the string for markup.
+        head.setTextFormat(Qt.TextFormat.RichText)
+        head.setWordWrap(True)
+
+        # One flat list: every row is a sighting the open eBird data file does
+        # not account for, so there is nothing to group by and no need for the
+        # expand arrows.  The header above already explains how it happens.
+        tree = QTreeWidget()
+        tree.setColumnCount(4)
+        tree.setHeaderLabels(["Media", "Species", "Date", "Location"])
+        tree.setRootIsDecorated(False)
+        tree.setAlternatingRowColors(True)
+        tree.setMinimumHeight(260)
+        tree.setMinimumWidth(720)
+
+        # Chronological, with undated rows last: the dates are the whole point
+        # of the list, so they should not be pushed down the page by the
+        # records that have none.
+        for u in sorted(unmatched, key=lambda r: (not r["date"], r["date"],
+                                                  r["fileName"])):
+            # Records written before catalogs carried a location have none to
+            # show, and the sighting that knew it is exactly what has gone.
+            # The checklist number is a poor substitute but it is at least
+            # actionable — it can be looked up on the eBird web site.
+            where = u["location"]
+            if not where:
+                where = (f"Checklist {u['checklistID']}"
+                         if u["checklistID"] else "\u2014")
+            QTreeWidgetItem(tree, [os.path.basename(u["fileName"]),
+                                   u["commonName"],
+                                   u["date"] or "\u2014",
+                                   where])
+
+        for col in range(3):
+            tree.resizeColumnToContents(col)
+        tree.header().setStretchLastSection(True)
+
+        buttons = QDialogButtonBox()
+        keep = buttons.addButton("Keep them", QDialogButtonBox.ButtonRole.AcceptRole)
+        drop = buttons.addButton("Remove them", QDialogButtonBox.ButtonRole.DestructiveRole)
+        buttons.addButton("Cancel", QDialogButtonBox.ButtonRole.RejectRole)
+        keep.setDefault(True)
+        keep.clicked.connect(lambda: self._choose(self.KEEP))
+        drop.clicked.connect(lambda: self._choose(self.DELETE))
+        buttons.rejected.connect(self.reject)
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(12, 12, 12, 12)
+        outer.setSpacing(12)
+        outer.addWidget(head)
+        outer.addWidget(tree)
+        outer.addWidget(buttons)
+
+    def _choose(self, choice):
+        self.choice = choice
+        self.accept()
+
+
 class _OptimizePhotoSettingsDialog(QDialog):
     """Scans photo settings for missing files and offers to remove them."""
 
@@ -394,6 +519,40 @@ class _OptimizePhotoSettingsDialog(QDialog):
         self.missing = missing
         self._showResults()
 
+    def _fitToContents(self):
+        """Resize to fit after the layout has changed.
+
+        adjustSize on its own measures stale hints here: the progress bar has
+        just been hidden and a button box added, and until the layouts are
+        activated the dialog sizes itself for the content it had a moment ago
+        — one button row short, which draws the first line of the message
+        clipped off the top.  The deferred second pass catches the
+        word-wrapped label, whose height is only known once its real width is.
+        """
+        self._layout.activate()
+        if self.layout() is not None:
+            self.layout().activate()
+        self.adjustSize()
+        QTimer.singleShot(0, self._pinLabelHeight)
+
+    def _pinLabelHeight(self):
+        """Give the wrapped message the height its real width demands.
+
+        A word-wrapped QLabel's sizeHint is for a notional width; at the
+        width the layout actually hands it, the text can need another line,
+        and the dialog has already sized itself without it.  Once the label
+        has a real width, pin its minimum height to the true requirement and
+        measure again.
+        """
+        label = self._statusLabel
+        width = label.width()
+        if width > 0 and label.hasHeightForWidth():
+            label.setMinimumHeight(label.heightForWidth(width))
+        self._layout.activate()
+        if self.layout() is not None:
+            self.layout().activate()
+        self.adjustSize()
+
     def _showResults(self):
         self._progress.setVisible(False)
 
@@ -421,7 +580,7 @@ class _OptimizePhotoSettingsDialog(QDialog):
             btn_box.accepted.connect(self.accept)
             btn_box.rejected.connect(self.reject)
             self._layout.addWidget(btn_box)
-            self.adjustSize()
+            self._fitToContents()
             return
 
         n_photos = sum(1 for m in self.missing if m["kind"] == "photo")
@@ -461,7 +620,7 @@ class _OptimizePhotoSettingsDialog(QDialog):
         self._buttonBox.rejected.connect(self.reject)
         self._buttonBox.setVisible(True)
 
-        self.adjustSize()
+        self._fitToContents()
 
 
 class _UpdateCheckThread(QThread):
@@ -490,8 +649,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
     # About) and string-compared in _onUpdateCheckDone.  Letters are fine.
     # Avoid SPACES though — build_release.sh interpolates this into DMG
     # filenames and the disk-image volume name (Yearbirder_v${VERSION}.dmg).
-    versionNumber = "2.17"
-    versionDate = "September 19, 2026"
+    versionNumber = "2.18"
+    versionDate = "October 9, 2026"
     taxonomyYear = ""
 
     def __init__(self):
@@ -692,11 +851,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionBrowseRecordings.triggered.connect(self.createRecordingsBrowser)
         self.actionRecordingsGrid.triggered.connect(self.createRecordingsGridBrowser)
         self.actionEditPhotosByFilter.triggered.connect(self.createEditPhotosByFilter)
-        self.actionEditPhotosByFilter.setVisible(False)
         self.actionUpdateEXIFDataForAllPhotos.triggered.connect(self.updateEXIFDataForAllPhotos)
-        self.actionUpdateEXIFDataForAllPhotos.setVisible(False)
-        self.actionUpdateRecordingData.triggered.connect(self.updateRecordingDataForAll)
-        self.actionUpdateRecordingData.setVisible(False)
         self.actionRenameMedia.triggered.connect(self.createRenameMedia)
         self.actionRenameMedia.setVisible(False)
 
@@ -717,17 +872,27 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionIndia_States.triggered.connect(self.createChoroplethIndiaStates)
         self.actionGB_Counties.triggered.connect(self.createChoroplethGBCounties)
         self.actionWorld_Countries.triggered.connect(self.createChoroplethWorldCountries)
-        self.actionUS_States_Checklists.triggered.connect(self.createChoroplethUSStatesChecklists)
-        self.actionUS_Counties_Checklists.triggered.connect(self.createChoroplethUSCountiesChecklists)
-        self.actionCanada_Provinces_Checklists.triggered.connect(self.createChoroplethCanadaProvincesChecklists)
-        self.actionIndia_States_Checklists.triggered.connect(self.createChoroplethIndiaStatesChecklists)
-        self.actionGB_Counties_Checklists.triggered.connect(self.createChoroplethGBCountiesChecklists)
-        self.actionWorld_Countries_Checklists.triggered.connect(self.createChoroplethWorldCountriesChecklists)
+
+        # The Europe submenu's countries are data-driven, so they are created in
+        # code rather than in form_MDIMain.
+        self.buildEuropeChoroplethMenu()
         self.actionGeolocatedPhotos.triggered.connect(self.createGeolocatedPhotosMap)
         self.actionAnimatedPhotoSequence.triggered.connect(self.createAnimatedPhotoSequenceMap)
         self.actionSlideshow.triggered.connect(self.createSlideshow)
         self.actionYTDPhotos.triggered.connect(self.CreateYTDPhotos)
         self.actionPhotoPie.triggered.connect(self.CreatePhotoPieChart)
+        self.actionPhotoStatsOverview.triggered.connect(
+            lambda: self.CreatePhotoStats("overview"))
+        self.actionPhotoStatsGear.triggered.connect(
+            lambda: self.CreatePhotoStats("gear"))
+        self.actionPhotoStatsCoverage.triggered.connect(
+            lambda: self.CreatePhotoStats("coverage"))
+        self.actionExposureSettings.triggered.connect(
+            lambda: self.CreatePhotoSettingChart("exposuresettings"))
+        self.actionCompareSettings.triggered.connect(
+            lambda: self.CreatePhotoSettingChart("comparesettings"))
+        self.actionPhotoTimeOfDay.triggered.connect(
+            lambda: self.CreatePhotoSettingChart("photohour"))
         self.actionPhotoBar.triggered.connect(self.CreatePhotoBarChart)
         self.actionPhotoAccumulation.triggered.connect(self.CreatePhotoAccumulationChart)
         self.actionCumulativePhotos.triggered.connect(self.CreateCumulativePhotosChart)
@@ -1226,20 +1391,126 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             if isinstance(w, code_ManageRecordings.ManageRecordings):
                 w.refreshRigPickers()
 
-    def _updateMediaMenuVisibility(self):
-        """Show the Photos menu only when the open media catalog actually contains
-        photos, and the Recordings menu only when it contains recordings.  Both
-        hide when no catalog is open.  (File-menu items like Add photos / Add
-        recordings stay available whenever an eBird data file is open, so you can
-        add the first item of a kind — but Manage recordings needs an existing
-        recording to manage, so it tracks the same condition as the Recordings
-        menu.)"""
-        has_catalog = self.db.photoDataFileOpenFlag
-        self.menuPhotos.menuAction().setVisible(has_catalog and self.db.hasPhotos())
-        self.menuRecordings.menuAction().setVisible(has_catalog and self.db.hasRecordings())
-        self.actionManageRecordings.setVisible(has_catalog and self.db.hasRecordings())
-        # Toolbar Recordings button tracks the same condition as the menu.
-        self.actionRecordingsToolbar.setVisible(has_catalog and self.db.hasRecordings())
+    # Menus whose every entry needs an open eBird data file.  File, Windows
+    # and the help menus are deliberately absent: opening a file and reading
+    # the guide must work when nothing is loaded.
+    _DATA_MENU_NAMES = ("menuFilter", "menuLists", "menuReports", "menuGraphs",
+                        "menuMaps", "menuCommunity")
+    # Toolbar buttons likewise, minus Open.  Photos and Recordings are left
+    # out because the media logic below governs them more strictly.
+    _DATA_TOOLBAR_NAMES = ("actionPrint", "actionCreatePDF", "actionClearAllFilters",
+                           "actionSpecies", "actionLocations", "actionChecklists",
+                           "actionMap", "actionFamilies", "actionDateTotals",
+                           "actionLocationTotals", "actionCompareLists",
+                           "actionTripReport", "actionFind")
+
+    def _updateActionStates(self):
+        """Enable or grey out the app's actions for the data currently loaded.
+
+        One cascade governs everything, each level a precondition of the next:
+
+            data file open?  ->  media catalog open?  ->  any photos?
+                                                      ->  any recordings?
+
+        Deriving each level from the one above means no close path can leave
+        an inconsistent pair of flags behind — ClearDatabase happens to clear
+        both today, but one error path clears the data-file flag alone.
+
+        Photos and Recordings keep their contents greyed rather than hidden.
+
+        These menus used to be hidden outright, which told a new user nothing:
+        a catalog with no photos simply had no Photos menu, so browsing,
+        galleries, maps and every report were invisible to anyone who had not
+        already found them.  Disabled entries advertise what the app can do,
+        the tooltip says what is missing, and Add photos / Add recordings sits
+        at the top of each menu still enabled — so the menu is a route in
+        rather than a dead end.
+
+        This is a deliberate exception to the hide-don't-disable convention
+        used elsewhere in the app; it is made here because these two features
+        are the ones a user cannot otherwise discover.
+        """
+        has_file       = bool(self.db.eBirdFileOpenFlag)
+        has_catalog    = bool(has_file and self.db.photoDataFileOpenFlag)
+        has_photos     = bool(has_catalog and self.db.hasPhotos())
+        has_recordings = bool(has_catalog and self.db.hasRecordings())
+
+        # Everything that needs data at all.  The menus stay openable so the
+        # app still shows what it can do before a file is loaded; only their
+        # entries grey out.
+        no_file_why = "Open an eBird data file to use this"
+        for name in self._DATA_MENU_NAMES:
+            menu = getattr(self, name, None)
+            if menu is not None:
+                self._setMenuEntriesEnabled(menu, has_file, no_file_why)
+        for name in self._DATA_TOOLBAR_NAMES:
+            action = getattr(self, name, None)
+            if action is not None:
+                action.setEnabled(has_file)
+
+        for menu, ready, addAction, noun in (
+                (self.menuPhotos, has_photos, self.actionAddPhotos, "photos"),
+                (self.menuRecordings, has_recordings, self.actionAddRecordings,
+                 "recordings")):
+            # Always present, in every state.  The whole point is that a user
+            # who has not set up media can still look inside and see what the
+            # app offers, so there is no condition under which these vanish.
+            menu.menuAction().setVisible(True)
+            # The two empty states need different advice, since the remedy
+            # differs: there may be no catalog at all, or a catalog with
+            # nothing of this kind in it yet.
+            if not has_file:
+                why = f"Open an eBird data file, then add {noun}"
+            elif not has_catalog:
+                why = f"Open or create a media catalog, then add {noun}"
+            else:
+                why = f"Add {noun} to your catalog to use these reports"
+            self._setMenuEntriesEnabled(menu, ready, why, skip=addAction)
+            # Adding media is how you get out of the empty state, so it keeps
+            # its place in the menu always, and is live whenever there is a
+            # data file to attach media to.
+            addAction.setVisible(True)
+            addAction.setEnabled(bool(has_file))
+
+        # The File menu's media maintenance entries follow the same rule as
+        # the menus: present always, live only when there is something for
+        # them to act on.  Managing or refreshing recordings needs at least
+        # one recording to work with.
+        for action, ready in ((self.actionManageRecordings, has_recordings),
+                              (self.actionEditPhotosByFilter, has_photos),
+                              (self.actionUpdateEXIFDataForAllPhotos, has_photos)):
+            action.setVisible(True)
+            action.setEnabled(ready)
+        # Toolbar buttons follow the menus: shown always, greyed until usable.
+        self.actionPhotos.setVisible(True)
+        self.actionPhotos.setEnabled(has_photos)
+        self.actionRecordingsToolbar.setVisible(True)
+        self.actionRecordingsToolbar.setEnabled(has_recordings)
+
+    def _setMenuEntriesEnabled(self, menu, ready, why, skip=None):
+        """Enable or grey out everything in a menu, submenus included.
+
+        Submenus themselves stay ENABLED so they can still be opened: the
+        point of greying rather than hiding is that a user can look inside
+        and see what the app offers, and a disabled submenu cannot be opened
+        at all.  Their contents are greyed instead, one level down.
+        """
+        for action in menu.actions():
+            if action is skip or action.isSeparator():
+                continue
+            submenu = action.menu()
+            if submenu is not None:
+                action.setEnabled(True)
+                self._setMenuEntriesEnabled(submenu, ready, why)
+                continue
+            action.setEnabled(ready)
+            # Stash each action's own tooltip the first time through, or
+            # swapping in the explanation would destroy it: these entries
+            # carry descriptions written for them, and an emptied tooltip
+            # cannot be recovered once overwritten.
+            if action.property("ybTooltip") is None:
+                action.setProperty("ybTooltip", action.toolTip())
+            action.setToolTip(action.property("ybTooltip") if ready else why)
 
     def finishedProcessingPreferences(self):
         self.updateMyLocationButtons()
@@ -1255,8 +1526,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.actionAddPhotos.setVisible(True)
             self.actionAddRecordings.setVisible(True)
             self.actionRebuildThumbnailCache.setVisible(True)
-            # Photos/Recordings menus appear only if the catalog has that media.
-            self._updateMediaMenuVisibility()
+            # A data file is open, so everything that needs one wakes up; this
+            # runs before the catalog check so it applies either way.
+            self._updateActionStates()
 
             #show photo filter if an ebird file has been read and a photo file has been opened
             if self.db.photoDataFileOpenFlag == True:
@@ -1264,18 +1536,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 self.fillRecordingsComboBoxes()
                 self.showMediaFilter()
                 self._showPhotoCatalogMenuItems()
-                self.actionGeolocatedPhotos.setVisible(True)
-                self.actionGeolocatedPhotosSeparator.setVisible(True)
-                self.actionAnimatedPhotoSequence.setVisible(True)
-                self.actionSlideshow.setVisible(True)
-                self.actionYTDPhotos.setVisible(True)
-                self.actionPhotoPie.setVisible(True)
-                self.actionPhotoBar.setVisible(True)
-                self.actionPhotoAccumulation.setVisible(True)
-                self.actionCumulativePhotos.setVisible(True)
-                self.actionEditPhotosByFilter.setVisible(True)
-                self.actionUpdateEXIFDataForAllPhotos.setVisible(True)
-                self.actionUpdateRecordingData.setVisible(True)
                 self.actionRenameMedia.setVisible(True)
                 self.actionOptimizePhotoSettings.setVisible(True)
 
@@ -1588,19 +1848,10 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
         self.showMediaFilter()
 
-        # Photos/Recordings menus appear only if the catalog has that media.
-        self._updateMediaMenuVisibility()
+        # Photos/Recordings menu entries are enabled only for media the
+        # catalog actually holds.
+        self._updateActionStates()
         self._showPhotoCatalogMenuItems()
-        self.actionGeolocatedPhotos.setVisible(True)
-        self.actionGeolocatedPhotosSeparator.setVisible(True)
-        self.actionAnimatedPhotoSequence.setVisible(True)
-        self.actionSlideshow.setVisible(True)
-        self.actionYTDPhotos.setVisible(True)
-        self.actionPhotoPie.setVisible(True)
-        self.actionPhotoBar.setVisible(True)
-        self.actionEditPhotosByFilter.setVisible(True)
-        self.actionUpdateEXIFDataForAllPhotos.setVisible(True)
-        self.actionUpdateRecordingData.setVisible(True)
         self.actionRenameMedia.setVisible(True)
         self.actionOptimizePhotoSettings.setVisible(True)
 
@@ -1621,40 +1872,37 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.db.ClearPhotoSettings()
             return
 
-        filter = code_Filter.Filter()
+        # The catalog holds records but not one of them attached to a sighting:
+        # it belongs to a different eBird data file.  Both media kinds count —
+        # testing photos alone closed a perfectly good recordings-only catalog,
+        # since photoRecordsInCatalog counts photos and recordings together.
         if (self.db.photoRecordsInCatalog > 0
-                and not self.db.GetSightingsWithPhotos(filter)):
+                and not self.db.hasPhotos()
+                and not self.db.hasRecordings()):
             QMessageBox.warning(
                 self,
                 "Media Catalog Mismatch",
-                "The photos in the catalog don't match the open eBird data file. "
-                "The catalog will be closed.\n\n"
+                "The media in the catalog doesn't match the open eBird data "
+                "file. The catalog will be closed.\n\n"
                 + default_catalog,
             )
             self.db.ClearPhotoSettings()
 
 
     def _showPhotoCatalogMenuItems(self):
-        self.actionPhotos.setVisible(True)
         self.actionOpenPhotoSettings.setVisible(True)
         self.actionClosePhotoSettings.setVisible(True)
         self.actionSavePhotoSettings.setVisible(True)
         self.menuFileCatalogSeparator.setVisible(True)
-        self.actionEditPhotosByFilter.setVisible(True)
-        self.actionUpdateEXIFDataForAllPhotos.setVisible(True)
         self.actionRenameMedia.setVisible(True)
         self.actionOptimizePhotoSettings.setVisible(True)
 
     def _hidePhotoCatalogMenuItems(self):
-        self.actionPhotos.setVisible(False)
         self.actionClosePhotoSettings.setVisible(False)
         self.actionSavePhotoSettings.setVisible(False)
         # menuFileCatalogSeparator stays visible: "Open media catalog..." is
         # always shown, so the separator after it always has something to
         # separate from "Add photos..." below it.
-        self.actionEditPhotosByFilter.setVisible(False)
-        self.actionUpdateEXIFDataForAllPhotos.setVisible(False)
-        self.actionUpdateRecordingData.setVisible(False)
         self.actionRenameMedia.setVisible(False)
         self.actionOptimizePhotoSettings.setVisible(False)
 
@@ -1672,18 +1920,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         for w in list(self.mdiArea.subWindowList()):
             if w.objectName() == "frmStats":
                 w.close()
-        # Catalog is now closed — hide both media menus.
-        self._updateMediaMenuVisibility()
+        # Catalog is now closed — both media menus grey out.
+        self._updateActionStates()
         self._hidePhotoCatalogMenuItems()
-        self.actionGeolocatedPhotos.setVisible(False)
-        self.actionGeolocatedPhotosSeparator.setVisible(False)
-        self.actionAnimatedPhotoSequence.setVisible(False)
-        self.actionSlideshow.setVisible(False)
-        self.actionYTDPhotos.setVisible(False)
-        self.actionPhotoPie.setVisible(False)
-        self.actionPhotoBar.setVisible(False)
-        self.actionPhotoAccumulation.setVisible(False)
-        self.actionCumulativePhotos.setVisible(False)
 
 
     def addPhotos(self):
@@ -1872,12 +2111,16 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             suggested = f"{base}_Backup_{datestamp}{ext}"
             dialog_title = "Backup Media Catalog"
 
+        preserve = self._confirmUnmatchedRecords()
+        if preserve is None:
+            return
+
         fname = QFileDialog.getSaveFileName(self, dialog_title, suggested, "Yearbirder Media Catalog (*.jsonl)")
 
         if fname[0] == "":
             return
 
-        self.db.writePhotoDataToFile(fname[0])
+        self.db.writePhotoDataToFile(fname[0], preserveUnmatched=preserve)
         self.db.photoDataFile = fname[0]
         self.db.photosNeedSaving = False
 
@@ -2009,9 +2252,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.cboRecordingsDevice.setVisible(bool(self.db.deviceList))
         self.lblRecordingsDevice.setVisible(bool(self.db.deviceList))
 
-        # Microphone combo: same shape, but the list is empty until the user
-        # assigns a rig to at least one recording, so it stays hidden until
-        # there is something to filter on.
+        # Microphone combo: same shape as the device combo, and shown on the
+        # same terms — as soon as the catalog holds any recording, even if none
+        # has a rig assigned yet.
         self.cboRecordingsMicrophone.blockSignals(True)
         self.cboRecordingsMicrophone.clear()
         self.cboRecordingsMicrophone.addItem("All")
@@ -2113,18 +2356,38 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         sighting references it any more, so removing media from the catalog
         reclaims its cache.  Must be called while the file still exists on disk —
         the cache key derives from its path+mtime+size — so a permanent delete
-        must call this BEFORE unlinking the file."""
-        if not self.db.isMediaFileReferenced(fileName):
-            code_ThumbnailCache.evict(fileName)
+        must call this BEFORE unlinking the file.
+
+        A record that never attached to a sighting still counts as a reference:
+        it is in the catalog, just not visible under the open eBird data file.
+        A recording assigned to several species can lose one of them and still
+        be held by an unmatched record, and evicting then would throw away a
+        spectrogram the catalog still wants.
+        """
+        if self.db.isMediaFileReferenced(fileName):
+            return
+        if any(u.get("fileName") == fileName
+               for u in self.db.unmatchedCatalogRecords):
+            return
+        code_ThumbnailCache.evict(fileName)
 
 
-    def _liveCatalogMedia(self):
+    def _liveCatalogMedia(self, includeUnmatched=True):
         """(source_path, kinds) for every distinct media file in the open catalog:
         photos carry both photo cache kinds (the browser thumbnail and Browse
         Grid's small one), recordings the three spectro_* kinds.  Feeds
         code_ThumbnailCache.prune_to_catalog to sweep orphaned cache files — a
         kind missing here is swept as an orphan, so both photo kinds must be
-        listed."""
+        listed.
+
+        Records that never attached to a sighting are included by default.
+        They are not in sightingList — that is what makes them unmatched — so
+        leaving them out told the sweep their cache was orphaned and it deleted
+        every thumbnail and spectrogram for media the user had just chosen to
+        keep. Pass includeUnmatched=False only when those records have actually
+        been removed from the catalog, which is the one case where their cache
+        really is dead.
+        """
         _PHOTO_KINDS = ["photo", "photo_grid"]
         _REC_KINDS = ["spectro_thumb", "spectro_overview", "spectro_ribbon"]
         media = []
@@ -2140,6 +2403,13 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 if fn and fn not in seen:
                     seen.add(fn)
                     media.append((fn, _REC_KINDS))
+        if includeUnmatched:
+            for u in self.db.unmatchedCatalogRecords:
+                fn = u.get("fileName", "")
+                if fn and fn not in seen:
+                    seen.add(fn)
+                    media.append((fn, _PHOTO_KINDS if u["kind"] == "photo"
+                                  else _REC_KINDS))
         return media
 
 
@@ -2211,19 +2481,34 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         """Photos > Browse Grid — the same photos as a thumbnail grid."""
         self._createPhotosWindow(code_PhotosGrid.PhotosGrid)
 
-    def _createPhotosWindow(self, viewClass):
-        """Spawn a photo browser of the given class for the current filter.
+    def createPhotosGridForFilter(self, filter, photoTest=None, titleText=None):
+        """Browse Grid for an explicit filter.
+
+        Used where a report has already narrowed the photos itself — clicking
+        one dot on the Shutter Speed vs Focal Length chart, say — so the
+        current Media Filter must not be re-read over the top of it.
+        photoTest and titleText are passed through to FillPhotos for selections
+        the Media Filter cannot express (see Photos.FillPhotos).
+        """
+        self._createPhotosWindow(code_PhotosGrid.PhotosGrid, filter,
+                                 photoTest=photoTest, titleText=titleText)
+
+    def _createPhotosWindow(self, viewClass, filter=None, photoTest=None,
+                            titleText=None):
+        """Spawn a photo browser of the given class.
 
         Both browse views differ only in layout (PhotosGrid subclasses Photos),
         so the guards, the no-results messaging and the build-hidden-then-reveal
-        dance live here once.
+        dance live here once.  `filter` defaults to the current Media Filter;
+        callers pass one explicitly when they have already narrowed it.
         """
         # if no data file is currently open, abort
         if MainWindow.db.eBirdFileOpenFlag is not True:
             self.CreateMessageNoFile()
             return
 
-        filter = self.GetPhotoFilter()
+        if filter is None:
+            filter = self.GetPhotoFilter()
 
         # Pre-check before touching the MDI area — PositionChildWindow restores
         # any maximized sibling, so adding then immediately removing a window
@@ -2257,7 +2542,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             sub.setFocus()
         sub.contentReady.connect(_revealPhotos)
 
-        if sub.FillPhotos(filter) is False:
+        if sub.FillPhotos(filter, photoTest=photoTest,
+                          titleText=titleText) is False:
 
             # Fallback: filter passed sightings but no individual photos matched
             sub.close()
@@ -2867,6 +3153,22 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             code_ThumbnailCache.enforce_cap()   # keep the cache bounded
 
 
+    def _confirmUnmatchedRecords(self):
+        """Ask before a rewrite that would drop records the eBird file can't see.
+
+        Returns None to abort, or the preserveUnmatched flag to rewrite with.
+        With nothing unmatched there is nothing to ask about, so the common
+        case shows no dialog at all.
+        """
+        unmatched = self.db.unmatchedCatalogRecords
+        if not unmatched:
+            return True
+        dlg = _UnmatchedRecordsDialog(self, unmatched)
+        if dlg.exec() != QDialog.DialogCode.Accepted or dlg.choice is None:
+            return None
+        return dlg.choice == _UnmatchedRecordsDialog.KEEP
+
+
     def optimizePhotoSettings(self):
 
         if not MainWindow.db.photoDataFileOpenFlag:
@@ -2880,6 +3182,10 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
         dlg = _OptimizePhotoSettingsDialog(self, MainWindow.db)
         if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        preserve = self._confirmUnmatchedRecords()
+        if preserve is None:
             return
 
         missing = dlg.missing
@@ -2906,14 +3212,17 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             if not sighting["audio"]:
                 del sighting["audio"]
 
-        MainWindow.db.compactJsonlFile()
+        MainWindow.db.compactJsonlFile(preserveUnmatched=preserve)
 
         # Sweep the on-disk cache: delete every cached thumbnail/spectrogram that
         # does not correspond to a media file in the now-compacted catalog. This
         # reclaims cache for files removed above and any earlier orphans. The
         # cache is shared across catalogs, so another catalog's media re-caches
         # on next view (no data or files are lost).
-        cache_removed = code_ThumbnailCache.prune_to_catalog(self._liveCatalogMedia())
+        # Keep the cache for records the user chose to keep; sweep it only for
+        # the ones actually removed above.
+        cache_removed = code_ThumbnailCache.prune_to_catalog(
+            self._liveCatalogMedia(includeUnmatched=preserve))
 
         n_photos = sum(1 for m in missing if m["kind"] == "photo")
         n_recordings  = sum(1 for m in missing if m["kind"] == "recording")
@@ -3103,11 +3412,28 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             # sibling when the child closes — intermittently leaving the sibling
             # at its small showNormal()/scaleMe() size (e.g. a Browse Recordings
             # window shrinking after its Recording Enlargement closes).  Restore
-            # it explicitly when the child is destroyed.
+            # it explicitly when the child is destroyed — but ONLY while the
+            # child is still maximized itself.  If the user restores the child,
+            # Qt takes the whole MDI area out of maximized mode and every window
+            # shows restored; re-maximizing the sibling when the child then
+            # closes would resize a window the user never asked to resize.  A
+            # child window's size must only change when the user clicks its own
+            # maximize/minimize/restore button.
+            #
+            # destroyed fires after the C++ object is gone, so track the
+            # maximized bit as it changes rather than querying it at close time.
+            # Closing a subwindow clears WindowActive but leaves WindowMaximized
+            # set, so a child closed while still maximized is correctly seen as
+            # maximized here and does hand the state back.
             if displaced_maximized is not None:
+                childMaximized = [True]
+                child.windowStateChanged.connect(
+                    lambda _old, newState, flag=childMaximized:
+                        flag.__setitem__(
+                            0, bool(newState & Qt.WindowState.WindowMaximized)))
                 child.destroyed.connect(
-                    lambda *_a, w=displaced_maximized:
-                        self._restoreDisplacedMaximized(w))
+                    lambda *_a, w=displaced_maximized, flag=childMaximized:
+                        self._restoreDisplacedMaximized(w) if flag[0] else None)
             # The deferred showMaximized above is this window's FIRST appearance.
             # Signal the caller not to show() it now: showing it here would flash
             # the window at its small pre-maximize size for one frame before it
@@ -3143,11 +3469,17 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         if self.db.photosNeedSaving is True:
 
             if self.db.photoDataFile and self.db.photoDataFile.lower().endswith(".jsonl"):
-                # JSONL file already set — compact silently, no dialog needed
-                self.db.compactJsonlFile()
+                # Nothing to do: the catalog is a journal, and every edit was
+                # appended to it as it was made, so the work is already on disk.
+                # This used to compact silently here, which rewrote the file from
+                # memory — and so deleted every record the open eBird data file
+                # could not account for.  Compaction is now only ever the user's
+                # own choice, from File → Compact media catalog and cache.
+                self.db.photosNeedSaving = False
 
             else:
-                # No JSONL file yet (first save or legacy CSV) — use the standard migration prompt
+                # No JSONL file yet (first save or legacy CSV) — appends are a
+                # no-op for those, so the migration prompt is the only save path.
                 self._promptJsonlMigrationIfNeeded()
 
         return(True)
@@ -3171,6 +3503,10 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.actionAddPhotos.setVisible(True)
             self.actionAddRecordings.setVisible(True)
             self.actionRebuildThumbnailCache.setVisible(True)
+            # A data file is open now, so everything that needs one wakes up.
+            # This must happen outside the catalog check below: opening a data
+            # file with no media catalog still has to ungrey the rest of the app.
+            self._updateActionStates()
 
             self._autoOpenDefaultCatalog()
 
@@ -3178,21 +3514,10 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 self.fillPhotoComboBoxes()
                 self.fillRecordingsComboBoxes()
                 self.showMediaFilter()
-                # Photos/Recordings menus appear only if the catalog has that media.
-                self._updateMediaMenuVisibility()
+                # Re-run now that the catalog is open too, so the media menus
+                # reflect what it holds.
+                self._updateActionStates()
                 self._showPhotoCatalogMenuItems()
-                self.actionGeolocatedPhotos.setVisible(True)
-                self.actionGeolocatedPhotosSeparator.setVisible(True)
-                self.actionAnimatedPhotoSequence.setVisible(True)
-                self.actionSlideshow.setVisible(True)
-                self.actionYTDPhotos.setVisible(True)
-                self.actionPhotoPie.setVisible(True)
-                self.actionPhotoBar.setVisible(True)
-                self.actionPhotoAccumulation.setVisible(True)
-                self.actionCumulativePhotos.setVisible(True)
-                self.actionEditPhotosByFilter.setVisible(True)
-                self.actionUpdateEXIFDataForAllPhotos.setVisible(True)
-                self.actionUpdateRecordingData.setVisible(True)
                 self.actionRenameMedia.setVisible(True)
                 self.actionOptimizePhotoSettings.setVisible(True)
 
@@ -3293,6 +3618,10 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             bblCodeFile = code_DataBase.resource_path("eBird_BBLCodes.csv")
             if os.path.isfile(bblCodeFile):
                 MainWindow.db.ReadBBLCodeFile(bblCodeFile)
+
+            # The Europe choropleth submenu lists only countries present in the
+            # data that was just loaded.
+            self.refreshEuropeChoroplethMenu()
 
 
 
@@ -3599,6 +3928,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             "frmGraphs",
             "frmPhotos",
             "frmStats",
+            "frmPhotoStats",
             "frmIndividual",
             "frmLocation",
             "frmTripReport",
@@ -4275,6 +4605,44 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         sub.mdiParent = self
 
         if sub.FillGraph(self.GetPhotoFilter(), "ytdphotos") is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+            QTimer.singleShot(0, sub.scaleMe)
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+
+
+    def CreatePhotoStats(self, mode):
+        """Open one of the Photos > Statistics tabular reports."""
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+
+        sub = code_PhotoStats.PhotoStats()
+        sub.mdiParent = self
+
+        if sub.FillPhotoStats(self.GetPhotoFilter(), mode) is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+            QTimer.singleShot(0, sub.scaleMe)
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+
+
+    def CreatePhotoSettingChart(self, chartType):
+        """Open one of the Photos > Statistics EXIF charts."""
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+
+        sub = code_Graphs.Graphs()
+        sub.mdiParent = self
+
+        if sub.FillGraph(self.GetPhotoFilter(), chartType) is True:
             self.mdiArea.addSubWindow(sub)
             self.PositionChildWindow(sub, self)
             sub.show()
@@ -5428,6 +5796,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         # loop through the filtered photos, and refresh each photo's EXIF data
         updated = 0
         skipped = 0
+        failed = []
         for s in sightings:
             for pCount, p in enumerate(s["photos"]):
                 # skip files no longer on disk so we don't wipe good EXIF data
@@ -5440,6 +5809,14 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 photoData["notes"] = p.get("notes", "")
                 s["photos"][pCount] = photoData
                 updated += 1
+                # Journal each refreshed photo as it is rewritten.  This used to
+                # rely on the compaction at the end to reach disk, which made the
+                # whole routine a no-op whenever compaction was skipped — and
+                # silently discarded anything the open eBird export couldn't see.
+                try:
+                    self.db.appendPhotoToJsonl(s, photoData)
+                except IOError as exc:
+                    failed.append((p["fileName"], exc))
 
         # rebuild the photo (and recording) filter metadata lists from the full
         # catalog so values for photos outside this subset are retained
@@ -5448,8 +5825,10 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         # clear and repopulate photo filter cbo boxes with updated data
         self.fillPhotoComboBoxes()
 
-        # Persist to JSONL: compact rewrites all in-memory photo data.
-        # If no JSONL file is open, checkIfPhotoDataNeedSaving prompts the user to create one.
+        # Each photo above was journalled as it was refreshed, so the work is
+        # already on disk.  The flag still goes up for a legacy CSV catalog,
+        # where appendPhotoToJsonl is a no-op and the migration prompt in
+        # checkIfPhotoDataNeedSaving is the only way these edits get saved.
         self.db.photosNeedSaving = True
         self.checkIfPhotoDataNeedSaving()
 
@@ -5457,52 +5836,14 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                f"\n\nFilter: {filter.describeScope(self.db)}")
         if skipped:
             msg += f"\n\n{skipped} file(s) were not found on disk and were not updated."
+        if failed:
+            msg += (f"\n\n{len(failed)} photo(s) were updated in memory but could "
+                    f"not be written to the media catalog:\n{failed[0][1]}")
         QMessageBox.information(
             self, "Updated EXIF Data", msg, QMessageBox.StandardButton.Ok,
         )
         
         
-    def updateRecordingDataForAll(self):
-        # Respect the current Sighting Filter and Recording (Media) Filter so the
-        # user can refresh just a subset of recordings. The photo side of the
-        # media filter is irrelevant here, so clear it to avoid the media-conflict
-        # prompt in GetGeneralFilter.
-        filter = self.GetFilter()
-        filter.clearPhotoFilter()
-
-        sightings = self.db.GetSightingsWithRecordings(filter)
-
-        updated = 0
-        skipped = 0
-        for s in sightings:
-            for i, a in enumerate(s["audio"]):
-                fn = a["fileName"]
-                if not os.path.isfile(fn):
-                    skipped += 1
-                    continue
-                fresh = self.db.getRecordingData(fn)
-                # preserve the user's rating and notes (getRecordingData blanks them)
-                fresh["rating"] = a.get("rating", "0")
-                fresh["notes"] = a.get("notes", "")
-                s["audio"][i] = fresh
-                updated += 1
-
-        self.db.refreshRecordingsLists()
-        self.fillRecordingsComboBoxes()
-
-        self.db.photosNeedSaving = True
-        self.checkIfPhotoDataNeedSaving()
-        self.notifyMediaChanged()
-
-        msg = (f"Updated recording data for {updated} recording(s)."
-               f"\n\nFilter: {filter.describeScope(self.db)}")
-        if skipped:
-            msg += f"\n\n{skipped} file(s) were not found on disk and were not updated."
-        QMessageBox.information(
-            self, "Updated Recording Data", msg, QMessageBox.StandardButton.Ok
-        )
-
-
     def SeasonalRangeClicked(self):
         self.cboSeasonalRangeOptions.setCurrentIndex(1)
         
@@ -5573,14 +5914,11 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.dckMediaFilter.setVisible(False)
         self.actionClose.setVisible(False)
         self.actionOpenPhotoSettings.setVisible(False)
-        self.actionAddPhotos.setVisible(False)
-        self.actionAddRecordings.setVisible(False)
         self.actionRebuildThumbnailCache.setVisible(False)
-        self.menuPhotos.menuAction().setVisible(False)
-        self.menuRecordings.menuAction().setVisible(False)
-        self.actionManageRecordings.setVisible(False)
-        self.actionRecordingsToolbar.setVisible(False)
         self._hidePhotoCatalogMenuItems()
+        # The Photos and Recordings menus stay in the menu bar with their
+        # entries greyed, rather than disappearing with the data file.
+        self._updateActionStates()
 
 
     def ShowMainWindowOptions(self):
@@ -5921,18 +6259,17 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
         self.CloseAllWindows()
         self.clearAllFilters()
+        # No data, so no country has a regional map to offer.
+        self.refreshEuropeChoroplethMenu()
         self.hideStandardFilter()
         self.hideMediaFilter()
         self.actionClose.setVisible(False)
         self.actionOpenPhotoSettings.setVisible(False)
-        self.actionAddPhotos.setVisible(False)
-        self.actionAddRecordings.setVisible(False)
         self.actionRebuildThumbnailCache.setVisible(False)
-        self.menuPhotos.menuAction().setVisible(False)
-        self.menuRecordings.menuAction().setVisible(False)
-        self.actionManageRecordings.setVisible(False)
         self._hidePhotoCatalogMenuItems()
         self.db.ClearDatabase()
+        # After the database is cleared, so the greyed state reflects it.
+        self._updateActionStates()
 
 
     def _refillTaxonomyCombosForFilter(self, f):
@@ -6761,6 +7098,103 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.highlightRecordingFilterElement(self.cboRecordingsMicrophone)
 
 
+    # Countries with a regional choropleth in europe-regions.json, in menu order
+    # (alphabetical by the label shown).  Great Britain is listed but reuses the
+    # existing counties action: eBird's four GB subnational1 regions are far too
+    # coarse to shade, so its map is at county level instead.
+    EUROPE_CHOROPLETH_MENU = [
+        ("AT", "Austria"),     ("CZ", "Czech Republic"), ("FR", "France"),
+        ("DE", "Germany"),     ("GB", None),          ("GR", "Greece"),
+        ("IT", "Italy"),
+        ("NL", "Netherlands"), ("NO", "Norway"),      ("PL", "Poland"),
+        ("PT", "Portugal"),    ("RO", "Romania"),     ("ES", "Spain"),
+        ("SE", "Sweden"),      ("CH", "Switzerland"),
+        ]
+
+
+    def buildEuropeChoroplethMenu(self):
+        """Create the Europe submenu's country actions once, at startup.
+
+        Built here rather than laid out in form_MDIMain so the labels stay beside
+        the country codes they have to match.
+        """
+        self._europeChoroplethActions = {}
+
+        for code, label in self.EUROPE_CHOROPLETH_MENU:
+            if label is None:
+                # Great Britain keeps its own counties action, positioned
+                # alphabetically among the country names.
+                self.menuChoroEurope.addAction(self.actionGB_Counties)
+                self._europeChoroplethActions[code] = self.actionGB_Counties
+                continue
+
+            action = QAction(label, self)
+            action.setObjectName(f"actionChoroEurope_{code}")
+            action.triggered.connect(
+                lambda checked=False, cc=code:
+                    self.createChoroplethCountryRegions(cc))
+            self.menuChoroEurope.addAction(action)
+            self._europeChoroplethActions[code] = action
+
+        self.refreshEuropeChoroplethMenu()
+
+
+    def refreshEuropeChoroplethMenu(self):
+        """Show only the countries the loaded data actually covers.
+
+        A fixed list of fourteen would mostly be entries that open an empty map,
+        so each country appears only once there are sightings for it, and the
+        Europe submenu itself disappears when there are none.
+        """
+        actions = getattr(self, "_europeChoroplethActions", None)
+        if not actions:
+            return
+
+        # Read the codes off masterLocationList rather than db.countryList: that
+        # list holds two-letter codes after ReadDataFile but is REBUILT with long
+        # country names by ReadCountryStateCodeFile, which runs afterwards.  Using
+        # it here would compare "DE" against "Germany" and hide every country.
+        if MainWindow.db.eBirdFileOpenFlag:
+            present = {l.get("countryCode")
+                       for l in MainWindow.db.masterLocationList}
+        else:
+            present = set()
+
+        anyVisible = False
+        for code, action in actions.items():
+            visible = code in present
+            action.setVisible(visible)
+            anyVisible = anyVisible or visible
+
+        self.menuChoroEurope.menuAction().setVisible(anyVisible)
+
+
+    def createChoroplethCountryRegions(self, countryCode):
+        """Open the regional choropleth for one European country."""
+
+        # if no data file is currently open, abort
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+
+        filter = self.GetGeneralFilter()
+        if filter is None:
+            return
+
+        sub = code_Web.Web()
+        sub.mdiParent = self
+
+        if sub.loadChoroplethCountryRegions(filter, countryCode) is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+
+        else:
+            # abort if the filter found no sightings for the map
+            self.CreateMessageNoResults()
+            sub.close()
+
+
     def createChoroplethUSStates(self):
         
         # if no data file is currently open, abort        
@@ -6925,114 +7359,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.CreateMessageNoResults()
             sub.close()
 
-
-
-    def createChoroplethUSStatesChecklists(self):
-        if MainWindow.db.eBirdFileOpenFlag is not True:
-            self.CreateMessageNoFile()
-            return
-        filter = self.GetGeneralFilter()
-        if filter is None:
-            return
-        sub = code_Web.Web()
-        sub.mdiParent = self
-        if sub.loadChoroplethUSStates(filter, mode='checklists') is True:
-            self.mdiArea.addSubWindow(sub)
-            self.PositionChildWindow(sub, self)
-            sub.show()
-        else:
-            self.CreateMessageNoResults()
-            sub.close()
-
-
-    def createChoroplethUSCountiesChecklists(self):
-        if MainWindow.db.eBirdFileOpenFlag is not True:
-            self.CreateMessageNoFile()
-            return
-        filter = self.GetGeneralFilter()
-        if filter is None:
-            return
-        sub = code_Web.Web()
-        sub.mdiParent = self
-        if sub.loadChoroplethUSCounties(filter, mode='checklists') is True:
-            self.mdiArea.addSubWindow(sub)
-            self.PositionChildWindow(sub, self)
-            sub.show()
-        else:
-            self.CreateMessageNoResults()
-            sub.close()
-
-
-    def createChoroplethCanadaProvincesChecklists(self):
-        if MainWindow.db.eBirdFileOpenFlag is not True:
-            self.CreateMessageNoFile()
-            return
-        filter = self.GetGeneralFilter()
-        if filter is None:
-            return
-        sub = code_Web.Web()
-        sub.mdiParent = self
-        if sub.loadChoroplethCanadaProvinces(filter, mode='checklists') is True:
-            self.mdiArea.addSubWindow(sub)
-            self.PositionChildWindow(sub, self)
-            sub.show()
-        else:
-            self.CreateMessageNoResults()
-            sub.close()
-
-
-    def createChoroplethIndiaStatesChecklists(self):
-        if MainWindow.db.eBirdFileOpenFlag is not True:
-            self.CreateMessageNoFile()
-            return
-        filter = self.GetGeneralFilter()
-        if filter is None:
-            return
-        sub = code_Web.Web()
-        sub.mdiParent = self
-        if sub.loadChoroplethIndiaStates(filter, mode='checklists') is True:
-            self.mdiArea.addSubWindow(sub)
-            self.PositionChildWindow(sub, self)
-            sub.show()
-        else:
-            self.CreateMessageNoResults()
-            sub.close()
-
-
-    def createChoroplethGBCountiesChecklists(self):
-        if MainWindow.db.eBirdFileOpenFlag is not True:
-            self.CreateMessageNoFile()
-            return
-        filter = self.GetGeneralFilter()
-        if filter is None:
-            return
-        sub = code_Web.Web()
-        sub.mdiParent = self
-        if sub.loadChoroplethGBCounties(filter, mode='checklists') is True:
-            self.mdiArea.addSubWindow(sub)
-            self.PositionChildWindow(sub, self)
-            sub.show()
-        else:
-            self.CreateMessageNoResults()
-            sub.close()
-
-
-    def createChoroplethWorldCountriesChecklists(self):
-        if MainWindow.db.eBirdFileOpenFlag is not True:
-            self.CreateMessageNoFile()
-            return
-        filter = self.GetGeneralFilter()
-        if filter is None:
-            return
-        sub = code_Web.Web()
-        sub.mdiParent = self
-        if sub.loadChoroplethWorldCountries(filter, mode='checklists') is True:
-            self.mdiArea.addSubWindow(sub)
-            self.PositionChildWindow(sub, self)
-            sub.show()
-        else:
-            self.CreateMessageNoResults()
-            sub.close()
 
 
     def createGeolocatedPhotosMap(self):

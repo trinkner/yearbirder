@@ -277,11 +277,13 @@ class TripReport(QMdiSubWindow, form_TripReport.Ui_frmTripReport):
         self.lstSpecies.doubleClicked.connect(lambda: self.CreateIndividual(self.lstSpecies))
         self.lstLocationSpecies.doubleClicked.connect(lambda: self.CreateIndividual(self.lstLocationSpecies))
         self.lstLocationUniqueSpecies.doubleClicked.connect(lambda: self.CreateIndividual(self.lstLocationUniqueSpecies))
+        self.lstDateUniqueSpecies.doubleClicked.connect(lambda: self.CreateIndividual(self.lstDateUniqueSpecies))
         self.lstNewLifeSpecies.doubleClicked.connect(lambda: self.CreateIndividual(self.lstNewLifeSpecies))
         # Match the lighter-gray table background (#252730) on the Dates,
         # Locations, and "New for Dates" tabs (default QListWidget bg is darker).
         for lst in (self.lstNewLifeSpecies, self.lstDates, self.lstSpecies,
-                    self.lstLocations, self.lstLocationSpecies, self.lstLocationUniqueSpecies):
+                    self.lstLocations, self.lstLocationSpecies, self.lstLocationUniqueSpecies,
+                    self.lstDateUniqueSpecies):
             lst.setStyleSheet("QListWidget { background: #252730; }")
         self.tblNewYearSpecies.doubleClicked.connect(lambda: self.CreateIndividual(self.tblNewYearSpecies))
         self.tblNewMonthSpecies.doubleClicked.connect(lambda: self.CreateIndividual(self.tblNewMonthSpecies))
@@ -300,6 +302,7 @@ class TripReport(QMdiSubWindow, form_TripReport.Ui_frmTripReport):
         self.lstSpecies.addAction(self.actionSetSpeciesFilter)        
         self.lstLocationSpecies.addAction(self.actionSetSpeciesFilter)
         self.lstLocationUniqueSpecies.addAction(self.actionSetSpeciesFilter)
+        self.lstDateUniqueSpecies.addAction(self.actionSetSpeciesFilter)
         self.lstNewLifeSpecies.addAction(self.actionSetSpeciesFilter)
         self.tblNewYearSpecies.addAction(self.actionSetSpeciesFilter)
         self.tblNewYearSpecies.addAction(self.actionSetDateFilterToYear)
@@ -374,10 +377,12 @@ class TripReport(QMdiSubWindow, form_TripReport.Ui_frmTripReport):
     
     
     def CreateIndividual(self,  callingWidget):
+        species = None
         QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
         if callingWidget.objectName() in (["lstSpecies", 
                                                                             "lstLocationSpecies", 
                                                                             "lstLocationUniqueSpecies", 
+                                                                            "lstDateUniqueSpecies", 
                                                                             "lstNewLifeSpecies"
                                                                             ]):
             species = callingWidget.currentItem().text()
@@ -392,6 +397,9 @@ class TripReport(QMdiSubWindow, form_TripReport.Ui_frmTripReport):
                 QApplication.restoreOverrideCursor()
                 return
             species = callingWidget.item(callingWidget.currentRow(),  1).text()
+        if species is None:
+            QApplication.restoreOverrideCursor()
+            return
         sub = code_Individual.Individual()
         sub.mdiParent = self.mdiParent
         sub.FillIndividual(species)
@@ -780,6 +788,7 @@ class TripReport(QMdiSubWindow, form_TripReport.Ui_frmTripReport):
     def FillSpeciesForDate(self):
         # create temporary filter for query with nothing but needed date
         self.lstSpecies.clear()
+        self.lstDateUniqueSpecies.clear()
         date = self.lstDates.currentItem().text()
         
         tempFilter = code_Filter.Filter()
@@ -791,6 +800,16 @@ class TripReport(QMdiSubWindow, form_TripReport.Ui_frmTripReport):
         
         self.lstSpecies.addItems(speciesList)
         self.lstSpecies.setSpacing(2)
+
+        uniqueSpecies = self.mdiParent.db.GetUniqueSpeciesForDate(
+            self.filter,
+            date,
+            speciesList,
+            self.filteredSightingList
+            )
+
+        self.lstDateUniqueSpecies.addItems(uniqueSpecies)
+        self.lstDateUniqueSpecies.setSpacing(2)
         
         count = 0
         nonSpeciesTaxaCount = 0
@@ -819,7 +838,34 @@ class TripReport(QMdiSubWindow, form_TripReport.Ui_frmTripReport):
         if nonSpeciesTaxaCount > 0:
             labelText = labelText + " + " + str(nonSpeciesTaxaCount) + " taxa"
                 
-        self.lblSpeciesSeen.setText(labelText) 
+        self.lblSpeciesSeen.setText(labelText)
+
+        # reset counts
+        count = 0
+        nonSpeciesTaxaCount = 0
+
+        for R in range(self.lstDateUniqueSpecies.count()):
+
+            # set font to bold for all entries
+            self.lstDateUniqueSpecies.item(R).setFont(font)
+
+            # color code the entry: stylesheet colour for full species, gray if
+            # the entry is a hybrid, spuh or slash
+            speciesName = self.lstDateUniqueSpecies.item(R).text()
+
+            if " x " in speciesName or "sp." in speciesName or "/" in speciesName:
+                self.lstDateUniqueSpecies.item(R).setForeground(Qt.gray)
+                nonSpeciesTaxaCount += 1
+            else:
+                self.lstDateUniqueSpecies.item(R).setForeground(code_Stylesheet.speciesColor)
+                count += 1
+
+        labelText = "Observed only on this date: " + str(count)
+
+        if nonSpeciesTaxaCount > 0:
+            labelText = labelText + " + " + str(nonSpeciesTaxaCount) + " taxa"
+
+        self.lblDateUniqueSpecies.setText(labelText)
     
 
     def _locationSequence(self):
@@ -882,6 +928,15 @@ class TripReport(QMdiSubWindow, form_TripReport.Ui_frmTripReport):
         # CircleMarker because only real markup can carry a label; every dot
         # gets the same diameter, sized to the widest number so the map keeps
         # one consistent dot size.
+        # Species per location, for the hover tooltip.  Built from the same
+        # GetSightings(filter) list the standalone Location Map uses, so the two
+        # maps report the same thing; dict-as-ordered-set keeps eBird taxonomic
+        # order.
+        location_species = defaultdict(dict)
+        for s in self.filteredSightingList:
+            location_species[s["location"]][s["commonName"]] = None
+
+        tip_data = {}
         sequence = self._locationSequence()
         digits = len(str(max(sequence.values()))) if sequence else 1
         diameter = {1: 20, 2: 22, 3: 26}.get(digits, 30)
@@ -902,10 +957,19 @@ class TripReport(QMdiSubWindow, form_TripReport.Ui_frmTripReport):
                     f'font-weight:700;line-height:1;">{number}</div>'
                 ),
             )
+            sp_sorted = list(location_species.get(name, {}).keys())
+            sp_lines = "".join(f"<br>&nbsp;&nbsp;{sp}" for sp in sp_sorted[:25])
+            if len(sp_sorted) > 25:
+                sp_lines += f"<br>&nbsp;&nbsp;(+{len(sp_sorted) - 25} more)"
+            # The visit number leads, since the dot carries it.
+            tip_data[name] = (f"<b>{number}. {name}</b><br>"
+                              f"{len(sp_sorted)} species{sp_lines}")
+
+            # No tooltip= here: folium's own tooltip cannot be positioned, and
+            # the injected div below replaces it.
             marker = folium.Marker(
                 location=[lat, lon],
                 icon=icon,
-                tooltip=f"{number}. {name}",
             )
             marker.options["locationName"] = name
             marker.add_to(location_map)
@@ -921,6 +985,10 @@ class TripReport(QMdiSubWindow, form_TripReport.Ui_frmTripReport):
         qwc_js = bytes(qwc_file.readAll()).decode("utf-8")
         qwc_file.close()
 
+        import json
+        tip_data_json = json.dumps(tip_data, ensure_ascii=False)
+        CHART_PRIMARY = code_Stylesheet.CHART_PRIMARY
+
         html = location_map.get_root().render()
 
         map_var = re.search(r'var\s+(map_[a-zA-Z0-9_]+)\s*=\s*L\.map', html)
@@ -931,6 +999,21 @@ class TripReport(QMdiSubWindow, form_TripReport.Ui_frmTripReport):
 {qwc_js}
 document.addEventListener("DOMContentLoaded", function() {{
     setTimeout(function() {{ {map_var}.invalidateSize(); }}, 100);
+
+    // Custom tooltip div, matching the standalone Location Map: folium's own
+    // tooltip cannot be told which side of the marker to open on, so it runs
+    // off the edge for dots near the right-hand side of the map.
+    var tipDiv = document.createElement('div');
+    tipDiv.style.cssText = (
+        'position:fixed; display:none; pointer-events:none; z-index:9999;' +
+        'background:#252730; color:#e2e4ec; border:1px solid {CHART_PRIMARY};' +
+        'border-radius:6px; padding:6px 10px; font-size:12px;' +
+        'max-width:300px; line-height:1.5;'
+    );
+    document.body.appendChild(tipDiv);
+
+    var tipData = {tip_data_json};
+
     new QWebChannel(qt.webChannelTransport, function(channel) {{
         window.bridge = channel.objects.bridge;
         {map_var}.eachLayer(function(layer) {{
@@ -938,6 +1021,52 @@ document.addEventListener("DOMContentLoaded", function() {{
                 var name = layer.options.locationName;
                 layer.on('click', function(e) {{
                     window.bridge.locationClicked(name);
+                }});
+                layer.on('mouseover', function(e) {{
+                    var html = tipData[name];
+                    if (!html) return;
+
+                    // These dots are DivIcon markers, not CircleMarkers, so
+                    // there is no setStyle to call — the highlight goes on the
+                    // icon's own element instead.
+                    var el = layer.getElement && layer.getElement();
+                    if (el && el.firstChild) {{
+                        el.firstChild.style.borderColor = '#ff8800';
+                        el.firstChild.style.borderWidth = '2px';
+                    }}
+
+                    tipDiv.innerHTML = html;
+                    tipDiv.style.display = 'block';
+
+                    var mapCont = {map_var}.getContainer();
+                    var mapRect = mapCont.getBoundingClientRect();
+                    var pt = {map_var}.latLngToContainerPoint(e.target.getLatLng());
+
+                    var GAP  = 12;
+                    var tipW = tipDiv.offsetWidth;
+                    var tipH = tipDiv.offsetHeight;
+
+                    // Flip left when the dot sits in the right half of the map.
+                    var absX;
+                    if (pt.x > mapRect.width / 2) {{
+                        absX = mapRect.left + pt.x - tipW - GAP;
+                    }} else {{
+                        absX = mapRect.left + pt.x + GAP;
+                    }}
+
+                    var absY = mapRect.top + pt.y - tipH / 2;
+                    absY = Math.max(GAP, Math.min(absY, window.innerHeight - tipH - GAP));
+
+                    tipDiv.style.left = absX + 'px';
+                    tipDiv.style.top  = absY + 'px';
+                }});
+                layer.on('mouseout', function(e) {{
+                    var el = layer.getElement && layer.getElement();
+                    if (el && el.firstChild) {{
+                        el.firstChild.style.borderColor = '#1e1f26';
+                        el.firstChild.style.borderWidth = '1px';
+                    }}
+                    tipDiv.style.display = 'none';
                 }});
             }}
         }});

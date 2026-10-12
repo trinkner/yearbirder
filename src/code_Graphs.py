@@ -3,6 +3,7 @@ import copy
 import calendar
 import colorsys
 import datetime
+import math
 import os
 
 import numpy as np
@@ -11,11 +12,13 @@ import form_Graphs
 import code_MediaRefresh
 import code_Lists
 import code_Photos
+import code_PhotoMetrics as pm
 import code_SpeciesGallery
 
 from collections import defaultdict
 from math import floor
-from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.cm import ScalarMappable
+from matplotlib.colors import LinearSegmentedColormap, Normalize
 from matplotlib.patches import Patch, Rectangle
 
 from PySide6.QtGui import QCursor, QFont, QIcon, QPixmap
@@ -41,6 +44,119 @@ _MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
 
 _DAY_LIMIT   = 1000
 _TOP_N_LOCS  = 20
+
+# Photo settings charts.  ISO arrives in third-stops and zoom lenses report
+# every millimetre, so those two are banded; aperture and shutter speed come
+# in a short list of standard values and are plotted as recorded.
+_ISO_EDGES   = [100, 200, 400, 800, 1600, 3200, 6400, 12800, 25600]
+_FOCAL_BAND  = 50     # mm
+# Photos & Ratings by Setting distributes one of these at a time; the radio
+# row above the chart picks which, so they are one window rather than four
+# near-identical menu entries.
+_EXPOSURE_FIELDS = ("iso", "aperture", "shutter", "focal")
+# What each field is called where a sentence needs it.
+_EXPOSURE_NOUNS = {
+    "iso":      ("ISO", "an ISO"),
+    "aperture": ("Aperture", "an aperture"),
+    "shutter":  ("Shutter Speed", "a shutter speed"),
+    "focal":    ("Focal Length", "a focal length"),
+}
+# Setting Combinations plots any one exposure variable against any other, so each
+# needs its own axis treatment: ISO and shutter speed are stop scales (each
+# step doubles) and need a log axis or two thirds of the range crushes into
+# one corner, while focal length and aperture read linearly.
+_AXIS_SPECS = {
+    "iso": {
+        "label": "ISO",
+        "log":   True,
+        "ticks": [50, 100, 200, 400, 800, 1600, 3200, 6400, 12800, 25600, 51200],
+        "fmt":   lambda v: f"{int(v):,}",
+        "dot":   lambda v: f"ISO {int(v):,}",
+    },
+    "shutter": {
+        # Plotted as the denominator, so a larger number is a faster shutter
+        # and the axis reads the way photographers talk.
+        "label": "Shutter speed",
+        "log":   True,
+        "ticks": [15, 30, 60, 125, 250, 500, 1000, 2000, 4000, 8000],
+        "fmt":   lambda v: f"1/{int(v)}",
+        "dot":   lambda v: f"1/{int(v)}",
+    },
+    "focal": {
+        "label": "Focal length (mm)",
+        "log":   False,
+        "ticks": None,          # matplotlib's own linear ticks read fine
+        "fmt":   lambda v: f"{int(v)}",
+        "dot":   lambda v: f"{int(v)} mm",
+    },
+    "aperture": {
+        # Only a stop and a half of range in a typical bird catalog, so linear
+        # costs nothing and keeps the f-numbers evenly spaced.
+        "label": "Aperture (f-number)",
+        "log":   False,
+        "ticks": None,
+        "fmt":   lambda v: f"f/{v:g}",
+        "dot":   lambda v: f"f/{v:g}",
+    },
+}
+
+
+def _axis_value(photo, field):
+    """One photo's value for an axis variable, or None if unrecorded."""
+    if field == "focal":
+        return pm.focal(photo)
+    if field == "iso":
+        return pm.iso(photo)
+    if field == "aperture":
+        return pm.aperture(photo)
+    return pm.shutter_denom(photo)
+
+
+def _iso_band(value):
+    """(sort key, label, filter range) for an ISO value, banded by stops."""
+    if value < _ISO_EDGES[0]:
+        return (-1, f"<{_ISO_EDGES[0]}", ("", str(_ISO_EDGES[0] - 1)))
+    for i, edge in enumerate(_ISO_EDGES):
+        if i + 1 == len(_ISO_EDGES):
+            return (i, f"{edge:,}+", (str(edge), ""))
+        if value < _ISO_EDGES[i + 1]:
+            top = _ISO_EDGES[i + 1] - 1
+            return (i, f"{edge:,}–{top:,}", (str(edge), str(top)))
+    return (len(_ISO_EDGES), f"{_ISO_EDGES[-1]:,}+", (str(_ISO_EDGES[-1]), ""))
+
+
+def _setting_bucket(photo, field):
+    """(sort key, x-axis label, filter range) for one photo in a distribution.
+
+    The filter range is the pair of strings the Media Filter wants for this
+    bucket — in the Media Filter's own notation, so shutter speed reads "1/250"
+    and focal length "500 mm" — which lets a click on a bar open the Photos
+    browser showing exactly the photos that bar counted.
+
+    Returns (None, None, None) when the photo does not record the field, so
+    callers can count it as unknown rather than invent a bucket for it.
+    """
+    if field == "iso":
+        v = pm.iso(photo)
+        return _iso_band(v) if v is not None else (None, None, None)
+    if field == "aperture":
+        v = pm.aperture(photo)
+        if v is None:
+            return (None, None, None)
+        return (v, f"f/{v:g}", (f"{v:g}", f"{v:g}"))
+    if field == "shutter":
+        v = pm.shutter_denom(photo)
+        if v is None:
+            return (None, None, None)
+        return (v, f"1/{v}", (f"1/{v}", f"1/{v}"))
+    if field == "focal":
+        v = pm.focal(photo)
+        if v is None:
+            return (None, None, None)
+        band = (v // _FOCAL_BAND) * _FOCAL_BAND
+        top = band + _FOCAL_BAND - 1
+        return (band, f"{band}–{top}", (f"{band} mm", f"{top} mm"))
+    return (None, None, None)
 
 _SEASON_COLORS = {
     "Winter": "#7ab8d4",   # Dec 20–Mar 19  steel blue
@@ -146,6 +262,14 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         self._pie_label_suffix = "species"  # "species" or "individuals"
         self._pie_wedges      = []   # matplotlib Wedge artists
         self._pie_hover_idx   = -1
+        self._envelope_tips   = []   # per-dot tooltip body
+        self._bar_rating_counts = []    # per-bar rating tallies (tooltip)
+        self._bar_photo_counts  = []    # per-bar photo counts, whatever the bars measure
+        self._bar_hours         = []    # hour of day per bar (Time of Day)
+        self._bar_ratings_used  = False
+        self._photo_setting_field   = ""   # which EXIF field is distributed
+        self._photo_setting_ranges  = []   # per-bar Media Filter range
+        self._photo_setting_unknown = 0    # photos with the field unrecorded
         self._chart_type = "bar"
         self._hover_annot = None
         self._hover_idx   = -1
@@ -207,6 +331,19 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         if self._chart_type in ("familypie", "indivpie", "locationchecklistpie",
                                  "photopie", "recordingspie"):
             windowHeight = int(windowHeight * 1.05)
+        elif self._chart_type == "exposuresettings":
+            # Its radio row sits above the chart and costs a line, which is
+            # enough to put a scroll bar on the window at the default height.
+            # Measured at 1.10; 1.12 leaves headroom for the taller text
+            # metrics on Windows.
+            windowHeight = int(windowHeight * 1.12)
+        elif self._chart_type == "photohour":
+            # Gained a radio row, so it needs the same extra line as above.
+            windowHeight = int(windowHeight * 1.12)
+        elif self._chart_type == "comparesettings":
+            # Two radio rows, one per axis.  Clean at 1.12 measured; 1.15
+            # leaves the same kind of headroom as above.
+            windowHeight = int(windowHeight * 1.15)
         self.resize(windowWidth, windowHeight)
 
     def html(self):
@@ -267,7 +404,9 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         recording_chart_types = {"totalrecordings", "ytdrecordings", "recordingspie",
                              "recordingsaccumulation", "cumulativerecordings"}
         photo_chart_types = {"totalphotos", "ytdphotos", "photopie",
-                             "photoaccumulation", "cumulativephotos"}
+                             "photoaccumulation", "cumulativephotos",
+                             "exposuresettings", "comparesettings",
+                             "photohour"}
         if self._chart_type in recording_chart_types:
             self._bar_color    = RECORDINGS_PRIMARY
             self._repeat_color = RECORDINGS_SECONDARY
@@ -659,6 +798,172 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         suffix = {"year": "per Year", "month": "per Month",
                   "monthyear": "per Month", "day": "per Day"}[granularity]
         return labels, counts, species_lists, species_tallies, f"Photographs {suffix}"
+
+    # ------------------------------------------------------------------
+    # Photo settings distributions (Photos > Statistics)
+    # ------------------------------------------------------------------
+
+    def _photo_pairs(self):
+        """(sighting, photo) for every photo matching the current filter.
+
+        GetSightingsWithPhotos keeps a sighting when *any* of its photos
+        matches the media filter, so each photo needs the individual test too —
+        the same two-stage pass the Photos browser and Slideshow make.  These
+        charts plot EXIF values, so without it a camera, lens, ISO or rating
+        filter would quietly draw bars for photos the user excluded.
+
+        Unlike _filtered_sightings these keep hybrids, spuhs and slashes: the
+        subject of the chart is the camera setting, not the taxon.
+        """
+        db = self.mdiParent.db
+        pairs = []
+        for s in db.GetSightingsWithPhotos(self.filter):
+            for p in s.get("photos", []):
+                if db.TestIndividualPhoto(p, self.filter):
+                    pairs.append((s, p))
+        return pairs
+
+    def _build_photo_setting_data(self, pairs, field):
+        """Return (labels, counts, species_lists, species_tallies, y_label).
+
+        Buckets are chosen per field from what cameras actually record: ISO
+        arrives in third-stops (50-odd distinct values in a mid-sized catalog)
+        and zoom lenses report every millimetre, so both are banded; aperture
+        and shutter speed come in a short list of standard values and are
+        plotted exactly as recorded.
+        """
+        bucket   = defaultdict(lambda: defaultdict(int))   # key -> species -> n
+        ratings  = defaultdict(lambda: defaultdict(int))   # key -> rating -> n
+        labels   = {}
+        ranges   = {}
+        unknown  = 0
+        for s, p in pairs:
+            key, label, rng = _setting_bucket(p, field)
+            if key is None:
+                unknown += 1
+                continue
+            bucket[key][s["commonName"]] += 1
+            ratings[key][pm.rating(p)] += 1
+            labels[key] = label
+            ranges[key] = rng
+
+        keys = sorted(bucket)
+        # Kept parallel to the bars so a click can reopen the bucket's photos.
+        self._photo_setting_field  = field
+        self._photo_setting_ranges = [ranges[k] for k in keys]
+        # Per-bar rating tallies for the tooltip.  Whether the chart uses them
+        # at all depends on the catalog: a user who rates nothing would get a
+        # breakdown reading "Unrated" on every bar, so the species list stays
+        # the fallback.
+        self._bar_rating_counts = [dict(ratings[k]) for k in keys]
+        self._bar_ratings_used  = any(r > 0 for counts in self._bar_rating_counts
+                                      for r in counts)
+        out_labels  = [labels[k] for k in keys]
+        counts      = [sum(bucket[k].values()) for k in keys]
+        species_lists, species_tallies = [], []
+        for k in keys:
+            ordered = sorted(bucket[k].items(), key=lambda kv: (-kv[1], kv[0]))
+            species_lists.append([sp for sp, _n in ordered])
+            species_tallies.append([n for _sp, n in ordered])
+
+        self._photo_setting_unknown = unknown
+        return out_labels, counts, species_lists, species_tallies, "Photographs"
+
+    def _build_photo_hour_data(self, pairs):
+        """Photo counts by hour of day, from each photo's own EXIF timestamp."""
+        bucket  = defaultdict(lambda: defaultdict(int))
+        ratings = defaultdict(lambda: defaultdict(int))
+        unknown = 0
+        for s, p in pairs:
+            h = pm.hour(p, s)
+            if h is None:
+                unknown += 1
+                continue
+            bucket[h][s["commonName"]] += 1
+            ratings[h][pm.rating(p)] += 1
+
+        hours  = sorted(bucket)
+        # Kept parallel to the bars so a click can reopen that hour's photos.
+        self._bar_hours = list(hours)
+        # Collected for the Average Rating axis.  _bar_ratings_used stays
+        # False: this chart's tooltip lists the species in the hour, which is
+        # the more useful thing to know about a time of day.
+        self._bar_rating_counts = [dict(ratings[h]) for h in hours]
+        self._bar_ratings_used  = False
+        labels = [f"{h:02d}:00" for h in hours]
+        counts = [sum(bucket[h].values()) for h in hours]
+        species_lists, species_tallies = [], []
+        for h in hours:
+            ordered = sorted(bucket[h].items(), key=lambda kv: (-kv[1], kv[0]))
+            species_lists.append([sp for sp, _n in ordered])
+            species_tallies.append([n for _sp, n in ordered])
+
+        self._photo_setting_unknown = unknown
+        return labels, counts, species_lists, species_tallies, "Photographs"
+
+    def _build_photo_envelope_data(self, pairs, xfield, yfield):
+        """Return (x values, shutter denominators, counts, avgs, names, tips).
+
+        `xfield` and `yfield` each name one exposure variable.
+
+        Both axes are discrete — a lens reports whole millimetres, ISO comes in
+        third-stops, and a camera offers a short list of shutter speeds — so
+        photos do not scatter, they stack: thousands of frames occupy a few
+        hundred lattice points.  One translucent dot per photo would therefore
+        hide the very thing the chart is for, since a point holding 900 photos
+        would look like one holding ten.  So each occupied position becomes a
+        single dot and the count rides on its size.
+
+        """
+        cells = defaultdict(lambda: {"n": 0,
+                                     "ratings": defaultdict(int),
+                                     "species": defaultdict(int)})
+        for s, p in pairs:
+            f = _axis_value(p, xfield)
+            d = _axis_value(p, yfield)
+            if f is None or d is None:
+                continue
+            cell = cells[(f, d)]
+            cell["n"] += 1
+            cell["ratings"][pm.rating(p)] += 1
+            cell["species"][s["commonName"]] += 1
+
+        xs, ys, counts, avgs, names, tips = [], [], [], [], [], []
+        for (f, d), cell in sorted(cells.items()):
+            xs.append(f)
+            ys.append(d)
+            counts.append(cell["n"])
+            names.append(f"{_AXIS_SPECS[xfield]['dot'](f)}  ·  "
+                         f"{_AXIS_SPECS[yfield]['dot'](d)}")
+
+            # Average rating over the RATED photos only — 0 means unrated, not
+            # bad, so averaging it in would drag every cell towards gold.  None
+            # when nothing here is rated, so the chart can say so rather than
+            # invent a colour.
+            rated_n = sum(n for r, n in cell["ratings"].items() if r > 0)
+            if rated_n:
+                avgs.append(sum(r * n for r, n in cell["ratings"].items() if r > 0)
+                            / rated_n)
+            else:
+                avgs.append(None)
+
+            n = cell["n"]
+            lines = [f"{n:,} photo{'' if n == 1 else 's'}"]
+            if any(r > 0 for r in cell["ratings"]):
+                for star in range(5, 0, -1):
+                    if cell["ratings"].get(star):
+                        lines.append(f"  {'★' * star} {cell['ratings'][star]:,}")
+                if cell["ratings"].get(0):
+                    lines.append(f"  Unrated {cell['ratings'][0]:,}")
+            else:
+                top = sorted(cell["species"].items(),
+                             key=lambda kv: (-kv[1], kv[0]))[:4]
+                lines.extend(f"  {sp} ({c})" for sp, c in top)
+                if len(cell["species"]) > 4:
+                    lines.append(f"  (+{len(cell['species']) - 4:,} more)")
+            tips.append("\n".join(lines))
+
+        return xs, ys, counts, avgs, names, tips
 
     def _build_cumulative_data(self, sightings):
         daily = defaultdict(set)
@@ -1698,6 +2003,376 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         canvas.mpl_connect('motion_notify_event', self._on_mouse_move)
         canvas.mpl_connect('button_press_event', self._on_named_scatter_click)
 
+    def _anyRatings(self):
+        """True when some bar has a rated photo to average."""
+        return any(r > 0 for tally in getattr(self, "_bar_rating_counts", [])
+                   for r in tally)
+
+    def _ratingAverages(self):
+        """Average rating per bar, over rated photos only.
+
+        Rating 0 means unrated, not bad, so averaging it in would drag every
+        bar towards one star.  A bar with nothing rated comes back as 0.
+        """
+        out = []
+        for tally in self._bar_rating_counts:
+            rated = sum(n for r, n in tally.items() if r > 0)
+            out.append(sum(r * n for r, n in tally.items() if r > 0) / rated
+                       if rated else 0.0)
+        return out
+
+    def _applyRatingAxis(self):
+        """Pin the y-axis to the full 1-5 range for an average-rating chart."""
+        # The bars are comparable between selections only if the scale does
+        # not rescale itself to each one; an axis starting at 3.1 would
+        # exaggerate small differences.
+        self._ax.set_ylim(0, 5.3)
+        self._ax.set_yticks([1, 2, 3, 4, 5])
+        self._canvas.draw_idle()
+
+    def _selectedExposureField(self):
+        """Which setting the Photos & Ratings radio row is asking for."""
+        if self.rdoExpAperture.isChecked():
+            return "aperture"
+        if self.rdoExpShutter.isChecked():
+            return "shutter"
+        if self.rdoExpFocal.isChecked():
+            return "focal"
+        return "iso"
+
+    def _redraw_exposure(self):
+        """Re-draw Photos & Ratings by Setting for the newly chosen setting."""
+        self._draw_exposure_chart(self._selectedExposureField())
+
+    def _draw_exposure_chart(self, field):
+        """Distribution of one exposure setting across the filtered photos.
+
+        The bars measure either how many photos sit at each setting or how
+        those photos were rated, per the right-hand radio pair.
+        """
+        pairs = self._photo_pairs()
+        if not pairs:
+            return False
+        labels, counts, sp_lists, sp_tallies, y_label = \
+            self._build_photo_setting_data(pairs, field)
+        if not labels:
+            return False
+        self._bar_species_tallies = sp_tallies
+        # The photo counts stay on hand whatever the bars measure, because the
+        # tooltip reports them either way.
+        self._bar_photo_counts = list(counts)
+
+        wants_rating = self.rdoExpRating.isChecked() and self._anyRatings()
+        if wants_rating:
+            values = self._ratingAverages()
+            self._draw_chart(labels, values, sp_lists, "Average rating",
+                             item_label="photos", value_fmt="%.1f")
+            self._applyRatingAxis()
+        else:
+            self._draw_chart(labels, counts, sp_lists, y_label,
+                             item_label="photos")
+
+        self._noteSkippedPhotos(_EXPOSURE_NOUNS[field][1])
+        if self.rdoExpRating.isChecked() and not wants_rating:
+            # Asked for ratings in a catalog that has none: say so rather than
+            # drawing a row of empty bars.
+            self._fig.text(0.5, 0.5,
+                           "No photo in this selection carries a rating",
+                           ha="center", va="center", color=_GREY_COLOR,
+                           fontsize=10)
+            self._canvas.draw_idle()
+        return True
+
+    def _redraw_hour(self):
+        """Re-draw Time of Day for the newly chosen measure."""
+        self._draw_hour_chart()
+
+    def _draw_hour_chart(self):
+        """Photos by hour of day, measured as counts or as average rating."""
+        pairs = self._photo_pairs()
+        if not pairs:
+            return False
+        labels, counts, sp_lists, sp_tallies, y_label = \
+            self._build_photo_hour_data(pairs)
+        if not labels:
+            return False
+        self._bar_species_tallies = sp_tallies
+        self._bar_photo_counts = list(counts)
+
+        wants_rating = self.rdoHourRating.isChecked() and self._anyRatings()
+        if wants_rating:
+            self._draw_chart(labels, self._ratingAverages(), sp_lists,
+                             "Average rating", item_label="photos",
+                             value_fmt="%.1f")
+            self._applyRatingAxis()
+        else:
+            self._draw_chart(labels, counts, sp_lists, y_label,
+                             item_label="photos")
+
+        self._noteSkippedPhotos("a timestamp")
+        if self.rdoHourRating.isChecked() and not wants_rating:
+            self._fig.text(0.5, 0.5,
+                           "No photo in this selection carries a rating",
+                           ha="center", va="center", color=_GREY_COLOR,
+                           fontsize=10)
+            self._canvas.draw_idle()
+        return True
+
+    def _noteSkippedPhotos(self, missing):
+        """Footnote the photos a chart had to leave out.
+
+        Said plainly rather than quietly charting a subset: a catalog of phone
+        pictures or scanned film may record none of these fields.
+        """
+        skipped = getattr(self, "_photo_setting_unknown", 0)
+        if not skipped:
+            return
+        self._fig.text(
+            0.995, 0.005,
+            f"{skipped:,} photo{'' if skipped == 1 else 's'} "
+            f"without {missing} not shown",
+            ha="right", va="bottom", color=_GREY_COLOR, fontsize=7)
+        self._canvas.draw_idle()
+
+    def _selectedCompareAxes(self):
+        """(x field, y field) from the Setting Combinations radio rows."""
+        def pick(store, fallback):
+            for field, rdo in store.items():
+                if rdo.isChecked():
+                    return field
+            return fallback
+        return pick(self.rdoCmpX, "focal"), pick(self.rdoCmpY, "shutter")
+
+    def _redraw_compare(self):
+        self._draw_compare_chart()
+
+    def _draw_compare_chart(self):
+        """Draw the currently selected pair of exposure variables.
+
+        Both axes may name the same variable, which draws a diagonal and says
+        nothing.  That is allowed on purpose: disabling the duplicate would
+        make swapping the two axes — the common adjustment — a three-click
+        detour through a variable the user does not want, to escape a state
+        they can see is useless the moment they reach it.
+        """
+        xfield, yfield = self._selectedCompareAxes()
+        pairs = self._photo_pairs()
+        if not pairs:
+            return False
+        xs, ys, counts, avgs, names, tips = \
+            self._build_photo_envelope_data(pairs, xfield, yfield)
+        if not xs:
+            return False
+        self._draw_photo_envelope(xs, ys, counts, avgs, names, tips,
+                                  xfield, yfield)
+        return True
+
+    @staticmethod
+    def _applyEnvelopeAxis(ax, which, field, values):
+        """Scale, tick and label one Setting Combinations axis from its spec."""
+        spec = _AXIS_SPECS[field]
+        setScale = ax.set_xscale if which == "x" else ax.set_yscale
+        setTicks = ax.set_xticks if which == "x" else ax.set_yticks
+        setLabels = ax.set_xticklabels if which == "x" else ax.set_yticklabels
+        setAxisLabel = ax.set_xlabel if which == "x" else ax.set_ylabel
+
+        if spec["log"] and values:
+            setScale("log", base=2)
+            if spec["ticks"]:
+                lo, hi = min(values), max(values)
+                ticks = [t for t in spec["ticks"] if lo / 1.5 <= t <= hi * 1.5]
+                if ticks:
+                    setTicks(ticks)
+                    setLabels([spec["fmt"](t) for t in ticks],
+                              color=_TEXT_COLOR, fontsize=9)
+        setAxisLabel(spec["label"], color=_TEXT_COLOR, fontsize=9)
+
+    def _draw_photo_envelope(self, xs, ys, counts, avgs, names, tips,
+                             xfield, yfield):
+        """One exposure variable against another, one dot per combination.
+
+        Each axis is scaled and labelled from _AXIS_SPECS: the stop scales
+        (ISO, shutter speed) go logarithmic so each gridline is one stop and
+        the spread is even instead of piling up in one corner.  Dot area grows
+        with the number of photos sharing that exact combination (see
+        _build_photo_envelope_data for why that matters).
+        """
+        if self._canvas is not None:
+            self._canvas.setParent(None)
+            self._canvas = None
+            self._fig = None
+
+        # The nearest-point search and tooltip placement are shared with the
+        # location/species scatters, so reuse their state.
+        self._named_scatter_x       = np.array(xs, dtype=float)
+        self._named_scatter_y       = np.array(ys, dtype=float)
+        self._named_scatter_names   = names
+        self._named_scatter_species = []
+        self._envelope_tips         = tips
+
+        fig = Figure(facecolor=_BG_COLOR)
+        ax  = fig.add_subplot(111, facecolor=_AXES_COLOR)
+
+        # Dot SIZE carries how many photos share the combination.  The scale
+        # is logarithmic because the distribution is heavily skewed — most
+        # combinations hold one or two photos and a handful hold hundreds — so
+        # a linear ramp would spend its whole range on the few busy cells and
+        # leave everything else flat.
+        peak  = max(counts) if counts else 1
+        span  = math.log(peak + 1) or 1.0
+        frac  = [math.log(c + 1) / span for c in counts]
+
+        # Diameters in points, squared because `s` is an area.  Kept modest so
+        # neighbouring dots do not run together on a lattice this dense.
+        d_min, d_max = 4.0, 19.0
+        sizes = [(d_min + (d_max - d_min) * f) ** 2 for f in frac]
+
+        # Dot COLOUR carries the average rating of those photos, so the two
+        # channels answer different questions: size is how often you shot
+        # here, colour is how well it went.
+        rated = [a for a in avgs if a is not None]
+        if rated:
+            cmap = LinearSegmentedColormap.from_list(
+                'yearbirder_rating',
+                [PHOTO_PRIMARY, '#f0944e', '#d4487e', '#7d1750'])
+            # Combinations with nothing rated get the neutral no-data grey
+            # rather than a colour that would imply a rating.
+            cmap.set_bad(color=_GREY_COLOR)
+            norm = Normalize(vmin=1.0, vmax=5.0)
+            colors = np.ma.masked_invalid(
+                [a if a is not None else np.nan for a in avgs])
+        else:
+            # Nothing in this selection is rated, so colour would be a channel
+            # with nothing to say.  One flat colour, and no legend below.
+            cmap = norm = None
+            colors = PHOTO_PRIMARY
+
+        # A hairline in the panel colour keeps neighbouring dots legible as
+        # separate marks where they touch, instead of merging into a band.
+        ax.scatter(xs, ys, c=colors, cmap=cmap, norm=norm, s=sizes, zorder=2,
+                   linewidths=0.5, edgecolors=_AXES_COLOR,
+                   rasterized=len(xs) > 20000)
+
+        self._applyEnvelopeAxis(ax, "x", xfield, xs)
+        self._applyEnvelopeAxis(ax, "y", yfield, ys)
+        ax.minorticks_off()
+        # After the axes are set, not before: a log axis that writes its own
+        # tick labels colours them itself, but a linear one leaves matplotlib's
+        # default black, which is invisible on the dark panel.  This covers
+        # both, and must follow set_?ticklabels so it is not overwritten.
+        ax.tick_params(colors=_TEXT_COLOR, which="both", labelcolor=_TEXT_COLOR)
+
+        total = sum(counts)
+        note = (f"{total:,} photos at {len(xs):,} settings combinations — "
+                f"dot size is how many share one combination "
+                f"(largest: {peak:,})")
+        blank = sum(1 for a in avgs if a is None)
+        if rated and blank:
+            note += (f"\n{blank:,} combination{'' if blank == 1 else 's'} "
+                     f"hold no rated photo and are shown in grey")
+
+        fig.text(0.995, 0.005, note, ha="right", va="bottom",
+                 color=_GREY_COLOR, fontsize=7, linespacing=1.5)
+
+        for spine in ax.spines.values():
+            spine.set_edgecolor(_GRID_COLOR)
+        ax.xaxis.grid(True, color=_GRID_COLOR, linewidth=0.5, zorder=1)
+        ax.yaxis.grid(True, color=_GRID_COLOR, linewidth=0.5, zorder=1)
+        ax.set_axisbelow(True)
+
+        fig.tight_layout()
+
+        if cmap is not None:
+            # Rating key under the x-axis.  Built after tight_layout, in space
+            # reserved for it, so it cannot be laid over the axis label.
+            fig.subplots_adjust(bottom=0.23)
+            pos = ax.get_position()
+            cax = fig.add_axes([pos.x0 + pos.width * 0.32, 0.095,
+                                pos.width * 0.36, 0.015])
+            bar = fig.colorbar(ScalarMappable(norm=norm, cmap=cmap), cax=cax,
+                               orientation="horizontal")
+            bar.set_ticks([1, 2, 3, 4, 5])
+            bar.set_ticklabels([f"{n}\u2605" for n in range(1, 6)])
+            bar.ax.tick_params(color=_TEXT_COLOR, labelcolor=_TEXT_COLOR,
+                               labelsize=8, length=0)
+            bar.set_label("Average rating", color=_TEXT_COLOR, fontsize=8)
+            bar.outline.set_edgecolor(_GRID_COLOR)
+
+        canvas = FigureCanvasQTAgg(fig)
+        layout = self.chartWidget.layout()
+        if layout is None:
+            layout = QVBoxLayout(self.chartWidget)
+            layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(canvas)
+
+        self._fig    = fig
+        self._canvas = canvas
+        self._ax     = ax
+        self._hover_idx = -1
+
+        self._hover_annot = ax.annotate(
+            "", xy=(0, 0),
+            xytext=(12, 12), textcoords="offset points",
+            bbox=dict(boxstyle="round,pad=0.5", fc=_AXES_COLOR,
+                      ec=PHOTO_PRIMARY, lw=1),
+            color=_TEXT_COLOR, fontsize=8,
+            visible=False, zorder=5)
+
+        self._named_scatter_highlight = ax.scatter(
+            [], [], s=55, zorder=4,
+            facecolors='none', edgecolors=_TEXT_COLOR, linewidths=1.5)
+
+        canvas.mpl_connect('motion_notify_event', self._on_mouse_move)
+        canvas.mpl_connect('button_press_event', self._on_envelope_click)
+
+    def _on_envelope_click(self, event):
+        """Open the photos behind one dot of the envelope chart, as a grid.
+
+        Frontier nodes are deliberately inert: the curve is a summary of a
+        whole band rather than a set of photos, and its tooltip already says
+        everything there is to open.
+        """
+        if event.inaxes is not self._ax or event.xdata is None or event.ydata is None:
+            return
+        if len(self._named_scatter_x) == 0:
+            return
+
+        # Same pixel-space hit test as the hover, for the same reason: the
+        # y-axis is logarithmic.
+        pts  = self._ax.transData.transform(
+            np.column_stack([self._named_scatter_x, self._named_scatter_y]))
+        dist = np.hypot(pts[:, 0] - event.x, pts[:, 1] - event.y)
+        idx  = int(np.argmin(dist))
+        if dist[idx] > 14.0:
+            return
+
+        new_filter = copy.deepcopy(self.filter)
+        # Both bounds set to the dot's own value on each axis: it represents
+        # exactly one value of each variable, written the way the Media
+        # Filter wants it.
+        xfield, yfield = self._selectedCompareAxes()
+        for field, value in ((xfield, self._named_scatter_x[idx]),
+                             (yfield, self._named_scatter_y[idx])):
+            if field == "focal":
+                text = f"{int(value)} mm"
+                setters = (new_filter.setStartFocalLength,
+                           new_filter.setEndFocalLength)
+            elif field == "iso":
+                text = str(int(value))
+                setters = (new_filter.setStartIso, new_filter.setEndIso)
+            elif field == "shutter":
+                text = f"1/{int(value)}"
+                setters = (new_filter.setStartShutterSpeed,
+                           new_filter.setEndShutterSpeed)
+            else:
+                text = f"{value:g}"
+                setters = (new_filter.setStartAperture,
+                           new_filter.setEndAperture)
+            setters[0](text)
+            setters[1](text)
+
+        self.mdiParent.createPhotosGridForFilter(new_filter)
+
     def _get_current_data(self):
         sightings = self._filtered_sightings()
         if self._chart_type == "totalchecklists":
@@ -1725,7 +2400,10 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
     # Chart renderer
     # ------------------------------------------------------------------
 
-    def _draw_chart(self, labels, counts, species_lists, y_label, item_label="species"):
+    def _draw_chart(self, labels, counts, species_lists, y_label,
+                    item_label="species", value_fmt=None):
+        """Bar chart.  value_fmt formats the number drawn above each bar, for
+        charts whose bars are not whole counts (an average rating, say)."""
         if self._canvas is not None:
             self._canvas.setParent(None)
             self._canvas = None
@@ -1741,7 +2419,8 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         many = n > 10
         if n <= 50:
             ax.bar_label(bars, padding=3, color=_TEXT_COLOR,
-                         fontsize=7 if many else 9)
+                         fontsize=7 if many else 9,
+                         **({"fmt": value_fmt} if value_fmt else {}))
 
         # Limit x-axis labels to ~50 via dynamic stride when there are many bars
         stride      = max(1, n // 50) if n > 50 else 1
@@ -1960,7 +2639,14 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         canvas.mpl_connect('button_press_event', self._on_heatmap_click)
 
     def _draw_stacked_bar_chart(self, labels, new_counts, repeat_counts, new_species,
-                                click_handler=None):
+                                click_handler=None, repeat_label="Seen Before"):
+        """Shared by the three accumulation charts.
+
+        repeat_label names the lower band, which is "seen before" only on the
+        species chart: on the media charts a bar counts species photographed or
+        recorded that year, so the species carried over are the ones already
+        captured, not merely already seen.
+        """
         if self._canvas is not None:
             self._canvas.setParent(None)
             self._canvas = None
@@ -1975,7 +2661,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
 
         x_pos = list(range(len(labels)))
         ax.bar(x_pos, repeat_counts, color=self._repeat_color, width=0.6,
-               label="Seen Before", zorder=2)
+               label=repeat_label, zorder=2)
         ax.bar(x_pos, new_counts, bottom=repeat_counts, color=self._bar_color,
                width=0.6, label="New", zorder=2)
 
@@ -2265,7 +2951,8 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             self._update_location_hover(event)
         elif self._chart_type == "scatter":
             self._update_scatter_hover(event)
-        elif self._chart_type in ("locationscatter", "speciesscatter"):
+        elif self._chart_type in ("locationscatter", "speciesscatter",
+                                  "comparesettings"):
             self._update_named_scatter_hover(event)
         elif self._chart_type == "strip":
             self._update_strip_hover(event)
@@ -2573,6 +3260,16 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         if not (0 <= bar_idx < len(self._labels)):
             return
 
+        # The settings distributions are not period charts: their bars are ISO
+        # bands and apertures, so the date arithmetic below means nothing for
+        # them.  A click instead opens the photos that bar counted.
+        if self._chart_type == "exposuresettings":
+            self._spawn_photo_setting_window(bar_idx)
+            return
+        if self._chart_type == "photohour":
+            self._spawn_photo_hour_window(bar_idx)
+            return
+
         label = self._labels[bar_idx]
         new_filter = copy.deepcopy(self.filter)
 
@@ -2664,8 +3361,33 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         sp_list = self._bar_species[idx] if idx < len(self._bar_species) else []
         limit   = self._tooltip_species_limit(anchor_data_xy=(idx, count))
 
-        tip = f"{self._labels[idx]}: {count} {self._bar_item_label}"
-        if self._chart_type in ("totalphotos", "totalrecordings") and idx < len(self._bar_species_tallies):
+        # On Photos & Ratings by Setting the bar may be an average rating, so
+        # the headline always reports the photo count rather than the bar's
+        # own value — "2.5 photos" would be nonsense.
+        headline = count
+        if (self._chart_type in ("exposuresettings", "photohour")
+                and idx < len(getattr(self, "_bar_photo_counts", []))):
+            headline = self._bar_photo_counts[idx]
+        tip = f"{self._labels[idx]}: {headline:,} {self._bar_item_label}"
+        if (self._chart_type == "exposuresettings"
+                and getattr(self, "_bar_ratings_used", False)
+                and idx < len(self._bar_rating_counts)):
+            # How the photos taken at a setting turned out is the question
+            # worth asking of a settings bucket; which species they were is
+            # not.
+            counts = self._bar_rating_counts[idx]
+            rows = 0
+            for star in range(5, 0, -1):
+                n = counts.get(star, 0)
+                if n:
+                    tip += f"\n  {'★' * star} {n:,}"
+                    rows += 1
+            unrated = counts.get(0, 0)
+            if unrated:
+                tip += f"\n  Unrated {unrated:,}"
+                rows += 1
+            n_lines = 1 + rows
+        elif self._chart_type in ("totalphotos", "totalrecordings") and idx < len(self._bar_species_tallies):
             tallies = self._bar_species_tallies[idx]
             num_sp  = len(sp_list)
             for i, name in enumerate(sp_list[:limit]):
@@ -3236,17 +3958,29 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             self._canvas.setCursor(Qt.ArrowCursor)
             return
 
-        xlim   = self._ax.get_xlim()
-        ylim   = self._ax.get_ylim()
-        xrange = xlim[1] - xlim[0] if xlim[1] != xlim[0] else 1.0
-        yrange = ylim[1] - ylim[0] if ylim[1] != ylim[0] else 1.0
+        if self._chart_type == "comparesettings":
+            # This chart's axes may be logarithmic, so a distance normalised in
+            # data units would be misleading: 1/2000 to 1/4000 is one stop but
+            # half the axis range, while every slow speed would read as
+            # touching every other.  Measure on screen instead.
+            pts  = self._ax.transData.transform(
+                np.column_stack([self._named_scatter_x, self._named_scatter_y]))
+            dist = np.hypot(pts[:, 0] - event.x, pts[:, 1] - event.y)
+            idx  = int(np.argmin(dist))
+            too_far = dist[idx] > 14.0      # pixels
+        else:
+            xlim   = self._ax.get_xlim()
+            ylim   = self._ax.get_ylim()
+            xrange = xlim[1] - xlim[0] if xlim[1] != xlim[0] else 1.0
+            yrange = ylim[1] - ylim[0] if ylim[1] != ylim[0] else 1.0
 
-        dx   = (self._named_scatter_x - event.xdata) / xrange
-        dy   = (self._named_scatter_y - event.ydata) / yrange
-        dist = np.sqrt(dx * dx + dy * dy)
-        idx  = int(np.argmin(dist))
+            dx   = (self._named_scatter_x - event.xdata) / xrange
+            dy   = (self._named_scatter_y - event.ydata) / yrange
+            dist = np.sqrt(dx * dx + dy * dy)
+            idx  = int(np.argmin(dist))
+            too_far = dist[idx] > 0.03
 
-        if dist[idx] > 0.03:
+        if too_far:
             if self._hover_annot.get_visible():
                 self._hover_annot.set_visible(False)
                 self._hover_idx = -1
@@ -3265,7 +3999,16 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         py = float(self._named_scatter_y[idx])
         name = self._named_scatter_names[idx]
 
-        if self._chart_type == "locationscatter":
+        if self._chart_type == "comparesettings":
+            # One dot is one settings combination; the tip is its pre-built
+            # photo count and rating breakdown.
+            tip = name
+            n_lines = 1
+            if idx < len(self._envelope_tips):
+                body = self._envelope_tips[idx]
+                tip += f"\n{body}"
+                n_lines += 1 + body.count("\n")
+        elif self._chart_type == "locationscatter":
             sp_list = self._named_scatter_species[idx] if idx < len(self._named_scatter_species) else []
             n_sp    = len(sp_list)
             limit   = self._tooltip_species_limit(anchor_data_xy=(px, py))
@@ -3563,6 +4306,48 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             self.mdiParent.CreateMessageNoResults()
             sub.close()
         QApplication.restoreOverrideCursor()
+
+    def _spawn_photo_hour_window(self, bar_idx):
+        """Open Browse Grid on the photos taken during one hour of the day.
+
+        The hour is not a Media Filter field — it comes from each photo's own
+        EXIF timestamp — so this rides the per-photo predicate FillPhotos
+        accepts rather than trying to express the selection as a filter.
+        """
+        hours = getattr(self, "_bar_hours", [])
+        if bar_idx >= len(hours):
+            return
+        hour = hours[bar_idx]
+        label = self._labels[bar_idx] if bar_idx < len(self._labels) else f"{hour:02d}:00"
+        self.mdiParent.createPhotosGridForFilter(
+            copy.deepcopy(self.filter),
+            photoTest=lambda p, s, h=hour: pm.hour(p, s) == h,
+            titleText=f"Photos Taken at {label}")
+
+    def _spawn_photo_setting_window(self, bar_idx):
+        """Open Browse Grid on the bucket a settings bar represents.
+
+        The grid rather than the cards: a bucket is usually many photos of
+        many species, which is what the grid is for, and it matches the dot
+        click on the two envelope charts.
+        """
+        ranges = getattr(self, "_photo_setting_ranges", [])
+        field  = getattr(self, "_photo_setting_field", "")
+        if bar_idx >= len(ranges):
+            return
+        start, end = ranges[bar_idx]
+        new_filter = copy.deepcopy(self.filter)
+        setters = {
+            "iso":      (new_filter.setStartIso, new_filter.setEndIso),
+            "aperture": (new_filter.setStartAperture, new_filter.setEndAperture),
+            "shutter":  (new_filter.setStartShutterSpeed, new_filter.setEndShutterSpeed),
+            "focal":    (new_filter.setStartFocalLength, new_filter.setEndFocalLength),
+        }.get(field)
+        if setters is None:
+            return
+        setters[0](start)
+        setters[1](end)
+        self.mdiParent.createPhotosGridForFilter(new_filter)
 
     def _spawn_photos_window(self, filter):
         QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
@@ -4201,6 +4986,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
     # relevant even without a media filter, so a deletion/edit must refresh them.
     _MEDIA_CHART_TYPES = {
         "totalphotos", "ytdphotos", "photopie", "photoaccumulation", "cumulativephotos",
+        "exposuresettings", "comparesettings", "photohour",
         "totalrecordings", "ytdrecordings", "recordingspie", "recordingsaccumulation",
         "cumulativerecordings",
     }
@@ -4372,7 +5158,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
                                  "photos", today)
             self.mdiParent.SetChildDetailsLabels(self, filter)
             self.setWindowTitle(
-                filter.buildWindowTitle("Year to Date by Photographs", self.mdiParent.db))
+                filter.buildWindowTitle("Year to Date by Photos", self.mdiParent.db))
             icon = QIcon()
             icon.addPixmap(QPixmap(":/icon_bird_white.png"),
                            QIcon.Normal, QIcon.Off)
@@ -4416,10 +5202,11 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             if not labels:
                 return False
             self._draw_stacked_bar_chart(labels, new_counts, repeat_counts, new_species,
-                                         click_handler=self._on_photo_accumulation_click)
+                                         click_handler=self._on_photo_accumulation_click,
+                                         repeat_label="Photographed Before")
             self.mdiParent.SetChildDetailsLabels(self, filter)
             self.setWindowTitle(
-                filter.buildWindowTitle("New Species Photographed Each Year", self.mdiParent.db))
+                filter.buildWindowTitle("New Species Photographed per Year", self.mdiParent.db))
             icon = QIcon()
             icon.addPixmap(QPixmap(":/icon_bird_white.png"),
                            QIcon.Normal, QIcon.Off)
@@ -4432,10 +5219,11 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             if not labels:
                 return False
             self._draw_stacked_bar_chart(labels, new_counts, repeat_counts, new_species,
-                                         click_handler=self._on_photo_accumulation_click)
+                                         click_handler=self._on_photo_accumulation_click,
+                                         repeat_label="Recorded Before")
             self.mdiParent.SetChildDetailsLabels(self, filter)
             self.setWindowTitle(
-                filter.buildWindowTitle("New Species Recorded Each Year", self.mdiParent.db))
+                filter.buildWindowTitle("New Species Recorded per Year", self.mdiParent.db))
             icon = QIcon()
             icon.addPixmap(QPixmap(":/icon_bird_white.png"),
                            QIcon.Normal, QIcon.Off)
@@ -4645,6 +5433,64 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             self.setWindowIcon(icon)
             return True
 
+        # ------------------------------------------------------------------
+        # Photo settings distributions — Photos > Statistics
+        #
+        # These read individual photos rather than the sightings list, so they
+        # build their own data and ignore `sightings` above.
+        # ------------------------------------------------------------------
+        if chartType in ("exposuresettings", "comparesettings", "photohour"):
+            self.frmGranularity.setVisible(False)
+            pairs = self._photo_pairs()
+            if not pairs:
+                return False
+
+            titles = {
+                "exposuresettings": "Photos & Ratings by Setting",
+                "comparesettings":  "Setting Combinations",
+                "photohour":        "Photos by Time of Day",
+            }
+
+            if chartType == "exposuresettings":
+                self.frmExposureMode.setVisible(True)
+                self.rdoExpIso.setChecked(True)
+                self.rdoExpCount.setChecked(True)
+                for rdo in (self.rdoExpIso, self.rdoExpAperture,
+                            self.rdoExpShutter, self.rdoExpFocal,
+                            self.rdoExpCount, self.rdoExpRating):
+                    rdo.toggled.connect(
+                        lambda checked: self._redraw_exposure() if checked else None)
+                self._draw_exposure_chart("iso")
+            elif chartType == "comparesettings":
+                self.frmCompareMode.setVisible(True)
+                # Opens on the pair that answers the most useful question:
+                # how slow a shutter each focal length has held.
+                self.rdoCmpX["focal"].setChecked(True)
+                self.rdoCmpY["shutter"].setChecked(True)
+                for store in (self.rdoCmpX, self.rdoCmpY):
+                    for rdo in store.values():
+                        rdo.toggled.connect(
+                            lambda checked: self._redraw_compare() if checked else None)
+                if not self._draw_compare_chart():
+                    return False
+            else:   # photohour
+                self.frmHourMode.setVisible(True)
+                self.rdoHourCount.setChecked(True)
+                for rdo in (self.rdoHourCount, self.rdoHourRating):
+                    rdo.toggled.connect(
+                        lambda checked: self._redraw_hour() if checked else None)
+                if not self._draw_hour_chart():
+                    return False
+
+            self.mdiParent.SetChildDetailsLabels(self, filter)
+            self.setWindowTitle(
+                filter.buildWindowTitle(titles[chartType], self.mdiParent.db))
+            icon = QIcon()
+            icon.addPixmap(QPixmap(":/icon_camera_white.png"),
+                           QIcon.Normal, QIcon.Off)
+            self.setWindowIcon(icon)
+            return True
+
         if chartType == "recordingspie":
             self.frmGranularity.setVisible(False)
             families, counts, species_lists, species_tallies = self._build_family_audio_pie_data(sightings)
@@ -4720,12 +5566,12 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             labels, counts, item_lists, sp_tallies, y_label = self._build_photo_count_data(sightings, default)
             self._bar_species_tallies = sp_tallies
             item_label = "photos"
-            title = "Total Photos"
+            title = "Photos per Time Period"
         elif chartType == "totalrecordings":
             labels, counts, item_lists, sp_tallies, y_label = self._build_audio_count_data(sightings, default)
             self._bar_species_tallies = sp_tallies
             item_label = "recordings"
-            title = "Total Recordings"
+            title = "Recordings per Time Period"
         else:  # "bar"
             if default == "month":
                 labels, counts, item_lists, y_label = self._build_month_data(sightings)

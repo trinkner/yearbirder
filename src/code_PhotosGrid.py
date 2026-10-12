@@ -324,4 +324,16 @@ class PhotosGrid(code_Photos.Photos):
             height = self._fittedHeight(width)
         else:
             height = int(800 * self.mdiParent.scaleFactor)
+
+        # Never resize while maximized.  Qt honours the resize but leaves the
+        # subwindow reporting isMaximized() == True, so it ends up small while
+        # the MDI still believes it is in maximized mode — the siblings then
+        # draw their restored frames around a stunted window.  This is not
+        # hypothetical ordering: FillPhotos calls processEvents as it builds,
+        # which lets PositionChildWindow's deferred showMaximized fire part way
+        # through, so scaleMe can and does run on an already-maximized window.
+        # A maximized window is already the size it should be.
+        if self.isMaximized():
+            return
+
         self.resize(width, height)

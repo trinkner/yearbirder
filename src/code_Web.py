@@ -223,9 +223,25 @@ class ChoroplethBridge(QObject):
         self._mode = mode
 
     @Slot(str)
-    def regionClicked(self, clickKey):
+    def modeChanged(self, mode):
+        """The in-window species/checklists toggle was used.
+
+        Only the window title needs Python: the fills and tooltips are restyled
+        client-side from data already embedded in the page.
+        """
+        self._mode = mode
+        self._web._applyChoroplethMode(mode)
+
+    @Slot(str, str)
+    def regionClicked(self, clickKey, mode=''):
         from copy import deepcopy
         import code_Lists
+
+        # The page passes its live mode rather than letting this object hold its
+        # own copy: the toggle changes the mode after construction, and a second
+        # source of truth here is one that can drift out of step with the button.
+        if mode:
+            self._mode = mode
 
         newFilter = deepcopy(self._web.filter)
         newFilter.setLocationType(self._location_type)
@@ -1539,6 +1555,26 @@ document.addEventListener("DOMContentLoaded", function() {{
         self.setWindowTitle(self.title)
 
 
+    def _applyChoroplethMode(self, mode):
+        """Refresh the window title after the in-map species/checklists toggle.
+
+        The map itself is restyled in JavaScript; this only rebuilds the title,
+        whose wording and count come from Python.  Registered by whichever loader
+        built the page — silently does nothing on pages that never set it up.
+        """
+        base = getattr(self, "_choroplethTitleBase", None)
+        if base is None:
+            return
+
+        title = base if mode != 'checklists' else f"{base} – By Checklists"
+        self.title = title
+        self._buildFilterTitle(
+            self.filter, title,
+            count=getattr(self, "_choroplethCounts", {}).get(mode),
+            countUnit=getattr(self, "_choroplethUnit", ""),
+            )
+
+
     def _lerp_orange(self, value, max_value):
         """Return a hex color across a 3-stop yellow → orange → deep red gradient.
 
@@ -1604,7 +1640,9 @@ document.addEventListener("DOMContentLoaded", function() {{
             QApplication.restoreOverrideCursor()
 
 
-    def _setup_choropleth_channel(self, html, location_type, tip_data_json="{}", mode='species'):
+    def _setup_choropleth_channel(self, html, location_type, tip_data_json="{}",
+                                  mode='species', allModes=None,
+                                  tipSubSource=None):
         """Register a ChoroplethBridge on the page and inject click/tooltip JS.
 
         Each GeoJSON feature whose properties contain a non-empty 'clickKey'
@@ -1615,6 +1653,13 @@ document.addEventListener("DOMContentLoaded", function() {{
 
         tip_data_json  JSON string mapping tipKey → {"hdr": header_html,
                        "sp": [items_in_order]}.  Pass "{}" for no tooltips.
+        allModes       Optional {"tips": …, "totals": …, "largest": …}, each keyed
+                       by mode, which adds a Species/Checklists toggle to the map.
+                       With both views embedded the switch is instant and needs no
+                       round trip to Python — only the window title does.
+        tipSubSource   Where the zero-sighting tooltip finds its subtitle line:
+                       "id" for the feature's own id, or a property name such as
+                       "state".  None for no subtitle.
         """
         import re
 
@@ -1627,6 +1672,19 @@ document.addEventListener("DOMContentLoaded", function() {{
         qwc_file.open(QIODevice.OpenModeFlag.ReadOnly)
         qwc_js = bytes(qwc_file.readAll()).decode("utf-8")
         qwc_file.close()
+
+        if allModes:
+            import json as _json
+            tips_js    = _json.dumps(allModes["tips"],    ensure_ascii=False)
+            totals_js  = _json.dumps(allModes["totals"],  ensure_ascii=False)
+            largest_js = _json.dumps(allModes["largest"], ensure_ascii=False)
+        else:
+            # No toggle: reuse the single payload the caller already serialised.
+            tips_js    = '{"%s": %s}' % (mode, tip_data_json)
+            totals_js  = "{}"
+            largest_js = "{}"
+        toggle_enabled = "true" if allModes else "false"
+        tip_sub_source = tipSubSource or ""
 
         map_var_match = re.search(r'var\s+(map_[a-zA-Z0-9_]+)\s*=\s*L\.map', html)
         map_var = map_var_match.group(1) if map_var_match else "map"
@@ -1646,23 +1704,45 @@ document.addEventListener("DOMContentLoaded", function() {{
     );
     document.body.appendChild(tipDiv);
 
-    var tipData = {tip_data_json};
+    var ybMode   = "{mode}";
+    var ybTips   = {tips_js};
+    var ybTotals = {totals_js};
+    var ybMax    = {largest_js};
+    var ybToggle = {toggle_enabled};
+    var ybTipSub = "{tip_sub_source}";
+    var tipData  = ybTips[ybMode] || {{}};
     var LINE_H  = 20;   // approximate pixels per species line
 
-    function showTip(e, props) {{
+    function showTip(e, feature) {{
+        var props = feature.properties || {{}};
         var entry = tipData[props.tipKey];
-        if (!entry) return;
+        var html;
 
-        // Dynamically limit species list to fit 80 % of viewport height.
-        var maxLines = Math.max(3, Math.floor((window.innerHeight * 0.80 - 50) / LINE_H));
-        var sp    = entry.sp || [];
-        var shown = Math.min(sp.length, maxLines);
-        var html  = entry.hdr;
-        for (var i = 0; i < shown; i++) {{
-            html += '<br>&nbsp;&nbsp;' + sp[i];
-        }}
-        if (sp.length > shown) {{
-            html += '<br>&nbsp;&nbsp;(+' + (sp.length - shown) + ' more)';
+        if (entry) {{
+            // Dynamically limit species list to fit 80 % of viewport height.
+            var maxLines = Math.max(3, Math.floor((window.innerHeight * 0.80 - 50) / LINE_H));
+            var sp    = entry.sp || [];
+            var shown = Math.min(sp.length, maxLines);
+            html = entry.hdr;
+            for (var i = 0; i < shown; i++) {{
+                html += '<br>&nbsp;&nbsp;' + sp[i];
+            }}
+            if (sp.length > shown) {{
+                html += '<br>&nbsp;&nbsp;(+' + (sp.length - shown) + ' more)';
+            }}
+        }} else {{
+            // No sightings here.  Name the region and show a zero rather than
+            // nothing at all — hovering a blank area should still tell you what
+            // you are pointing at.  Everything comes from the feature itself, so
+            // empty regions add nothing to the page.  ebird_name first: the GB
+            // county map labels its regions with that rather than name.
+            var nm = props.ebird_name || props.name;
+            if (!nm) return;
+            var sub = '';
+            if (ybTipSub === 'id') sub = feature.id || '';
+            else if (ybTipSub)     sub = props[ybTipSub] || '';
+            html = '<b>' + nm + '</b><br>' +
+                   (sub ? sub + '  &middot;  ' : '') + '0 ' + ybMode;
         }}
         tipDiv.innerHTML = html;
         tipDiv.style.display = 'block';
@@ -1688,28 +1768,127 @@ document.addEventListener("DOMContentLoaded", function() {{
         tipDiv.style.top  = absY + 'px';
     }}
 
+    // ---- species/checklists toggle -------------------------------------------
+    // Port of Python's _lerp_orange so fills can be recoloured without asking
+    // Python for a fresh page: 3-stop yellow -> orange -> deep red, sqrt scaled.
+    function ybColor(value, maxValue) {{
+        if (!value || !maxValue) return '#e8e8e8';
+        var t = Math.min(Math.sqrt(value / maxValue), 1.0);
+        var r, g, b, s;
+        if (t < 0.5) {{
+            s = t * 2;
+            r = 255;
+            g = Math.floor(255 + s * (102 - 255));
+            b = Math.floor(110 * (1 - s));
+        }} else {{
+            s = (t - 0.5) * 2;
+            r = Math.floor(255 + s * (136 - 255));
+            g = Math.floor(102 + s * (0 - 102));
+            b = 0;
+        }}
+        function hx(v) {{ var h = v.toString(16); return h.length < 2 ? '0' + h : h; }}
+        return '#' + hx(r) + hx(g) + hx(b);
+    }}
+
+    var ybGeoLayers = [];
+    var ybSpeciesBtn = null, ybChecklistBtn = null;
+
+    var _ybBtnBase = ('border-radius:5px;padding:4px 10px;font-size:12px;' +
+                      'cursor:pointer;font-family:inherit;' +
+                      'box-shadow:0 1px 4px rgba(0,0,0,.4);');
+    var _ybBtnOff = 'background:#252730;color:#e2e4ec;border:1px solid #444657;' + _ybBtnBase;
+    var _ybBtnOn  = 'background:#3b3d4f;color:#ffffff;border:1px solid {CHART_PRIMARY};' + _ybBtnBase;
+
+    function ybSyncButtons() {{
+        if (!ybSpeciesBtn) return;
+        ybSpeciesBtn.style.cssText   = (ybMode === 'species')    ? _ybBtnOn : _ybBtnOff;
+        ybChecklistBtn.style.cssText = (ybMode === 'checklists') ? _ybBtnOn : _ybBtnOff;
+    }}
+
+    function ybApplyMode(mode) {{
+        if (mode === ybMode) return;
+        ybMode  = mode;
+        tipData = ybTips[mode] || {{}};
+        var totals = ybTotals[mode] || {{}};
+        var mx     = ybMax[mode] || 0;
+
+        for (var i = 0; i < ybGeoLayers.length; i++) {{
+            var gl = ybGeoLayers[i];
+            // Recolour through the layer's own style option rather than each
+            // sublayer: folium's highlight handler calls resetStyle on mouseout,
+            // which would otherwise restore the colours of the mode we just left.
+            if (!gl._ybOrigStyle) gl._ybOrigStyle = gl.options.style;
+            gl.options.style = (function(orig, tot, mval) {{
+                return function(feature) {{
+                    var st = orig ? Object.assign({{}}, orig(feature)) : {{}};
+                    // tipKey is the key the Python side stored totals under, which
+                    // is not always the feature id — the GB county map keys on an
+                    // ebird_name property.  Features with no data have no tipKey,
+                    // and correctly fall through to the zero colour.
+                    var k = feature.properties ? feature.properties.tipKey : null;
+                    st.fillColor = ybColor(k ? (tot[k] || 0) : 0, mval);
+                    return st;
+                }};
+            }})(gl._ybOrigStyle, totals, mx);
+            gl.resetStyle();
+        }}
+
+        tipDiv.style.display = 'none';
+        ybSyncButtons();
+        if (window.bridge && window.bridge.modeChanged) window.bridge.modeChanged(mode);
+    }}
+
+    function ybAddToggle(map) {{
+        var Ctl = L.Control.extend({{
+            options: {{position: 'topright'}},
+            onAdd: function() {{
+                var wrap = L.DomUtil.create('div');
+                wrap.style.cssText = 'display:flex;gap:4px;';
+                ybSpeciesBtn   = L.DomUtil.create('button', '', wrap);
+                ybChecklistBtn = L.DomUtil.create('button', '', wrap);
+                ybSpeciesBtn.textContent   = 'Species';
+                ybChecklistBtn.textContent = 'Checklists';
+                ybSyncButtons();
+                L.DomEvent.on(ybSpeciesBtn, 'click', function(e) {{
+                    L.DomEvent.stop(e); ybApplyMode('species');
+                }});
+                L.DomEvent.on(ybChecklistBtn, 'click', function(e) {{
+                    L.DomEvent.stop(e); ybApplyMode('checklists');
+                }});
+                return wrap;
+            }}
+        }});
+        new Ctl().addTo(map);
+    }}
+
     new QWebChannel(qt.webChannelTransport, function(channel) {{
         window.bridge = channel.objects.bridge;
         {map_var}.eachLayer(function(layer) {{
             if (layer.eachLayer) {{
+                ybGeoLayers.push(layer);
                 layer.eachLayer(function(featureLayer) {{
                     if (featureLayer.feature && featureLayer.feature.properties) {{
                         var props = featureLayer.feature.properties;
-                        if (props.tipKey) {{
-                            featureLayer.on('mousemove', function(e) {{ showTip(e, props); }});
+                        // Wired for every region, including the empty ones: their
+                        // tooltip is composed in showTip rather than looked up.
+                        (function(feat) {{
+                            featureLayer.on('mousemove', function(e) {{ showTip(e, feat); }});
                             featureLayer.on('mouseout',  function()  {{ tipDiv.style.display = 'none'; }});
-                        }}
+                        }})(featureLayer.feature);
                         if (props.clickKey) {{
                             featureLayer.getElement && featureLayer.getElement() &&
                                 (featureLayer.getElement().style.cursor = 'pointer');
                             featureLayer.on('click', function() {{
-                                window.bridge.regionClicked(props.clickKey);
+                                // Pass the live mode: the toggle changes it after
+                                // the bridge was built, so Python must not guess.
+                                window.bridge.regionClicked(props.clickKey, ybMode);
                             }});
                         }}
                     }}
                 }});
             }}
         }});
+        if (ybToggle) ybAddToggle({map_var});
     }});
 }});
 </script>
@@ -1740,65 +1919,31 @@ document.addEventListener("DOMContentLoaded", function() {{
         if len(stateDict) == 0:
             return False
 
-        stateTotals = defaultdict()
-        stateTipItems = {}
-        largestTotal = 0
-        if mode == 'checklists':
-            self.title = "US States Choropleth – By Checklists"
-            for state, sightings in stateDict.items():
-                cl_dates = {}
-                for s in sightings:
-                    cl_dates[s["checklistID"]] = s["date"]
-                dates_sorted = sorted(cl_dates.values(), reverse=True)
-                stateTotals[state] = len(cl_dates)
-                stateTipItems[state] = dates_sorted
-                if stateTotals[state] > largestTotal:
-                    largestTotal = stateTotals[state]
-        else:
-            self.title = "US States Choropleth"
-            for state, sightings in stateDict.items():
-                sp_ordered = {}
-                for s in sightings:
-                    commonName = s["commonName"]
-                    if "/" not in commonName and "sp." not in commonName and " x " not in commonName:
-                        sp_ordered[commonName] = None
-                stateTotals[state] = len(sp_ordered)
-                stateTipItems[state] = list(sp_ordered.keys())
-                if stateTotals[state] > largestTotal:
-                    largestTotal = stateTotals[state]
-
         geo_file = self.mdiParent.db.state_geo
 
-        tip_data = {}
-        for f in geo_file["features"]:
-            sid = f["id"]
-            n = stateTotals.get(sid, 0)
-            f["properties"]["speciesTotal"] = n
-            if n > 0:
-                f["properties"]["clickKey"] = "US-" + sid
-                f["properties"]["tipKey"]   = sid
-                state_name = f["properties"].get("name", sid)
-                if mode == 'checklists':
-                    tip_data[sid] = {
-                        "hdr": f"<b>{state_name}</b><br>{sid}  ·  {n} checklists",
-                        "sp":  stateTipItems.get(sid, []),
-                    }
-                else:
-                    tip_data[sid] = {
-                        "hdr": f"<b>{state_name}</b><br>{sid}  ·  {n} species",
-                        "sp":  stateTipItems.get(sid, []),
-                    }
-            else:
-                stateTotals[sid] = 0
-                f["properties"].pop("clickKey", None)
-                f["properties"].pop("tipKey",   None)
+        totals, tipItems, largest = self._choroplethBothModes(stateDict)
+        tip_data = self._choroplethAnnotate(
+            geo_file, totals, tipItems,
+            subtitleFor=lambda f: f["id"],)
 
+        # State the in-map Species/Checklists toggle needs to rebuild the title.
+        self._choroplethTitleBase = "US States Choropleth"
+        self._choroplethUnit      = "States"
+        self._choroplethCounts    = {
+            m: sum(1 for v in totals[m].values() if v > 0)
+            for m in self.CHOROPLETH_MODES
+            }
+        self.title = self._choroplethTitleBase
+
+        activeTotals  = totals[mode]
+        activeLargest = largest[mode]
         state_map = folium.Map(location=[39.5, -98.3], zoom_start=4, tiles=code_Basemap.streetTiles())
 
         folium.GeoJson(
             geo_file,
             style_function=lambda feature: {
-                'fillColor': self._lerp_orange(stateTotals[feature['id']], largestTotal),
+                'fillColor': self._lerp_orange(
+                    activeTotals.get(feature['id'], 0), activeLargest),
                 'color': 'black',
                 'weight': .2,
                 'fillOpacity': .8,
@@ -1812,15 +1957,18 @@ document.addEventListener("DOMContentLoaded", function() {{
 
         import tempfile
         html = state_map.get_root().render()
-        html = self._setup_choropleth_channel(html, "State", json.dumps(tip_data, ensure_ascii=False), mode=mode)
+        html = self._setup_choropleth_channel(
+            html, "State", json.dumps(tip_data[mode], ensure_ascii=False), mode=mode,
+            allModes={"tips": tip_data, "totals": totals, "largest": largest},
+            tipSubSource="id",
+            )
         with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as f:
             f.write(html)
             tmp_path = f.name
         settings = QWebEngineProfile.defaultProfile().settings()
         settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
         self.webView.setUrl(QUrl.fromLocalFile(tmp_path))
-        count = sum(1 for v in stateTotals.values() if v > 0)
-        self._buildFilterTitle(filter, self.title, count=count, countUnit="States")
+        self._applyChoroplethMode(mode)
 
         return True
 
@@ -1848,65 +1996,30 @@ document.addEventListener("DOMContentLoaded", function() {{
         if len(provDict) == 0:
             return False
 
-        provTotals = defaultdict()
-        provTipItems = {}
-        largestTotal = 0
-        if mode == 'checklists':
-            self.title = "Canada Provinces Choropleth – By Checklists"
-            for prov, sightings in provDict.items():
-                cl_dates = {}
-                for s in sightings:
-                    cl_dates[s["checklistID"]] = s["date"]
-                dates_sorted = sorted(cl_dates.values(), reverse=True)
-                provTotals[prov] = len(cl_dates)
-                provTipItems[prov] = dates_sorted
-                if provTotals[prov] > largestTotal:
-                    largestTotal = provTotals[prov]
-        else:
-            self.title = "Canada Provinces Choropleth"
-            for prov, sightings in provDict.items():
-                sp_ordered = {}
-                for s in sightings:
-                    commonName = s["commonName"]
-                    if "/" not in commonName and "sp." not in commonName and " x " not in commonName:
-                        sp_ordered[commonName] = None
-                provTotals[prov] = len(sp_ordered)
-                provTipItems[prov] = list(sp_ordered.keys())
-                if provTotals[prov] > largestTotal:
-                    largestTotal = provTotals[prov]
-
         geo_file = self.mdiParent.db.ca_province_geo
 
-        tip_data = {}
-        for f in geo_file["features"]:
-            pid = f["id"]
-            n = provTotals.get(pid, 0)
-            f["properties"]["speciesTotal"] = n
-            if n > 0:
-                f["properties"]["clickKey"] = "CA-" + pid
-                f["properties"]["tipKey"]   = pid
-                prov_name = f["properties"].get("name", pid)
-                if mode == 'checklists':
-                    tip_data[pid] = {
-                        "hdr": f"<b>{prov_name}</b><br>{n} checklists",
-                        "sp":  provTipItems.get(pid, []),
-                    }
-                else:
-                    tip_data[pid] = {
-                        "hdr": f"<b>{prov_name}</b><br>{n} species",
-                        "sp":  provTipItems.get(pid, []),
-                    }
-            else:
-                provTotals[pid] = 0
-                f["properties"].pop("clickKey", None)
-                f["properties"].pop("tipKey",   None)
+        totals, tipItems, largest = self._choroplethBothModes(provDict)
+        tip_data = self._choroplethAnnotate(
+            geo_file, totals, tipItems,)
 
+        # State the in-map Species/Checklists toggle needs to rebuild the title.
+        self._choroplethTitleBase = "Canada Provinces Choropleth"
+        self._choroplethUnit      = "Provinces"
+        self._choroplethCounts    = {
+            m: sum(1 for v in totals[m].values() if v > 0)
+            for m in self.CHOROPLETH_MODES
+            }
+        self.title = self._choroplethTitleBase
+
+        activeTotals  = totals[mode]
+        activeLargest = largest[mode]
         prov_map = folium.Map(location=[62, -96], zoom_start=3, tiles=code_Basemap.streetTiles())
 
         folium.GeoJson(
             geo_file,
             style_function=lambda feature: {
-                'fillColor': self._lerp_orange(provTotals[feature['id']], largestTotal),
+                'fillColor': self._lerp_orange(
+                    activeTotals.get(feature['id'], 0), activeLargest),
                 'color': 'black',
                 'weight': .2,
                 'fillOpacity': .8,
@@ -1920,15 +2033,17 @@ document.addEventListener("DOMContentLoaded", function() {{
 
         import tempfile
         html = prov_map.get_root().render()
-        html = self._setup_choropleth_channel(html, "State", json.dumps(tip_data, ensure_ascii=False), mode=mode)
+        html = self._setup_choropleth_channel(
+            html, "State", json.dumps(tip_data[mode], ensure_ascii=False), mode=mode,
+            allModes={"tips": tip_data, "totals": totals, "largest": largest},
+            )
         with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as f:
             f.write(html)
             tmp_path = f.name
         settings = QWebEngineProfile.defaultProfile().settings()
         settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
         self.webView.setUrl(QUrl.fromLocalFile(tmp_path))
-        count = sum(1 for v in provTotals.values() if v > 0)
-        self._buildFilterTitle(filter, self.title, count=count, countUnit="Provinces")
+        self._applyChoroplethMode(mode)
 
         return True
 
@@ -1955,65 +2070,30 @@ document.addEventListener("DOMContentLoaded", function() {{
         if len(stateDict) == 0:
             return False
 
-        stateTotals = defaultdict()
-        stateTipItems = {}
-        largestTotal = 0
-        if mode == 'checklists':
-            self.title = "India States Choropleth – By Checklists"
-            for state, sightings in stateDict.items():
-                cl_dates = {}
-                for s in sightings:
-                    cl_dates[s["checklistID"]] = s["date"]
-                dates_sorted = sorted(cl_dates.values(), reverse=True)
-                stateTotals[state] = len(cl_dates)
-                stateTipItems[state] = dates_sorted
-                if stateTotals[state] > largestTotal:
-                    largestTotal = stateTotals[state]
-        else:
-            self.title = "India States Choropleth"
-            for state, sightings in stateDict.items():
-                sp_ordered = {}
-                for s in sightings:
-                    commonName = s["commonName"]
-                    if "/" not in commonName and "sp." not in commonName and " x " not in commonName:
-                        sp_ordered[commonName] = None
-                stateTotals[state] = len(sp_ordered)
-                stateTipItems[state] = list(sp_ordered.keys())
-                if stateTotals[state] > largestTotal:
-                    largestTotal = stateTotals[state]
-
         geo_file = self.mdiParent.db.in_state_geo
 
-        tip_data = {}
-        for f in geo_file["features"]:
-            sid = f["id"]
-            n = stateTotals.get(sid, 0)
-            f["properties"]["speciesTotal"] = n
-            if n > 0:
-                f["properties"]["clickKey"] = sid
-                f["properties"]["tipKey"]   = sid
-                state_name = f["properties"].get("name", sid)
-                if mode == 'checklists':
-                    tip_data[sid] = {
-                        "hdr": f"<b>{state_name}</b><br>{n} checklists",
-                        "sp":  stateTipItems.get(sid, []),
-                    }
-                else:
-                    tip_data[sid] = {
-                        "hdr": f"<b>{state_name}</b><br>{n} species",
-                        "sp":  stateTipItems.get(sid, []),
-                    }
-            else:
-                stateTotals[sid] = 0
-                f["properties"].pop("clickKey", None)
-                f["properties"].pop("tipKey",   None)
+        totals, tipItems, largest = self._choroplethBothModes(stateDict)
+        tip_data = self._choroplethAnnotate(
+            geo_file, totals, tipItems,)
 
+        # State the in-map Species/Checklists toggle needs to rebuild the title.
+        self._choroplethTitleBase = "India States Choropleth"
+        self._choroplethUnit      = "States"
+        self._choroplethCounts    = {
+            m: sum(1 for v in totals[m].values() if v > 0)
+            for m in self.CHOROPLETH_MODES
+            }
+        self.title = self._choroplethTitleBase
+
+        activeTotals  = totals[mode]
+        activeLargest = largest[mode]
         state_map = folium.Map(location=[22, 80], zoom_start=4, tiles=code_Basemap.streetTiles())
 
         folium.GeoJson(
             geo_file,
             style_function=lambda feature: {
-                'fillColor': self._lerp_orange(stateTotals[feature['id']], largestTotal),
+                'fillColor': self._lerp_orange(
+                    activeTotals.get(feature['id'], 0), activeLargest),
                 'color': 'black',
                 'weight': .2,
                 'fillOpacity': .8,
@@ -2027,15 +2107,17 @@ document.addEventListener("DOMContentLoaded", function() {{
 
         import tempfile
         html = state_map.get_root().render()
-        html = self._setup_choropleth_channel(html, "State", json.dumps(tip_data, ensure_ascii=False), mode=mode)
+        html = self._setup_choropleth_channel(
+            html, "State", json.dumps(tip_data[mode], ensure_ascii=False), mode=mode,
+            allModes={"tips": tip_data, "totals": totals, "largest": largest},
+            )
         with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as f:
             f.write(html)
             tmp_path = f.name
         settings = QWebEngineProfile.defaultProfile().settings()
         settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
         self.webView.setUrl(QUrl.fromLocalFile(tmp_path))
-        count = sum(1 for v in stateTotals.values() if v > 0)
-        self._buildFilterTitle(filter, self.title, count=count, countUnit="States")
+        self._applyChoroplethMode(mode)
 
         return True
 
@@ -2064,66 +2146,31 @@ document.addEventListener("DOMContentLoaded", function() {{
         if len(countyDict) == 0:
             return False
 
-        countyTotals = defaultdict()
-        countyTipItems = {}
-        largestTotal = 0
-        if mode == 'checklists':
-            self.title = "Great Britain Counties Choropleth – By Checklists"
-            for county, sightings in countyDict.items():
-                cl_dates = {}
-                for s in sightings:
-                    cl_dates[s["checklistID"]] = s["date"]
-                dates_sorted = sorted(cl_dates.values(), reverse=True)
-                countyTotals[county] = len(cl_dates)
-                countyTipItems[county] = dates_sorted
-                if countyTotals[county] > largestTotal:
-                    largestTotal = countyTotals[county]
-        else:
-            self.title = "Great Britain Counties Choropleth"
-            for county, sightings in countyDict.items():
-                sp_ordered = {}
-                for s in sightings:
-                    commonName = s["commonName"]
-                    if "/" not in commonName and "sp." not in commonName and " x " not in commonName:
-                        sp_ordered[commonName] = None
-                countyTotals[county] = len(sp_ordered)
-                countyTipItems[county] = list(sp_ordered.keys())
-                if countyTotals[county] > largestTotal:
-                    largestTotal = countyTotals[county]
-
         geo_file = self.mdiParent.db.gb_county_geo
 
-        tip_data = {}
-        for f in geo_file["features"]:
-            ename = f["properties"].get("ebird_name", f["properties"]["name"])
-            n = countyTotals.get(ename, 0)
-            f["properties"]["speciesTotal"] = n
-            if n > 0:
-                f["properties"]["clickKey"] = ename
-                f["properties"]["tipKey"]   = ename
-                if mode == 'checklists':
-                    tip_data[ename] = {
-                        "hdr": f"<b>{ename}</b><br>{n} checklists",
-                        "sp":  countyTipItems.get(ename, []),
-                    }
-                else:
-                    tip_data[ename] = {
-                        "hdr": f"<b>{ename}</b><br>{n} species",
-                        "sp":  countyTipItems.get(ename, []),
-                    }
-            else:
-                countyTotals[ename] = 0
-                f["properties"].pop("clickKey", None)
-                f["properties"].pop("tipKey",   None)
+        totals, tipItems, largest = self._choroplethBothModes(countyDict)
+        tip_data = self._choroplethAnnotate(
+            geo_file, totals, tipItems,
+            keyFor=lambda f: f['properties'].get('ebird_name', f['properties']['name']),)
 
+        # State the in-map Species/Checklists toggle needs to rebuild the title.
+        self._choroplethTitleBase = "Great Britain Counties Choropleth"
+        self._choroplethUnit      = "Counties"
+        self._choroplethCounts    = {
+            m: sum(1 for v in totals[m].values() if v > 0)
+            for m in self.CHOROPLETH_MODES
+            }
+        self.title = self._choroplethTitleBase
+
+        activeTotals  = totals[mode]
+        activeLargest = largest[mode]
         county_map = folium.Map(location=[54, -2], zoom_start=5, tiles=code_Basemap.streetTiles())
 
         folium.GeoJson(
             geo_file,
             style_function=lambda feature: {
                 'fillColor': self._lerp_orange(
-                    countyTotals.get(feature['properties'].get('ebird_name', feature['properties']['name']), 0),
-                    largestTotal),
+                    activeTotals.get(feature['properties'].get('ebird_name', feature['properties']['name']), 0), activeLargest),
                 'color': 'black',
                 'weight': .2,
                 'fillOpacity': .8,
@@ -2137,15 +2184,17 @@ document.addEventListener("DOMContentLoaded", function() {{
 
         import tempfile
         html = county_map.get_root().render()
-        html = self._setup_choropleth_channel(html, "County", json.dumps(tip_data, ensure_ascii=False), mode=mode)
+        html = self._setup_choropleth_channel(
+            html, "County", json.dumps(tip_data[mode], ensure_ascii=False), mode=mode,
+            allModes={"tips": tip_data, "totals": totals, "largest": largest},
+            )
         with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as f:
             f.write(html)
             tmp_path = f.name
         settings = QWebEngineProfile.defaultProfile().settings()
         settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
         self.webView.setUrl(QUrl.fromLocalFile(tmp_path))
-        count = sum(1 for v in countyTotals.values() if v > 0)
-        self._buildFilterTitle(filter, self.title, count=count, countUnit="Counties")
+        self._applyChoroplethMode(mode)
 
         return True
 
@@ -2173,71 +2222,35 @@ document.addEventListener("DOMContentLoaded", function() {{
         if len(countyDict) == 0:
             return False
 
-        countyTotals = defaultdict()
-        countyTipItems = {}
-        largestTotal = 0
-        if mode == 'checklists':
-            self.title = "US Lower 48 Counties Choropleth – By Checklists"
-            for county, sightings in countyDict.items():
-                cl_dates = {}
-                for s in sightings:
-                    cl_dates[s["checklistID"]] = s["date"]
-                dates_sorted = sorted(cl_dates.values(), reverse=True)
-                countyTotals[county] = len(cl_dates)
-                countyTipItems[county] = dates_sorted
-                if countyTotals[county] > largestTotal:
-                    largestTotal = countyTotals[county]
-        else:
-            self.title = "US Lower 48 Counties Choropleth"
-            for county, sightings in countyDict.items():
-                sp_ordered = {}
-                for s in sightings:
-                    commonName = s["commonName"]
-                    if "/" not in commonName and "sp." not in commonName and " x " not in commonName:
-                        sp_ordered[commonName] = None
-                countyTotals[county] = len(sp_ordered)
-                countyTipItems[county] = list(sp_ordered.keys())
-                if countyTotals[county] > largestTotal:
-                    largestTotal = countyTotals[county]
-
-        # Load the shape of the zone (US counties)
         geo_file = self.mdiParent.db.county_geo
 
-        tip_data = {}
-        for f in geo_file["features"]:
-            cid = f["id"]
-            n = countyTotals.get(cid, 0)
-            f["properties"]["speciesTotal"] = n
-            if n > 0:
-                county_name  = f["properties"].get("name", cid)
-                state_abbrev = f["properties"].get("state", "")
-                f["properties"]["clickKey"] = countyDict[cid][0]["county"]
-                f["properties"]["tipKey"]   = cid
-                if mode == 'checklists':
-                    tip_data[cid] = {
-                        "hdr": f"<b>{county_name}</b><br>{state_abbrev}  ·  {n} checklists",
-                        "sp":  countyTipItems.get(cid, []),
-                    }
-                else:
-                    tip_data[cid] = {
-                        "hdr": f"<b>{county_name}</b><br>{state_abbrev}  ·  {n} species",
-                        "sp":  countyTipItems.get(cid, []),
-                    }
-            else:
-                countyTotals[cid] = 0
-                f["properties"].pop("clickKey", None)
-                f["properties"].pop("tipKey",   None)
+        totals, tipItems, largest = self._choroplethBothModes(countyDict)
+        tip_data = self._choroplethAnnotate(
+            geo_file, totals, tipItems,
+            clickKeyFor=lambda f, k: countyDict[k][0]["county"],
+            subtitleFor=lambda f: f["properties"].get("state", ""),)
 
+        # State the in-map Species/Checklists toggle needs to rebuild the title.
+        self._choroplethTitleBase = "US Lower 48 Counties Choropleth"
+        self._choroplethUnit      = "Counties"
+        self._choroplethCounts    = {
+            m: sum(1 for v in totals[m].values() if v > 0)
+            for m in self.CHOROPLETH_MODES
+            }
+        self.title = self._choroplethTitleBase
+
+        activeTotals  = totals[mode]
+        activeLargest = largest[mode]
         county_map = folium.Map(location=[39.5, -98.3], zoom_start=4, tiles=code_Basemap.streetTiles())
 
         folium.GeoJson(
             geo_file,
             style_function=lambda feature: {
-                'fillColor': self._lerp_orange(countyTotals[feature['id']], largestTotal),
+                'fillColor': self._lerp_orange(
+                    activeTotals.get(feature['id'], 0), activeLargest),
                 'color': 'black',
                 'weight': 1,
                 'fillOpacity': .8,
-                'nan_fill_color': 'white'
                 },
             highlight_function=lambda feature: {
                 'color': CHART_PRIMARY, 'weight': 2, 'fillOpacity': .95,
@@ -2246,23 +2259,20 @@ document.addEventListener("DOMContentLoaded", function() {{
 
         folium.LayerControl().add_to(county_map)
 
-        # Note: the county GeoJSON embeds ~1.2MB of data in a single JS line, which causes
-        # QWebEngineView.setHtml() to silently produce a blank page when many counties have
-        # non-zero counts (as in the no-filter case). Writing to a temp file and
-        # loading via setUrl() bypasses this Qt internal content-handling limitation.
         import tempfile
         html = county_map.get_root().render()
-        html = self._setup_choropleth_channel(html, "County", json.dumps(tip_data, ensure_ascii=False), mode=mode)
+        html = self._setup_choropleth_channel(
+            html, "County", json.dumps(tip_data[mode], ensure_ascii=False), mode=mode,
+            allModes={"tips": tip_data, "totals": totals, "largest": largest},
+            tipSubSource="state",
+            )
         with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as f:
             f.write(html)
             tmp_path = f.name
-
         settings = QWebEngineProfile.defaultProfile().settings()
         settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
-
         self.webView.setUrl(QUrl.fromLocalFile(tmp_path))
-        count = sum(1 for v in countyTotals.values() if v > 0)
-        self._buildFilterTitle(filter, self.title, count=count, countUnit="Counties")
+        self._applyChoroplethMode(mode)
 
         return True
 
@@ -2289,69 +2299,33 @@ document.addEventListener("DOMContentLoaded", function() {{
         if len(countryDict) == 0:
             return False
 
-        countryTotals = defaultdict()
-        countryTipItems = {}
-        largestTotal = 0
-        if mode == 'checklists':
-            self.title = "World Choropleth – By Checklists"
-            for country, sightings in countryDict.items():
-                cl_dates = {}
-                for s in sightings:
-                    cl_dates[s["checklistID"]] = s["date"]
-                dates_sorted = sorted(cl_dates.values(), reverse=True)
-                countryTotals[country] = len(cl_dates)
-                countryTipItems[country] = dates_sorted
-                if countryTotals[country] > largestTotal:
-                    largestTotal = countryTotals[country]
-        else:
-            self.title = "World Choropleth"
-            for country, sightings in countryDict.items():
-                sp_ordered = {}
-                for s in sightings:
-                    commonName = s["commonName"]
-                    if "/" not in commonName and "sp." not in commonName and " x " not in commonName:
-                        sp_ordered[commonName] = None
-                countryTotals[country] = len(sp_ordered)
-                countryTipItems[country] = list(sp_ordered.keys())
-                if countryTotals[country] > largestTotal:
-                    largestTotal = countryTotals[country]
-
         geo_file = self.mdiParent.db.country_geo
 
-        tip_data = {}
-        for f in geo_file["features"]:
-            cid = f["id"]
-            n = countryTotals.get(cid, 0)
-            f["properties"]["speciesTotal"] = n
-            if n > 0:
-                f["properties"]["clickKey"] = cid
-                f["properties"]["tipKey"]   = cid
-                country_name = f["properties"].get("name", cid)
-                if mode == 'checklists':
-                    tip_data[cid] = {
-                        "hdr": f"<b>{country_name}</b><br>{n} checklists",
-                        "sp":  countryTipItems.get(cid, []),
-                    }
-                else:
-                    tip_data[cid] = {
-                        "hdr": f"<b>{country_name}</b><br>{n} species",
-                        "sp":  countryTipItems.get(cid, []),
-                    }
-            else:
-                countryTotals[cid] = 0
-                f["properties"].pop("clickKey", None)
-                f["properties"].pop("tipKey",   None)
+        totals, tipItems, largest = self._choroplethBothModes(countryDict)
+        tip_data = self._choroplethAnnotate(
+            geo_file, totals, tipItems,)
 
+        # State the in-map Species/Checklists toggle needs to rebuild the title.
+        self._choroplethTitleBase = "World Choropleth"
+        self._choroplethUnit      = "Countries"
+        self._choroplethCounts    = {
+            m: sum(1 for v in totals[m].values() if v > 0)
+            for m in self.CHOROPLETH_MODES
+            }
+        self.title = self._choroplethTitleBase
+
+        activeTotals  = totals[mode]
+        activeLargest = largest[mode]
         choro_map = folium.Map(location=[1, 1], zoom_start=1, tiles=code_Basemap.streetTiles())
 
         folium.GeoJson(
             geo_file,
             style_function=lambda feature: {
-                'fillColor': self._lerp_orange(countryTotals[feature['id']], largestTotal),
+                'fillColor': self._lerp_orange(
+                    activeTotals.get(feature['id'], 0), activeLargest),
                 'color': 'black',
                 'weight': 1,
                 'fillOpacity': .8,
-                'nan_fill_color': 'white'
                 },
             highlight_function=lambda feature: {
                 'color': CHART_PRIMARY, 'weight': 2, 'fillOpacity': .95,
@@ -2362,15 +2336,239 @@ document.addEventListener("DOMContentLoaded", function() {{
 
         import tempfile
         html = choro_map.get_root().render()
-        html = self._setup_choropleth_channel(html, "Country", json.dumps(tip_data, ensure_ascii=False), mode=mode)
+        html = self._setup_choropleth_channel(
+            html, "Country", json.dumps(tip_data[mode], ensure_ascii=False), mode=mode,
+            allModes={"tips": tip_data, "totals": totals, "largest": largest},
+            )
         with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as f:
             f.write(html)
             tmp_path = f.name
         settings = QWebEngineProfile.defaultProfile().settings()
         settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
         self.webView.setUrl(QUrl.fromLocalFile(tmp_path))
-        count = sum(1 for v in countryTotals.values() if v > 0)
-        self._buildFilterTitle(filter, self.title, count=count, countUnit="Countries")
+        self._applyChoroplethMode(mode)
+
+        return True
+
+
+    # ------------------------------------------------------------------
+    # Shared choropleth machinery
+    #
+    # Every choropleth page carries BOTH the species and the checklist view so
+    # the in-window toggle can switch between them without a round trip to
+    # Python.  These helpers compute and package both.
+
+    CHOROPLETH_MODES = ('species', 'checklists')
+
+
+    def _choroplethBothModes(self, sightingsByRegion):
+        """Totals and tooltip lists for both modes, in a single pass per region.
+
+        Returns (totals, tipItems, largest), each a dict keyed by mode.  Computing
+        both costs barely more than one — they come off the same sighting list —
+        and it is what lets the toggle be instant.
+        """
+        totals   = {m: {} for m in self.CHOROPLETH_MODES}
+        tipItems = {m: {} for m in self.CHOROPLETH_MODES}
+        largest  = {m: 0  for m in self.CHOROPLETH_MODES}
+
+        for region, sightings in sightingsByRegion.items():
+            sp_ordered = {}
+            cl_dates   = {}
+            for s in sightings:
+                commonName = s["commonName"]
+                if "/" not in commonName and "sp." not in commonName and " x " not in commonName:
+                    sp_ordered[commonName] = None
+                cl_dates[s["checklistID"]] = s["date"]
+
+            totals['species'][region]      = len(sp_ordered)
+            tipItems['species'][region]    = list(sp_ordered.keys())
+            totals['checklists'][region]   = len(cl_dates)
+            tipItems['checklists'][region] = sorted(cl_dates.values(), reverse=True)
+
+            for m in self.CHOROPLETH_MODES:
+                if totals[m][region] > largest[m]:
+                    largest[m] = totals[m][region]
+
+        return totals, tipItems, largest
+
+
+    def _choroplethAnnotate(self, geo_file, totals, tipItems, keyFor=None,
+                            clickKeyFor=None, subtitleFor=None):
+        """Tag features for clicking/tooltips and build both modes' tip payloads.
+
+        A region with no sightings loses clickKey and tipKey so it is inert, and
+        gets an explicit zero in every mode's totals — the style function indexes
+        totals by feature id for every feature, including the empty ones.
+
+        keyFor       feature → the key totals/tipItems are stored under
+                     (default: the feature's top-level id).
+        clickKeyFor  feature, key → what a click should filter on.  The US county
+                     map needs this: its totals are keyed by FIPS code but the
+                     filter wants the county's name.
+        subtitleFor  feature → a short string shown after the region name, such as
+                     a state code.  None for no subtitle line.
+        """
+        tip_data = {m: {} for m in self.CHOROPLETH_MODES}
+
+        for f in geo_file["features"]:
+            key = keyFor(f) if keyFor else f["id"]
+            hasData = any(totals[m].get(key, 0) for m in self.CHOROPLETH_MODES)
+
+            # Kept for any downstream reader of the rendered GeoJSON; the styling
+            # itself reads the per-mode totals dicts, not this.
+            f["properties"]["speciesTotal"] = totals['species'].get(key, 0)
+
+            if hasData:
+                f["properties"]["clickKey"] = clickKeyFor(f, key) if clickKeyFor else key
+                f["properties"]["tipKey"]   = key
+                name     = f["properties"].get("name", key)
+                subtitle = subtitleFor(f) if subtitleFor else ""
+                for m in self.CHOROPLETH_MODES:
+                    n = totals[m].get(key, 0)
+                    if subtitle:
+                        hdr = f"<b>{name}</b><br>{subtitle}  ·  {n} {m}"
+                    else:
+                        hdr = f"<b>{name}</b><br>{n} {m}"
+                    tip_data[m][key] = {"hdr": hdr, "sp": tipItems[m].get(key, [])}
+            else:
+                for m in self.CHOROPLETH_MODES:
+                    totals[m][key] = 0
+                # Nothing is written for an empty region.  It still gets a tooltip
+                # naming it and showing a zero, but the page composes that from the
+                # name already in the feature, so empty regions add no bytes — on
+                # the US county map there are 3,100 of them.  Both keys go: no
+                # tipKey means no totals lookup (correctly zero), and no clickKey
+                # means clicking stays inert.
+                f["properties"].pop("clickKey", None)
+                f["properties"].pop("tipKey",   None)
+
+        return tip_data
+
+
+    def _choroplethBounds(self, geo_file, totals):
+        """[[south, west], [north, east]] around the regions that actually have data.
+
+        Fitting to every feature would strand mainland Spain and Portugal in a
+        corner of the window: ES-CN Canarias lies ~1800 km southwest of Madrid and
+        PT-20 Azores ~1500 km west of Lisbon.  Fitting to the regions the user has
+        birded gives a mainland map to someone who has never birded the islands,
+        and the wider extent to someone who has.  Falls back to every feature when
+        nothing has data.
+        """
+        withData = [f for f in geo_file["features"]
+                    if any(totals[m].get(f["id"], 0) for m in self.CHOROPLETH_MODES)]
+
+        if not withData:
+            withData = geo_file["features"]
+        if not withData:
+            return None
+
+        lons, lats = [], []
+
+        def walk(node):
+            if isinstance(node, (list, tuple)):
+                if len(node) >= 2 and isinstance(node[0], (int, float)) \
+                        and isinstance(node[1], (int, float)):
+                    lons.append(node[0])
+                    lats.append(node[1])
+                else:
+                    for n in node:
+                        walk(n)
+
+        for f in withData:
+            walk(f["geometry"].get("coordinates"))
+
+        if not lons or not lats:
+            return None
+        return [[min(lats), min(lons)], [max(lats), max(lons)]]
+
+
+    def loadChoroplethCountryRegions(self, filter, countryCode, mode='species'):
+        """Regional choropleth for one European country.
+
+        Shared by all 13 countries in europe-regions.json rather than copied per
+        country.  Note the region key is the FULL eBird subnational1 code
+        ("DE-BY"), not the two-letter slice loadChoroplethUSStates takes out of
+        s["state"] — europe-regions.json ids are complete ISO 3166-2 codes.
+        """
+        from copy import deepcopy
+        import folium
+        import json
+
+        self.filter = deepcopy(filter)
+
+        geo_file = self.mdiParent.db.europeRegionGeo(countryCode)
+        if geo_file is None:
+            return False
+
+        regionDict = {}
+        minimalSightingList = self.mdiParent.db.GetMinimalFilteredSightingsList(filter)
+        cf = self.mdiParent.db.CompileFilter(filter)
+
+        for s in minimalSightingList:
+            if s["country"] == countryCode:
+                if self.mdiParent.db.TestSightingCompiled(s, cf):
+                    key = s["state"]
+                    if key not in regionDict:
+                        regionDict[key] = []
+                    regionDict[key].append(s)
+
+        if len(regionDict) == 0:
+            return False
+
+        totals, tipItems, largest = self._choroplethBothModes(regionDict)
+        tip_data = self._choroplethAnnotate(
+            geo_file, totals, tipItems,
+            subtitleFor=lambda f: f["id"])
+
+        countryName = self.mdiParent.db.GetCountryName(countryCode)
+
+        # State the in-map toggle needs to rebuild the title without Python
+        # recomputing the map.  _applyChoroplethMode reads these.
+        self._choroplethTitleBase = f"{countryName} Regions Choropleth"
+        self._choroplethUnit      = "Regions"
+        self._choroplethCounts    = {
+            m: sum(1 for v in totals[m].values() if v > 0)
+            for m in self.CHOROPLETH_MODES
+            }
+        self.title = self._choroplethTitleBase
+
+        region_map = folium.Map(tiles=code_Basemap.streetTiles())
+        bounds = self._choroplethBounds(geo_file, totals)
+        if bounds:
+            region_map.fit_bounds(bounds)
+
+        activeTotals = totals[mode]
+        folium.GeoJson(
+            geo_file,
+            style_function=lambda feature: {
+                'fillColor': self._lerp_orange(activeTotals[feature['id']], largest[mode]),
+                'color': 'black',
+                'weight': .2,
+                'fillOpacity': .8,
+                },
+            highlight_function=lambda feature: {
+                'color': CHART_PRIMARY, 'weight': 2, 'fillOpacity': .95,
+                },
+            ).add_to(region_map)
+
+        folium.LayerControl().add_to(region_map)
+
+        import tempfile
+        html = region_map.get_root().render()
+        html = self._setup_choropleth_channel(
+            html, "State", json.dumps(tip_data[mode], ensure_ascii=False), mode=mode,
+            allModes={"tips": tip_data, "totals": totals, "largest": largest},
+            tipSubSource="id",
+            )
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as f:
+            f.write(html)
+            tmp_path = f.name
+        settings = QWebEngineProfile.defaultProfile().settings()
+        settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
+        self.webView.setUrl(QUrl.fromLocalFile(tmp_path))
+        self._applyChoroplethMode(mode)
 
         return True
 
@@ -3652,7 +3850,7 @@ document.addEventListener("DOMContentLoaded", function() {{
         import tempfile
         import json
 
-        self.title = "Geolocated Recordings"
+        self.title = "Recording Map"
         self.filter = deepcopy(filter)
 
         recordingSightings = self.mdiParent.db.GetSightingsWithRecordings(filter)
@@ -3783,7 +3981,7 @@ document.addEventListener("DOMContentLoaded", function() {{
             tmp_path = f.name
 
         self.webView.setUrl(QUrl.fromLocalFile(tmp_path))
-        self._buildFilterTitle(filter, "Geolocated Recordings",
+        self._buildFilterTitle(filter, "Recording Map",
                                count=len(markers), countUnit="Recordings")
         return True
 
@@ -3795,7 +3993,7 @@ document.addEventListener("DOMContentLoaded", function() {{
         import json
         import tempfile
 
-        self.title = "Animated Recording Sequence Map"
+        self.title = "Animated Recording Map"
         self.filter = deepcopy(filter)
 
         recordingSightings = self.mdiParent.db.GetSightingsWithRecordings(filter)
@@ -4026,7 +4224,7 @@ document.addEventListener("DOMContentLoaded", function() {{
             tmp_path = f.name
 
         self.webView.setUrl(QUrl.fromLocalFile(tmp_path))
-        self._buildFilterTitle(filter, "Animated Recording Sequence Map",
+        self._buildFilterTitle(filter, "Animated Recording Map",
                                count=total, countUnit="Recordings")
         return True
 
@@ -4039,7 +4237,7 @@ document.addEventListener("DOMContentLoaded", function() {{
         from copy import deepcopy
         import json
 
-        self.title = "Recordings by Species"
+        self.title = "Total Recordings per Species"
         self.filter = deepcopy(filter)
 
         recordingSightings = self.mdiParent.db.GetSightingsWithRecordings(filter)
@@ -4106,7 +4304,7 @@ document.addEventListener("DOMContentLoaded", function() {{
 </style>
 </head><body>
 <div id="header">
-  <h2>Recordings by Species</h2>
+  <h2>Total Recordings per Species</h2>
   <span class="sub">{total_species} species &nbsp;·&nbsp; {total_recs} recordings</span>
 </div>
 <table>
@@ -4192,7 +4390,7 @@ applySort();
         from PySide6.QtGui import QColor
         self.webView.page().setBackgroundColor(QColor("#1e1f26"))
         self.webView.setHtml(html)
-        self._buildFilterTitle(filter, "Recordings by Species",
+        self._buildFilterTitle(filter, "Total Recordings per Species",
                                count=total_species, countUnit="Species")
         return True
 
@@ -4205,7 +4403,7 @@ applySort();
         from copy import deepcopy
         import json
 
-        self.title = "Photos by Species"
+        self.title = "Total Photos per Species"
         self.filter = deepcopy(filter)
 
         photoSightings = self.mdiParent.db.GetSightingsWithPhotos(filter)
@@ -4279,7 +4477,7 @@ applySort();
 </style>
 </head><body>
 <div id="header">
-  <h2>Photos by Species</h2>
+  <h2>Total Photos per Species</h2>
   <span class="sub">{total_species} species &nbsp;·&nbsp; {total_photos} photos</span>
 </div>
 <table>
@@ -4365,7 +4563,7 @@ applySort();
         from PySide6.QtGui import QColor
         self.webView.page().setBackgroundColor(QColor("#1e1f26"))
         self.webView.setHtml(html)
-        self._buildFilterTitle(filter, "Photos by Species",
+        self._buildFilterTitle(filter, "Total Photos per Species",
                                count=total_species, countUnit="Species")
         return True
 
