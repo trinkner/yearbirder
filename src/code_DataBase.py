@@ -2253,8 +2253,17 @@ class DataBase():
         countryCodeData = []
         
         # open the country and state code data file
-        # and read its lines into a list for future searching
-        with open(dataFile, 'r', errors='replace') as csvfile:
+        # and read its lines into a list for future searching.
+        #
+        # The encoding is explicit because this file is UTF-8 and 636 of its
+        # 3,938 lines carry non-ASCII names.  Without it Python falls back to
+        # the locale encoding, which is UTF-8 on macOS but cp1252 on Windows —
+        # where every one of those names decoded into mojibake ("Hlavní město
+        # Praha" became "HlavnÃ­ mÄ›sto Praha") in the Sightings Filter.
+        # errors='replace' made it silent: cp1252 maps almost every byte, so
+        # nothing raised.  utf-8-sig rather than utf-8 so a future copy of this
+        # file saved with a BOM doesn't put a stray \ufeff on the first field.
+        with open(dataFile, 'r', encoding='utf-8-sig', errors='replace') as csvfile:
             csvdata = csv.reader(csvfile, delimiter=',', quotechar='"')
             for line in csvdata:
                 countryCodeData.append(line)
