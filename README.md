@@ -11,7 +11,7 @@
 
 # Yearbirder
 
-**Current release: v2.17** (September 2026)
+**Current release: v2.18** (October 2026)
 
 A desktop application for exploring and analysing your personal [eBird](https://ebird.org) data, bird photos, and sound recordings.
 
@@ -20,6 +20,15 @@ Yearbirder lets you filter, browse, and visualise your personal eBird sightings 
 Full version history and downloads: [yearbirder.org](https://yearbirder.org)
 
 ---
+
+## What's New in v2.18
+
+- **Shaded region maps for Europe** — thirteen European countries now map by their own administrative regions (French régions, Italian regioni, Spanish comunidades and the rest), alongside the existing US, Canadian, Indian and British maps. A continent menu groups them, and a toggle inside the map switches between shading by species count and by checklist count.
+- **Photo statistics** — new **Birding Statistics** and **Technical Statistics** submenus under Photos: totals per species and per time period, coverage of the species you have seen, and the camera settings you actually shoot at — ISO, shutter speed, aperture and focal length, against photo count or average rating. Two-setting charts plot one against another with dot size for quantity and colour for average rating; clicking a dot opens a Browse Grid of exactly those photos. Every report respects the current filter.
+- **Your media catalog is safer** — compacting now happens only when you ask for it, and tells you first if any media is attached to sightings the open eBird data file does not contain, listing them with their dates and locations and keeping them unless you say otherwise. The same check guards Backup, so a backup can never come out smaller than the catalog it was made from.
+- **More in the Trip Report** — the Dates tab lists the species seen only on the selected date, and hovering a location dot on the trip map shows the species recorded there.
+- **Media files match the names birders type** — filename matching accepts four-letter alpha codes, including both valid forms for hyphenated names, so COWP and CWPI both find Common Wood-Pigeon.
+- **Fixes** — switching off a Bluetooth headset mid-playback no longer crashes the app; By Year and By Month lists carry their counts; Manage Photos redraws its Remove and Skip boxes; maximized windows are no longer shrunk by new content.
 
 ## What's New in v2.17
 
@@ -206,7 +215,7 @@ Later 2.0x releases refined this work; see the [full version history](https://ye
 
 ## Download
 
-**macOS** — download the signed and notarized `Yearbirder_v2.17.dmg` from the [Releases page](https://github.com/trinkner/yearbirder/releases/latest), open it, and drag Yearbirder to your Applications folder.
+**macOS** — download the signed and notarized `Yearbirder_v2.18.dmg` from the [Releases page](https://github.com/trinkner/yearbirder/releases/latest), open it, and drag Yearbirder to your Applications folder.
 
 **Windows** — download the installer from [yearbirder.org/download](https://yearbirder.org/download) and run it.
 
