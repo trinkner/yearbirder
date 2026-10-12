@@ -1434,7 +1434,7 @@ class Ui_MainWindow(object):
         self.cboLocations.setToolTip(_translate("MainWindow", "Select a location to limit your search to one location\'s sightings."))
         self.lblOrders.setText(_translate("MainWindow", "Order"))
         self.cboOrders.setToolTip(_translate("MainWindow", "Select an order to limit your search to sightings of one order."))
-        self.lblFamilies.setText(_translate("MainWindow", "Familiy"))
+        self.lblFamilies.setText(_translate("MainWindow", "Family"))
         self.cboFamilies.setToolTip(_translate("MainWindow", "Select a family to limit your search to sightings of one family."))
         self.lblSpecies.setText(_translate("MainWindow", "Species"))
         self.cboSpecies.setToolTip(_translate("MainWindow", "Select a species to limit your search to sightings of one species."))
