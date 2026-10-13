@@ -261,9 +261,16 @@ sudo dnf install python3-pip    # Fedora</div>
           <div class="step-number">3</div>
           <div class="step-content">
             <h4>Install required packages</h4>
-            <div class="code-block">pip3 install pyside6 folium matplotlib numpy natsort piexif</div>
+            <div class="code-block">pip3 install pyside6 folium matplotlib numpy natsort piexif soundfile soxr</div>
+            <p style="margin-top:8px;"><code>soundfile</code> and <code>soxr</code> are what read and resample your recordings — without them the Recordings features will not work. Two further packages are optional: <code>mutagen</code> lets Yearbirder read the date out of ID3-tagged audio, and <code>certifi</code> supplies its own set of HTTPS certificates. Yearbirder works without either, falling back to the filename for dates and to your system's certificates.</p>
             <div class="callout">
-              <strong>Note:</strong> PySide6 on Linux requires certain system libraries. If the app fails to start with an error about <code>libxcb</code>, install the Qt platform dependencies for your distro. On Debian/Ubuntu: <code>sudo apt install libxcb-cursor0</code>
+              <strong>System libraries:</strong> the Python packages above do not bring everything Qt needs on Linux.
+              <br><br>
+              <strong>If the app will not start</strong> with an error mentioning <code>libxcb</code>, install the Qt platform dependencies. On Debian/Ubuntu: <code>sudo apt install libxcb-cursor0</code>
+              <br><br>
+              <strong>If recordings will not play</strong>, Qt's audio support on Linux is built on GStreamer, which is not included in the Python packages. On Debian/Ubuntu: <code>sudo apt install libgstreamer1.0-0 gstreamer1.0-plugins-base gstreamer1.0-plugins-good</code>
+              <br><br>
+              <strong>If maps and reports are blank</strong>, those are rendered by Qt WebEngine, which needs NSS. On Debian/Ubuntu: <code>sudo apt install libnss3</code>
             </div>
           </div>
         </div>
