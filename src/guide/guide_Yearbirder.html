@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Yearbirder User Guide</title>
   <style>
-    /* Colours mirror the website's palette (web/style.css :root), so the guide
+    /* Colors mirror the website's palette (web/style.css :root), so the guide
        reads as part of the site once published there.  Literal values, not
        custom properties: the guide is one self-contained file loaded off disk
        inside the app, with no stylesheet to import.  Change these if the
@@ -132,7 +132,7 @@
 <body>
 
 <h1 id="top">Yearbirder User Guide</h1>
-<p><em>A desktop application for exploring and analysing your personal eBird data</em></p>
+<p><em>A desktop application for exploring and analyzing your personal eBird data</em></p>
 
 <hr>
 
@@ -401,7 +401,7 @@
     <tr><td>Sample Rate Range</td><td>Minimum and maximum sample rate (in kHz, e.g. 44.1&nbsp;kHz, 48&nbsp;kHz, 96&nbsp;kHz). Yearbirder reads each recording's sample rate from the file itself when you add it.</td></tr>
     <tr><td>Bit Depth</td><td>A set of checkboxes — one for each bit depth found in your catalog (for example 16-bit, 24-bit, or 32-bit float). Tick any combination to show only recordings of those bit depths.</td></tr>
     <tr><td>Recording Device</td><td>Filter by the device a recording was made with (for example <em>ZOOM F3</em> or <em>Shure MV88</em>). Yearbirder reads the device from the file's metadata when you add it; recordings whose files carry no device information are grouped under <em>Unknown</em>.</td></tr>
-    <tr><td>Microphone</td><td>Filter by the microphone a recording was made with. No audio file records this, so the setting appears only once you have assigned a rig to at least one recording (see <a href="#recording-gear">Section 26 — Recording gear</a>). Recordings with no rig assigned yet are grouped under <em>Unknown</em>, which is the quickest way to find the ones still to be labelled.</td></tr>
+    <tr><td>Microphone</td><td>Filter by the microphone a recording was made with. No audio file records this, so the setting appears only once you have assigned a rig to at least one recording (see <a href="#recording-gear">Section 26 — Recording gear</a>). Recordings with no rig assigned yet are grouped under <em>Unknown</em>, which is the quickest way to find the ones still to be labeled.</td></tr>
   </tbody>
 </table>
 <p>The <strong>Sample Rate Range</strong>, <strong>Bit Depth</strong>, and <strong>Recording Device</strong> controls list only the values that actually occur in your catalog, so you will never see an option that returns no results. The bit-depth checkboxes are a multi-select: leaving them all unticked disables the filter, while ticking two or more shows recordings matching <em>any</em> of the ticked depths.</p>
@@ -588,7 +588,7 @@
   <li>A card is shown for each open species list. Click one card to select it as <strong>List A</strong> (highlighted in blue). Click a second card to select it as <strong>List B</strong> (highlighted in orange) — the comparison runs immediately.</li>
 </ol>
 <p>To change a selection, click the highlighted card again to deselect it, then click a different card. Clicking an unselected card when both slots are already filled automatically replaces List B.</p>
-<p>Results are displayed in three columns: species unique to List A on the left, species on both lists in the centre, and species unique to List B on the right. Double-click any species name to open its Individual Species window.</p>
+<p>Results are displayed in three columns: species unique to List A on the left, species on both lists in the center, and species unique to List B on the right. Double-click any species name to open its Individual Species window.</p>
 
 <p class="back-to-top"><a href="#top">Back to top &uarr;</a></p>
 
@@ -633,9 +633,9 @@
 <p>When the Sighting Filter is set to a specific <strong>Location</strong>, the report queries that exact eBird location's species list — rather than falling back to the county. Private eBird locations (personal locations not shared publicly) are automatically detected and marked <strong>(Personal Location)</strong> in the report title. A note in the header explains that the seen/unseen counts for private locations reflect your own sightings only.</p>
 
 <h3>Reading the report</h3>
-<p>The header shows the region name, a subtitle summarising the active filter, and a stats bar with counts of species seen, not yet seen, and photographed. Each row in the body shows:</p>
+<p>The header shows the region name, a subtitle summarizing the active filter, and a stats bar with counts of species seen, not yet seen, and photographed. Each row in the body shows:</p>
 <ul>
-  <li>An <strong>orange checkmark</strong> for species you have seen under the current filter, or grey text for unseen species.</li>
+  <li>An <strong>orange checkmark</strong> for species you have seen under the current filter, or gray text for unseen species.</li>
   <li>A <strong>blue dot</strong> (when a media catalog is open) for species you have photographed.</li>
   <li>The <strong>common name</strong> and <strong>scientific name</strong>, grouped under their family heading.</li>
 </ul>
@@ -662,10 +662,10 @@
 
 <h2 id="graphs">16. Graphs</h2>
 <p>Open graphs from the <strong>Graphs</strong> menu. Every graph responds to the current Sighting Filter, shows a hover tooltip with details when you move the cursor over a data point or bar, and (for most graphs) opens a <strong>Species List</strong> window filtered to that point's context when you click it.</p>
-<p>The Graphs menu is organised into four submenus by what each graph measures: <strong>Species</strong>, <strong>Locations</strong>, <strong>Checklists</strong>, and <strong>Timing &amp; Seasonality</strong>.</p>
-<p>Yearbirder uses a consistent colour scheme: charts based on <strong>sighting data</strong> use a <strong>blue</strong> theme, while charts produced when the Media Filter is active (i.e. based on <strong>photograph data</strong>) use a <strong>yellow</strong> theme. Several timing charts colour their data points by season, using this palette:</p>
+<p>The Graphs menu is organized into four submenus by what each graph measures: <strong>Species</strong>, <strong>Locations</strong>, <strong>Checklists</strong>, and <strong>Timing &amp; Seasonality</strong>.</p>
+<p>Yearbirder uses a consistent color scheme: charts based on <strong>sighting data</strong> use a <strong>blue</strong> theme, while charts produced when the Media Filter is active (i.e. based on <strong>photograph data</strong>) use a <strong>yellow</strong> theme. Several timing charts color their data points by season, using this palette:</p>
 <table>
-  <thead><tr><th>Colour</th><th>Season</th><th>Months</th></tr></thead>
+  <thead><tr><th>Color</th><th>Season</th><th>Months</th></tr></thead>
   <tbody>
     <tr><td>Steel blue</td><td>Winter</td><td>December 20 &ndash; March 19</td></tr>
     <tr><td>Green</td><td>Spring</td><td>March 20 &ndash; June 19</td></tr>
@@ -677,7 +677,7 @@
 <h3>Graphs &rarr; Species</h3>
 <ul>
   <li><strong>Total Species</strong> &mdash; a bar chart of species counts aggregated over time, with four granularity options (radio buttons): <strong>By Year</strong>, <strong>By Month</strong> (aggregated across all years), <strong>By Month-Year</strong>, and <strong>By Day</strong>. When there are more than 50 bars, x-axis labels are thinned automatically while hover tooltips remain available for all bars; By Day is disabled beyond 1,000 days. Click a bar to open a Species List for that period.</li>
-  <li><strong>New Species Each Year</strong> &mdash; a stacked bar chart showing, for each year, how many species were <em>new to you under the current filter</em> (bright blue, labelled with a + count) versus species already seen in a previous year (muted blue). Answers questions like &ldquo;How many new species did I add to my county list in 2023?&rdquo; Click a bar for that year's Species List.</li>
+  <li><strong>New Species Each Year</strong> &mdash; a stacked bar chart showing, for each year, how many species were <em>new to you under the current filter</em> (bright blue, labeled with a + count) versus species already seen in a previous year (muted blue). Answers questions like &ldquo;How many new species did I add to my county list in 2023?&rdquo; Click a bar for that year's Species List.</li>
   <li><strong>Species Growth Over Time</strong> &mdash; a line chart of your running cumulative species total as each new species was first recorded. Most interesting with no date filter, where it traces your life-list growth curve; with a location filter it shows how quickly you added species there. Hover for the count and date at any point; click to open a Species List up to that date.</li>
   <li><strong>Families Growth Over Time</strong> &mdash; the same cumulative line chart, but counting distinct bird <strong>families</strong> rather than species.</li>
   <li><strong>Year to Date by Species</strong> &mdash; a horizontal bar chart comparing your species count through today's calendar date against your full-year totals for every year. The blue segment is the year-to-date total; the muted-blue extension is the remainder of that year. The current year's bar is highlighted. Click a bar to open the records for that year through today.</li>
@@ -700,14 +700,14 @@
 <ul>
   <li><strong>Total Checklists</strong> &mdash; a bar chart of the number of checklists submitted per period, with the same granularity options as Total Species.</li>
   <li><strong>Year to Date by Checklists</strong> &mdash; checklists submitted this year versus full-year totals for previous years, in the same year-to-date bar format.</li>
-  <li><strong>Outing Effort</strong> &mdash; a scatter plot of every checklist matching the filter, with <strong>duration in minutes</strong> on the x-axis and <strong>species count</strong> on the y-axis, coloured by season (see the table above). Incidental observations (checklists with no recorded duration) are excluded, with a count of omissions noted on the chart. Note that the species count reflects only species matching the active filter, not all species on the checklist. Click a dot to open that checklist's Species List.</li>
+  <li><strong>Outing Effort</strong> &mdash; a scatter plot of every checklist matching the filter, with <strong>duration in minutes</strong> on the x-axis and <strong>species count</strong> on the y-axis, colored by season (see the table above). Incidental observations (checklists with no recorded duration) are excluded, with a count of omissions noted on the chart. Note that the species count reflects only species matching the active filter, not all species on the checklist. Click a dot to open that checklist's Species List.</li>
 </ul>
 
 <h3>Graphs &rarr; Timing &amp; Seasonality</h3>
 <ul>
-  <li><strong>Monthly Activity</strong> &mdash; a heatmap grid of species counts for every month (columns) of every year (rows, most recent on top). Cell colour ranges from light blue (low) to dark blue (high); empty cells are grey, and counts are labelled when the grid is 15 years or fewer. Immediately reveals seasonal patterns and gaps in your record. Click a cell for that month's Species List.</li>
-  <li><strong>Seasonal Occurrence</strong> &mdash; a dot chart revealing the seasonal timing of occurrence: each dot is a date a species (or filtered species) was recorded, plotted by <strong>day of year</strong> (x-axis) and <strong>year</strong> (y-axis), coloured by season. Most powerful with a <strong>species, family, or order</strong> filter &mdash; it shows typical arrival and departure dates, whether a species is a year-round resident or a seasonal visitor, and whether the timing has shifted over the years. With no such filter set, Yearbirder warns you first, since plotting all species together is cluttered.</li>
-  <li><strong>First of Year Chart</strong> &mdash; a dot chart plotting the <em>first sighting of each species in each year</em>, by day of year (x-axis) and year (y-axis), coloured by season. Ideal for tracking arrival timing &mdash; when do your warblers return each spring? Apply a Family or species filter for the most focused view.</li>
+  <li><strong>Monthly Activity</strong> &mdash; a heatmap grid of species counts for every month (columns) of every year (rows, most recent on top). Cell color ranges from light blue (low) to dark blue (high); empty cells are gray, and counts are labeled when the grid is 15 years or fewer. Immediately reveals seasonal patterns and gaps in your record. Click a cell for that month's Species List.</li>
+  <li><strong>Seasonal Occurrence</strong> &mdash; a dot chart revealing the seasonal timing of occurrence: each dot is a date a species (or filtered species) was recorded, plotted by <strong>day of year</strong> (x-axis) and <strong>year</strong> (y-axis), colored by season. Most powerful with a <strong>species, family, or order</strong> filter &mdash; it shows typical arrival and departure dates, whether a species is a year-round resident or a seasonal visitor, and whether the timing has shifted over the years. With no such filter set, Yearbirder warns you first, since plotting all species together is cluttered.</li>
+  <li><strong>First of Year Chart</strong> &mdash; a dot chart plotting the <em>first sighting of each species in each year</em>, by day of year (x-axis) and year (y-axis), colored by season. Ideal for tracking arrival timing &mdash; when do your warblers return each spring? Apply a Family or species filter for the most focused view.</li>
   <li><strong>Last of Year Chart</strong> &mdash; the mirror image of the First of Year Chart: the <em>last sighting of each species in each year</em>, for tracking departure timing and lingering late records.</li>
 </ul>
 <p>All Timing &amp; Seasonality dot charts let you hover a dot for the exact date, location(s), and species seen, and click to open a Species List for that date.</p>
@@ -726,7 +726,7 @@
 
 <h3>Animated Lifer Map</h3>
 <p>Open with <strong>Maps → Animated Lifer Map</strong>.</p>
-<p>Animates your life list building geographically over time. Each dot represents a lifer — the first time you recorded a species anywhere in your database — placed at the sighting's GPS coordinates and revealed in chronological order. Dots are coloured on a cream-to-orange gradient from earliest to most recent lifer; the newest dot flashes blue before settling to its gradient colour when the next dot appears.</p>
+<p>Animates your life list building geographically over time. Each dot represents a lifer — the first time you recorded a species anywhere in your database — placed at the sighting's GPS coordinates and revealed in chronological order. Dots are colored on a cream-to-orange gradient from earliest to most recent lifer; the newest dot flashes blue before settling to its gradient color when the next dot appears.</p>
 <p>A control bar at the bottom of the map provides:</p>
 <ul>
   <li><strong>⏮ Restart</strong> — jump back to the beginning.</li>
@@ -740,7 +740,7 @@
 <h3>Animated First Sightings Map</h3>
 <p>Open with <strong>Maps → Animated First Sightings</strong>.</p>
 <p>Animates the accumulation of new species under the current filter, revealing each species at the location where you first recorded it — in chronological order. Unlike the Animated Lifer Map, which always shows absolute life firsts, this map respects the active filter: apply a county filter to watch your county list grow, apply a year filter to replay a single year's additions, or apply any combination of region, family, or date filters to explore a specific context.</p>
-<p>Dots are coloured on a cream-to-orange gradient — pale dots are earlier firsts, deep orange dots are more recent. The newest dot appears in bright red and settles to its gradient colour when the next dot arrives. A tooltip showing the species name, number, date, and location follows the animation automatically; hover any dot at any time to see its details.</p>
+<p>Dots are colored on a cream-to-orange gradient — pale dots are earlier firsts, deep orange dots are more recent. The newest dot appears in bright red and settles to its gradient color when the next dot arrives. A tooltip showing the species name, number, date, and location follows the animation automatically; hover any dot at any time to see its details.</p>
 <p>The control bar is identical to the Animated Lifer Map:</p>
 <ul>
   <li><strong>⏮ Restart</strong> — jump back to the beginning.</li>
@@ -786,7 +786,7 @@
   <li><strong>Species</strong> — each region is shaded by the number of distinct species you have recorded there under the current filter. Darker shading = more species. Hover over a region to see its name, species count, and a list of the most recently recorded species.</li>
   <li><strong>Checklists</strong> — each region is shaded by the number of checklists you have submitted there. Hover to see its name, checklist count, and the dates of your most recent visits (newest first).</li>
 </ul>
-<p>Regions where you have no records are shaded pale grey. Hovering one still names it and shows a zero, so you can identify anywhere you have not yet birded; clicking it does nothing, as there are no records to list.</p>
+<p>Regions where you have no records are shaded pale gray. Hovering one still names it and shows a zero, so you can identify anywhere you have not yet birded; clicking it does nothing, as there are no records to list.</p>
 
 <h3>Available regions</h3>
 <table>
@@ -842,7 +842,7 @@
       <li><strong>Windows:</strong> hold <strong>Ctrl</strong> and click to select individual photos, or hold <strong>Shift</strong> and click to select a contiguous range.</li>
     </ul>
   </li>
-  <li>For each photo, Yearbirder asks you to confirm the associated bird species and checklist. To make this easier, it uses each photo's filename and EXIF date/time to suggest the most likely species — so in many cases you only need to confirm the suggestion. Yearbirder recognises eBird species codes in filenames (e.g. <code>rufhum_20240514.jpg</code>), four-letter alpha codes, and common-name words. Both readings of a hyphenated name are accepted, so a Common Wood-Pigeon is found by <code>COWP</code> as well as <code>CWPI</code>, and accents need not be typed (<code>RUWA</code> finds R&uuml;ppell's Warbler). Species with no official banding code &mdash; most birds outside North America &mdash; are matched from their names the same way. Names are read word by word — the capital letters in <em>LincolnsSparrow</em> mark where the words divide — and the words that tell the birds on that checklist apart count most, so "Lincoln" decides the species rather than "Sparrow". Small typos are forgiven, and when two species are equally likely Yearbirder leaves the choice to you rather than guessing. Whether a code is ambiguous depends on the checklist, not on birds in general: <code>COCH</code> means Common Chaffinch on a list holding only that bird, and is left for you to settle on a list holding Common Chiffchaff too. A suggested species is shown in <strong>green</strong> when a code or the whole name matched exactly, and in <strong>amber</strong> when only part of the name matched or a typo was corrected — amber suggestions are the ones worth checking. If the correct sighting does not appear as an option, make sure that sighting is logged in eBird; you cannot associate a photo with a sighting that is not in your data.</li>
+  <li>For each photo, Yearbirder asks you to confirm the associated bird species and checklist. To make this easier, it uses each photo's filename and EXIF date/time to suggest the most likely species — so in many cases you only need to confirm the suggestion. Yearbirder recognizes eBird species codes in filenames (e.g. <code>rufhum_20240514.jpg</code>), four-letter alpha codes, and common-name words. Both readings of a hyphenated name are accepted, so a Common Wood-Pigeon is found by <code>COWP</code> as well as <code>CWPI</code>, and accents need not be typed (<code>RUWA</code> finds R&uuml;ppell's Warbler). Species with no official banding code &mdash; most birds outside North America &mdash; are matched from their names the same way. Names are read word by word — the capital letters in <em>LincolnsSparrow</em> mark where the words divide — and the words that tell the birds on that checklist apart count most, so "Lincoln" decides the species rather than "Sparrow". Small typos are forgiven, and when two species are equally likely Yearbirder leaves the choice to you rather than guessing. Whether a code is ambiguous depends on the checklist, not on birds in general: <code>COCH</code> means Common Chaffinch on a list holding only that bird, and is left for you to settle on a list holding Common Chiffchaff too. A suggested species is shown in <strong>green</strong> when a code or the whole name matched exactly, and in <strong>amber</strong> when only part of the name matched or a typo was corrected — amber suggestions are the ones worth checking. If the correct sighting does not appear as an option, make sure that sighting is logged in eBird; you cannot associate a photo with a sighting that is not in your data.</li>
   <li>Your associations are saved to the media catalog automatically as you make them. The first time you add media with no catalog open, Yearbirder prompts you to choose a name and location for a new catalog file (a <code>.jsonl</code> file); from then on it saves there automatically. Remember where you saved it — you will open it again the next time you use Yearbirder.</li>
 </ol>
 
@@ -988,7 +988,7 @@
 
 <h3 id="photo-pie">Families &amp; Orders by Photos</h3>
 <p>Open with <strong>Photos → Families &amp; Orders by Photos</strong>. Available only when a media catalog is loaded.</p>
-<p>A pie chart where each wedge represents a bird family (or order), sized by the <strong>total number of photos</strong> you have of species in that group under the current filter — not the number of species or individuals, but the literal photo count. Wedges are rendered in a <strong>yellow</strong> colour palette to distinguish this chart from the sighting-data pie charts.</p>
+<p>A pie chart where each wedge represents a bird family (or order), sized by the <strong>total number of photos</strong> you have of species in that group under the current filter — not the number of species or individuals, but the literal photo count. Wedges are rendered in a <strong>yellow</strong> color palette to distinguish this chart from the sighting-data pie charts.</p>
 <p>Toggle between <strong>Families</strong> and <strong>Orders</strong> using the radio buttons. Hover over a wedge to see the group name, photo count, percentage of total, and the species you have photographed most within that group (ranked by photo count). Click a wedge to open a <strong>Photos</strong> window filtered to that family or order.</p>
 
 <h3 id="photo-bar">Total Photos</h3>
@@ -1030,7 +1030,7 @@
 
 <p><strong>Setting Combinations</strong> plots any one exposure variable against any other. Two rows of radio buttons above the chart choose what runs along the bottom and what runs up the side — ISO, aperture, shutter speed or focal length. Choosing the same variable for both draws a diagonal line and tells you nothing, but it is allowed, so that swapping the two axes takes a click on each row rather than a detour through a third variable. It opens on focal length against shutter speed, the pair that shows how slow a shutter each focal length has held. ISO and shutter speed get logarithmic axes, because each step doubles; focal length and aperture are read linearly.</p>
 
-<p>Because cameras record these values in steps rather than continuously, photos stack rather than scatter: each dot is one combination of the two variables. Its <strong>size</strong> is how many of your photos share that combination, on a logarithmic scale since a few combinations usually hold far more photos than the rest; its <strong>colour</strong> is the average rating of those photos, running from gold at one star to deep magenta at five, with the key below the chart. So size tells you how often you shoot there and colour tells you how well it tends to go. A combination whose photos are all unrated is drawn in grey, and the note under the chart says how many those are. Hovering a dot gives its exact count and the full spread of its ratings; clicking one opens those photos in Browse Grid.</p>
+<p>Because cameras record these values in steps rather than continuously, photos stack rather than scatter: each dot is one combination of the two variables. Its <strong>size</strong> is how many of your photos share that combination, on a logarithmic scale since a few combinations usually hold far more photos than the rest; its <strong>color</strong> is the average rating of those photos, running from gold at one star to deep magenta at five, with the key below the chart. So size tells you how often you shoot there and color tells you how well it tends to go. A combination whose photos are all unrated is drawn in gray, and the note under the chart says how many those are. Hovering a dot gives its exact count and the full spread of its ratings; clicking one opens those photos in Browse Grid.</p>
 
 <p>Some pairings say more than others. Shutter speed against focal length is about holding the camera steady; shutter speed against ISO is the exposure trade-off, and reads as a record of the light you have worked in. Aperture against focal length traces your zoom’s own variable-aperture curve, since a lens that opens to f/4.5 at the short end cannot do so at the long one.</p>
 
@@ -1188,7 +1188,7 @@
 <ol>
   <li>Choose <strong>File → Add recordings…</strong>.</li>
   <li>A file dialog opens. Navigate to the folder containing your recordings and select one or more <strong>WAV</strong> files. You can select several at once (hold <strong>Command</strong> / <strong>Ctrl</strong> to pick individual files, or <strong>Shift</strong> to select a contiguous range).</li>
-  <li>For each recording, Yearbirder asks you to confirm the associated species, location, date, and time. As with photos, it uses each file's name and timestamp to suggest the most likely sighting, so you usually only need to confirm. Because one recording can capture several birds, each species appears as its own chip, coloured <strong>green</strong> or <strong>amber</strong> by how closely the file name matched it, just as for photos (see <a href="#photo-settings-file">Section 20</a>); a species you pick yourself is shown in blue. The sighting must already exist in your eBird data.</li>
+  <li>For each recording, Yearbirder asks you to confirm the associated species, location, date, and time. As with photos, it uses each file's name and timestamp to suggest the most likely sighting, so you usually only need to confirm. Because one recording can capture several birds, each species appears as its own chip, colored <strong>green</strong> or <strong>amber</strong> by how closely the file name matched it, just as for photos (see <a href="#photo-settings-file">Section 20</a>); a species you pick yourself is shown in blue. The sighting must already exist in your eBird data.</li>
   <li>Set an optional <strong>rating</strong> (your personal quality score) for each recording.</li>
   <li>Your additions are saved to the media catalog automatically. (If no catalog is open yet, Yearbirder prompts you to create one.)</li>
 </ol>
@@ -1324,7 +1324,7 @@
 <hr>
 
 <h2 id="recordings-reports">30. Recordings Charts and Reports</h2>
-<p>The <strong>Recordings</strong> menu mirrors the Photos menu: the menu itself holds the ways of listening to your recordings — Browse Grid, Browse Cards, Species Gallery, Recording Map and Animated Recording Map — and its <strong>Birding Statistics</strong> submenu holds the charts and reports described here. They count your sound recordings instead of photos, appear once a media catalog is open, and are rendered in a <strong>green</strong> colour palette to distinguish them from the yellow photo charts. Each respects the current Sighting Filter and Media Filter. There is no Technical Statistics submenu for recordings: the gear and exposure reports photos have do not apply to audio.</p>
+<p>The <strong>Recordings</strong> menu mirrors the Photos menu: the menu itself holds the ways of listening to your recordings — Browse Grid, Browse Cards, Species Gallery, Recording Map and Animated Recording Map — and its <strong>Birding Statistics</strong> submenu holds the charts and reports described here. They count your sound recordings instead of photos, appear once a media catalog is open, and are rendered in a <strong>green</strong> color palette to distinguish them from the yellow photo charts. Each respects the current Sighting Filter and Media Filter. There is no Technical Statistics submenu for recordings: the gear and exposure reports photos have do not apply to audio.</p>
 <ul>
   <li><strong>Total Recordings per Species</strong> — a gallery grouped by species, showing a representative spectrogram for each species you have recorded.</li>
   <li><strong>Year to Date by Recordings</strong> — a horizontal bar chart comparing your year-to-date recording count against your full-year totals for every year in your data.</li>
@@ -1351,7 +1351,7 @@
 </ul>
 
 <h3>Reading the report</h3>
-<p>Species are listed in taxonomic order. Each row shows the species common and scientific name, along with colour-coded badge bubbles and a report count on the right. Hybrid species are shown in grey without badges.</p>
+<p>Species are listed in taxonomic order. Each row shows the species common and scientific name, along with color-coded badge bubbles and a report count on the right. Hybrid species are shown in gray without badges.</p>
 <p>The badge bubbles indicate firsts relative to <strong>your own eBird data</strong>:</p>
 <ul>
   <li><strong>Life</strong> — you have never recorded this species anywhere.</li>
@@ -1365,7 +1365,7 @@
 <p>Click the <strong>+</strong> button to the left of any species name to expand its row and see all the individual checklists on which that species was reported. Each checklist row shows the location, date and time, count, and observer name. Click <strong>View ↗</strong> to open that checklist on the eBird website. Duplicate sightings (same location, time, and observer) are automatically removed.</p>
 
 <h3>Clicking a species</h3>
-<p>Click any blue species common name to open an <strong>Individual Species</strong> window for that species, showing your full sighting history, location and year breakdowns, monthly patterns, and photo thumbnails. If the species is not in your own data, clicking it does nothing. Hybrid species names are shown in grey and are not clickable.</p>
+<p>Click any blue species common name to open an <strong>Individual Species</strong> window for that species, showing your full sighting history, location and year breakdowns, monthly patterns, and photo thumbnails. If the species is not in your own data, clicking it does nothing. Hybrid species names are shown in gray and are not clickable.</p>
 
 <h3>Filtering the list</h3>
 <p>When the report contains species with one or more badges, a row of filter buttons appears above the list. Click a button to show only species that match that badge type — for example, clicking <strong>Year</strong> hides everything except species you have not yet recorded this year. Click <strong>All</strong> to show every species again.</p>
@@ -1387,7 +1387,7 @@
 </ul>
 
 <h3>Reading the report</h3>
-<p>Species are listed in taxonomic order. Each row shows the most recent sighting of that species — location, date and time, count, and observer — along with the same colour-coded Life/State/County/Year badge bubbles as the Notable Sightings report. Hybrid species are shown in grey without badges.</p>
+<p>Species are listed in taxonomic order. Each row shows the most recent sighting of that species — location, date and time, count, and observer — along with the same color-coded Life/State/County/Year badge bubbles as the Notable Sightings report. Hybrid species are shown in gray without badges.</p>
 <p>Click <strong>View ↗</strong> on any row to open that checklist on the eBird website.</p>
 
 <h3>All Locations button</h3>
@@ -1402,7 +1402,7 @@
 <p>These buttons are shown even when no checklists have been submitted in the past three days, so you can always access the taxonomy and map for a location you are interested in.</p>
 
 <h3>Clicking a species</h3>
-<p>Click any blue species common name to open an <strong>Individual Species</strong> window for that species. If the species is not in your own data, clicking it does nothing. Hybrid species names are shown in grey and are not clickable.</p>
+<p>Click any blue species common name to open an <strong>Individual Species</strong> window for that species. If the species is not in your own data, clicking it does nothing. Hybrid species names are shown in gray and are not clickable.</p>
 
 <h3>Filtering the list</h3>
 <p>The same filter bar as the Notable Sightings report appears above the list when badge types are present. Click a badge button to narrow the list to species matching that first type; click <strong>All</strong> to restore the full list.</p>
@@ -1582,7 +1582,7 @@
 
 <h3>Using graphs to understand your birding patterns</h3>
 <ul>
-  <li><strong>Seasonal Occurrence + species filter</strong>: select a favourite migrant species in the Species filter, then open <strong>Graphs → Timing &amp; Seasonality → Seasonal Occurrence</strong>. You will immediately see whether your records show the species arriving earlier or later in recent years.</li>
+  <li><strong>Seasonal Occurrence + species filter</strong>: select a favorite migrant species in the Species filter, then open <strong>Graphs → Timing &amp; Seasonality → Seasonal Occurrence</strong>. You will immediately see whether your records show the species arriving earlier or later in recent years.</li>
   <li><strong>Outing Effort + location filter</strong>: set a location filter and open <strong>Graphs → Checklists → Outing Effort</strong>. Clusters of dots reveal your typical productivity at that site — and outlier dots (many species in a short time, or few species in a long session) are worth investigating.</li>
   <li><strong>New Species Each Year + location filter</strong>: filter to a county or location you visit regularly and open <strong>Graphs → Species → New Species Each Year</strong>. Bars with a large bright-blue new-species segment were standout years for that location.</li>
   <li><strong>Species growth with no filter</strong>: open <strong>Graphs → Species → Species Growth Over Time</strong> with all filters cleared to see your all-time life-list growth curve. The slope flattens as you become a more experienced birder — steep jumps often correspond to trips to new regions.</li>
