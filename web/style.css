@@ -502,6 +502,8 @@ footer p { font-size: 13px; }
 }
 
 .platform-intro-text p { color: var(--slate); font-size: 0.95rem; }
+.platform-intro-text ul { padding-left: 20px; margin: 0 0 12px; }
+.platform-intro-text li { color: var(--slate); font-size: 0.95rem; margin-bottom: 8px; }
 
 /* Step-by-step */
 .steps-heading {
