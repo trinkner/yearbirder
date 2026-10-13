@@ -2100,7 +2100,11 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
         # showing an empty line.
         microphone = rec.get("microphone", "")
 
-        info = f"\n\n{location}\n{weekday}{date} {time_str}\n"
+        region = self.mdiParent.db.GetRegionLine(s)
+        info = f"\n\n{location}\n"
+        if region:
+            info += f"{region}\n"
+        info += f"{weekday}{date} {time_str}\n"
         if duration:
             info += f"\nDuration: {duration}"
         if sample_rate:

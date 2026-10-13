@@ -5336,6 +5336,24 @@ class DataBase():
             return(shortCode)
 
         
+    def GetRegionLine(self, sighting):
+        """"County, State, Country" for a sighting, as one readable line.
+
+        Each part is dropped when the sighting has no value for it, which is
+        the normal case for the county outside the handful of countries eBird
+        divides that far — Costa Rica and Czechia have no counties at all, so
+        theirs read "Alajuela, Costa Rica".  State and country are expanded
+        from their eBird codes via the lookups rather than the sighting's own
+        fields, since those carry "US-CO" and "US".
+        """
+        parts = [
+            sighting.get("county", ""),
+            self.GetStateName(sighting.get("state", "")),
+            self.GetCountryName(sighting.get("country", "")),
+        ]
+        return ", ".join(p for p in parts if p)
+
+
     def dumpDatabaseToFile(self):
         
         # routine used only in debugging
