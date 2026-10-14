@@ -649,8 +649,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
     # About) and string-compared in _onUpdateCheckDone.  Letters are fine.
     # Avoid SPACES though — build_release.sh interpolates this into DMG
     # filenames and the disk-image volume name (Yearbirder_v${VERSION}.dmg).
-    versionNumber = "2.18"
-    versionDate = "October 9, 2026"
+    versionNumber = "2.20"
+    versionDate = "October 14, 2026"
     taxonomyYear = ""
 
     def __init__(self):
@@ -4243,7 +4243,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             msg.addButton("Not Now", QMessageBox.ButtonRole.RejectRole)
             msg.exec()
             if msg.clickedButton() is download_btn:
-                QDesktopServices.openUrl(QUrl("https://github.com/trinkner/yearbirder/releases/latest"))
+                QDesktopServices.openUrl(QUrl(code_Web.DOWNLOAD_URL))
             elif msg.clickedButton() is whats_new_btn:
                 # The browser, not a child window: the dialog is modal, and a
                 # window opened behind it could not be read until it closed.

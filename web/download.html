@@ -58,7 +58,7 @@
 <!-- ── Hero ───────────────────────────────────────────────────────── -->
 <section class="download-hero">
   <div class="container">
-    <div class="version-badge">Current release: v2.18 &nbsp;·&nbsp; October 2026</div>
+    <div class="version-badge">Current release: v2.20 &nbsp;·&nbsp; October 2026</div>
     <h1>Download Yearbirder</h1>
     <p>Free and open-source. Available as a one-click install on macOS and Windows,<br>or run from source on Linux.</p>
   </div>
@@ -85,23 +85,22 @@
 
       <div class="platform-intro">
         <div class="platform-cta">
-          <a href="https://github.com/trinkner/yearbirder/releases/download/v2.18/Yearbirder_v2.18.dmg" class="btn btn-primary btn-lg">
+          <a href="https://github.com/trinkner/yearbirder/releases/download/v2.20/Yearbirder_v2.20.dmg" class="btn btn-primary btn-lg">
             Download for macOS
           </a>
           <p class="release-note">Signed &amp; notarized &nbsp;·&nbsp; macOS 13+ &nbsp;·&nbsp; Apple Silicon</p>
         </div>
         <div class="platform-intro-text">
           <h3>One file, drag-and-drop install</h3>
-          <p>The macOS app is signed and notarized by Apple.</p>
-          <p><strong>Apple Silicon Macs only.</strong> Yearbirder runs on Macs with an
-            Apple M-series chip (M1 and later, sold from late 2020 onward). It will not
-            open on an older Intel Mac. To check which you have, choose
-            <strong>Apple menu&nbsp;→ About This Mac</strong>: if <em>Chip</em> reads
-            "Apple M1", "Apple M2" or similar, you are all set. If it reads
-            <em>Processor</em> with an Intel name, this download will not run — you can
-            still run Yearbirder from source (see the Linux tab for the general
-            approach), or <a href="https://github.com/trinkner/yearbirder/issues">let us
-            know</a>, as demand is what would justify building an Intel version.</p>
+          <ul>
+            <li>Signed and notarized by Apple for your security.</li>
+            <li><strong>Apple Silicon Macs only.</strong> Yearbirder runs on Apple
+              M-series chips (M1 and later, sold from late 2020 onward). It does not
+              run on older Intel Macs.</li>
+            <li>To check your processor type, choose
+              <strong>Apple menu&nbsp;→ About This Mac</strong>. If Chip reads
+              "Apple M1", "Apple M2" or similar, your Mac will run Yearbirder.</li>
+          </ul>
         </div>
       </div>
 
@@ -111,7 +110,7 @@
           <div class="step-number">1</div>
           <div class="step-content">
             <h4>Download Yearbirder</h4>
-            <p>Click the <strong>Download for macOS</strong> button above. Your browser will download <code>Yearbirder_v2.18.dmg</code>.</p>
+            <p>Click the <strong>Download for macOS</strong> button above. Your browser will download <code>Yearbirder_v2.20.dmg</code>.</p>
           </div>
         </div>
         <div class="step">
@@ -151,40 +150,52 @@
 
       <div class="platform-intro">
         <div class="platform-cta">
-          <a href="https://github.com/trinkner/yearbirder/releases/download/v2.18/Yearbirder_Setup_v2.18.exe" class="btn btn-primary btn-lg">
-            Download for Windows
+          <a href="https://apps.microsoft.com/detail/9PKH7PL7F5G2" class="btn btn-primary btn-lg" target="_blank" rel="noopener">
+            Get it from the Microsoft Store
+          </a>
+          <a href="https://github.com/trinkner/yearbirder/releases/download/v2.20/Yearbirder_Setup_v2.20.exe" class="btn btn-secondary btn-lg">
+            Download the installer
           </a>
           <p class="release-note">Windows 10 or 11 &nbsp;·&nbsp; 64-bit (x64)</p>
         </div>
         <div class="platform-intro-text">
-          <h3>One-click installer</h3>
-          <p>Download <code>Yearbirder_Setup_v2.18.exe</code> and run it. Yearbirder adds itself to your Program Files folder and the Start Menu.</p>
-          <p><strong>Built for x64 processors</strong> — the Intel and AMD chips in
-            almost every Windows PC. To check, open <strong>Settings&nbsp;→ System&nbsp;→
-            About</strong> and look at <em>System type</em>.</p>
-          <p>On the newer <strong>ARM-based</strong> Windows PCs (Snapdragon and
-            Copilot+ machines), Yearbirder still installs and runs — Windows translates
-            it automatically — but everything is slower, and the community sightings
-            reports in particular scroll sluggishly. A native ARM version is on the list;
-            <a href="https://github.com/trinkner/yearbirder/issues">tell us</a> if you are
-            on an ARM PC, as that is what would move it up.</p>
+          <h3>Two ways to install</h3>
+          <ul>
+            <li><strong>The Microsoft Store</strong> — Fully signed, authenticated by Microsoft, installs without security warnings and automatically updates with each version.</li>
+            <li><strong>Setup.exe file</strong> — Bypasses the Store, but you will need to click through two security prompts and update it manually.</li>
+          </ul>
+          <p>Optimized for x64 processors — the Intel and AMD chips in most Windows PCs.
+            On ARM-based Windows PCs (Snapdragon and Copilot+ machines), a few
+            HTML-based features may scroll slowly.</p>
         </div>
       </div>
 
-      <div class="callout callout-warning">
-        <strong>Windows security prompts</strong> — You will see two security dialogs when installing. Both are normal for free, independent apps that are not commercially code-signed. Yearbirder is safe and open-source; its full source code is on <a href="https://github.com/trinkner/yearbirder" target="_blank" rel="noopener">GitHub</a>.<br><br>
-        <strong>1. SmartScreen</strong> — A blue screen saying <em>"Windows protected your PC."</em> Click <strong>More info</strong>, then <strong>Run anyway</strong>.<br><br>
-        <strong>2. User Account Control</strong> — A prompt asking <em>"Do you want to allow this app from an unknown publisher to make changes to your device?"</em> Click <strong>Yes</strong> to allow the installer to place Yearbirder in Program Files.
+      <div class="callout">
+        <strong>Already have Yearbirder from the installer?</strong> Uninstall it before
+        installing from the Store. The two are separate installations and will otherwise
+        sit side by side &mdash; two entries in your Start Menu, each updating by its own
+        route. Your eBird data, media catalog, photos and recordings are untouched either
+        way, but the Store copy starts with fresh settings, so you will need to re-open
+        your catalog and re-enter your optional eBird API key.
       </div>
 
-      <h3 class="steps-heading">Installation steps</h3>
+      <div class="callout callout-warning">
+        <strong>Windows security prompts — direct installer only</strong> — These two dialogs appear when you run the <code>.exe</code>. They do not appear if you install from the Microsoft Store, which Microsoft signs. Both are normal for free, independent apps that are not commercially code-signed. Yearbirder is safe and open-source; its full source code is on <a href="https://github.com/trinkner/yearbirder" target="_blank" rel="noopener">GitHub</a>.<br><br>
+        <strong>1. SmartScreen</strong> — A blue screen saying "Windows protected your PC." Click <strong>More info</strong>, then <strong>Run anyway</strong>.<br><br>
+        <strong>2. User Account Control</strong> — A prompt asking "Do you want to allow this app from an unknown publisher to make changes to your device?" Click <strong>Yes</strong> to allow the installer to place Yearbirder in Program Files.
+      </div>
+
+      <h3 class="steps-heading">Installing with the direct installer</h3>
+      <p>Installing from the Microsoft Store needs no instructions — open the
+        <a href="https://apps.microsoft.com/detail/9PKH7PL7F5G2" target="_blank" rel="noopener">Store listing</a>
+        and click <strong>Get</strong>. These steps are for the <code>.exe</code>.</p>
       <div class="steps">
 
         <div class="step">
           <div class="step-number">1</div>
           <div class="step-content">
             <h4>Download the installer</h4>
-            <p>Click <strong>Download for Windows</strong> above. Your browser will download <code>Yearbirder_Setup_v2.18.exe</code>.</p>
+            <p>Click <strong>Download the installer</strong> above. Your browser will download <code>Yearbirder_Setup_v2.20.exe</code>.</p>
           </div>
         </div>
 
@@ -192,7 +203,7 @@
           <div class="step-number">2</div>
           <div class="step-content">
             <h4>Run the installer</h4>
-            <p>Double-click <code>Yearbirder_Setup_v2.18.exe</code>. If Windows shows a SmartScreen warning, click <strong>More info</strong> and then <strong>Run anyway</strong>. Follow the installer prompts — the defaults are fine.</p>
+            <p>Double-click <code>Yearbirder_Setup_v2.20.exe</code>. If Windows shows a SmartScreen warning, click <strong>More info</strong> and then <strong>Run anyway</strong>. Follow the installer prompts — the defaults are fine.</p>
           </div>
         </div>
 
@@ -221,7 +232,7 @@
 
       <div class="platform-intro">
         <div class="platform-cta">
-          <a href="https://github.com/trinkner/yearbirder/archive/refs/tags/v2.18.zip" class="btn btn-secondary btn-lg">
+          <a href="https://github.com/trinkner/yearbirder/archive/refs/tags/v2.20.zip" class="btn btn-secondary btn-lg">
             Download Yearbirder
           </a>
           <p class="release-note">Requires Python 3.10+</p>
@@ -259,9 +270,16 @@ sudo dnf install python3-pip    # Fedora</div>
           <div class="step-number">3</div>
           <div class="step-content">
             <h4>Install required packages</h4>
-            <div class="code-block">pip3 install pyside6 folium matplotlib numpy natsort piexif</div>
+            <div class="code-block">pip3 install pyside6 folium matplotlib numpy natsort piexif soundfile soxr</div>
+            <p style="margin-top:8px;"><code>soundfile</code> and <code>soxr</code> are what read and resample your recordings — without them the Recordings features will not work. Two further packages are optional: <code>mutagen</code> lets Yearbirder read the date out of ID3-tagged audio, and <code>certifi</code> supplies its own set of HTTPS certificates. Yearbirder works without either, falling back to the filename for dates and to your system's certificates.</p>
             <div class="callout">
-              <strong>Note:</strong> PySide6 on Linux requires certain system libraries. If the app fails to start with an error about <code>libxcb</code>, install the Qt platform dependencies for your distro. On Debian/Ubuntu: <code>sudo apt install libxcb-cursor0</code>
+              <strong>System libraries:</strong> the Python packages above do not bring everything Qt needs on Linux.
+              <br><br>
+              <strong>If the app will not start</strong> with an error mentioning <code>libxcb</code>, install the Qt platform dependencies. On Debian/Ubuntu: <code>sudo apt install libxcb-cursor0</code>
+              <br><br>
+              <strong>If recordings will not play</strong>, Qt's audio support on Linux is built on GStreamer, which is not included in the Python packages. On Debian/Ubuntu: <code>sudo apt install libgstreamer1.0-0 gstreamer1.0-plugins-base gstreamer1.0-plugins-good</code>
+              <br><br>
+              <strong>If maps and reports are blank</strong>, those are rendered by Qt WebEngine, which needs NSS. On Debian/Ubuntu: <code>sudo apt install libnss3</code>
             </div>
           </div>
         </div>

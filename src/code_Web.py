@@ -12,6 +12,7 @@ except ImportError:
     _SSL_CTX = ssl.create_default_context()
 
 from code_Stylesheet import CHART_PRIMARY, PHOTO_PRIMARY, RECORDINGS_PRIMARY
+import code_Stylesheet
 
 # import the GUI forms that we create with Qt Creator
 import form_Web
@@ -190,6 +191,11 @@ class _ExternalLinkPage(QWebEnginePage):
 # app's own offline copy.  The app does NOT show this page directly: it would
 # describe releases the user may not be running (see publish_whatsnew.py).
 WHATS_NEW_URL = "https://yearbirder.org/history"
+# Where Check for Updates sends people.  Deliberately the download page and
+# not the GitHub release: the page leads with the Microsoft Store, so a Store
+# user who follows it is not handed a .exe that would install a second,
+# parallel copy of Yearbirder alongside the one the Store already updates.
+DOWNLOAD_URL = "https://yearbirder.org/download"
 
 
 class _FullScreenPage(QWebEnginePage):
@@ -789,6 +795,14 @@ def satellite_toggle_js():
     _initSatToggle();
 })();
 </script>"""
+
+
+# Hotspot Map: ask before drawing more than this many dots.  8,000 sits above
+# every region that works today — Los Angeles County is 2,496 and Texas 7,486
+# — and below the sizes that genuinely break: a whole country runs to six
+# figures.  Measured at ~674 bytes of generated HTML per hotspot, 8,000 is
+# about 5 MB, which QtWebEngine handles.
+_HOTSPOT_CONFIRM_AT = 8000
 
 
 class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
@@ -8176,6 +8190,7 @@ function openChecklist(subId) {{
         import io
         import folium
         import json as _json
+        import socket
         import tempfile
         import urllib.request
         from copy import deepcopy
@@ -8200,9 +8215,10 @@ function openChecklist(subId) {{
         region_id, region_label = self._getEBirdRegionCode(filter)
         if not region_id:
             QMessageBox.warning(
-                self.mdiParent, "County Required",
-                "Hotspot Map requires a county or specific location to be "
-                "selected in the filter.\n\nPlease select a county and try again.",
+                self.mdiParent, "Region Required",
+                "Hotspot Map needs a region selected in the filter \u2014 a "
+                "country, state or province, county, or a specific location."
+                "\n\nPlease choose one and try again.",
                 QMessageBox.StandardButton.Ok,
             )
             return False
@@ -8227,13 +8243,30 @@ function openChecklist(subId) {{
             except Exception:
                 pass
 
-        # Restrict to county-level (2 dashes) or location-derived codes
-        if not region_id.startswith("L") and region_id.count("-") < 2:
-            QMessageBox.warning(
-                self.mdiParent, "County Required",
-                "Hotspot Map is only available at the county level — "
-                "a country or state would return too many hotspots to display "
-                "usefully.\n\nPlease select a county in the filter and try again.",
+        # Refuse a whole country before asking eBird for anything.  A country
+        # map is both unusable and rude: the United States returns 158,000
+        # hotspots and 16 MB, and nobody plans an outing at that scale.  eBird
+        # offers no way to learn the size without downloading it — HEAD omits
+        # Content-Length and Range is ignored — so the only way not to make the
+        # request is to decide on the region level first.
+        #
+        # The exception is a country eBird does not subdivide at all: Singapore,
+        # Bermuda, Hong Kong, the Vatican and 49 others, where the country IS
+        # the finest level and the counts are small (Singapore, the largest, has
+        # 313 — about one US county).  countryHasStates reads that from the
+        # shipped code file, so the check costs nothing.
+        #
+        # Counties and states are always allowed; the biggest state, Texas, is
+        # 7,486 hotspots, under the confirmation threshold below.
+        if (not region_id.startswith("L")
+                and "-" not in region_id
+                and self.mdiParent.db.countryHasStates(region_id)):
+            QMessageBox.information(
+                self.mdiParent, "Choose a State or County",
+                f"A hotspot map of {region_label} would cover the whole country "
+                "— far more locations than a map can show usefully, and a large "
+                "request to eBird.\n\nPlease select a state or county in the "
+                "filter, then try again.",
                 QMessageBox.StandardButton.Ok,
             )
             return False
@@ -8241,15 +8274,26 @@ function openChecklist(subId) {{
         QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
         url = f"https://api.ebird.org/v2/ref/hotspot/{region_id}"
         req = urllib.request.Request(url, headers={"X-eBirdApiToken": api_key})
+        # 90s, not 20s: a whole-country region is a genuinely large download
+        # (the United States is ~16 MB and took 7s on a fast line), and a
+        # timeout here used to surface as "check your internet connection and
+        # eBird API key" — blaming the one thing that was working.
         try:
-            with urllib.request.urlopen(req, timeout=20, context=_SSL_CTX) as resp:
+            with urllib.request.urlopen(req, timeout=90, context=_SSL_CTX) as resp:
                 raw_csv = resp.read().decode("utf-8")
-        except Exception:
+        except Exception as exc:
             QApplication.restoreOverrideCursor()
+            timed_out = isinstance(exc, (socket.timeout, TimeoutError)) or \
+                        "timed out" in str(exc).lower()
+            if timed_out:
+                msg = (f"eBird took too long to return the hotspots for "
+                       f"'{region_label}'.\n\nThis is usually a very large "
+                       "region. Try a smaller one, or try again later.")
+            else:
+                msg = (f"Could not fetch hotspots for '{region_label}'.\n\n"
+                       "Check your internet connection and eBird API key.")
             QMessageBox.warning(
-                self.mdiParent, "Network Error",
-                f"Could not fetch hotspots for '{region_label}'.\n\n"
-                "Check your internet connection and eBird API key.",
+                self.mdiParent, "Could Not Fetch Hotspots", msg,
                 QMessageBox.StandardButton.Ok,
             )
             return False
@@ -8280,6 +8324,42 @@ function openChecklist(subId) {{
                 QMessageBox.StandardButton.Ok,
             )
             return False
+
+        # Every hotspot becomes its own Leaflet vector path, and folium emits
+        # about 674 bytes of HTML for each, so the cost is linear and steep:
+        # Texas (7,486) is roughly 5 MB, the whole United States (158,415) is
+        # over 100 MB and would hang the renderer.  The ceiling is deliberately
+        # a question rather than a refusal — somebody who wants a statewide
+        # overview and will wait for it is making a reasonable choice, and the
+        # old rule gave them no way to say so.
+        if len(points) > _HOTSPOT_CONFIRM_AT:
+            # Only suggest drilling down if eBird actually has a finer level
+            # here.  Telling a Costa Rica user to pick a county is the dead end
+            # this whole change exists to remove.
+            advice = ""
+            if not region_id.startswith("L") and region_id.count("-") < 2:
+                try:
+                    _u = (f"https://api.ebird.org/v2/ref/region/list/"
+                          f"subnational2/{region_id}")
+                    _r = urllib.request.Request(
+                        _u, headers={"X-eBirdApiToken": api_key})
+                    with urllib.request.urlopen(_r, timeout=20,
+                                                context=_SSL_CTX) as _resp:
+                        if _json.loads(_resp.read().decode("utf-8")):
+                            advice = ("\n\nSelecting a county in the filter "
+                                      "would give a faster, more detailed map.")
+                except Exception:
+                    pass
+
+            reply = code_Stylesheet.question(
+                self.mdiParent, "Large Hotspot Map",
+                f"{region_label} has {len(points):,} eBird hotspots.\n\n"
+                "A map this size takes a while to draw and may scroll and zoom "
+                "slowly." + advice + "\n\nShow it anyway?",
+                yes_text="Show anyway", no_text="Cancel",
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return False
 
         # Color shading: pale straw → orange → deep crimson, rank-normalised so the
         # full color range is always used regardless of the species-count distribution.

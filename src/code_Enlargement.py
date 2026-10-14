@@ -1122,6 +1122,9 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
         # exposure/aperture line renders — every line break must therefore be
         # an explicit <br>, not a literal "\n".
         detailsText = "<br><br>" + photoLocation + "<br>"
+        _region = self.mdiParent.mdiParent.db.GetRegionLine(sighting)
+        if _region:
+            detailsText = detailsText + _region + "<br>"
         detailsText = detailsText + photoWeekday + photoExifDate + " " + photoExifTime + "<br>"
         detailsText = detailsText + "<br>"
         detailsText = detailsText + photoExifModel + "<br>"

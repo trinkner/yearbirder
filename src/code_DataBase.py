@@ -789,6 +789,7 @@ class DataBase():
         self.showBatchOptions = False
         self._countryLookup = {}   # shortCode -> longName, built by ReadCountryStateCodeFile
         self._stateLookup = {}     # shortCode -> longName, built by ReadCountryStateCodeFile
+        self._countriesWithoutStates = set()   # countries eBird does NOT subdivide
         self.monthNameDict = ({
             "01":"Jan",
             "02":"Feb",
@@ -2253,13 +2254,38 @@ class DataBase():
         countryCodeData = []
         
         # open the country and state code data file
-        # and read its lines into a list for future searching
-        with open(dataFile, 'r', errors='replace') as csvfile:
+        # and read its lines into a list for future searching.
+        #
+        # The encoding is explicit because this file is UTF-8 and 636 of its
+        # 3,938 lines carry non-ASCII names.  Without it Python falls back to
+        # the locale encoding, which is UTF-8 on macOS but cp1252 on Windows —
+        # where every one of those names decoded into mojibake ("Hlavní město
+        # Praha" became "HlavnÃ­ mÄ›sto Praha") in the Sightings Filter.
+        # errors='replace' made it silent: cp1252 maps almost every byte, so
+        # nothing raised.  utf-8-sig rather than utf-8 so a future copy of this
+        # file saved with a BOM doesn't put a stray \ufeff on the first field.
+        with open(dataFile, 'r', encoding='utf-8-sig', errors='replace') as csvfile:
             csvdata = csv.reader(csvfile, delimiter=',', quotechar='"')
             for line in csvdata:
                 countryCodeData.append(line)
         csvfile.close()
         
+        # Which countries eBird subdivides at all.  The file carries one
+        # placeholder row per country, coded "XX-" with a bare hyphen and named
+        # for the country itself, alongside a row per real subnational1 ("SM-01").
+        # A country whose only row is the placeholder has no states or provinces
+        # in eBird — 53 of the 253 are like this, mostly islands and city-states
+        # such as Singapore, Bermuda, Hong Kong and the Vatican.  Checked
+        # against the live API for a dozen countries and exact in every case.
+        _known = {c[0] for c in countryCodeData if c and c[0] and c[0] != "country_code"}
+        _divided = {c[0] for c in countryCodeData
+                    if len(c) > 1 and c[1] and not c[1].endswith("-")}
+        # Stored as the undivided set, not the divided one, so that an
+        # unrecognised code falls on the cautious side: "not in this set" means
+        # "assume it has states", which refuses a whole-country request rather
+        # than asking eBird for a country we know nothing about.
+        self._countriesWithoutStates = _known - _divided
+
         # clear the countryList and stateList because we'll use longer names
         self.countryList = []
         self.stateList = []
@@ -5327,6 +5353,37 @@ class DataBase():
             return(shortCode)
 
         
+    def countryHasStates(self, countryCode):
+        """True when eBird subdivides this country into states or provinces.
+
+        Read from the shipped country/state code file, so it costs nothing and
+        needs no network.  Only the 53 countries the file positively shows as
+        undivided answer False; an unrecognised code, or a code file that never
+        loaded, answers True.  That is the cautious side: the caller uses this
+        to decide whether a whole-country request is reasonable, and a country
+        we know nothing about might be a large one.
+        """
+        return bool(countryCode) and countryCode not in self._countriesWithoutStates
+
+
+    def GetRegionLine(self, sighting):
+        """"County, State, Country" for a sighting, as one readable line.
+
+        Each part is dropped when the sighting has no value for it, which is
+        the normal case for the county outside the handful of countries eBird
+        divides that far — Costa Rica and Czechia have no counties at all, so
+        theirs read "Alajuela, Costa Rica".  State and country are expanded
+        from their eBird codes via the lookups rather than the sighting's own
+        fields, since those carry "US-CO" and "US".
+        """
+        parts = [
+            sighting.get("county", ""),
+            self.GetStateName(sighting.get("state", "")),
+            self.GetCountryName(sighting.get("country", "")),
+        ]
+        return ", ".join(p for p in parts if p)
+
+
     def dumpDatabaseToFile(self):
         
         # routine used only in debugging

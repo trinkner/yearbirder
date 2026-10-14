@@ -53,8 +53,15 @@ def releases():
         date = re.search(r'class="release-date">([^<]+)<', chunk)
         if not ver:
             continue
+        # Each bullet is one paragraph opening with a bold label:
+        #   <p><strong>Trip Report</strong> &mdash; the Dates tab lists…</p>
+        # The label and the rest are split here so the in-app page can keep
+        # rendering them as a titled block.  history.html used to carry a
+        # separate <span class="feat-title"> heading above the paragraph; when
+        # that was dropped, this parser silently matched nothing and the app
+        # shipped a What's New page of empty version headers.
         items = re.findall(
-            r'<span class="feat-title">(.*?)</span>\s*<p>(.*?)</p>',
+            r'<p><strong>(.*?)</strong>\s*&mdash;\s*(.*?)</p>',
             chunk, re.S)
         out.append((ver.group(1),
                     date.group(1).strip() if date else "",
@@ -99,9 +106,9 @@ PAGE = """<!DOCTYPE html>
       margin: 2.2rem 0 1rem;
     }}
     h2 .date {{ font-weight: 400; color: #5A6E5B; font-size: 0.9rem; float: right; }}
-    .feat {{ margin: 0 0 1.1rem; }}
+    ul.feats {{ margin: 0 0 1.6rem; padding-left: 1.3rem; }}
+    ul.feats li {{ margin: 0 0 0.7rem; }}
     .feat-title {{ font-weight: 600; color: #1A2B1C; }}
-    .feat p {{ margin: 0.25rem 0 0; }}
     a {{ color: #2D6A4F; }}
     code {{ background: #F2FAF5; padding: 1px 4px; border-radius: 3px; }}
     .footer {{
@@ -140,16 +147,30 @@ def main():
     if not found:
         sys.exit(f"ERROR: no releases parsed from {HISTORY} — its markup changed")
 
+    # Versions parsing but features not is the failure that actually happened:
+    # the release headers come from different markup than the bullets, so a
+    # change to the bullets alone left every entry present but empty, and the
+    # build said nothing.  Any release with no features is now fatal.
+    empty = [v for v, _, items in found if not items]
+    if empty:
+        sys.exit(f"ERROR: no features parsed for v{', v'.join(empty)} in {HISTORY} "
+                 f"— the bullet markup changed")
+
     kept = [r for r in found if as_tuple(r[0]) <= cutoff]
     if not kept:
         sys.exit(f"ERROR: {HISTORY} lists nothing at or below v{version}")
 
     blocks = []
     for ver, date, items in kept:
-        feats = "\n".join(
-            f'  <div class="feat"><span class="feat-title">{t}</span>\n'
-            f'    <p>{b}</p></div>'
-            for t, b in items)
+        # One bullet per change, exactly as web/history.html reads it: the
+        # bold label, an em dash, then the text.  Splitting them onto separate
+        # lines made the body read as a sentence fragment, because it is
+        # written as a continuation of the label and so begins lowercase.
+        feats = ('<ul class="feats">\n'
+                 + "\n".join(
+                     f'  <li><span class="feat-title">{t}</span> &mdash; {b}</li>'
+                     for t, b in items)
+                 + '\n</ul>')
         date_html = f'<span class="date">{html.escape(date)}</span>' if date else ""
         blocks.append(f'<h2>v{ver} {date_html}</h2>\n{feats}')
 

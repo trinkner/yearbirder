@@ -53,7 +53,7 @@ HEAD_EXTRA = f"""  <meta name="description" content="{DESCRIPTION}">
   <meta name="twitter:description" content="{DESCRIPTION}">
   <meta name="twitter:image" content="{SITE}/images/og_yearbirder.jpg">
   <style>
-    /* Web-only: the guide centres its own 860px column via body, which would
+    /* Web-only: the guide centers its own 860px column via body, which would
        pen the site's navigation into that column too.  Hand the column to a
        wrapper instead and let body span the window. */
     body {{ max-width: none; margin: 0; padding: 0; background: #fff; }}
