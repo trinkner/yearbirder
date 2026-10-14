@@ -106,9 +106,9 @@ PAGE = """<!DOCTYPE html>
       margin: 2.2rem 0 1rem;
     }}
     h2 .date {{ font-weight: 400; color: #5A6E5B; font-size: 0.9rem; float: right; }}
-    .feat {{ margin: 0 0 1.1rem; }}
+    ul.feats {{ margin: 0 0 1.6rem; padding-left: 1.3rem; }}
+    ul.feats li {{ margin: 0 0 0.7rem; }}
     .feat-title {{ font-weight: 600; color: #1A2B1C; }}
-    .feat p {{ margin: 0.25rem 0 0; }}
     a {{ color: #2D6A4F; }}
     code {{ background: #F2FAF5; padding: 1px 4px; border-radius: 3px; }}
     .footer {{
@@ -162,10 +162,15 @@ def main():
 
     blocks = []
     for ver, date, items in kept:
-        feats = "\n".join(
-            f'  <div class="feat"><span class="feat-title">{t}</span>\n'
-            f'    <p>{b}</p></div>'
-            for t, b in items)
+        # One bullet per change, exactly as web/history.html reads it: the
+        # bold label, an em dash, then the text.  Splitting them onto separate
+        # lines made the body read as a sentence fragment, because it is
+        # written as a continuation of the label and so begins lowercase.
+        feats = ('<ul class="feats">\n'
+                 + "\n".join(
+                     f'  <li><span class="feat-title">{t}</span> &mdash; {b}</li>'
+                     for t, b in items)
+                 + '\n</ul>')
         date_html = f'<span class="date">{html.escape(date)}</span>' if date else ""
         blocks.append(f'<h2>v{ver} {date_html}</h2>\n{feats}')
 
