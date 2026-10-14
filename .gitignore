@@ -72,3 +72,7 @@ tutorials/
 # Windows installer built by CI (downloaded for testing, served from R2)
 Yearbirder_Setup.exe
 Yearbirder_Setup.msix
+
+# Microsoft Store listing screenshots — kept locally for the next submission,
+# not served by the website and no business being in a public repo.
+web/images/MS Store Submission/
