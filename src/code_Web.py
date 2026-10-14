@@ -8243,14 +8243,33 @@ function openChecklist(subId) {{
             except Exception:
                 pass
 
-        # No administrative-level gate.  This used to require a county, on the
-        # reasoning that a state "would return too many hotspots" — but the
-        # level was never measuring that.  Los Angeles County has 2,496 hotspots
-        # and renders fine, while all of Costa Rica has 1,532 and was refused;
-        # countries such as Costa Rica and Czechia have no eBird counties at
-        # all, so their users could never satisfy the rule.  The real limit is
-        # how many dots land on the map, so it is checked against the actual
-        # count once the hotspots are in hand — see _HOTSPOT_CONFIRM_AT below.
+        # Refuse a whole country before asking eBird for anything.  A country
+        # map is both unusable and rude: the United States returns 158,000
+        # hotspots and 16 MB, and nobody plans an outing at that scale.  eBird
+        # offers no way to learn the size without downloading it — HEAD omits
+        # Content-Length and Range is ignored — so the only way not to make the
+        # request is to decide on the region level first.
+        #
+        # The exception is a country eBird does not subdivide at all: Singapore,
+        # Bermuda, Hong Kong, the Vatican and 49 others, where the country IS
+        # the finest level and the counts are small (Singapore, the largest, has
+        # 313 — about one US county).  countryHasStates reads that from the
+        # shipped code file, so the check costs nothing.
+        #
+        # Counties and states are always allowed; the biggest state, Texas, is
+        # 7,486 hotspots, under the confirmation threshold below.
+        if (not region_id.startswith("L")
+                and "-" not in region_id
+                and self.mdiParent.db.countryHasStates(region_id)):
+            QMessageBox.information(
+                self.mdiParent, "Choose a State or County",
+                f"A hotspot map of {region_label} would cover the whole country "
+                "— far more locations than a map can show usefully, and a large "
+                "request to eBird.\n\nPlease select a state or county in the "
+                "filter, then try again.",
+                QMessageBox.StandardButton.Ok,
+            )
+            return False
 
         QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
         url = f"https://api.ebird.org/v2/ref/hotspot/{region_id}"

@@ -789,6 +789,7 @@ class DataBase():
         self.showBatchOptions = False
         self._countryLookup = {}   # shortCode -> longName, built by ReadCountryStateCodeFile
         self._stateLookup = {}     # shortCode -> longName, built by ReadCountryStateCodeFile
+        self._countriesWithoutStates = set()   # countries eBird does NOT subdivide
         self.monthNameDict = ({
             "01":"Jan",
             "02":"Feb",
@@ -2269,6 +2270,22 @@ class DataBase():
                 countryCodeData.append(line)
         csvfile.close()
         
+        # Which countries eBird subdivides at all.  The file carries one
+        # placeholder row per country, coded "XX-" with a bare hyphen and named
+        # for the country itself, alongside a row per real subnational1 ("SM-01").
+        # A country whose only row is the placeholder has no states or provinces
+        # in eBird — 53 of the 253 are like this, mostly islands and city-states
+        # such as Singapore, Bermuda, Hong Kong and the Vatican.  Checked
+        # against the live API for a dozen countries and exact in every case.
+        _known = {c[0] for c in countryCodeData if c and c[0] and c[0] != "country_code"}
+        _divided = {c[0] for c in countryCodeData
+                    if len(c) > 1 and c[1] and not c[1].endswith("-")}
+        # Stored as the undivided set, not the divided one, so that an
+        # unrecognised code falls on the cautious side: "not in this set" means
+        # "assume it has states", which refuses a whole-country request rather
+        # than asking eBird for a country we know nothing about.
+        self._countriesWithoutStates = _known - _divided
+
         # clear the countryList and stateList because we'll use longer names
         self.countryList = []
         self.stateList = []
@@ -5336,6 +5353,19 @@ class DataBase():
             return(shortCode)
 
         
+    def countryHasStates(self, countryCode):
+        """True when eBird subdivides this country into states or provinces.
+
+        Read from the shipped country/state code file, so it costs nothing and
+        needs no network.  Only the 53 countries the file positively shows as
+        undivided answer False; an unrecognised code, or a code file that never
+        loaded, answers True.  That is the cautious side: the caller uses this
+        to decide whether a whole-country request is reasonable, and a country
+        we know nothing about might be a large one.
+        """
+        return bool(countryCode) and countryCode not in self._countriesWithoutStates
+
+
     def GetRegionLine(self, sighting):
         """"County, State, Country" for a sighting, as one readable line.
 
