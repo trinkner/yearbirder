@@ -53,8 +53,15 @@ def releases():
         date = re.search(r'class="release-date">([^<]+)<', chunk)
         if not ver:
             continue
+        # Each bullet is one paragraph opening with a bold label:
+        #   <p><strong>Trip Report</strong> &mdash; the Dates tab lists…</p>
+        # The label and the rest are split here so the in-app page can keep
+        # rendering them as a titled block.  history.html used to carry a
+        # separate <span class="feat-title"> heading above the paragraph; when
+        # that was dropped, this parser silently matched nothing and the app
+        # shipped a What's New page of empty version headers.
         items = re.findall(
-            r'<span class="feat-title">(.*?)</span>\s*<p>(.*?)</p>',
+            r'<p><strong>(.*?)</strong>\s*&mdash;\s*(.*?)</p>',
             chunk, re.S)
         out.append((ver.group(1),
                     date.group(1).strip() if date else "",
@@ -139,6 +146,15 @@ def main():
     found = releases()
     if not found:
         sys.exit(f"ERROR: no releases parsed from {HISTORY} — its markup changed")
+
+    # Versions parsing but features not is the failure that actually happened:
+    # the release headers come from different markup than the bullets, so a
+    # change to the bullets alone left every entry present but empty, and the
+    # build said nothing.  Any release with no features is now fatal.
+    empty = [v for v, _, items in found if not items]
+    if empty:
+        sys.exit(f"ERROR: no features parsed for v{', v'.join(empty)} in {HISTORY} "
+                 f"— the bullet markup changed")
 
     kept = [r for r in found if as_tuple(r[0]) <= cutoff]
     if not kept:
