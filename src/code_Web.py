@@ -191,6 +191,11 @@ class _ExternalLinkPage(QWebEnginePage):
 # app's own offline copy.  The app does NOT show this page directly: it would
 # describe releases the user may not be running (see publish_whatsnew.py).
 WHATS_NEW_URL = "https://yearbirder.org/history"
+# Where Check for Updates sends people.  Deliberately the download page and
+# not the GitHub release: the page leads with the Microsoft Store, so a Store
+# user who follows it is not handed a .exe that would install a second,
+# parallel copy of Yearbirder alongside the one the Store already updates.
+DOWNLOAD_URL = "https://yearbirder.org/download"
 
 
 class _FullScreenPage(QWebEnginePage):
