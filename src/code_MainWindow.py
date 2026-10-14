@@ -120,43 +120,6 @@ from PySide6.QtPrintSupport import (
 from PySide6.QtGui import QPageSize, QPageLayout
 
 
-# winerror.h: returned by GetCurrentPackageFullName when the calling process
-# has no package identity, i.e. was not installed as an MSIX.
-_APPMODEL_ERROR_NO_PACKAGE = 15700
-
-
-def isStorePackage():
-    """True when this copy is running from an installed MSIX package.
-
-    Yearbirder reaches Windows two ways: the Inno Setup .exe, which the user
-    updates by downloading the next one, and the Microsoft Store, which
-    updates the app itself in the background.  Only the first wants a Check
-    for Updates command.
-
-    GetCurrentPackageFullName is the documented way to ask: a packaged
-    process has a package identity, an unpackaged one does not.  Passing a
-    zero length and no buffer gets the answer without allocating — the call
-    reports ERROR_INSUFFICIENT_BUFFER when there is a name to return, and
-    APPMODEL_ERROR_NO_PACKAGE when there is not.  Testing the executable path
-    against C:\\Program Files\\WindowsApps would also work, but that is a
-    layout Microsoft can change and this is the supported question.
-
-    Anything unexpected answers False, which is exactly the behaviour every
-    install has today: the API is absent before Windows 8, and absent
-    entirely on macOS and Linux.
-    """
-    if sys.platform != "win32":
-        return False
-    try:
-        import ctypes
-        length = ctypes.c_uint32(0)
-        rc = ctypes.WinDLL("kernel32", use_last_error=True).GetCurrentPackageFullName(
-            ctypes.byref(length), None)
-        return rc != _APPMODEL_ERROR_NO_PACKAGE
-    except Exception:
-        return False
-
-
 class _ProgressOverlay(QWidget):
     """Child-widget progress overlay used during data and photo loading.
 
@@ -809,17 +772,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         _checkUpdatesAction = QAction("Check for Updates…", self)
         _checkUpdatesAction.setMenuRole(QAction.MenuRole.NoRole)
         _checkUpdatesAction.triggered.connect(self.CheckForUpdates)
-        _updatesSeparator = self.menuHelp.addSeparator()
+        self.menuHelp.addSeparator()
         self.menuHelp.addAction(_checkUpdatesAction)
-        # A Store install updates itself in the background, so the command has
-        # nothing to offer: it would check, then report that there is nothing
-        # to do.  It is hidden rather than disabled because there is no action
-        # the user could take to enable it — a greyed-out item would only
-        # raise a question it cannot answer.  Its separator goes too, or About
-        # is left sitting under a stray rule.
-        if isStorePackage():
-            _checkUpdatesAction.setVisible(False)
-            _updatesSeparator.setVisible(False)
         self.menuHelp.addAction(_aboutAction)        
         # lambda, not a direct connect: triggered() passes a bool that would
         # otherwise land in createPreferences' `tab` argument
