@@ -37,12 +37,12 @@ HEAD_LINKS = """  <link rel="stylesheet" href="/style.css">
 # Injected right before </head>: metadata, plus the few overrides that let the
 # site's full-width navigation sit above the guide's 860px text column.
 HEAD_EXTRA = f"""  <meta name="description" content="{DESCRIPTION}">
-  <link rel="canonical" href="{SITE}/guide">
+  <link rel="canonical" href="{SITE}/guide/">
   <link rel="icon" type="image/x-icon" href="/images/favicon.ico">
   <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32.png">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Yearbirder">
-  <meta property="og:url" content="{SITE}/guide">
+  <meta property="og:url" content="{SITE}/guide/">
   <meta property="og:title" content="Yearbirder User Guide">
   <meta property="og:description" content="{DESCRIPTION}">
   <meta property="og:image" content="{SITE}/images/og_yearbirder.jpg">
@@ -81,7 +81,7 @@ SITE_NAV = """<nav>
       <li><a href="/community">Community</a></li>
       <li><a href="/download" class="nav-download">Download</a></li>
       <li><a href="/history">Version History</a></li>
-      <li><a href="/guide" class="active">User Guide</a></li>
+      <li><a href="/guide/" class="active">User Guide</a></li>
     </ul>
   </div>
 </nav>
