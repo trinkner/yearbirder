@@ -14,6 +14,7 @@ from collections import defaultdict
 # do this so later we won't have to clutter our code with references to parent Qt classes 
 
 from PySide6.QtGui import (
+    QAction,
     QCursor,
     QDesktopServices,
     QFont,
@@ -74,6 +75,7 @@ class Location(QMdiSubWindow, form_Location.Ui_frmLocation):
         self.tblSpecies.doubleClicked.connect(self.ClickedTblSpecies)
         self.tblChecklists.doubleClicked.connect(self.ClickedTblChecklists)
         self.tblDates.setShowGrid(False)
+        self._addFilterActions()
         
         self.horizontalLayout_2.setContentsMargins(5, 5, 5, 5)
         self.horizontalLayout_2.setSpacing(4)
@@ -81,6 +83,63 @@ class Location(QMdiSubWindow, form_Location.Ui_frmLocation):
         self.webMap.setObjectName("webMap")
         self.horizontalLayout_2.addWidget(self.webMap)  
         self.tabLocation.setCurrentIndex(0)
+
+
+    def _addFilterActions(self):
+        """Right-click menus that send a species or a date to the main filter,
+        as the Species window and the species lists do.
+
+        Each pane gets its own actions, reading that pane's current row — a
+        right-click makes the clicked row current before the menu opens.
+        """
+        def attach(widget, entries):
+            widget.setContextMenuPolicy(Qt.ActionsContextMenu)
+            for text, handler in entries:
+                action = QAction(text, self)
+                action.triggered.connect(handler)
+                widget.addAction(action)
+
+        # Species tab: Tax, Species, First, Last, Checklists, % of Checklists
+        attach(self.tblSpecies, [
+            ("Set Filter to Species",
+             lambda: self._setSpeciesFilterFrom(self._cellText(self.tblSpecies, 1))),
+            ('Set Filter to "First" Date',
+             lambda: self._setDateFilterFrom(self._cellText(self.tblSpecies, 2))),
+            ('Set Filter to "Last" Date',
+             lambda: self._setDateFilterFrom(self._cellText(self.tblSpecies, 3))),
+        ])
+        # Dates tab: the dates table (Rank, Date, Species, Checklists) and the
+        # species seen on the selected date.
+        attach(self.tblDates, [
+            ("Set Filter to Date",
+             lambda: self._setDateFilterFrom(self._cellText(self.tblDates, 1))),
+        ])
+        attach(self.lstSpecies, [
+            ("Set Filter to Species",
+             lambda: self._setSpeciesFilterFrom(
+                 self.lstSpecies.currentItem().text()
+                 if self.lstSpecies.currentItem() is not None else "")),
+        ])
+        # Checklists tab: Date, Time, Species, eBird
+        attach(self.tblChecklists, [
+            ("Set Filter to Date",
+             lambda: self._setDateFilterFrom(self._cellText(self.tblChecklists, 0))),
+        ])
+
+    @staticmethod
+    def _cellText(table, column):
+        """Text of `column` in the table's current row, or "" if none."""
+        item = table.item(table.currentRow(), column)
+        return item.text() if item is not None else ""
+
+    def _setSpeciesFilterFrom(self, species):
+        if species:
+            self.mdiParent.setSpeciesFilter(species)
+
+    def _setDateFilterFrom(self, date):
+        # The Species table ends in an empty row; ignore anything not a date.
+        if len(date) == 10 and date[4] == "-" and date[7] == "-":
+            self.mdiParent.setDateFilter(date)
 
 
     def ClickedLstSpecies(self):

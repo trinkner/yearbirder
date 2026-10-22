@@ -91,11 +91,6 @@ def _fmtItineraryDate(dateString):
     return f"{d.strftime('%A, %B')} {d.day}, {d.year}"
 
 
-def _fmtReportDate(d):
-    """'September 8, 2026' — spelled out, and no %-d (Windows has no such flag)."""
-    return f"{d.strftime('%B')} {d.day}, {d.year}"
-
-
 def _fmtItineraryTime(timeString):
     """'17:24' -> '5:24 PM'.  Times are stored 24-hour by the CSV importer."""
     if not timeString:
@@ -1449,12 +1444,12 @@ document.addEventListener('click', function(e) {
     def pdfFooter(self):
         """Left-hand footer text stamped on every printed page.
 
-        MainWindow's print/PDF routines look for this method; a window that
-        defines it gets page furniture, one that doesn't prints as before.
+        MainWindow's Print routine looks for this method; a window that
+        defines it gets page furniture on paper too, one that doesn't prints
+        as before.  (Save as PDF stamps every window.)  The text is the
+        standard PDF footer, so a printed and a saved Trip Report match.
         """
-        return (f"Yearbirder {self.mdiParent.versionNumber}"
-                f"  ·  Trip Report generated "
-                f"{_fmtReportDate(datetime.now())}")
+        return self.mdiParent.pdfFooterText()
 
 
     def _pdfBand(self, title, note="", pageBreak=False):

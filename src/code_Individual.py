@@ -13,6 +13,7 @@ import code_Stylesheet
 # do this so later we won't have to clutter our code with references to parent Qt classes 
 
 from PySide6.QtGui import (
+    QAction,
     QCursor,
     QFont,
     QFontMetrics,
@@ -33,6 +34,7 @@ from PySide6.QtWidgets import (
     QTableWidgetItem,
     QHeaderView,
     QMdiSubWindow,
+    QMenu,
     QTreeWidgetItem,
     QPushButton,
     QMessageBox
@@ -54,6 +56,10 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
         self.setAttribute(Qt.WA_DeleteOnClose,True)
         self.mdiParent = ""
         self._photoPixmap = None
+        self._species = ""
+        self._btnPhotos = None
+        self._btnRecordings = None
+        self._mediaState = None
         self.resized.connect(self.resizeMe)                    
         self.trLocations.currentItemChanged.connect(self.FillDates)
         self.trLocations.itemDoubleClicked.connect(self.CreateLocation)
@@ -68,6 +74,22 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
         self.buttonAudubon.clicked.connect(self.CreateWebPageForAudubon)
         self.buttonMap.clicked.connect(self.CreateMap)
         self.buttonChecklists.clicked.connect(self.CreateChecklists)
+
+        # Right-click a date in the By Location dates list to set the main
+        # filter to it, as the dates lists in Date Totals and Trip Report do.
+        # A right-click makes the clicked row current before the menu opens,
+        # so the action reads currentItem().
+        self.actionSetDateFilter = QAction("Set Filter to Date", self)
+        self.actionSetDateFilter.triggered.connect(self.setDateFilter)
+        self.lstDates.setContextMenuPolicy(Qt.ActionsContextMenu)
+        self.lstDates.addAction(self.actionSetDateFilter)
+
+        # Right-click any level of the By Location tree — country, state,
+        # county or location — to set the main filter to it.  Built per click
+        # because the entry's wording depends on the level clicked.
+        self.trLocations.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.trLocations.customContextMenuRequested.connect(
+            self._showLocationTreeMenu)
         self.tabIndividual.setCurrentIndex(0)
 
         # Match every data pane in the three tabs to the app's table surface
@@ -338,52 +360,8 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
         self.lblDates.setText("Years: " + str(yearCount))
         self.lblMonthDates.setText("Months: " + str(monthCount))
             
-        # Load best-rated photo into the center pane, and add a Photos button
-        filter = code_Filter.Filter()
-        filter.setSpeciesName(Species)
-
-        photoSightings = self.mdiParent.db.GetSightingsWithPhotos(filter)
-
-        if len(photoSightings) > 0:
-            # Find the highest-rated photo across all sightings
-            best_rating = -1.0
-            best_file = None
-            for s in photoSightings:
-                for p in s["photos"]:
-                    try:
-                        rating = float(p["rating"]) if p["rating"] else 0.0
-                    except (ValueError, TypeError):
-                        rating = 0.0
-                    if rating > best_rating:
-                        best_rating = rating
-                        best_file = p["fileName"]
-
-            if best_file:
-                reader = QImageReader(best_file)
-                reader.setAutoTransform(True)
-                imgSize = reader.size()
-                if imgSize.isValid():
-                    # Load at a generous cap — _updatePhotoThumb scales to fit the pane
-                    imgSize.scale(QSize(800, 600), Qt.KeepAspectRatio)
-                    reader.setScaledSize(imgSize)
-                pm = QPixmap.fromImage(reader.read())
-                if not pm.isNull():
-                    self._photoPixmap = pm
-                    self.framePhoto.setVisible(True)
-                    self.lblPhotoThumb.setCursor(Qt.PointingHandCursor)
-                    self.lblPhotoThumb.mousePressEvent = lambda _e: self.createPhotos()
-
-            btnPhotos = QPushButton()
-            btnPhotos.setText("Photos")
-            btnPhotos.clicked.connect(self.createPhotos)
-            self.verticalLayout_10.addWidget(btnPhotos)
-
-        recordingSightings = self.mdiParent.db.GetSightingsWithRecordings(filter)
-        if len(recordingSightings) > 0:
-            btnRecordings = QPushButton()
-            btnRecordings.setText("Recordings")
-            btnRecordings.clicked.connect(self.createRecordings)
-            self.verticalLayout_10.addWidget(btnRecordings)
+        self._species = Species
+        self._fillMedia()
 
         self.scaleMe()
         self.resizeMe()
@@ -391,6 +369,96 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
         QTimer.singleShot(0, self._updatePhotoThumb)            
 
         
+    def _mediaFor(self):
+        """(best photo file or None, has photos, has recordings) for this
+        species — everything the header's media pane and buttons depend on."""
+        filter = code_Filter.Filter()
+        filter.setSpeciesName(self._species)
+        photoSightings = self.mdiParent.db.GetSightingsWithPhotos(filter)
+        # Find the highest-rated photo across all sightings
+        best_rating = -1.0
+        best_file = None
+        for s in photoSightings:
+            for p in s["photos"]:
+                try:
+                    rating = float(p["rating"]) if p["rating"] else 0.0
+                except (ValueError, TypeError):
+                    rating = 0.0
+                if rating > best_rating:
+                    best_rating = rating
+                    best_file = p["fileName"]
+        has_recordings = bool(self.mdiParent.db.GetSightingsWithRecordings(filter))
+        return (best_file, bool(photoSightings), has_recordings)
+
+    def _fillMedia(self):
+        """Load the best-rated photo into the center pane and add the Photos
+        and Recordings buttons this species has media for."""
+        state = self._mediaFor()
+        self._mediaState = state
+        best_file, has_photos, has_recordings = state
+
+        if best_file:
+            reader = QImageReader(best_file)
+            reader.setAutoTransform(True)
+            imgSize = reader.size()
+            if imgSize.isValid():
+                # Load at a generous cap — _updatePhotoThumb scales to fit the pane
+                imgSize.scale(QSize(800, 600), Qt.KeepAspectRatio)
+                reader.setScaledSize(imgSize)
+            pm = QPixmap.fromImage(reader.read())
+            if not pm.isNull():
+                self._photoPixmap = pm
+                self.framePhoto.setVisible(True)
+                self.lblPhotoThumb.setCursor(Qt.PointingHandCursor)
+                self.lblPhotoThumb.mousePressEvent = lambda _e: self.createPhotos()
+
+        if has_photos:
+            self._btnPhotos = QPushButton()
+            self._btnPhotos.setText("Photos")
+            self._btnPhotos.clicked.connect(self.createPhotos)
+            self.verticalLayout_10.addWidget(self._btnPhotos)
+
+        if has_recordings:
+            self._btnRecordings = QPushButton()
+            self._btnRecordings.setText("Recordings")
+            self._btnRecordings.clicked.connect(self.createRecordings)
+            self.verticalLayout_10.addWidget(self._btnRecordings)
+
+    def refreshMedia(self):
+        """Bring the photo pane and media buttons up to date after a catalog
+        change — called by MainWindow.notifyMediaChanged.
+
+        FillIndividual builds them once, so a window opened before the
+        species had any photos never showed one after photos were added (and
+        kept showing a photo, or a Photos button, after the last was removed).
+        Only the media part is rebuilt: re-running FillIndividual would add
+        duplicate buttons and snap the window back to its default size.
+        """
+        if not self._species:
+            return
+        if self._mediaFor() == self._mediaState:
+            return
+
+        for btn in (self._btnPhotos, self._btnRecordings):
+            if btn is not None:
+                self.verticalLayout_10.removeWidget(btn)
+                btn.deleteLater()
+        self._btnPhotos = None
+        self._btnRecordings = None
+        self._photoPixmap = None
+        self.lblPhotoThumb.clear()
+        self.lblPhotoThumb.unsetCursor()
+        self.lblPhotoThumb.mousePressEvent = lambda _e: None
+        self.framePhoto.setVisible(False)
+
+        self._fillMedia()
+        fontSize = self.mdiParent.fontSize
+        for btn in (self._btnPhotos, self._btnRecordings):
+            if btn is not None:
+                btn.setFont(QFont(YBFont, fontSize))
+        self._sizeButtonStack()
+        QTimer.singleShot(0, self._updatePhotoThumb)
+
     def FillDates(self):
 
         currentItem = self.trLocations.currentItem()        
@@ -518,6 +586,50 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
             R = R + 1
         
         self.lblLocationsForDate.setText("Checklists: " + str(locationWidget.rowCount()))
+
+
+    @staticmethod
+    def _locationLevel(item):
+        """"Country", "State", "County" or "Location" for a By Location tree
+        item, from its depth (the tree is always built four levels deep)."""
+        depth = 0
+        parent = item.parent()
+        while parent is not None:
+            depth += 1
+            parent = parent.parent()
+        return ("Country", "State", "County", "Location")[min(depth, 3)]
+
+    def _showLocationTreeMenu(self, pos):
+        item = self.trLocations.itemAt(pos)
+        if item is None:
+            return
+        self.trLocations.setCurrentItem(item)
+        level = self._locationLevel(item)
+        name = item.text(0)
+        menu = QMenu(self)
+        action = menu.addAction(f"Set Filter to {level}")
+        # Two tree labels name nothing the filter can select: "No County Name"
+        # groups locations without a county, and a bare code such as "GR-" is
+        # the "state" eBird gives a checklist entered at country level only.
+        if ((level == "County" and name == "No County Name")
+                or (level == "State" and name.endswith("-"))):
+            action.setEnabled(False)
+        chosen = menu.exec(self.trLocations.viewport().mapToGlobal(pos))
+        if chosen is not action:
+            return
+        setter = {
+            "Country":  self.mdiParent.setCountryFilter,
+            "State":    self.mdiParent.setStateFilter,
+            "County":   self.mdiParent.setCountyFilter,
+            "Location": self.mdiParent.setLocationFilter,
+        }[level]
+        setter(name)
+
+    def setDateFilter(self):
+        item = self.lstDates.currentItem()
+        if item is None:
+            return
+        self.mdiParent.setDateFilter(item.text())
 
 
     def CreateChecklists(self):
@@ -901,6 +1013,25 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
         self._updatePhotoThumb()
 
 
+    def _sizeButtonStack(self):
+        """Give every header button the same height, and cap the photo pane and
+        the header to the height of the button stack, which keeps the header
+        compact regardless of font size or window size."""
+        metrics = self.trDates.fontMetrics()
+        textHeight = int(metrics.boundingRect("2222-22-22").height())
+        # Fixed height for all buttons: text height + comfortable padding, all uniform
+        btnHeight = textHeight + 12
+        for i in range(self.verticalLayout_10.count()):
+            item = self.verticalLayout_10.itemAt(i)
+            if item and item.widget():
+                item.widget().setFixedHeight(btnHeight)
+
+        numBtns = self.verticalLayout_10.count()
+        stackHeight = (numBtns * btnHeight
+                       + max(0, numBtns - 1) * self.verticalLayout_10.spacing())
+        self.framePhoto.setMaximumHeight(stackHeight)
+        self.frameTop.setMaximumHeight(stackHeight)
+
     def scaleMe(self):
                
         scaleFactor = self.mdiParent.scaleFactor
@@ -952,20 +1083,7 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
         textWidth= int(metrics.boundingRect("2222-22-22").width())
         myQSize = QSize(int(textWidth * 1.1), int(textHeight * 1.75))
 
-        # Fixed height for all buttons: text height + comfortable padding, all uniform
-        btnHeight = textHeight + 12
-        for i in range(self.verticalLayout_10.count()):
-            item = self.verticalLayout_10.itemAt(i)
-            if item and item.widget():
-                item.widget().setFixedHeight(btnHeight)
-
-        # Cap both the photo pane and the entire header to the button stack height.
-        # This keeps the header compact regardless of font size or window size.
-        numBtns = self.verticalLayout_10.count()
-        stackHeight = (numBtns * btnHeight
-                       + max(0, numBtns - 1) * self.verticalLayout_10.spacing())
-        self.framePhoto.setMaximumHeight(stackHeight)
-        self.frameTop.setMaximumHeight(stackHeight)
+        self._sizeButtonStack()
 
         root = self.trLocations.invisibleRootItem()
         for i in range(root.childCount()):

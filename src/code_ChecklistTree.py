@@ -31,6 +31,11 @@ _MONTHS = ["", "January", "February", "March", "April", "May", "June",
 
 _ROLE = Qt.ItemDataRole.UserRole
 
+# Shown for a checklist with no start time (common in historical data), which
+# would otherwise be a blank row with an expander arrow.  Display only: the
+# node's ctx keeps the real, empty time.
+_NO_TIME_LABEL = "No specific time"
+
 
 class ChecklistTreeDialog(QDialog):
     """Modal-ish picker.  After exec(), `result` is None (cancelled) or a dict
@@ -104,7 +109,8 @@ class ChecklistTreeDialog(QDialog):
             f.setEndDate(ctx["date"])
             f.setLocationName(ctx["location"])
             f.setLocationType("Location")
-            return [(t, {**ctx, "time": t}) for t in db.GetStartTimes(f)]
+            return [(t or _NO_TIME_LABEL, {**ctx, "time": t})
+                    for t in db.GetStartTimes(f)]
 
         if level == _LEVEL_TIME:
             f = code_Filter.Filter()
@@ -112,8 +118,18 @@ class ChecklistTreeDialog(QDialog):
             f.setEndDate(ctx["date"])
             f.setLocationName(ctx["location"])
             f.setLocationType("Location")
-            f.setTime(ctx["time"])
-            return [(sp, {**ctx, "species": sp}) for sp in db.GetSpecies(f)]
+            if ctx["time"]:
+                f.setTime(ctx["time"])
+                species = db.GetSpecies(f)
+            else:
+                # An empty time is no time filter at all, which would mix in
+                # the species from any timed checklist at the same place and
+                # date.  Keep only the untimed sightings.
+                untimed = [s for s in db.GetMinimalFilteredSightingsList(f)
+                           if not s["time"]]
+                # GetSpecies reads an empty list as "use every sighting".
+                species = db.GetSpecies(f, untimed) if untimed else []
+            return [(sp, {**ctx, "species": sp}) for sp in species]
 
         return []
 
@@ -165,7 +181,9 @@ class ChecklistTreeDialog(QDialog):
             (None, _MONTHS[int(date[5:7])]),
             (None, date),
             (None, location),
-            (None, time),
+            # An untimed checklist's node is labelled, not blank; a blank time
+            # with a location to match means the checklist has none.
+            (None, time or (_NO_TIME_LABEL if location else "")),
             (None, species),
         ]
         parent = self.tree.invisibleRootItem()
