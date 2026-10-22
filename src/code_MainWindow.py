@@ -21,6 +21,7 @@ import code_DateTotals
 import code_Graphs
 import code_Photos
 import code_PhotoStats
+import code_RecordingStats
 import code_PhotosGrid
 import code_Recordings
 import code_RecordingsGrid
@@ -905,6 +906,12 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionTotalRecordings.triggered.connect(self.CreateTotalRecordingsChart)
         self.actionRecordingsAccumulation.triggered.connect(self.CreateRecordingsAccumulationChart)
         self.actionCumulativeRecordings.triggered.connect(self.CreateCumulativeRecordingsChart)
+        self.actionRecordingsOverview.triggered.connect(
+            lambda: self.CreateRecordingStats("overview"))
+        self.actionRecordingGear.triggered.connect(
+            lambda: self.CreateRecordingStats("gear"))
+        self.actionRecordingTimeOfDay.triggered.connect(
+            lambda: self.CreateRecordingSettingChart("recordinghour"))
         self.actionLifeListMap.triggered.connect(self.createLifeListMap)
         self.actionFirstSightingsMap.triggered.connect(self.createFirstSightingsMap)
         self.actionEffortMap.triggered.connect(self.createEffortMap)
@@ -2431,8 +2438,12 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             if (isinstance(w, code_Recordings.Recordings)
                     and not getattr(w, "_singleMode", False)
                     and w.filter):
-                if w.FillRecordings(w.filter) is False:
+                if w.FillRecordings(
+                        w.filter,
+                        recordingTest=getattr(w, "_recordingTest", None),
+                        titleText=getattr(w, "_titleText", None)) is False:
                     w.close()
+        self._refreshOpenEnlargements()
 
 
     def refreshOpenPhotos(self):
@@ -2445,6 +2456,23 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                     and w.filter):
                 if w.FillPhotos(w.filter) is False:
                     w.close()
+        self._refreshOpenEnlargements()
+
+
+    def _refreshOpenEnlargements(self):
+        """Let open photo and recording enlargements re-pair their media with
+        the sightings it now belongs to (see Enlargement.refreshAssignments and
+        RecordingEnlargement.refreshAssignments).  A full-screen one is
+        detached from the MDI area, so it is reached through _fullScreenChild."""
+        windows = list(self.mdiArea.subWindowList())
+        if self._fullScreenChild is not None and self._fullScreenChild not in windows:
+            windows.append(self._fullScreenChild)
+        for w in windows:
+            try:
+                if hasattr(w, "refreshAssignments"):
+                    w.refreshAssignments()
+            except RuntimeError:      # C++ side already deleted
+                pass
 
 
     def createPreferences(self, tab=None):
@@ -4643,6 +4671,44 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         sub.mdiParent = self
 
         if sub.FillGraph(self.GetPhotoFilter(), chartType) is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+            QTimer.singleShot(0, sub.scaleMe)
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+
+
+    def CreateRecordingStats(self, mode):
+        """Open one of the Recordings tabular reports (code_RecordingStats)."""
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+
+        sub = code_RecordingStats.RecordingStats()
+        sub.mdiParent = self
+
+        if sub.FillRecordingStats(self.GetRecordingsFilter(), mode) is True:
+            self.mdiArea.addSubWindow(sub)
+            self.PositionChildWindow(sub, self)
+            sub.show()
+            QTimer.singleShot(0, sub.scaleMe)
+        else:
+            self.CreateMessageNoResults()
+            sub.close()
+
+
+    def CreateRecordingSettingChart(self, chartType):
+        """Open one of the Recordings > Technical Statistics charts."""
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+
+        sub = code_Graphs.Graphs()
+        sub.mdiParent = self
+
+        if sub.FillGraph(self.GetRecordingsFilter(), chartType) is True:
             self.mdiArea.addSubWindow(sub)
             self.PositionChildWindow(sub, self)
             sub.show()

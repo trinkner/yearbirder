@@ -3666,10 +3666,115 @@ class DataBase():
             else:
                 return(False)                    
                                          
-        # if we've arrived here, the photo passes the filter. 
+        # if we've arrived here, the photo passes the filter.
         return(True)
 
-    
+
+    def TestIndividualRecording(self, audioData, filter):
+        """True when this one recording passes the recording side of the Media
+        Filter.
+
+        The recordings counterpart of TestIndividualPhoto.  TestSighting keeps a
+        sighting when ANY of its recordings matches, so reports that count
+        recordings — rather than list sightings — need this per-file test too,
+        or a device or microphone filter would quietly count a sighting's other
+        recordings.  Each check mirrors the per-sighting one in
+        TestSightingCompiled.
+        """
+        def _dur_to_sec(dur_str):
+            parts = str(dur_str or "").split(":")
+            if len(parts) == 2:
+                try:
+                    return int(parts[0]) * 60 + int(parts[1])
+                except ValueError:
+                    return None
+            return None
+
+        startRating = filter.getStartRecordingRating()
+        endRating = filter.getEndRecordingRating()
+        if startRating != "" or endRating != "":
+            r = _safe_rating(audioData.get("rating", ""))
+            lo = _safe_rating(startRating) if startRating != "" else 0
+            hi = _safe_rating(endRating) if endRating != "" else 5
+            lo, hi = min(lo, hi), max(lo, hi)
+            if not lo <= r <= hi:
+                return False
+
+        channels = filter.getChannels()
+        if channels != "" and audioData.get("channels", "") != channels:
+            return False
+
+        startDuration = filter.getStartDuration()
+        endDuration = filter.getEndDuration()
+        if startDuration != "" or endDuration != "":
+            sec = _dur_to_sec(audioData.get("duration", ""))
+            if sec is None:
+                return False
+            lo = int(startDuration.rstrip("s")) if startDuration != "" else None
+            hi = int(endDuration.rstrip("s")) if endDuration != "" else None
+            if lo is not None and hi is not None and lo > hi:
+                lo, hi = hi, lo
+            if (lo is not None and sec < lo) or (hi is not None and sec > hi):
+                return False
+
+        startSampleRate = filter.getStartSampleRate()
+        endSampleRate = filter.getEndSampleRate()
+        if startSampleRate != "" or endSampleRate != "":
+            lo = _hz_from_rate_str(startSampleRate)
+            hi = _hz_from_rate_str(endSampleRate)
+            if lo is not None and hi is not None and lo > hi:
+                lo, hi = hi, lo
+            hz = _hz_from_rate_str(audioData.get("sampleRate", ""))
+            if hz is None:
+                return False
+            if (lo is not None and hz < lo) or (hi is not None and hz > hi):
+                return False
+
+        bitDepths = filter.getBitDepths()
+        if bitDepths != [] and audioData.get("bitDepth", "") not in bitDepths:
+            return False
+
+        # "Unknown" matches recordings with no device / no rig assigned yet.
+        device = filter.getDevice()
+        if device != "":
+            wanted = "" if device == "Unknown" else device
+            if audioData.get("device", "") != wanted:
+                return False
+
+        microphone = filter.getMicrophone()
+        if microphone != "":
+            wanted = "" if microphone == "Unknown" else microphone
+            if audioData.get("microphone", "") != wanted:
+                return False
+
+        return True
+
+
+    def RecordingHour(self, audioData, sighting):
+        """Hour of day (0-23) a recording was made, or None.
+
+        The recordings counterpart of code_PhotoMetrics.hour.  Prefers the time
+        the file itself records (BWF bext / RIFF INFO, cached as metaTime), then
+        a time set when the file was added, then one in the filename — Rename
+        Media writes HHMMSS into every name, and many recorders do too — and
+        only then the checklist's start time, which can be hours off for a
+        long checklist.
+        """
+        candidates = (
+            audioData.get("metaTime"),
+            audioData.get("time"),
+            self._parseDateTimeFromFilename(audioData.get("fileName", ""))[1],
+            sighting.get("time"),
+        )
+        for t in candidates:
+            t = str(t or "").strip()
+            if len(t) >= 2 and t[:2].isdigit():
+                h = int(t[:2])
+                if 0 <= h <= 23:
+                    return h
+        return None
+
+
     def CompileFilter(self, filter):
         """Extract all filter parameters into a dict for use with TestSightingCompiled."""
         return {

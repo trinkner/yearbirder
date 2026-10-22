@@ -337,7 +337,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             # Measured at 1.10; 1.12 leaves headroom for the taller text
             # metrics on Windows.
             windowHeight = int(windowHeight * 1.12)
-        elif self._chart_type == "photohour":
+        elif self._chart_type in ("photohour", "recordinghour"):
             # Gained a radio row, so it needs the same extra line as above.
             windowHeight = int(windowHeight * 1.12)
         elif self._chart_type == "comparesettings":
@@ -402,7 +402,8 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
     def _setup_colors(self):
         """Switch palette based on chart domain (photo=yellow, audio=green, default=blue)."""
         recording_chart_types = {"totalrecordings", "ytdrecordings", "recordingspie",
-                             "recordingsaccumulation", "cumulativerecordings"}
+                             "recordingsaccumulation", "cumulativerecordings",
+                             "recordinghour"}
         photo_chart_types = {"totalphotos", "ytdphotos", "photopie",
                              "photoaccumulation", "cumulativephotos",
                              "exposuresettings", "comparesettings",
@@ -900,6 +901,54 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
 
         self._photo_setting_unknown = unknown
         return labels, counts, species_lists, species_tallies, "Photographs"
+
+    def _recording_items(self):
+        """{fileName: (audio, [sightings])} for every matching recording.
+
+        The recordings counterpart of _photo_pairs: each file gets the
+        individual Media Filter test as well, and a file assigned to several
+        species is gathered once, with all of its sightings, so it is counted
+        once.
+        """
+        db = self.mdiParent.db
+        items = {}
+        for s in db.GetSightingsWithRecordings(self.filter):
+            for a in s.get("audio", []):
+                if db.TestIndividualRecording(a, self.filter):
+                    items.setdefault(a["fileName"], (a, []))[1].append(s)
+        return items
+
+    def _build_recording_hour_data(self, items):
+        """Recording counts by hour of day (see DataBase.RecordingHour)."""
+        db = self.mdiParent.db
+        bucket  = defaultdict(lambda: defaultdict(int))
+        files   = defaultdict(int)
+        ratings = defaultdict(lambda: defaultdict(int))
+        unknown = 0
+        for a, sightings in items.values():
+            h = db.RecordingHour(a, sightings[0])
+            if h is None:
+                unknown += 1
+                continue
+            files[h] += 1
+            ratings[h][pm.rating(a)] += 1
+            for s in sightings:
+                bucket[h][s["commonName"]] += 1
+
+        hours = sorted(files)
+        self._bar_hours = list(hours)
+        self._bar_rating_counts = [dict(ratings[h]) for h in hours]
+        self._bar_ratings_used  = False
+        labels = [f"{h:02d}:00" for h in hours]
+        counts = [files[h] for h in hours]
+        species_lists, species_tallies = [], []
+        for h in hours:
+            ordered = sorted(bucket[h].items(), key=lambda kv: (-kv[1], kv[0]))
+            species_lists.append([sp for sp, _n in ordered])
+            species_tallies.append([n for _sp, n in ordered])
+
+        self._photo_setting_unknown = unknown
+        return labels, counts, species_lists, species_tallies, "Recordings"
 
     def _build_photo_envelope_data(self, pairs, xfield, yfield):
         """Return (x values, shutter denominators, counts, avgs, names, tips).
@@ -2088,12 +2137,20 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         self._draw_hour_chart()
 
     def _draw_hour_chart(self):
-        """Photos by hour of day, measured as counts or as average rating."""
-        pairs = self._photo_pairs()
-        if not pairs:
-            return False
-        labels, counts, sp_lists, sp_tallies, y_label = \
-            self._build_photo_hour_data(pairs)
+        """Photos or recordings by hour of day, as counts or average rating."""
+        if self._chart_type == "recordinghour":
+            items = self._recording_items()
+            if not items:
+                return False
+            built = self._build_recording_hour_data(items)
+            noun = "recording"
+        else:
+            pairs = self._photo_pairs()
+            if not pairs:
+                return False
+            built = self._build_photo_hour_data(pairs)
+            noun = "photo"
+        labels, counts, sp_lists, sp_tallies, y_label = built
         if not labels:
             return False
         self._bar_species_tallies = sp_tallies
@@ -2102,24 +2159,25 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         wants_rating = self.rdoHourRating.isChecked() and self._anyRatings()
         if wants_rating:
             self._draw_chart(labels, self._ratingAverages(), sp_lists,
-                             "Average rating", item_label="photos",
+                             "Average rating", item_label=noun + "s",
                              value_fmt="%.1f")
             self._applyRatingAxis()
         else:
             self._draw_chart(labels, counts, sp_lists, y_label,
-                             item_label="photos")
+                             item_label=noun + "s")
 
-        self._noteSkippedPhotos("a timestamp")
+        self._noteSkippedPhotos("a timestamp" if noun == "photo" else "a time",
+                                noun=noun)
         if self.rdoHourRating.isChecked() and not wants_rating:
             self._fig.text(0.5, 0.5,
-                           "No photo in this selection carries a rating",
+                           f"No {noun} in this selection carries a rating",
                            ha="center", va="center", color=_GREY_COLOR,
                            fontsize=10)
             self._canvas.draw_idle()
         return True
 
-    def _noteSkippedPhotos(self, missing):
-        """Footnote the photos a chart had to leave out.
+    def _noteSkippedPhotos(self, missing, noun="photo"):
+        """Footnote the photos (or recordings) a chart had to leave out.
 
         Said plainly rather than quietly charting a subset: a catalog of phone
         pictures or scanned film may record none of these fields.
@@ -2129,7 +2187,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             return
         self._fig.text(
             0.995, 0.005,
-            f"{skipped:,} photo{'' if skipped == 1 else 's'} "
+            f"{skipped:,} {noun}{'' if skipped == 1 else 's'} "
             f"without {missing} not shown",
             ha="right", va="bottom", color=_GREY_COLOR, fontsize=7)
         self._canvas.draw_idle()
@@ -3269,6 +3327,9 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         if self._chart_type == "photohour":
             self._spawn_photo_hour_window(bar_idx)
             return
+        if self._chart_type == "recordinghour":
+            self._spawn_recording_hour_window(bar_idx)
+            return
 
         label = self._labels[bar_idx]
         new_filter = copy.deepcopy(self.filter)
@@ -3365,7 +3426,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         # the headline always reports the photo count rather than the bar's
         # own value — "2.5 photos" would be nonsense.
         headline = count
-        if (self._chart_type in ("exposuresettings", "photohour")
+        if (self._chart_type in ("exposuresettings", "photohour", "recordinghour")
                 and idx < len(getattr(self, "_bar_photo_counts", []))):
             headline = self._bar_photo_counts[idx]
         tip = f"{self._labels[idx]}: {headline:,} {self._bar_item_label}"
@@ -4324,6 +4385,28 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             photoTest=lambda p, s, h=hour: pm.hour(p, s) == h,
             titleText=f"Photos Taken at {label}")
 
+    def _spawn_recording_hour_window(self, bar_idx):
+        """Open the recordings Browse Grid on one hour of the day.
+
+        Like the photo version, the hour is not a Media Filter field, so it
+        rides a per-recording predicate.  The predicate also applies the
+        individual Media Filter test, so the grid shows exactly the files the
+        bar counted.
+        """
+        hours = getattr(self, "_bar_hours", [])
+        if bar_idx >= len(hours):
+            return
+        hour = hours[bar_idx]
+        label = self._labels[bar_idx] if bar_idx < len(self._labels) else f"{hour:02d}:00"
+        db = self.mdiParent.db
+        filt = copy.deepcopy(self.filter)
+        self._spawn_recordings_grid(
+            filt,
+            recordingTest=lambda a, s, h=hour, f=filt: (
+                db.TestIndividualRecording(a, f)
+                and db.RecordingHour(a, s) == h),
+            titleText=f"Recordings Made at {label}")
+
     def _spawn_photo_setting_window(self, bar_idx):
         """Open Browse Grid on the bucket a settings bar represents.
 
@@ -4361,11 +4444,12 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             sub.close()
         QApplication.restoreOverrideCursor()
 
-    def _spawn_recordings_grid(self, filter):
+    def _spawn_recordings_grid(self, filter, recordingTest=None, titleText=None):
         """Open Recordings > Browse Grid for this filter (the cumulative
-        recordings chart's dot click).  Pre-checks for results before touching
-        the MDI area — adding then removing a window makes the sibling windows
-        visibly jerk."""
+        recordings chart's dot click, and a Recordings by Time of Day bar).
+        Pre-checks for results before touching the MDI area — adding then
+        removing a window makes the sibling windows visibly jerk.
+        recordingTest and titleText pass through to FillRecordings."""
         QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
         import code_RecordingsGrid
         if not self.mdiParent.db.GetSightingsWithRecordings(filter):
@@ -4376,7 +4460,9 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         sub.mdiParent = self.mdiParent
         self.mdiParent.mdiArea.addSubWindow(sub)
         self.mdiParent.PositionChildWindow(sub, self.mdiParent)
-        ok = sub.FillRecordings(filter)   # fill hidden, then show: see _createRecordingsWindow
+        # fill hidden, then show: see _createRecordingsWindow
+        ok = sub.FillRecordings(filter, recordingTest=recordingTest,
+                                titleText=titleText)
         QApplication.restoreOverrideCursor()
         if ok is False:
             sub.close()
@@ -4988,7 +5074,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         "totalphotos", "ytdphotos", "photopie", "photoaccumulation", "cumulativephotos",
         "exposuresettings", "comparesettings", "photohour",
         "totalrecordings", "ytdrecordings", "recordingspie", "recordingsaccumulation",
-        "cumulativerecordings",
+        "cumulativerecordings", "recordinghour",
     }
 
     @code_MediaRefresh.media_report(
@@ -5487,6 +5573,30 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
                 filter.buildWindowTitle(titles[chartType], self.mdiParent.db))
             icon = QIcon()
             icon.addPixmap(QPixmap(":/icon_camera_white.png"),
+                           QIcon.Normal, QIcon.Off)
+            self.setWindowIcon(icon)
+            return True
+
+        # Recordings > Technical Statistics > Time of Day: the photo chart's
+        # counterpart, sharing its radio row and drawing code.
+        if chartType == "recordinghour":
+            self.frmGranularity.setVisible(False)
+            if not self._recording_items():
+                return False
+            self.frmHourMode.setVisible(True)
+            self.rdoHourCount.setText("Recordings")
+            self.rdoHourCount.setChecked(True)
+            for rdo in (self.rdoHourCount, self.rdoHourRating):
+                rdo.toggled.connect(
+                    lambda checked: self._redraw_hour() if checked else None)
+            if not self._draw_hour_chart():
+                return False
+            self.mdiParent.SetChildDetailsLabels(self, filter)
+            self.setWindowTitle(
+                filter.buildWindowTitle("Recordings by Time of Day",
+                                        self.mdiParent.db))
+            icon = QIcon()
+            icon.addPixmap(QPixmap(":/icon_microphone_white.png"),
                            QIcon.Normal, QIcon.Off)
             self.setWindowIcon(icon)
             return True

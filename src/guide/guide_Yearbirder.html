@@ -194,7 +194,10 @@
       </ul></li>
     <li><a href="#recording-enlargement">The Recording Enlargement View</a></li>
     <li><a href="#managing-recordings">Managing Your Recordings</a></li>
-    <li><a href="#recordings-reports">Recordings Charts and Reports</a></li>
+    <li><a href="#recordings-reports">Recordings Charts and Reports</a>
+      <ul>
+        <li><a href="#recording-statistics">Technical Statistics</a></li>
+      </ul></li>
   </ul>
   <p class="toc-group">Viewing Community Sightings</p>
   <ul>
@@ -1019,7 +1022,7 @@
 <p class="back-to-top"><a href="#top">Back to top &uarr;</a></p>
 
 <h3 id="photo-statistics">Technical Statistics</h3>
-<p>Open with <strong>Photos &rarr; Technical Statistics</strong>. Available only when a media catalog is loaded. The Photos menu itself holds only ways of looking at your photographs; its two submenus hold the reports. <strong>Birding Statistics</strong> reports on the birds, the places and the dates — and opens with <strong>Photo Overview</strong>, the summary of your whole collection. <strong>Technical Statistics</strong>, described here, reports on the photographs themselves — the gear, the settings and the conditions. Every report in it respects the current Sighting Filter and Media Filter, so you can narrow any of them to a year, a region, a single lens, or an ISO range before opening it.</p>
+<p>Open with <strong>Photos &rarr; Technical Statistics</strong>. Available only when a media catalog is loaded. The Photos menu itself holds only ways of looking at your photographs; its two submenus hold the reports. <strong>Birding Statistics</strong> reports on the birds, the places and the dates — and opens with <strong>Photos Overview</strong>, the summary of your whole collection. <strong>Technical Statistics</strong>, described here, reports on the photographs themselves — the gear, the settings and the conditions. Every report in it respects the current Sighting Filter and Media Filter, so you can narrow any of them to a year, a region, a single lens, or an ISO range before opening it.</p>
 
 <p>It opens with one tabular report:</p>
 <ul>
@@ -1036,7 +1039,7 @@
 
 <p><strong>Time of Day</strong> breaks your photos down by the hour they were taken, from each photo's own EXIF timestamp. As on Photos &amp; Ratings by Setting, a pair of radio buttons above the chart chooses what the bars measure: <strong>Photographs</strong>, how many you took in each hour, or <strong>Average Rating</strong>, how those photos turned out — which can separate the hour you shoot most from the hour you shoot best. Hovering an hour lists the species photographed in it, and clicking one opens that hour's photos in Browse Grid. It answers which part of the day your photographs actually come from, which is often not the part you would guess.</p>
 
-<p>Camera Gear, and Photo Overview and Photo Coverage of Species under Birding Statistics, can all be saved with <strong>File &rarr; Save as PDF</strong>.</p>
+<p>Camera Gear, and Photos Overview and Photo Coverage of Species under Birding Statistics, can all be saved with <strong>File &rarr; Save as PDF</strong>.</p>
 
 <p class="back-to-top"><a href="#top">Back to top &uarr;</a></p>
 
@@ -1325,8 +1328,9 @@
 <hr>
 
 <h2 id="recordings-reports">30. Recordings Charts and Reports</h2>
-<p>The <strong>Recordings</strong> menu mirrors the Photos menu: the menu itself holds the ways of listening to your recordings — Browse Grid, Browse Cards, Species Gallery, Recording Map and Animated Recording Map — and its <strong>Birding Statistics</strong> submenu holds the charts and reports described here. They count your sound recordings instead of photos, appear once a media catalog is open, and are rendered in a <strong>green</strong> color palette to distinguish them from the yellow photo charts. Each respects the current Sighting Filter and Media Filter. There is no Technical Statistics submenu for recordings: the gear and exposure reports photos have do not apply to audio.</p>
+<p>The <strong>Recordings</strong> menu mirrors the Photos menu: the menu itself holds the ways of listening to your recordings — Browse Grid, Browse Cards, Species Gallery, Recording Map and Animated Recording Map — and its two submenus hold the charts and reports: <strong>Birding Statistics</strong>, described here, and <strong>Technical Statistics</strong>, described below. They count your sound recordings instead of photos, appear once a media catalog is open, and are rendered in a <strong>green</strong> color palette to distinguish them from the yellow photo charts. Each respects the current Sighting Filter and Media Filter.</p>
 <ul>
+  <li><strong>Recordings Overview</strong> — the summary of your recording collection, the counterpart of Photos Overview: how many recordings, species, families, locations, checklists and days with recordings, and your total recorded time; your first and latest recording, recordings per day and your busiest day; and, if you rate your recordings, how your ratings are distributed. A recording assigned to several species counts once. It can be saved with <strong>File &rarr; Save as PDF</strong>.</li>
   <li><strong>Total Recordings per Species</strong> — a gallery grouped by species, showing a representative spectrogram for each species you have recorded.</li>
   <li><strong>Year to Date by Recordings</strong> — a horizontal bar chart comparing your year-to-date recording count against your full-year totals for every year in your data.</li>
   <li><strong>Families &amp; Orders by Recordings</strong> — a pie chart where each wedge is a bird family (or order), sized by the total number of recordings you have of species in that group. Toggle between Families and Orders with the radio buttons.</li>
@@ -1335,6 +1339,14 @@
   <li><strong>Recorded Species Growth Over Time</strong> — a cumulative line curve tracking the total number of distinct species you have recorded over time.</li>
 </ul>
 <p>As with the photo charts, hovering over a bar, wedge, or point shows details, and clicking opens a filtered window or gallery for that selection.</p>
+
+<h3 id="recording-statistics">Technical Statistics</h3>
+<p>Open with <strong>Recordings &rarr; Technical Statistics</strong>. Where Birding Statistics reports on the birds, these two report on the recordings themselves — the gear you used and when. They are the recording counterparts of two reports under <a href="#photo-statistics">Photos &rarr; Technical Statistics</a>; the photo reports about exposure have no audio equivalent, so they have no counterpart here. Both respect the current Sighting Filter and Media Filter, so you can narrow them to one recorder, one microphone or one year before opening them.</p>
+<ul>
+  <li><strong>Recording Gear</strong> — one table for your recorders and one for your microphones, each with recording count, share, how many species it has recorded, and the first and last date you used it. When you use more than one microphone on the same recorder, a third table shows each recorder-and-microphone pair. Alongside sit your typical settings — the sample rate and bit depth you use most, how many recordings are mono and how many stereo, and your median, longest and total recording length — and a <strong>Formats</strong> table listing each sample-rate and bit-depth combination you have recorded in. Recording files do not store the microphone, so a recording counts toward a microphone only once you have assigned one with a rig (see <a href="#recording-gear">Recording gear</a>); the rest are listed as <em>not assigned</em>. Recording Gear can be saved with <strong>File &rarr; Save as PDF</strong>.</li>
+  <li><strong>Time of Day</strong> — your recordings broken down by the hour they were made. The time comes from the recording file's own metadata where the recorder wrote one, otherwise from a time in the filename, and only as a last resort from the checklist's start time. A pair of radio buttons above the chart chooses what the bars measure: <strong>Recordings</strong>, or <strong>Average Rating</strong> for rated recordings. Hovering an hour lists the species recorded in it, and clicking one opens that hour's recordings in Browse Grid.</li>
+</ul>
+<p>A recording assigned to several species is counted once in both reports, though it adds to the species count of each of them.</p>
 
 <p class="back-to-top"><a href="#top">Back to top &uarr;</a></p>
 

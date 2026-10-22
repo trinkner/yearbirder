@@ -3,7 +3,7 @@
 
 Three report modes share this window, each its own menu entry:
 
-    "overview"  totals, rating spread, catalog health
+    "overview"  totals, rating distribution, catalog health
     "gear"      bodies, lenses, rigs, typical settings, practical limits
     "coverage"  species photographed vs seen, most wanted, single-photo species
 
@@ -41,7 +41,7 @@ from PySide6.QtWebEngineCore import QWebEngineProfile, QWebEngineSettings
 
 # Report modes and the window-title prefix each one carries.
 _MODE_TITLES = {
-    "overview": "Photo Overview",
+    "overview": "Photos Overview",
     "gear":     "Camera Gear",
     "coverage": "Photo Coverage of Species",
 }
@@ -137,7 +137,7 @@ class PhotoStats(QMdiSubWindow, form_PhotoStats.Ui_frmPhotoStats):
     contentReady = Signal()   # report loaded and window sized to fit it
 
     def __init__(self):
-        super(self.__class__, self).__init__()
+        super().__init__()
         self.setupUi(self)
         self.setAttribute(Qt.WA_DeleteOnClose, True)
         icon = QIcon()
@@ -155,7 +155,7 @@ class PhotoStats(QMdiSubWindow, form_PhotoStats.Ui_frmPhotoStats):
 
     def resizeEvent(self, event):
         self.resized.emit()
-        return super(self.__class__, self).resizeEvent(event)
+        return super().resizeEvent(event)
 
 
     def resizeMe(self):
@@ -203,6 +203,15 @@ class PhotoStats(QMdiSubWindow, form_PhotoStats.Ui_frmPhotoStats):
         else:
             self._stats = self._computeOverview(photos)
 
+        self._render(filter.buildWindowTitle(_MODE_TITLES[self.mode], db))
+        return True
+
+
+    def _render(self, title):
+        """Show self._stats as the report, creating the web view on first use.
+
+        Shared with code_RecordingStats, which subclasses this window.
+        """
         if self.webView is None:
             # Size the window BEFORE creating the view: Chromium lays the page
             # out at the view's creation size, and resizes made while the
@@ -220,9 +229,8 @@ class PhotoStats(QMdiSubWindow, form_PhotoStats.Ui_frmPhotoStats):
             self.webView.setGeometry(5, 27, windowWidth - 10, windowHeight - 35)
             self.webView.loadFinished.connect(self._fitToContent)
 
-        self.setWindowTitle(filter.buildWindowTitle(_MODE_TITLES[self.mode], db))
+        self.setWindowTitle(title)
         self.webView.setHtml(self._generateHtml(self._stats, dark=True))
-        return True
 
 
     # ------------------------------------------------------------------
@@ -568,13 +576,16 @@ class PhotoStats(QMdiSubWindow, form_PhotoStats.Ui_frmPhotoStats):
                 f'{", ".join(shown) if shown else "(none)"}{tail}</div>')
         return self._shell(title, body, dark, note)
 
-    def _generateHtml(self, st, dark=True):
+    def _reportColumns(self, st, dark):
+        """(column HTML list, CSS grid-template-columns) for this mode."""
         if self.mode == "gear":
-            cols, grid = self._gearHtml(st, dark)
-        elif self.mode == "coverage":
-            cols, grid = self._coverageHtml(st, dark)
-        else:
-            cols, grid = self._overviewHtml(st, dark)
+            return self._gearHtml(st, dark)
+        if self.mode == "coverage":
+            return self._coverageHtml(st, dark)
+        return self._overviewHtml(st, dark)
+
+    def _generateHtml(self, st, dark=True):
+        cols, grid = self._reportColumns(st, dark)
 
         bg   = "#1e1f26" if dark else "#ffffff"
         text = "#e2e4ec" if dark else "#111111"
@@ -653,9 +664,9 @@ class PhotoStats(QMdiSubWindow, form_PhotoStats.Ui_frmPhotoStats):
             if r["top_decile"] is not None:
                 note = (f'Your best 10% of photos are rated '
                         f'{r["top_decile"]}★ and above.')
-            rating_sec = self._section("Rating Spread", rows, dark, note)
+            rating_sec = self._section("Rating Distribution", rows, dark, note)
         else:
-            rating_sec = self._section("Rating Spread", [
+            rating_sec = self._section("Rating Distribution", [
                 ("Rated Photos", "0"),
                 ("Unrated",      fi(r["unrated_n"])),
             ], dark, "No photos in this selection carry a rating, so the "

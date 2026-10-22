@@ -470,7 +470,18 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
     # Fill
     # ------------------------------------------------------------------
 
-    def FillRecordings(self, filter):
+    def FillRecordings(self, filter, recordingTest=None, titleText=None):
+        """Fill the browser with every recording matching `filter`.
+
+        recordingTest is an optional extra per-recording predicate,
+        recordingTest(a, s) -> bool, for selections the Media Filter cannot
+        express — one hour of the day on the Time of Day chart, say.  titleText
+        then names that selection in the window title in place of
+        "Recordings".  Mirrors Photos.FillPhotos.  Both are kept on the window
+        so MainWindow.refreshOpenRecordings re-runs the same selection.
+        """
+        self._recordingTest = recordingTest
+        self._titleText = titleText
         self.scaleMe()
         self.resizeMe()
 
@@ -498,19 +509,30 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
         audioFiles = set()
         for s in recordingSightings:
             for a in s.get("audio", []):
+                if recordingTest is not None and not recordingTest(a, s):
+                    continue
                 audioFiles.add(a["fileName"])
                 species.add(s["commonName"])
         audioCount = len(audioFiles)
+
+        # An extra predicate can empty a set the Media Filter alone would have
+        # filled; bail out the same way an empty query does.
+        if audioCount == 0:
+            self.mdiParent.progressOverlay.hide()
+            return False
 
         self.lblSpecies.setText(
             "Species: " + str(len(species)) + ".  Recordings: " + str(audioCount))
         self.mdiParent.SetChildDetailsLabels(self, filter)
         self.setWindowTitle(filter.buildWindowTitle(
-            "Recordings", self.mdiParent.db, count=audioCount, countUnit="Recordings"))
+            titleText or "Recordings", self.mdiParent.db,
+            count=audioCount, countUnit="Recordings"))
 
         self.audioList = []
         for s in recordingSightings:
             for a in s.get("audio", []):
+                if recordingTest is not None and not recordingTest(a, s):
+                    continue
                 self.audioList.append([a, s])
                 if self._abort:
                     self.mdiParent.progressOverlay.hide()

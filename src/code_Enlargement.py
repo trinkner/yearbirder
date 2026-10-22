@@ -800,6 +800,42 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
         self.handlePhotoDeletion(currentPhoto)
 
 
+    def refreshAssignments(self):
+        """Re-pair each photo with the sighting it now belongs to, after a
+        Manage Photos save, and redraw the details if the photo on screen moved.
+
+        A save that changes a photo's species, location or date re-attaches the
+        SAME photo record to a different sighting.  This window holds
+        (photo, sighting) pairs from when it opened, so without this its details
+        pane kept showing the old species and location.  Photos that left the
+        catalog altogether are handled by handlePhotoDeletion instead.
+        """
+        if not self.photoList:
+            return
+        db = self.mdiParent.mdiParent.db
+        wanted = {p["fileName"] for p, _s in self.photoList}
+        now = {}
+        for s in db.sightingList:
+            for p in s.get("photos", ()):
+                if p["fileName"] in wanted:
+                    now[p["fileName"]] = (p, s)
+
+        currentMoved = False
+        refreshed = []
+        for i, (p, s) in enumerate(self.photoList):
+            hit = now.get(p["fileName"])
+            if hit is not None and (hit[0] is not p or hit[1] is not s):
+                p, s = hit
+                if i == self.currentIndex:
+                    currentMoved = True
+            refreshed.append([p, s])
+        self.photoList = refreshed
+
+        if currentMoved:
+            self.setCameraDetails()
+            self.setPhotoTitle()
+
+
     def handlePhotoDeletion(self, filename):
         idx = next((i for i, (p, s) in enumerate(self.photoList) if p["fileName"] == filename), None)
         if idx is None:

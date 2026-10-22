@@ -66,6 +66,9 @@ class Ui_MainWindow(object):
         self.menuRecordingStats = QtWidgets.QMenu(self.menuRecordings)
         self.menuRecordingStats.setObjectName("menuRecordingStats")
         self.menuRecordingStats.setToolTipsVisible(True)
+        self.menuRecordingTechStats = QtWidgets.QMenu(self.menuRecordings)
+        self.menuRecordingTechStats.setObjectName("menuRecordingTechStats")
+        self.menuRecordingTechStats.setToolTipsVisible(True)
         self.menuMaps = QtWidgets.QMenu(self.menuBar)
         self.menuMaps.setObjectName("menuMaps")
         self.menuCommunity = QtWidgets.QMenu(self.menuBar)
@@ -1161,6 +1164,12 @@ class Ui_MainWindow(object):
         self.actionCompareSettings.setObjectName("actionCompareSettings")
         self.actionPhotoTimeOfDay = QtGui.QAction(MainWindow)
         self.actionPhotoTimeOfDay.setObjectName("actionPhotoTimeOfDay")
+        self.actionRecordingsOverview = QtGui.QAction(MainWindow)
+        self.actionRecordingsOverview.setObjectName("actionRecordingsOverview")
+        self.actionRecordingGear = QtGui.QAction(MainWindow)
+        self.actionRecordingGear.setObjectName("actionRecordingGear")
+        self.actionRecordingTimeOfDay = QtGui.QAction(MainWindow)
+        self.actionRecordingTimeOfDay.setObjectName("actionRecordingTimeOfDay")
         self.actionPhotoBar = QtGui.QAction(MainWindow)
         self.actionPhotoBar.setObjectName("actionPhotoBar")
         self.actionPhotoAccumulation = QtGui.QAction(MainWindow)
@@ -1266,9 +1275,10 @@ class Ui_MainWindow(object):
         self.menuFilter.addAction(self.actionClearStandardFilter)
         self.menuFilter.addAction(self.actionClearMediaFilter)
         # Laid out like the Photos menu: the menu proper holds only ways of
-        # LISTENING to recordings, and the reports live in a submenu.  There
-        # is no Technical Statistics counterpart yet — the recording-gear and
-        # settings reports that photos have do not exist for audio.
+        # LISTENING to recordings, and the reports live in two submenus — one
+        # about the birds, one about the recording gear.  Technical Statistics
+        # carries only the photo reports that have an audio meaning: there is
+        # no exposure to chart for a recording.
         self.menuRecordings.addAction(self.actionAddRecordings)
         self.menuRecordings.addSeparator()
         self.menuRecordings.addAction(self.actionRecordingsGrid)
@@ -1277,6 +1287,9 @@ class Ui_MainWindow(object):
         self.menuRecordings.addAction(self.actionGeolocatedRecordings)
         self.menuRecordings.addAction(self.actionAnimatedRecordingSequenceMap)
 
+        # Recordings Overview heads it, as Photos Overview heads the photo one.
+        self.menuRecordingStats.addAction(self.actionRecordingsOverview)
+        self.menuRecordingStats.addSeparator()
         self.menuRecordingStats.addAction(self.actionRecordingsSpeciesGallery)
         self.menuRecordingStats.addSeparator()
         self.menuRecordingStats.addAction(self.actionTotalRecordings)
@@ -1285,8 +1298,12 @@ class Ui_MainWindow(object):
         self.menuRecordingStats.addAction(self.actionRecordingsAccumulation)
         self.menuRecordingStats.addAction(self.actionCumulativeRecordings)
 
+        self.menuRecordingTechStats.addAction(self.actionRecordingGear)
+        self.menuRecordingTechStats.addAction(self.actionRecordingTimeOfDay)
+
         self.menuRecordings.addSeparator()
         self.menuRecordings.addAction(self.menuRecordingStats.menuAction())
+        self.menuRecordings.addAction(self.menuRecordingTechStats.menuAction())
         # The Photos menu proper holds only ways of LOOKING at photos; the
         # two submenus below hold the reports — one about the birds, one
         # about the camera.
@@ -1302,7 +1319,7 @@ class Ui_MainWindow(object):
         self.menuPhotos.addAction(self.actionAnimatedPhotoSequence)
 
         # Birding Statistics — reports about the birds, the places and the
-        # dates.  Photo Overview heads it as the summary of the collection.
+        # dates.  Photos Overview heads it as the summary of the collection.
         self.menuBirdingStats.addAction(self.actionPhotoStatsOverview)
         self.menuBirdingStats.addSeparator()
         self.menuBirdingStats.addAction(self.actionPhotosSpeciesGallery)
@@ -1404,6 +1421,7 @@ class Ui_MainWindow(object):
         self.menuBirdingStats.setTitle(_translate("MainWindow", "Birding Statistics"))
         self.menuRecordingStats.setTitle(_translate("MainWindow", "Birding Statistics"))
         self.menuTechnicalStats.setTitle(_translate("MainWindow", "Technical Statistics"))
+        self.menuRecordingTechStats.setTitle(_translate("MainWindow", "Technical Statistics"))
         self.menuRecordings.setTitle(_translate("MainWindow", "Recordings"))
         self.menuMaps.setTitle(_translate("MainWindow", "Maps"))
         self.menuCommunitySightings.setTitle(_translate("MainWindow", "Community Sightings"))
@@ -1630,8 +1648,8 @@ class Ui_MainWindow(object):
         self.actionYTDPhotos.setToolTip(_translate("MainWindow", "Photos taken this year vs. full-year totals for previous years"))
         self.actionPhotoPie.setText(_translate("MainWindow", "Families && Orders by Photos"))
         self.actionPhotoPie.setToolTip(_translate("MainWindow", "Photo count by family or order as a pie chart"))
-        self.actionPhotoStatsOverview.setText(_translate("MainWindow", "Photo Overview"))
-        self.actionPhotoStatsOverview.setToolTip(_translate("MainWindow", "Photo totals, rating spread and catalog health for the current filter"))
+        self.actionPhotoStatsOverview.setText(_translate("MainWindow", "Photos Overview"))
+        self.actionPhotoStatsOverview.setToolTip(_translate("MainWindow", "Photo totals, rating distribution and catalog health for the current filter"))
         self.actionPhotoStatsGear.setText(_translate("MainWindow", "Camera Gear"))
         self.actionPhotoStatsGear.setToolTip(_translate("MainWindow", "Bodies, lenses, typical settings and the limits your photos demonstrate"))
         self.actionPhotoStatsCoverage.setText(_translate("MainWindow", "Photo Coverage of Species"))
@@ -1642,6 +1660,12 @@ class Ui_MainWindow(object):
         self.actionCompareSettings.setToolTip(_translate("MainWindow", "How any two of ISO, aperture, shutter speed and focal length combine"))
         self.actionPhotoTimeOfDay.setText(_translate("MainWindow", "Time of Day"))
         self.actionPhotoTimeOfDay.setToolTip(_translate("MainWindow", "Which hours of the day your photos come from"))
+        self.actionRecordingsOverview.setText(_translate("MainWindow", "Recordings Overview"))
+        self.actionRecordingsOverview.setToolTip(_translate("MainWindow", "Recording totals, recording days and rating distribution for the current filter"))
+        self.actionRecordingGear.setText(_translate("MainWindow", "Recording Gear"))
+        self.actionRecordingGear.setToolTip(_translate("MainWindow", "Recorders, microphones, formats and recording lengths"))
+        self.actionRecordingTimeOfDay.setText(_translate("MainWindow", "Time of Day"))
+        self.actionRecordingTimeOfDay.setToolTip(_translate("MainWindow", "Which hours of the day your recordings come from"))
         self.actionPhotoBar.setText(_translate("MainWindow", "Photos per Time Period"))
         self.actionPhotoBar.setToolTip(_translate("MainWindow", "Total photos per time period"))
         self.actionPhotoAccumulation.setText(_translate("MainWindow", "New Species Photographed per Year"))

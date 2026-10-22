@@ -2414,6 +2414,42 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
         elif action == actionDelete:
             self.deleteFile()
 
+    def refreshAssignments(self):
+        """Re-pair each recording with the sighting it now belongs to, after a
+        Manage Recordings save, and redraw the details if the one on screen
+        moved.
+
+        The recordings counterpart of Enlargement.refreshAssignments.  A changed
+        species arrives as a removal for the old species (handleAudioDeletion
+        closes the window), but a changed location, date or time re-attaches
+        the same recording to a different sighting of the same species, which
+        left the details pane showing the old location.  Pairs are matched on
+        file AND species, since one file can be assigned to several species.
+        """
+        db = self.mdiParent.db
+        if not self._wavPath:
+            return
+        wanted = {a.get("fileName", "") for a, _s in self._audioList}
+        wanted.add(self._wavPath)
+        now = {}
+        for s in db.sightingList:
+            for a in s.get("audio", ()):
+                if a["fileName"] in wanted:
+                    now[(a["fileName"], s.get("commonName", ""))] = (a, s)
+
+        self._audioList = [
+            now.get((a.get("fileName", ""), s.get("commonName", "")), (a, s))
+            for a, s in self._audioList
+        ]
+
+        old = self._sighting or {}
+        hit = now.get((self._wavPath, old.get("commonName", "")))
+        if hit is not None and (hit[1] is not self._sighting
+                                or hit[0] is not self._audioRecord):
+            self._audioRecord, self._sighting = hit
+            self._setRecordingDetails()
+
+
     def handleAudioDeletion(self, filename, species=None):
         """A recording left the catalog — deleted from disk, or removed from the
         catalog for one species (species set) or all of them (species None).
