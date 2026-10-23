@@ -2489,6 +2489,11 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
             self._wavPath = new_path
             if getattr(self._player, "_currentPath", None) == old_path:
                 self._player._currentPath = new_path
+            # The title and the details pane show the file name as drawn.
+            species = (self._sighting or {}).get("commonName", "")
+            self.setWindowTitle(
+                f"Recording: {species} — {os.path.basename(new_path)}")
+            self._setRecordingDetails()
         if old_path in self._spectroCache:
             self._spectroCache[new_path] = self._spectroCache.pop(old_path)
 

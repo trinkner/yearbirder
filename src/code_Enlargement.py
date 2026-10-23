@@ -836,6 +836,18 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
             self.setPhotoTitle()
 
 
+    def handlePhotoRename(self, old_path, new_path):
+        """A Rename Media operation moved a photo on disk.  The photo dicts in
+        photoList are the live db objects, so their fileName is already the new
+        one; but the window title and the details pane show the file name as
+        drawn, so redraw them if the renamed photo is the one on screen."""
+        if not self.photoList:
+            return
+        if self.photoList[self.currentIndex][0].get("fileName") == new_path:
+            self.setCameraDetails()
+            self.setPhotoTitle()
+
+
     def handlePhotoDeletion(self, filename):
         idx = next((i for i, (p, s) in enumerate(self.photoList) if p["fileName"] == filename), None)
         if idx is None:

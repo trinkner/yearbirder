@@ -2463,15 +2463,21 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self._refreshOpenEnlargements()
 
 
-    def _refreshOpenEnlargements(self):
-        """Let open photo and recording enlargements re-pair their media with
-        the sightings it now belongs to (see Enlargement.refreshAssignments and
-        RecordingEnlargement.refreshAssignments).  A full-screen one is
-        detached from the MDI area, so it is reached through _fullScreenChild."""
+    def openWindowsIncludingFullScreen(self):
+        """Every open child window, including a full-screen enlargement, which
+        is detached from the MDI area (see Enlargement.toggleFullScreen) and so
+        missing from mdiArea.subWindowList()."""
         windows = list(self.mdiArea.subWindowList())
         if self._fullScreenChild is not None and self._fullScreenChild not in windows:
             windows.append(self._fullScreenChild)
-        for w in windows:
+        return windows
+
+
+    def _refreshOpenEnlargements(self):
+        """Let open photo and recording enlargements re-pair their media with
+        the sightings it now belongs to (see Enlargement.refreshAssignments and
+        RecordingEnlargement.refreshAssignments)."""
+        for w in self.openWindowsIncludingFullScreen():
             try:
                 if hasattr(w, "refreshAssignments"):
                     w.refreshAssignments()

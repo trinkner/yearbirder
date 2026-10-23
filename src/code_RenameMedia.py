@@ -1089,7 +1089,7 @@ class RenameMedia(QMdiSubWindow, form_RenameMedia.Ui_frmRenameMedia):
                 # windows: their audio dicts self-heal (shared db objects) but
                 # the per-row playback paths and path-keyed caches would keep
                 # pointing at the vanished file, silently breaking Play.
-                for w in self.mdiParent.mdiArea.subWindowList():
+                for w in self.mdiParent.openWindowsIncludingFullScreen():
                     if hasattr(w, "handleRecordingRename"):
                         w.handleRecordingRename(old_path, new_path)
 
@@ -1119,11 +1119,14 @@ class RenameMedia(QMdiSubWindow, form_RenameMedia.Ui_frmRenameMedia):
                 except IOError:
                     pass
 
-                # Update any open Photos window's pixmap cache.
-                for w in self.mdiParent.mdiArea.subWindowList():
+                # Update any open Photos window's pixmap cache, and let a Photo
+                # Enlargement showing this photo relabel itself.
+                for w in self.mdiParent.openWindowsIncludingFullScreen():
                     cache = getattr(w, "pixmapCache", None)
                     if cache and old_path in cache:
                         cache[new_path] = cache.pop(old_path)
+                    if hasattr(w, "handlePhotoRename"):
+                        w.handlePhotoRename(old_path, new_path)
 
             # Re-key the on-disk thumbnail/spectrogram cache so the renamed file
             # keeps its cached previews (a rename leaves mtime/size unchanged).
