@@ -118,12 +118,19 @@ class CommunitySightingsMapBridge(QObject):
     """JS→Python bridge for community sightings maps.
 
     When the user clicks a location dot, opens an All Community Sightings
-    tabular report for that specific eBird location (past 3 days).
+    tabular report for that specific eBird location, over the same number of
+    days as the report the map came from.
+
+    back_days is that window, for maps built from a report's observations
+    rather than from a filter (the species maps behind "Map Locations");
+    without it the window comes from the map's own filter (Hotspot Map,
+    Notable map), and failing that the default.
     """
 
-    def __init__(self, web_window):
+    def __init__(self, web_window, back_days=None):
         super().__init__()
         self._web = web_window
+        self._back_days = back_days
 
     @Slot(str, str)
     def locationClicked(self, loc_id, loc_name):
@@ -163,7 +170,11 @@ class CommunitySightingsMapBridge(QObject):
         # rather than raise in here.  An exception in a @Slot invoked over the
         # web channel is swallowed by Qt -- the click just silently does nothing,
         # which is exactly how this went unnoticed on the Hotspot Map.
-        f.backDays          = ebirdBackDays(getattr(self._web, "filter", None))
+        if self._back_days is not None:
+            f.backDays = max(EBIRD_BACK_DAYS_MIN,
+                             min(EBIRD_BACK_DAYS_MAX, int(self._back_days)))
+        else:
+            f.backDays = ebirdBackDays(getattr(self._web, "filter", None))
 
         main = self._web.mdiParent
         sub = Web()
@@ -7369,7 +7380,7 @@ function handleShowChecklist(el) {{
         _qwc_file.close()
         html = html.replace("</body>", inject_js + _qwc_block + click_js + self._satellite_toggle_js() + "\n</body>")
 
-        self._csSightingsMapBridge = CommunitySightingsMapBridge(self)
+        self._csSightingsMapBridge = CommunitySightingsMapBridge(self, back_days=back_days)
         cs_channel = QWebChannel(self.webView.page())
         cs_channel.registerObject("csBridge", self._csSightingsMapBridge)
         self.webView.page().setWebChannel(cs_channel)
@@ -7552,7 +7563,7 @@ function handleShowChecklist(el) {{
                     lat = float(obs.get("lat", 0))
                     lng = float(obs.get("lng", 0))
                     if lat != 0.0 or lng != 0.0:
-                        loc_coords[loc] = (lat, lng)
+                        loc_coords[loc] = (lat, lng, obs.get("locId", ""))
                 except (ValueError, TypeError):
                     pass
 
@@ -7562,11 +7573,11 @@ function handleShowChecklist(el) {{
         COLOR_COUNTY  = "#4488EE"
         COLOR_OTHER   = "#FFFFFF"
 
-        points = []   # (lat, lng, loc_name, color, [species, …])
+        points = []   # (lat, lng, loc_name, loc_id, color, [species, …])
         for loc, obs_list in loc_obs.items():
             if loc not in loc_coords:
                 continue
-            lat, lng = loc_coords[loc]
+            lat, lng, loc_id = loc_coords[loc]
 
             seen_sp = []
             for obs in obs_list:
@@ -7618,7 +7629,7 @@ function handleShowChecklist(el) {{
             else:
                 color = COLOR_OTHER
 
-            points.append((lat, lng, loc, color, seen_sp))
+            points.append((lat, lng, loc, loc_id, color, seen_sp))
 
         if not points:
             return False
@@ -7634,7 +7645,7 @@ function handleShowChecklist(el) {{
 
         import html as _html2
         tip_data = {}
-        for lat, lng, loc, color, sp_list in points:
+        for lat, lng, loc, loc_id, color, sp_list in points:
             sp_lines = ""
             for sp in sp_list[:25]:
                 _lk = _base(sp)
@@ -7659,7 +7670,7 @@ function handleShowChecklist(el) {{
 
         tip_data_json = _json.dumps(tip_data, ensure_ascii=False)
 
-        for lat, lng, loc, color, sp_list in points:
+        for lat, lng, loc, loc_id, color, sp_list in points:
             marker = folium.CircleMarker(
                 location=[lat, lng],
                 radius=12,
@@ -7670,6 +7681,7 @@ function handleShowChecklist(el) {{
                 fill_opacity=0.88,
             )
             marker.options["locationName"] = loc
+            marker.options["locationId"]   = loc_id
             marker.add_to(notable_map)
 
         lats = [p[0] for p in points]
@@ -7736,7 +7748,45 @@ function handleShowChecklist(el) {{
     init();
 }})();
 </script>"""
-        html = html.replace("</body>", inject_js + self._satellite_toggle_js() + "\n</body>")
+        # A dot click opens All Community Sightings for that location over this
+        # map's window — the same wiring as loadNotableMapFromObs.
+        click_js = """
+<script>
+(function() {
+    new QWebChannel(qt.webChannelTransport, function(channel) {
+        window.csBridge = channel.objects.csBridge;
+    });
+    function initClick() {
+        var map = null;
+        var keys = Object.keys(window);
+        for (var i = 0; i < keys.length; i++) {
+            try { var o = window[keys[i]]; if (o && o instanceof L.Map) { map = o; break; } }
+            catch(e) {}
+        }
+        if (!map) { setTimeout(initClick, 150); return; }
+        map.eachLayer(function(layer) {
+            if (!(layer instanceof L.CircleMarker)) return;
+            var locId   = layer.options.locationId;
+            var locName = layer.options.locationName;
+            if (!locId) return;
+            layer.on('click', function() {
+                if (window.csBridge) window.csBridge.locationClicked(locId, locName);
+            });
+        });
+    }
+    initClick();
+})();
+</script>"""
+        _qwc_file = QFile(":/qtwebchannel/qwebchannel.js")
+        _qwc_file.open(QIODevice.OpenModeFlag.ReadOnly)
+        _qwc_block = "\n<script>" + bytes(_qwc_file.readAll()).decode("utf-8") + "</script>"
+        _qwc_file.close()
+        html = html.replace("</body>", inject_js + _qwc_block + click_js + self._satellite_toggle_js() + "\n</body>")
+
+        self._csSightingsMapBridge = CommunitySightingsMapBridge(self, back_days=BACK_DAYS)
+        cs_channel = QWebChannel(self.webView.page())
+        cs_channel.registerObject("csBridge", self._csSightingsMapBridge)
+        self.webView.page().setWebChannel(cs_channel)
 
         settings = QWebEngineProfile.defaultProfile().settings()
         settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
@@ -8159,7 +8209,7 @@ function openChecklist(subId) {{
         _qwc_file.close()
         html = html.replace("</body>", inject_js + _qwc_block + click_js + self._satellite_toggle_js() + "\n</body>")
 
-        self._csSightingsMapBridge = CommunitySightingsMapBridge(self)
+        self._csSightingsMapBridge = CommunitySightingsMapBridge(self, back_days=back_days)
         cs_channel = QWebChannel(self.webView.page())
         cs_channel.registerObject("csBridge", self._csSightingsMapBridge)
         self.webView.page().setWebChannel(cs_channel)
@@ -8752,7 +8802,7 @@ function openChecklist(subId) {{
         _qwc_file.close()
         html = html.replace("</body>", inject_js + _qwc_block + click_js + self._satellite_toggle_js() + "\n</body>")
 
-        self._csSightingsMapBridge = CommunitySightingsMapBridge(self)
+        self._csSightingsMapBridge = CommunitySightingsMapBridge(self, back_days=back_days)
         cs_channel = QWebChannel(self.webView.page())
         cs_channel.registerObject("csBridge", self._csSightingsMapBridge)
         self.webView.page().setWebChannel(cs_channel)
