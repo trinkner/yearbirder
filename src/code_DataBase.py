@@ -494,6 +494,30 @@ def resource_path(filename):
     return filename
 
 
+# AviList version that src/AviList_data.csv was built from (build_avilist_data.py);
+# it labels the conservation status shown in the Individual window.
+AVILIST_YEAR = "2026"
+
+# IUCN Red List categories as AviList writes them: display name and the IUCN's
+# own badge color.  A taxon AviList gives no category is shown as Not
+# Available ("NA", not an IUCN category): AviList leaves the status blank
+# where its species concept does not match BirdLife's, so a true IUCN Not
+# Evaluated would be the wrong claim.
+IUCN_CATEGORIES = {
+    "EX":       ("Extinct",                                    "#000000"),
+    "EW":       ("Extinct in the Wild",                        "#542344"),
+    "CR (PEW)": ("Critically Endangered (Possibly Extinct in the Wild)", "#D81E05"),
+    "CR (PE)":  ("Critically Endangered (Possibly Extinct)",   "#D81E05"),
+    "CR":       ("Critically Endangered",                      "#D81E05"),
+    "EN":       ("Endangered",                                 "#FC7F3F"),
+    "VU":       ("Vulnerable",                                 "#F9E814"),
+    "NT":       ("Near Threatened",                            "#CCE226"),
+    "LC":       ("Least Concern",                              "#60C659"),
+    "DD":       ("Data Deficient",                             "#D1D1C6"),
+    "NA":       ("Not Available",                              "#A0A0A0"),
+}
+
+
 def _safe_rating(val, default=0):
     """Return val as an int in 0-5, or default if val is missing/invalid."""
     try:
@@ -773,6 +797,7 @@ class DataBase():
         self.orderSpeciesDict = {}
         self.bblCodeDict = {}
         self.bblCodeByCommonName = {} # commonName -> BBL code, fallback when the sci name moved genus
+        self.aviListDict = None       # eBird code -> (IUCN status, BoW URL, IUCN id); loaded on first use
         self.eBirdCodeDict = {}       # sciName -> eBird species code, populated by ReadTaxonomyDataFile
         self.taxonOrderBySciName = {} # sciName -> float taxon order, populated by ReadTaxonomyDataFile
         self.sciNameByCommonName = {} # commonName -> sciName for the whole taxonomy, populated by ReadTaxonomyDataFile
@@ -5524,6 +5549,64 @@ class DataBase():
         if bblCode is None:
             bblCode = self.bblCodeByCommonName.get(commonName, "")
         return bblCode
+
+
+    def _loadAviListData(self):
+
+        # Loaded the first time an Individual window asks, not at startup.
+        # A missing file leaves the dict empty, so every species reads as
+        # Not Available and the Birds of the World link falls back to the
+        # URL built from the eBird code.
+        self.aviListDict = {}
+        aviListFile = resource_path("AviList_data.csv")
+        if not os.path.isfile(aviListFile):
+            return
+        with open(aviListFile, "r", encoding="utf-8", newline="") as csvfile:
+            for row in csv.DictReader(csvfile):
+                self.aviListDict[row["eBirdCode"]] = (
+                    row["Status"], row["BoWURL"], row.get("IUCNID") or "")
+
+
+    def GetSpeciesTaxonomyCode(self, species):
+
+        # The taxonomy's own scientific name first: a species' first sighting
+        # can carry a subspecies scientific name, which has no species code.
+        sciName = self.sciNameByCommonName.get(species)
+        if sciName and sciName in self.eBirdCodeDict:
+            return self.eBirdCodeDict[sciName]
+        return self.GeteBirdCode(species)
+
+
+    def GetConservationStatus(self, species):
+        """(IUCN category code, display name, badge color) for a species.
+        Species AviList gives no category, and slashes, spuhs and hybrids,
+        are Not Available."""
+
+        if self.aviListDict is None:
+            self._loadAviListData()
+        status = self.aviListDict.get(self.GetSpeciesTaxonomyCode(species), ("", "", ""))[0]
+        if status not in IUCN_CATEGORIES:
+            status = "NA"
+        name, color = IUCN_CATEGORIES[status]
+        return status, name, color
+
+
+    def GetBirdsOfTheWorldURL(self, species):
+
+        if self.aviListDict is None:
+            self._loadAviListData()
+        code = self.GetSpeciesTaxonomyCode(species)
+        if not code:
+            return ""
+        url = self.aviListDict.get(code, ("", "", ""))[1]
+        return url or "https://birdsoftheworld.org/bow/species/" + code
+
+
+    def GetIUCNTaxonID(self, species):
+
+        if self.aviListDict is None:
+            self._loadAviListData()
+        return self.aviListDict.get(self.GetSpeciesTaxonomyCode(species), ("", "", ""))[2]
 
 
     def GeteBirdCode(self, species):

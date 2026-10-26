@@ -209,12 +209,36 @@ WHATS_NEW_URL = "https://yearbirder.org/history"
 DOWNLOAD_URL = "https://yearbirder.org/download"
 
 
+# Profile for outside web pages (Birds of the World, All About Birds, Audubon,
+# Wikipedia).  Qt 6's default profile is off-the-record, so a login made there
+# is gone when the app quits; this named profile keeps its cookies on disk
+# (under the app's data folder, QtWebEngine/Yearbirder), and a Birds of the
+# World or eBird sign-in lasts across sessions.  Session cookies are kept too,
+# because the Cornell sign-in issues some.  Yearbirder never sees or stores the
+# password itself.  Maps and reports stay on the default profile: their pages
+# rely on settings made there (LocalContentCanAccessRemoteUrls, for one).
+_externalProfile = None
+
+
+def externalWebProfile():
+    global _externalProfile
+    if _externalProfile is None:
+        # Parented to the application so it outlives every page that uses it.
+        _externalProfile = QWebEngineProfile("Yearbirder", QApplication.instance())
+        _externalProfile.setPersistentCookiesPolicy(
+            QWebEngineProfile.PersistentCookiesPolicy.ForcePersistentCookies)
+    return _externalProfile
+
+
 class _FullScreenPage(QWebEnginePage):
     """QWebEnginePage that intercepts yearbirder://togglefullscreen navigation
     requests and routes them to the Web window's fullscreen toggle method."""
 
-    def __init__(self, web_window, parent=None):
-        super().__init__(parent)
+    def __init__(self, web_window, parent=None, profile=None):
+        if profile is not None:
+            super().__init__(profile, parent)
+        else:
+            super().__init__(parent)
         self._web = web_window
 
     def acceptNavigationRequest(self, url, nav_type, is_main_frame):
@@ -1304,6 +1328,11 @@ td {{ border-bottom:1px solid #e8e8e8; vertical-align:middle; }}
       files, and the live data retrieved from the eBird API &mdash; is provided by
       the <b>Cornell Lab of Ornithology</b> and is used with attribution.
       Yearbirder is not affiliated with or endorsed by eBird or the Cornell Lab.</li>
+  <li><b>Conservation status</b> and the <b>Birds of the World</b> links come from
+      <b>AviList: The Global Avian Checklist</b>, v2026, &copy; 2026 by the AviList
+      Core Team (https://doi.org/10.2173/avilist.v2026), used under the Creative
+      Commons Attribution 4.0 International License (CC BY 4.0). The status is the
+      IUCN Red List category as AviList records it.</li>
   <li><b>piexif</b>, by hMatoba, is used under the MIT License.</li>
   <li><b>natsort</b>, by Seth M. Morton, is used under the MIT License.</li>
   <li><b>SoundFile</b>, by Bastian Bechtold, used to read audio recordings, is
@@ -1379,6 +1408,12 @@ td {{ border-bottom:1px solid #e8e8e8; vertical-align:middle; }}
 
 
     def LoadWebPage(self,  url):
+        # An outside site: swap in a page on the persistent profile so the
+        # user's sign-in survives restarts (see externalWebProfile).
+        oldPage = self._fsPage
+        self._fsPage = _FullScreenPage(self, self.webView, externalWebProfile())
+        self.webView.setPage(self._fsPage)
+        oldPage.deleteLater()
 #         QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
         self.webView.load(QUrl(url))
         self.resizeMe()

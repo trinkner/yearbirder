@@ -8,6 +8,7 @@ import code_Web
 import code_Photos
 import code_Recordings
 import code_Stylesheet
+import code_DataBase
 
 # import the Qt components we'll use
 # do this so later we won't have to clutter our code with references to parent Qt classes 
@@ -26,6 +27,7 @@ from PySide6.QtCore import (
     QSize,
     QTimer,
     Signal,
+    QUrl,
     )
 
 from PySide6.QtWidgets import (
@@ -37,7 +39,9 @@ from PySide6.QtWidgets import (
     QMenu,
     QTreeWidgetItem,
     QPushButton,
-    QMessageBox
+    QMessageBox,
+    QWidget,
+    QHBoxLayout
     )
 
 from math import floor
@@ -72,6 +76,41 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
         self.buttonWikipedia.clicked.connect(self.CreateWebPageForWikipedia)
         self.buttonAllAboutBirds.clicked.connect(self.CreateWebPageForAllAboutBirds)
         self.buttonAudubon.clicked.connect(self.CreateWebPageForAudubon)
+
+        # Birds of the World sits under All About Birds, its Cornell sibling.
+        self.buttonBirdsOfTheWorld = QPushButton("Birds of the World", self.frameButtons)
+        self.buttonBirdsOfTheWorld.setSizePolicy(self.buttonAllAboutBirds.sizePolicy())
+        self.buttonBirdsOfTheWorld.setObjectName("buttonBirdsOfTheWorld")
+        self.buttonBirdsOfTheWorld.clicked.connect(self.CreateWebPageForBirdsOfTheWorld)
+        self.verticalLayout_10.insertWidget(
+            self.verticalLayout_10.indexOf(self.buttonAllAboutBirds) + 1,
+            self.buttonBirdsOfTheWorld)
+
+        # IUCN Red List under it: the authority behind the status badge, and
+        # the only answer for species AviList gives no status (Not Available).
+        self.buttonIUCN = QPushButton("IUCN Red List", self.frameButtons)
+        self.buttonIUCN.setSizePolicy(self.buttonAllAboutBirds.sizePolicy())
+        self.buttonIUCN.setObjectName("buttonIUCN")
+        self.buttonIUCN.clicked.connect(self.CreateWebPageForIUCN)
+        self.verticalLayout_10.insertWidget(
+            self.verticalLayout_10.indexOf(self.buttonBirdsOfTheWorld) + 1,
+            self.buttonIUCN)
+
+        # IUCN conservation status (AviList), under the scientific name: a
+        # caption, then the category in a badge of the IUCN's own color.
+        self.frameConservation = QWidget(self.frameNames)
+        conservationLayout = QHBoxLayout(self.frameConservation)
+        conservationLayout.setContentsMargins(0, 0, 0, 0)
+        conservationLayout.setSpacing(6)
+        self.lblConservationCaption = QLabel(
+            code_DataBase.AVILIST_YEAR + " Conservation Status:", self.frameConservation)
+        self.lblConservationStatus = QLabel(self.frameConservation)
+        conservationLayout.addWidget(self.lblConservationCaption, 0, Qt.AlignmentFlag.AlignVCenter)
+        conservationLayout.addWidget(self.lblConservationStatus, 0, Qt.AlignmentFlag.AlignVCenter)
+        conservationLayout.addStretch(1)
+        self.verticalLayout_3.insertWidget(
+            self.verticalLayout_3.indexOf(self.lblScientificName) + 1,
+            self.frameConservation)
         self.buttonMap.clicked.connect(self.CreateMap)
         self.buttonChecklists.clicked.connect(self.CreateChecklists)
 
@@ -127,6 +166,15 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
         if orderAndFamilyText != "":
             orderAndFamilyText = orderAndFamilyText + "; " + self.mdiParent.db.GetFamilyName(Species)
         self.lblOrderName.setText(orderAndFamilyText)
+
+        statusCode, statusName, statusColor = self.mdiParent.db.GetConservationStatus(Species)
+        self.lblConservationStatus.setText(statusName)
+        # Dark text on the light categories, white on the dark ones.  No
+        # badge gets a border, so every badge is the same height.
+        textColor = "#FFFFFF" if statusCode in ("EX", "EW", "CR", "CR (PE)", "CR (PEW)") else "#000000"
+        self.lblConservationStatus.setStyleSheet(
+            "QLabel {background-color: " + statusColor + "; color: " + textColor
+            + "; border: none; border-radius: 4px; padding: 0px 6px;}")
         
         # if available, add BBL banding code
         bblCode = self.mdiParent.db.GetBBLCode(Species)
@@ -141,6 +189,8 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
             self.buttonWikipedia.hide()
             self.buttonAllAboutBirds.hide()
             self.buttonAudubon.hide()
+            self.buttonBirdsOfTheWorld.hide()
+            self.buttonIUCN.hide()
             self.lblScientificName.hide()
             self.lblSpeciesCode.hide()
 
@@ -795,6 +845,50 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
         sub.show()       
 
 
+    def CreateWebPageForBirdsOfTheWorld(self):
+
+        speciesCommonName = self.lblCommonName.text()
+        url = self.mdiParent.db.GetBirdsOfTheWorldURL(speciesCommonName)
+        if not url:
+            return
+
+        sub = code_Web.Web()
+        sub.mdiParent = self.mdiParent
+        sub.title = "Birds of the World: " + speciesCommonName
+        sub.LoadWebPage(url)
+        self.parent().parent().addSubWindow(sub)
+        self.mdiParent.PositionChildWindow(sub, self)
+        sub.show()
+
+
+    def CreateWebPageForIUCN(self):
+
+        # The species' own Red List page when AviList supplies its IUCN id.
+        # Without one (the Not Available species) fall back to IUCN's search
+        # on the scientific name, which IUCN shows only to signed-in users;
+        # the persistent web profile keeps that sign-in.  The taxonomy's
+        # scientific name, not the label's: a species' first sighting can
+        # carry a subspecies scientific name.
+        speciesCommonName = self.lblCommonName.text()
+        taxonID = self.mdiParent.db.GetIUCNTaxonID(speciesCommonName)
+        if taxonID:
+            url = "https://www.iucnredlist.org/species/" + taxonID
+        else:
+            sciName = (self.mdiParent.db.sciNameByCommonName.get(speciesCommonName)
+                       or self.lblScientificName.text())
+            url = ("https://www.iucnredlist.org/search?query="
+                   + QUrl.toPercentEncoding(sciName).data().decode()
+                   + "&searchType=species")
+
+        sub = code_Web.Web()
+        sub.mdiParent = self.mdiParent
+        sub.title = "IUCN Red List: " + speciesCommonName
+        sub.LoadWebPage(url)
+        self.parent().parent().addSubWindow(sub)
+        self.mdiParent.PositionChildWindow(sub, self)
+        sub.show()
+
+
     def createPhotos(self):
 
         speciesCommonName = self.lblCommonName.text()
@@ -888,6 +982,13 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
             self.lblScientificName.text() + 
             "</H2>"
             )        
+
+        html = html + (
+            "<H4>" +
+            self.lblConservationCaption.text() + " " +
+            self.lblConservationStatus.text() +
+            "</H4>"
+            )
 
         html = html + (
             "<H4>" + 
@@ -1065,6 +1166,8 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
         self.lblScientificName.setFont(scientificFont)
         self.lblOrderName.setFont(detailFont)
         self.lblSpeciesCode.setFont(detailFont)
+        self.lblConservationCaption.setFont(detailFont)
+        self.lblConservationStatus.setFont(detailFont)
         self.lblFirstSeen.setFont(detailFont)
         self.lblMostRecentlySeen.setFont(detailFont)
 
@@ -1074,9 +1177,15 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
         # Pin them to plain text with explicit left alignment on every (re)layout
         # so they always take the simple, non-justifying paint path.
         for _lbl in (self.lblCommonName, self.lblScientificName, self.lblOrderName,
-                     self.lblSpeciesCode, self.lblFirstSeen, self.lblMostRecentlySeen):
+                     self.lblSpeciesCode, self.lblFirstSeen, self.lblMostRecentlySeen,
+                     self.lblConservationCaption, self.lblConservationStatus):
             _lbl.setTextFormat(Qt.TextFormat.PlainText)
             _lbl.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        # The status badge centers its text in the colored box, and its caption
+        # is centered vertically so the two share a midline.
+        self.lblConservationStatus.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lblConservationCaption.setAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
 
         metrics = self.trDates.fontMetrics()
         textHeight = int(metrics.boundingRect("2222-22-22").height())
