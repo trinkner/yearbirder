@@ -5,13 +5,14 @@ import code_Stylesheet
 import code_ThumbnailCache
 import code_ChecklistTree
 import code_NotesDialog
-from code_DataBase import SPECIES_MATCH_NONE
+from code_DataBase import SPECIES_MATCH_LOW, SPECIES_MATCH_NONE
+from code_ManagePhotos import _unattachedLabel
 import os
 import queue
 import threading
 import time
 from functools import partial
-from collections import defaultdict
+from collections import defaultdict, Counter
 
 import numpy as np
 from matplotlib.figure import Figure
@@ -314,6 +315,19 @@ class threadGetAudioData(QThread):
                         self.parent._comboCache[key] = comboData
                 cascadeMode = "date_first"
                 allSightings = None
+            elif mode == "unattached":
+                # The catalog's own values, as for an existing recording: the
+                # rating, notes and gear the user saved, not a fresh file read.
+                a = item["recordingData"]
+                for key in ("rating", "notes", "device", "microphone"):
+                    recordingData[key] = a.get(key, recordingData.get(key, ""))
+                if a.get("metaDate"):
+                    recordingData["metaDate"] = a["metaDate"]
+                    recordingData["metaTime"] = a.get("metaTime", "")
+                audioMatchData = item["audioMatchData"]
+                comboData = None
+                cascadeMode = "date_first"
+                allSightings = None
             else:
                 s = item["sighting"]
                 a = item["recordingData"]
@@ -387,6 +401,10 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         self._skipCloseGuard = False
         # (filename, species|None) removals this save made, broadcast from closeEvent
         self._departedRecordings = []
+        # Unattached Media (FillUnattachedRecordings): row -> the db's
+        # unattached item, and row -> (position, count) within its old name.
+        self._unattached = {}
+        self._unattachedPos = {}
 
         # Card gutters: frame the media-card rows with the window background
         # (the other three media views do the same on their rowsLayout).
@@ -445,6 +463,7 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         if (not self._skipCloseGuard and
                 not self._changesSaved and
                 not self.audioAlreadyInDb and
+                not self._unattached and   # unsaved = still unattached; nothing lost
                 self.metaDataByRow):
             reply = code_Stylesheet.question(
                 self, "Unsaved Recordings",
@@ -707,6 +726,64 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         self.fillingCombos = False
         self.setWindowTitle("Manage Recordings")
 
+        QTimer.singleShot(0, self._startThreads)
+        return True
+
+    def FillUnattachedRecordings(self, items):
+        """Rows for catalog recordings that no longer match a sighting, so the
+        user can attach each one again (File > Unattached Media).  The
+        recordings counterpart of ManagePhotos.FillUnattachedPhotos — see its
+        notes.  A row is one unattached assignment, so a file assigned to two
+        species that both stopped matching appears twice.
+
+        Returns False when none of the items is a recording still on disk.
+        """
+        db = self.mdiParent.db
+        items = [u for u in items
+                 if u["kind"] == "audio" and os.path.isfile(u["fileName"])]
+        if not items:
+            return False
+
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        self.audioAlreadyInDb = False
+        items.sort(key=lambda u: (u["commonName"].lower(), u["date"], u["fileName"]))
+        counts = Counter(u["commonName"] for u in items)
+        seen = Counter()
+
+        for row, u in enumerate(items):
+            peers = db.checklistDict.get(u["checklistID"], [])
+            suggestion = db.suggestSpeciesForUnattached(u)
+            match = {
+                "recordingLocation": u["location"],
+                "recordingDate":     u["date"],
+                "recordingTime":     peers[0].get("time", "") if peers else "",
+                "recordingCommonName": suggestion,
+                "recordingSpeciesConfidence":
+                    SPECIES_MATCH_LOW if suggestion else SPECIES_MATCH_NONE,
+                "dateMatchFound": bool(peers),
+                "timeMatchFound": bool(peers),
+            }
+            self._unattached[row] = u
+            seen[u["commonName"]] += 1
+            self._unattachedPos[row] = (seen[u["commonName"]], counts[u["commonName"]])
+            self.workQueue.put({
+                "row": row,
+                "file": u["fileName"],
+                "mode": "unattached",
+                "recordingData": db.recordingDataFromCatalogRecord(u["raw"]),
+                "audioMatchData": match,
+            })
+
+        self.setWindowTitle(f"Unattached Recordings ({len(items)})")
+        self._totalFiles = len(items)
+        self._loadedCount = 0
+        self._threadsToStart = min(self.threadCount, len(items))
+        self.threadsRemaining = self._threadsToStart
+
+        overlay = self.mdiParent.progressOverlay
+        overlay.armGate(1000)
+        overlay.showForRecordings()
+        overlay.startLoading(self._totalFiles)
         QTimer.singleShot(0, self._startThreads)
         return True
 
@@ -1064,6 +1141,9 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         lblMeta.setStyleSheet("color: %s;" % _FIELD_NAME_COLOR)
         lblMeta.setWordWrap(True)
         leftCol.addWidget(lblMeta)
+        unattached = self._unattached.get(row)
+        if unattached is not None:
+            leftCol.addWidget(_unattachedLabel(unattached, *self._unattachedPos[row]))
         leftCol.addSpacing(10)   # line feed after the metadata line
 
         for key in ("date", "location", "time", "device", "microphone"):
@@ -1694,11 +1774,23 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
                                     f"Recording saved in memory but could not be written to catalog:\n{exc}")
             else:
                 new_species = meta.get("newCommonNames", [])
+                unattached = self._unattached.get(r)
+                # Kept on its own checklist: attach by checklist ID, which is
+                # exact even when two checklists share a place and date.
+                keepChecklist = (unattached is not None
+                                 and unattached["reason"] == "species"
+                                 and meta["newDate"] == meta["date"]
+                                 and meta["newLocation"] == meta["location"]
+                                 and meta["newTime"] == meta["time"])
                 if new_species:
                     meta["recordingData"]["rating"] = meta["newRating"]
                     meta["recordingData"]["notes"] = meta["newNotes"]
                     meta["recordingData"]["device"] = meta.get("newDevice", "")
                     meta["recordingData"]["microphone"] = meta.get("newMicrophone", "")
+                    # Attach in memory first; the catalog file is touched only
+                    # once something has actually attached, so an unattached
+                    # recording that finds no sighting keeps its old record.
+                    attached = []
                     for species_name in new_species:
                         f = code_Filter.Filter()
                         f.setLocationName(meta["newLocation"])
@@ -1707,14 +1799,30 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
                         f.setEndDate(meta["newDate"])
                         f.setTime(meta["newTime"])
                         f.setSpeciesName(species_name)
+                        if keepChecklist:
+                            f.setChecklistID(unattached["checklistID"])
                         s = self.mdiParent.db.addRecordingToDatabase(f, meta["recordingData"])
                         if s:
-                            added_recording_files.add(meta["recordingData"]["fileName"])
-                            try:
-                                self.mdiParent.db.appendRecordingToJsonl(s, meta["recordingData"])
-                            except IOError as exc:
-                                QMessageBox.warning(self, "Catalog File Error",
-                                    f"Recording saved in memory but could not be written to catalog:\n{exc}")
+                            attached.append(s)
+                    if attached and unattached is not None:
+                        # Retire the stale assignment BEFORE writing the new
+                        # ones: the catalog replays lines in order, and this
+                        # deletion is scoped to the old name, so written first
+                        # it can never take out a new record — even one that
+                        # keeps the name on another checklist.
+                        try:
+                            self.mdiParent.db.appendRecordingDeletionToJsonl(
+                                unattached["fileName"], unattached["commonName"])
+                        except IOError:
+                            pass
+                        self.mdiParent.db.forgetUnattached(unattached)
+                    for s in attached:
+                        added_recording_files.add(meta["recordingData"]["fileName"])
+                        try:
+                            self.mdiParent.db.appendRecordingToJsonl(s, meta["recordingData"])
+                        except IOError as exc:
+                            QMessageBox.warning(self, "Catalog File Error",
+                                f"Recording saved in memory but could not be written to catalog:\n{exc}")
 
         # Cache the spectrogram thumbnail + enlargement ribbon + overview for the
         # added recordings in the background (skips ones already cached) so every
@@ -1734,6 +1842,9 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         self.mdiParent._updateActionStates()
         self.mdiParent.db.photosNeedSaving = True
         self._changesSaved = True
+        if self._unattached:
+            # What's left unattached has now been seen; don't prompt for it again.
+            self.mdiParent.acknowledgeUnattachedMedia()
         self.close()
 
     def handleAudioDeletion(self, filename, species=None):

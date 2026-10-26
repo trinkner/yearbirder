@@ -864,6 +864,17 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionRebuildThumbnailCache.triggered.connect(self.rebuildThumbnailCache)
         self.menuFile.insertAction(self.menuFileMediaSeparator,
                                    self.actionRebuildThumbnailCache)
+
+        # Unattached Media — catalog photos and recordings that no longer
+        # match a sighting (usually after an eBird taxonomy update), opened in
+        # Manage Photos / Manage Recordings for reassignment.  Created here,
+        # like the entry above, and placed just after Rename Media.
+        self.actionUnattachedMedia = QAction("Unattached Media…", self)
+        self.actionUnattachedMedia.setMenuRole(QAction.MenuRole.NoRole)
+        self.actionUnattachedMedia.triggered.connect(self.showUnattachedMedia)
+        self.menuFile.insertAction(self.actionOptimizePhotoSettings,
+                                   self.actionUnattachedMedia)
+        self.actionUnattachedMedia.setVisible(False)
         self.actionOptimizePhotoSettings.triggered.connect(self.optimizePhotoSettings)
         self.actionOptimizePhotoSettings.setVisible(False)
         
@@ -1494,6 +1505,17 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionRecordingsToolbar.setVisible(True)
         self.actionRecordingsToolbar.setEnabled(has_recordings)
 
+        # Unattached Media: present whenever a catalog is open, live only when
+        # something in it no longer matches a sighting.
+        n_unattached = len(self.db.unmatchedCatalogRecords) if has_catalog else 0
+        self.actionUnattachedMedia.setVisible(has_catalog)
+        self.actionUnattachedMedia.setEnabled(n_unattached > 0)
+        self.actionUnattachedMedia.setToolTip(
+            f"{n_unattached} catalog item{'s' if n_unattached != 1 else ''} "
+            "no longer match a sighting in this eBird file"
+            if n_unattached else
+            "Every photo and recording in the catalog matches a sighting")
+
     def _setMenuEntriesEnabled(self, menu, ready, why, skip=None):
         """Enable or grey out everything in a menu, submenus included.
 
@@ -1863,6 +1885,117 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionOptimizePhotoSettings.setVisible(True)
 
         self.CreateStatsOnLoad()
+        QTimer.singleShot(0, self._noticeUnattachedMedia)
+
+
+    def _noticeUnattachedMedia(self):
+        """After a catalog loads, say so if media has come unattached — once.
+
+        The fingerprint of what the user was last told about is kept in the
+        preferences, so the same set doesn't prompt on every launch; anything
+        newly unattached (the next taxonomy update, a re-downloaded eBird file)
+        changes the fingerprint and prompts again.
+        """
+        db = self.db
+        if db.unattachedFingerprint() == db.unattachedMediaNotice:
+            return
+        if not self.acknowledgeUnattachedMedia():
+            return
+
+        n_photos = sum(1 for u in db.unmatchedCatalogRecords if u["kind"] == "photo")
+        n_audio = sum(1 for u in db.unmatchedCatalogRecords if u["kind"] == "audio")
+        parts = []
+        if n_photos:
+            parts.append(f"{n_photos} photo{'s' if n_photos != 1 else ''}")
+        if n_audio:
+            parts.append(f"{n_audio} recording{'s' if n_audio != 1 else ''}")
+        reply = code_Stylesheet.question(
+            self, "Unattached Media",
+            f"{' and '.join(parts)} in your media catalog no longer match a "
+            "sighting in this eBird file.\n\n"
+            "This usually follows an eBird taxonomy update that renamed or split "
+            "a species. The files are safe: they stay in the catalog until you "
+            "attach them again.\n\n"
+            "Review them now? You can also do this later with "
+            "File > Unattached Media.",
+            yes_text="Review", no_text="Later",
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self.showUnattachedMedia()
+
+
+    def acknowledgeUnattachedMedia(self):
+        """Record the current unattached set as seen, so the load-time notice
+        stays quiet until something new comes unattached.  Called when the
+        notice is shown, when the review windows open, and after they save —
+        what the user chose to leave unattached shouldn't prompt again.
+        Returns the fingerprint ("" when nothing is unattached)."""
+        fingerprint = self.db.unattachedFingerprint()
+        if fingerprint != self.db.unattachedMediaNotice:
+            self.db.unattachedMediaNotice = fingerprint
+            self.db.writePreferences()
+        return fingerprint
+
+
+    def showUnattachedMedia(self):
+        """File > Unattached Media: open the catalog photos and recordings that
+        no longer match a sighting in Manage Photos / Manage Recordings, one
+        window per kind, for the user to attach again (see
+        ManagePhotos.FillUnattachedPhotos)."""
+        if MainWindow.db.eBirdFileOpenFlag is not True:
+            self.CreateMessageNoFile()
+            return
+
+        # Two windows editing the catalog at once can conflict, so this needs
+        # the editing windows closed, as the other entry points do.
+        for w in self.mdiArea.subWindowList():
+            if isinstance(w, (code_ManagePhotos.ManagePhotos,
+                              code_ManageRecordings.ManageRecordings,
+                              code_RenameMedia.RenameMedia)):
+                QMessageBox.warning(
+                    self, "Close Media Windows First",
+                    "Please close Manage Photos, Manage Recordings and Rename "
+                    "Media before reviewing unattached media.\n\n"
+                    "Having them open at the same time could cause conflicts.",
+                    QMessageBox.StandardButton.Ok)
+                return
+
+        self.acknowledgeUnattachedMedia()
+        items = list(self.db.unmatchedCatalogRecords)
+        missing = [u for u in items if not os.path.isfile(u["fileName"])]
+        opened = False
+        for viewClass, fill in (
+                (code_ManagePhotos.ManagePhotos, "FillUnattachedPhotos"),
+                (code_ManageRecordings.ManageRecordings, "FillUnattachedRecordings")):
+            sub = viewClass()
+            sub.mdiParent = self
+            if getattr(sub, fill)(items) is True:
+                self.mdiArea.addSubWindow(sub)
+                self.PositionChildWindow(sub, self)
+
+                def _reveal(sub=sub):
+                    sub.show()
+                    self.mdiArea.setActiveSubWindow(sub)
+                    sub.raise_()
+                    sub.setFocus()
+                sub.contentReady.connect(_reveal)
+                opened = True
+            else:
+                sub.close()
+
+        if missing:
+            QMessageBox.information(
+                self, "Unattached Media",
+                f"{len(missing)} unattached catalog item"
+                f"{'s are' if len(missing) != 1 else ' is'} not on disk, so "
+                "cannot be shown. File > Compact catalog and cache lists them "
+                "and offers to remove them.",
+                QMessageBox.StandardButton.Ok)
+        elif not opened:
+            QMessageBox.information(
+                self, "Unattached Media",
+                "Every photo and recording in the catalog matches a sighting.",
+                QMessageBox.StandardButton.Ok)
 
 
     def _autoOpenDefaultCatalog(self):
@@ -1894,6 +2027,10 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 + default_catalog,
             )
             self.db.ClearPhotoSettings()
+            return
+
+        # Deferred so it appears over the finished window, not mid-startup.
+        QTimer.singleShot(0, self._noticeUnattachedMedia)
 
 
     def _showPhotoCatalogMenuItems(self):

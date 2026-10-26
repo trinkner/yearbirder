@@ -12,6 +12,7 @@ from collections import defaultdict, Counter
 import datetime
 import code_Filter
 import json
+import hashlib
 import piexif
 from math import floor
 import wave
@@ -750,6 +751,7 @@ class DataBase():
         self.bblCodeDict = {}
         self.eBirdCodeDict = {}       # sciName -> eBird species code, populated by ReadTaxonomyDataFile
         self.taxonOrderBySciName = {} # sciName -> float taxon order, populated by ReadTaxonomyDataFile
+        self.sciNameByCommonName = {} # commonName -> sciName for the whole taxonomy, populated by ReadTaxonomyDataFile
         self._regionCache = {}
         self._seenLocations = set()
         self.photoDataFile = ""
@@ -787,6 +789,10 @@ class DataBase():
         # the window is actually for.  Not a Preferences-dialog setting —
         # written whenever the user toggles it, like explorerRegion.
         self.showBatchOptions = False
+        # Fingerprint of the unattached media the user was last told about
+        # (see unattachedFingerprint), so the notice after a load appears only
+        # when something new has come unattached, not on every launch.
+        self.unattachedMediaNotice = ""
         self._countryLookup = {}   # shortCode -> longName, built by ReadCountryStateCodeFile
         self._stateLookup = {}     # shortCode -> longName, built by ReadCountryStateCodeFile
         self._countriesWithoutStates = set()   # countries eBird does NOT subdivide
@@ -1868,6 +1874,135 @@ class DataBase():
         with open(self.photoDataFile, mode='a', encoding='utf-8') as f:
             f.write(json.dumps(record) + '\n')
 
+    def photoDataFromCatalogRecord(self, row):
+        """In-memory photo dict for one catalog record — what the loader
+        attaches, and what Unattached Media reassigns."""
+        photoData = {}
+        photoData["fileName"] = row.get("FileName", "")
+        photoData["camera"] = row.get("Camera", "")
+        photoData["lens"] = row.get("Lens", "")
+        photoData["shutterSpeed"] = row.get("ShutterSpeed", "")
+        photoData["aperture"] = row.get("Aperture", "")
+        photoData["iso"] = row.get("ISO", "")
+        photoData["focalLength"] = row.get("FocalLength", "")
+        rating = row.get("Rating", "0")
+        photoData["rating"] = rating if rating in ["0","1","2","3","4","5"] else "0"
+        photoData["notes"] = row.get("Notes", "")
+        # Cached EXIF capture time (present only once gleaned); absent →
+        # Rename Media reads it on demand and caches it back.
+        if "ExifDateTime" in row:
+            photoData["exifDatetime"] = row.get("ExifDateTime") or None
+            photoData["exifSubsec"] = row.get("ExifSubSec") or None
+            photoData["exifDateInvalid"] = bool(row.get("ExifDateInvalid"))
+        return photoData
+
+
+    def recordingDataFromCatalogRecord(self, row):
+        """In-memory recording dict for one catalog record — what the loader
+        attaches, and what Unattached Media reassigns."""
+        recordingData = {}
+        recordingData["fileName"] = fn = row.get("FileName", "")
+        recordingData["duration"] = row.get("Duration", "")
+        sr_val = row.get("SampleRate", "")
+        bd_val = row.get("BitDepth", "")
+        ch_val = row.get("Channels", "")
+        # Backfill format fields for catalogs written before these were
+        # captured (one cheap header read via libsndfile).
+        if (not sr_val or not bd_val or not ch_val) and os.path.isfile(fn):
+            g_sr, g_bd, g_ch = _glean_audio_format(fn)
+            sr_val = sr_val or g_sr
+            bd_val = bd_val or g_bd
+            ch_val = ch_val or g_ch
+        recordingData["sampleRate"] = sr_val
+        recordingData["bitDepth"] = bd_val
+        recordingData["channels"] = ch_val
+        # Recording device: backfill from the file if not persisted yet.
+        dev_val = row.get("Device", "")
+        if not dev_val and "Device" not in row and os.path.isfile(fn):
+            dev_val = _read_wav_device(fn)
+        recordingData["device"] = dev_val
+        # Microphone is never in the file — absent means nobody has
+        # assigned a rig to this recording yet.
+        recordingData["microphone"] = row.get("Microphone", "")
+        rating = row.get("Rating", "0")
+        recordingData["rating"] = rating if rating in ["0","1","2","3","4","5"] else "0"
+        recordingData["notes"] = row.get("Notes", "")
+        # Cached embedded date/time (present only once gleaned); absent →
+        # Rename Media reads it on demand and caches it back.
+        if "MetaDate" in row:
+            recordingData["metaDate"] = row.get("MetaDate") or ""
+            recordingData["metaTime"] = row.get("MetaTime") or ""
+        return recordingData
+
+
+    def suggestSpeciesForUnattached(self, item):
+        """The one species on an unattached item's checklist it most likely
+        became, or "" when there is no single answer.
+
+        Only for media whose checklist is still in the eBird file but no longer
+        has the old name — a rename, a split, a refined identification.  Tests
+        run in order, each looking for exactly one candidate among the
+        checklist's species; a test with several candidates stops the search
+        (a guess between two is no suggestion):
+          1. one name contains the other ("Warbling Vireo" →
+             "Western Warbling Vireo");
+          2. same genus, when the old name is in the taxonomy file;
+          3. same last word, the group noun ("Hooded Crow" → "Carrion Crow").
+        The user confirms every suggestion before anything is saved.
+        """
+        if item.get("reason") != "species":
+            return ""
+        old = item.get("commonName", "")
+        if not old:
+            return ""
+        peers = {}
+        for s in self.checklistDict.get(item.get("checklistID", ""), []):
+            peers.setdefault(s["commonName"], s)
+        peers.pop(old, None)
+        if not peers:
+            return ""
+
+        def _contains(name):
+            a, b = old.lower(), name.lower()
+            return a in b or b in a
+
+        oldSci = self.sciNameByCommonName.get(old, "")
+        oldGenus = oldSci.split(" ")[0] if oldSci else ""
+
+        def _sameGenus(name):
+            sci = peers[name].get("scientificName", "")
+            return bool(oldGenus) and sci.split(" ")[0] == oldGenus
+
+        oldNoun = old.split(" ")[-1].lower()
+
+        def _sameNoun(name):
+            return name.split(" (")[0].split(" ")[-1].lower() == oldNoun
+
+        for test in (_contains, _sameGenus, _sameNoun):
+            hits = [n for n in peers if test(n)]
+            if len(hits) == 1:
+                return hits[0]
+            if len(hits) > 1:
+                return ""
+        return ""
+
+
+    def unattachedFingerprint(self):
+        """A short digest of the unattached media, so the notice after a load
+        fires only when the set has changed since the user last saw it."""
+        keys = sorted((u["kind"], u["fileName"], u["checklistID"], u["commonName"])
+                      for u in self.unmatchedCatalogRecords)
+        return hashlib.sha1(json.dumps(keys).encode("utf-8")).hexdigest() if keys else ""
+
+
+    def forgetUnattached(self, item):
+        """Drop one unattached item once it has been reassigned, so a later
+        catalog rewrite doesn't also write its stale record back out (see the
+        Wave 3 note in writePhotoDataToFile)."""
+        self.unmatchedCatalogRecords = [
+            u for u in self.unmatchedCatalogRecords if u is not item]
+
+
     def _noteUnmatchedRecord(self, record, kind):
         """Remember a catalog record that found no sighting on load.
 
@@ -2053,23 +2188,7 @@ class DataBase():
                 filter = code_Filter.Filter()
                 filter.setChecklistID(row.get("ChecklistID", ""))
                 filter.setSpeciesName(row.get("CommonName", ""))
-                photoData = {}
-                photoData["fileName"] = row.get("FileName", "")
-                photoData["camera"] = row.get("Camera", "")
-                photoData["lens"] = row.get("Lens", "")
-                photoData["shutterSpeed"] = row.get("ShutterSpeed", "")
-                photoData["aperture"] = row.get("Aperture", "")
-                photoData["iso"] = row.get("ISO", "")
-                photoData["focalLength"] = row.get("FocalLength", "")
-                rating = row.get("Rating", "0")
-                photoData["rating"] = rating if rating in ["0","1","2","3","4","5"] else "0"
-                photoData["notes"] = row.get("Notes", "")
-                # Cached EXIF capture time (present only once gleaned); absent →
-                # Rename Media reads it on demand and caches it back.
-                if "ExifDateTime" in row:
-                    photoData["exifDatetime"] = row.get("ExifDateTime") or None
-                    photoData["exifSubsec"] = row.get("ExifSubSec") or None
-                    photoData["exifDateInvalid"] = bool(row.get("ExifDateInvalid"))
+                photoData = self.photoDataFromCatalogRecord(row)
                 if self.addPhotoToDatabase(filter, photoData, skip_file_check=True) is None:
                     self._noteUnmatchedRecord(row, "photo")
 
@@ -2082,38 +2201,7 @@ class DataBase():
                 filter = code_Filter.Filter()
                 filter.setChecklistID(checklistID)
                 filter.setSpeciesName(commonName)
-                recordingData = {}
-                recordingData["fileName"] = fn
-                recordingData["duration"] = row.get("Duration", "")
-                sr_val = row.get("SampleRate", "")
-                bd_val = row.get("BitDepth", "")
-                ch_val = row.get("Channels", "")
-                # Backfill format fields for catalogs written before these were
-                # captured (one cheap header read via libsndfile).
-                if (not sr_val or not bd_val or not ch_val) and os.path.isfile(fn):
-                    g_sr, g_bd, g_ch = _glean_audio_format(fn)
-                    sr_val = sr_val or g_sr
-                    bd_val = bd_val or g_bd
-                    ch_val = ch_val or g_ch
-                recordingData["sampleRate"] = sr_val
-                recordingData["bitDepth"] = bd_val
-                recordingData["channels"] = ch_val
-                # Recording device: backfill from the file if not persisted yet.
-                dev_val = row.get("Device", "")
-                if not dev_val and "Device" not in row and os.path.isfile(fn):
-                    dev_val = _read_wav_device(fn)
-                recordingData["device"] = dev_val
-                # Microphone is never in the file — absent means nobody has
-                # assigned a rig to this recording yet.
-                recordingData["microphone"] = row.get("Microphone", "")
-                rating = row.get("Rating", "0")
-                recordingData["rating"] = rating if rating in ["0","1","2","3","4","5"] else "0"
-                recordingData["notes"] = row.get("Notes", "")
-                # Cached embedded date/time (present only once gleaned); absent →
-                # Rename Media reads it on demand and caches it back.
-                if "MetaDate" in row:
-                    recordingData["metaDate"] = row.get("MetaDate") or ""
-                    recordingData["metaTime"] = row.get("MetaTime") or ""
+                recordingData = self.recordingDataFromCatalogRecord(row)
                 if self.addRecordingToDatabase(filter, recordingData,
                                                skip_file_check=True) is None:
                     self._noteUnmatchedRecord(row, "audio")
@@ -2964,6 +3052,12 @@ class DataBase():
         self.familyList = sorted(familyTaxonOrder.keys(), key=lambda f: familyTaxonOrder[f])
         self.orderList  = sorted(orderTaxonOrder.keys(),  key=lambda o: orderTaxonOrder[o])
         self.masterFamilyOrderList = [[f, o] for f, o in masterFamilyOrderSet]
+
+        # Common name -> scientific name across the whole taxonomy, not just the
+        # species in the sightings: suggestSpeciesForUnattached needs the genus
+        # of a name the eBird file may no longer use.
+        self.sciNameByCommonName = {
+            _row.get("PRIMARY_COM_NAME", ""): _sci for _sci, _row in taxDict.items()}
 
         # persist full sci-name → taxon-order mapping for community sightings sorting
         self.taxonOrderBySciName = {}
@@ -5622,6 +5716,10 @@ class DataBase():
                             line[len("explorerBackDays="):].strip())
                     except (ValueError, TypeError):
                         self.explorerBackDays = 0
+
+                elif line.startswith("unattachedMediaNotice="):
+                    self.unattachedMediaNotice = (
+                        line[len("unattachedMediaNotice="):].strip())
                 
     
     def writePreferences(self):
@@ -5650,5 +5748,6 @@ class DataBase():
                     + json.dumps(self.explorerRegion) + "\n")
             f.write("explorerBackDays=" + str(self.explorerBackDays) + "\n")
             f.write("showBatchOptions=" + str(bool(self.showBatchOptions)) + "\n")
+            f.write("unattachedMediaNotice=" + self.unattachedMediaNotice + "\n")
         
             

@@ -6,7 +6,7 @@ import code_Stylesheet
 import code_ThumbnailCache
 import code_ChecklistTree
 import code_NotesDialog
-from code_DataBase import SPECIES_MATCH_HIGH, SPECIES_MATCH_NONE
+from code_DataBase import SPECIES_MATCH_HIGH, SPECIES_MATCH_LOW, SPECIES_MATCH_NONE
 import os
 
 import piexif
@@ -18,7 +18,7 @@ import threading
 import time
 from functools import partial
 
-from collections import defaultdict
+from collections import defaultdict, Counter
 
 from PySide6.QtGui import (
     QPixmap,
@@ -88,6 +88,21 @@ _THUMB_DISPLAY_W = code_ThumbnailCache.THUMB_DISPLAY_SIZE.width()
 _THUMB_DISPLAY_H = code_ThumbnailCache.THUMB_DISPLAY_SIZE.height()
 
 
+def _unattachedLabel(item, position, count):
+    """The "Previously …" line on an Unattached Media card: the name the media
+    was saved under, why it no longer matches, and where the card falls among
+    the others with that name.  Shared with Manage Recordings."""
+    why = ("no longer on this checklist" if item.get("reason") == "species"
+           else "checklist not in this eBird file")
+    text = (f'Previously <b>{item.get("commonName", "")}</b> — {why}'
+            + (f" ({position} of {count})" if count > 1 else ""))
+    lbl = QLabel(text)
+    lbl.setTextFormat(Qt.TextFormat.RichText)
+    lbl.setStyleSheet("color: %s;" % _WEAK_MATCH_COLOR)
+    lbl.setWordWrap(True)
+    return lbl
+
+
 class GreenMatchDelegate(QStyledItemDelegate):
     """Paints a single popup item green to signal that the EXIF timestamp matched a checklist."""
 
@@ -134,6 +149,21 @@ class threadGetPhotoData(QThread):
 
             row = item[0]
             file = item[1]
+
+            # Unattached Media rows arrive with their data already known: the
+            # photo's own catalog record and the checklist it was last on.  Only
+            # the thumbnail is needed.
+            preset = self.parent._presetRows.get(row)
+            if preset is not None:
+                entry = defaultdict()
+                entry["row"] = row
+                entry["photoData"] = preset[0]
+                entry["photoMatchData"] = preset[1]
+                entry["image"] = self.parent.GetImageForThumbnail(file)
+                entry["comboData"] = None
+                self.resultQueue.put(entry)
+                self.workQueue.task_done()
+                continue
 
             # read EXIF once and share it across the metadata functions
             try:
@@ -236,6 +266,12 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         self._allDates = None
         # row -> (sighting, photo dict) for the catalog (by-filter) path
         self._rowContext = {}
+        # Unattached Media (FillUnattachedPhotos): row -> the db's unattached
+        # item, row -> preset (photoData, photoMatchData) for the workers, and
+        # row -> (position, count) within its old species name.
+        self._unattached = {}
+        self._presetRows = {}
+        self._unattachedPos = {}
 
         # One container widget per row in a QVBoxLayout — same fix as the
         # Photos browser: QGridLayout tops out around ~524k px of total
@@ -270,6 +306,7 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         if (not self._skipCloseGuard and
                 not self._changesSaved and
                 not self.photosAlreadyInDb and
+                not self._unattached and   # unsaved = still unattached; nothing lost
                 self.metaDataByRow):
             reply = code_Stylesheet.question(
                 self, "Unsaved Photos",
@@ -400,6 +437,75 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         QTimer.singleShot(0, self._startThreads)
                 
     
+    def FillUnattachedPhotos(self, items):
+        """Rows for catalog photos that no longer match a sighting, so the user
+        can attach each one again (File > Unattached Media).
+
+        The usual cause is an eBird taxonomy change: the photo's checklist is
+        still in the eBird file but the species name it was saved under is not.
+        Each row opens on that checklist — date, location and time already
+        filled in — with a suggested species where there is a single likely one
+        (DataBase.suggestSpeciesForUnattached), shown amber until confirmed.
+        Rows are grouped by the old name, since a taxonomy change moves every
+        photo of a species the same way.  Saving attaches them through the same
+        path as newly added photos; Skip leaves a photo unattached.
+
+        Returns False when none of the items is a photo still on disk.
+        """
+        db = self.mdiParent.db
+        items = [u for u in items
+                 if u["kind"] == "photo" and os.path.isfile(u["fileName"])]
+        if not items:
+            return False
+
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        self.photosAlreadyInDb = False
+        items.sort(key=lambda u: (u["commonName"].lower(), u["date"], u["fileName"]))
+        counts = Counter(u["commonName"] for u in items)
+        seen = Counter()
+
+        for row, u in enumerate(items):
+            photoData = db.photoDataFromCatalogRecord(u["raw"])
+            # The card's "Photographed …" line reads date/time keys, which a
+            # catalog record carries only as its cached EXIF stamp.
+            stamp = photoData.get("exifDatetime") or ""
+            if len(stamp) >= 16 and not photoData.get("exifDateInvalid"):
+                photoData["date"] = stamp[0:10].replace(":", "-")
+                photoData["time"] = stamp[11:16]
+
+            peers = db.checklistDict.get(u["checklistID"], [])
+            suggestion = db.suggestSpeciesForUnattached(u)
+            match = {
+                "photoLocation":  u["location"],
+                "photoDate":      u["date"],
+                "photoTime":      peers[0].get("time", "") if peers else "",
+                "photoCommonName": suggestion,
+                # A suggestion is a guess until the user confirms it: amber.
+                "photoSpeciesConfidence": SPECIES_MATCH_LOW if suggestion else SPECIES_MATCH_NONE,
+                # The checklist itself is certain when it is still in the file.
+                "dateMatchFound": bool(peers),
+                "timeMatchFound": bool(peers),
+            }
+            self._presetRows[row] = (photoData, match)
+            self._unattached[row] = u
+            seen[u["commonName"]] += 1
+            self._unattachedPos[row] = (seen[u["commonName"]], counts[u["commonName"]])
+            self.workQueue.put([row, u["fileName"]])
+
+        self.setWindowTitle(f"Unattached Photos ({len(items)})")
+        self._totalFiles = len(items)
+        self._loadedCount = 0
+        self._threadsToStart = min(self.threadCount, len(items))
+        self.threadsRemaining = self._threadsToStart
+
+        overlay = self.mdiParent.progressOverlay
+        overlay.armGate(1000)
+        overlay.showForPhotos()
+        overlay.startLoading(self._totalFiles)
+        QTimer.singleShot(0, self._startThreads)
+        return True
+
+
     def _startThreads(self):
         for i in range(self._threadsToStart):
             self.threads[i].start()
@@ -857,6 +963,9 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         lblMeta.setStyleSheet("color: %s;" % _FIELD_NAME_COLOR)
         lblMeta.setWordWrap(True)
         leftCol.addWidget(lblMeta)
+        unattached = self._unattached.get(row)
+        if unattached is not None:
+            leftCol.addWidget(_unattachedLabel(unattached, *self._unattachedPos[row]))
         leftCol.addSpacing(10)   # line feed after the metadata line
 
         for key in ("date", "location", "time", "species"):
@@ -1237,12 +1346,25 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
                     filter.setEndDate(self.metaDataByRow[r]["newDate"])
                     filter.setTime(self.metaDataByRow[r]["newTime"])
                     filter.setSpeciesName(self.metaDataByRow[r]["newCommonName"])
+
+                    # An unattached photo kept on its own checklist attaches by
+                    # checklist ID, which is exact even when two checklists share
+                    # a place and date.
+                    unattached = self._unattached.get(r)
+                    md = self.metaDataByRow[r]
+                    if (unattached is not None and unattached["reason"] == "species"
+                            and md["newDate"] == md["date"]
+                            and md["newLocation"] == md["location"]
+                            and md["newTime"] == md["time"]):
+                        filter.setChecklistID(unattached["checklistID"])
                     
                     self.metaDataByRow[r]["photoData"]["rating"] = self.metaDataByRow[r]["newRating"]
                     self.metaDataByRow[r]["photoData"]["notes"] = self.metaDataByRow[r]["newNotes"]
 
                     s = self.mdiParent.db.addPhotoToDatabase(filter, self.metaDataByRow[r]["photoData"])
                     if s:
+                        if unattached is not None:
+                            self.mdiParent.db.forgetUnattached(unattached)
                         added_photo_files.add(self.metaDataByRow[r]["photoData"]["fileName"])
                         try:
                             self.mdiParent.db.appendPhotoToJsonl(s, self.metaDataByRow[r]["photoData"])
@@ -1285,6 +1407,9 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         # Reveal the Photos menu if this added the first photo to the catalog.
         self.mdiParent._updateActionStates()
         self._changesSaved = True
+        if self._unattached:
+            # What's left unattached has now been seen; don't prompt for it again.
+            self.mdiParent.acknowledgeUnattachedMedia()
 
         # close the window (closeEvent will refresh any open Stats windows)
         self.close()
