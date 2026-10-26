@@ -2,6 +2,7 @@
 import form_Photos
 from code_Stylesheet import YBFont
 import code_Enlargement
+from code_DataBase import fullSpeciesName
 import code_Filter
 import code_SeasonalSort
 import code_ThumbnailCache
@@ -345,7 +346,7 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
                 weekday = ""
 
             caption = (
-                '<b>' + s["commonName"] + '</b><br>'
+                '<b>' + fullSpeciesName(s) + '</b><br>'
                 '<i>' + s["scientificName"] + '</i><br>'
                 + s["location"] + '<br>'
                 + weekday + ', ' + s["date"]
@@ -635,7 +636,7 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
         labelCaption.setAlignment(Qt.AlignTop | Qt.AlignLeft)
         labelCaption.setText(
             "<br><br>"
-            '<span style="font-size: 1.1em; font-weight: bold;">' + s["commonName"] + "</span><br>"
+            '<span style="font-size: 1.1em; font-weight: bold;">' + fullSpeciesName(s) + "</span><br>"
             "<i>" + s["scientificName"] + "</i><br><br>" +
             s["location"] + "<br>" +
             self.captureDateLine(p, s) + "<br><br>" +

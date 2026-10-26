@@ -19,6 +19,7 @@
 # rowsLayout has no such cap.
 
 import code_Photos
+from code_DataBase import fullSpeciesName
 import code_ThumbnailCache
 
 from PySide6.QtCore import Qt, QTimer
@@ -120,7 +121,7 @@ class PhotosGrid(code_Photos.Photos):
         nameLabel.setAlignment(Qt.AlignHCenter | Qt.AlignTop)
         nameLabel.setObjectName("mediaCaptionName")
         nameLabel.setText(QFontMetrics(nameLabel.font()).elidedText(
-            s["commonName"], Qt.ElideRight, self.CELL_SIZE.width() - 6))
+            fullSpeciesName(s), Qt.ElideRight, self.CELL_SIZE.width() - 6))
 
         dateLabel = QLabel(self.captureDate(p, s))
         dateLabel.setFixedWidth(self.CELL_SIZE.width())
@@ -139,7 +140,7 @@ class PhotosGrid(code_Photos.Photos):
         cell.mousePressEvent = partial(self._photoClicked, row)
         # Full detail on hover — the card view's caption in tooltip form.
         cell.setToolTip(
-            f'{s["commonName"]}\n{s["scientificName"]}\n'
+            f'{fullSpeciesName(s)}\n{s["scientificName"]}\n'
             f'{s["location"]}\n{self.captureDateLine(p, s)}\n'
             f'Rating: {p["rating"]}'
         )

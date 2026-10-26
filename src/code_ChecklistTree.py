@@ -7,6 +7,7 @@
 # the full (date, location, time, species) tuple and closes the dialog.
 
 import code_Filter
+from code_DataBase import baseSpeciesName
 
 from PySide6.QtWidgets import (
     QDialog,
@@ -118,17 +119,20 @@ class ChecklistTreeDialog(QDialog):
             f.setEndDate(ctx["date"])
             f.setLocationName(ctx["location"])
             f.setLocationType("Location")
+            # Full names, subspecies group included: two groups of one species
+            # on a checklist (Type 2 and Type 4 crossbills) are two sightings,
+            # and the media must go to the right one.
             if ctx["time"]:
                 f.setTime(ctx["time"])
-                species = db.GetSpecies(f)
+                species = db.GetFullSpeciesNames(f)
             else:
                 # An empty time is no time filter at all, which would mix in
                 # the species from any timed checklist at the same place and
                 # date.  Keep only the untimed sightings.
                 untimed = [s for s in db.GetMinimalFilteredSightingsList(f)
                            if not s["time"]]
-                # GetSpecies reads an empty list as "use every sighting".
-                species = db.GetSpecies(f, untimed) if untimed else []
+                # An empty list reads as "use every sighting".
+                species = db.GetFullSpeciesNames(f, untimed) if untimed else []
             return [(sp, {**ctx, "species": sp}) for sp in species]
 
         return []
@@ -168,6 +172,15 @@ class ChecklistTreeDialog(QDialog):
             child = parent.child(i)
             if child.text(0) == text:
                 return child
+        # A species saved under its plain name before media carried the full
+        # (subspecies) name still finds its node when only one sighting on the
+        # checklist has that species part.
+        data = parent.data(0, _ROLE) if parent is not self.tree.invisibleRootItem() else None
+        if data and data.get("level") == _LEVEL_TIME and text:
+            hits = [parent.child(i) for i in range(parent.childCount())
+                    if baseSpeciesName(parent.child(i).text(0)) == text]
+            if len(hits) == 1:
+                return hits[0]
         return None
 
     def expand_to(self, date="", location="", time="", species=""):

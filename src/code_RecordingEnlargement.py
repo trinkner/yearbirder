@@ -2,6 +2,7 @@ import form_RecordingEnlargement
 from code_ManageRecordings import SpectrogramLabel   # UI widget stays in its module
 from code_Audio import PcmAudioPlayer
 import code_Audio
+from code_DataBase import fullSpeciesName
 import code_Stylesheet
 import code_ThumbnailCache
 import code_NotesDialog
@@ -1379,7 +1380,7 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
         self._overviewWidget.setFraction(0.0)
         self._zoomedWidget.setFraction(0.0)
 
-        species = sighting.get("commonName", "")
+        species = fullSpeciesName(sighting)
         basename = os.path.basename(wav_path)
         self.setWindowTitle(f"Recording: {species} — {basename}")
 
@@ -2062,7 +2063,7 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
 
     def _setRecordingDetails(self):
         s = self._sighting
-        common = s.get("commonName", "")
+        common = fullSpeciesName(s)
         scientific = s.get("scientificName", "")
         location = s.get("location", "")
 
@@ -2435,15 +2436,15 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
         for s in db.sightingList:
             for a in s.get("audio", ()):
                 if a["fileName"] in wanted:
-                    now[(a["fileName"], s.get("commonName", ""))] = (a, s)
+                    now[(a["fileName"], fullSpeciesName(s))] = (a, s)
 
         self._audioList = [
-            now.get((a.get("fileName", ""), s.get("commonName", "")), (a, s))
+            now.get((a.get("fileName", ""), fullSpeciesName(s)), (a, s))
             for a, s in self._audioList
         ]
 
         old = self._sighting or {}
-        hit = now.get((self._wavPath, old.get("commonName", "")))
+        hit = now.get((self._wavPath, fullSpeciesName(old)))
         if hit is not None and (hit[1] is not self._sighting
                                 or hit[0] is not self._audioRecord):
             self._audioRecord, self._sighting = hit
@@ -2463,7 +2464,7 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
         def removed(fileName, sighting):
             return (fileName == filename
                     and (species is None
-                         or sighting.get("commonName", "") == species))
+                         or fullSpeciesName(sighting) == species))
 
         # The card on display is gone — close, exactly as a removal started from
         # this window does (see detachFile / deleteFile).
@@ -2490,7 +2491,7 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
             if getattr(self._player, "_currentPath", None) == old_path:
                 self._player._currentPath = new_path
             # The title and the details pane show the file name as drawn.
-            species = (self._sighting or {}).get("commonName", "")
+            species = fullSpeciesName(self._sighting or {})
             self.setWindowTitle(
                 f"Recording: {species} — {os.path.basename(new_path)}")
             self._setRecordingDetails()
@@ -2504,7 +2505,7 @@ class RecordingEnlargement(QMdiSubWindow, form_RecordingEnlargement.Ui_frmRecord
     def detachFile(self):
         db = self.mdiParent.db
         allSpecies  = db.getSpeciesForRecordingFile(self._wavPath)
-        thisSpecies = self._sighting.get("commonName", "")
+        thisSpecies = fullSpeciesName(self._sighting)
 
         if len(allSpecies) > 1:
             # Shared recording: removing it for every species is a bigger act

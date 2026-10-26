@@ -116,6 +116,29 @@ def _exif_datetime_from_dict(exif_dict):
     return dt_str, sub_str, False
 
 
+def baseSpeciesName(name):
+    """The species part of an eBird name: "Red Crossbill (Douglas-fir or
+    type 4)" -> "Red Crossbill".  The same rule ReadDataFile applies to every
+    sighting's commonName; "(hybrid)" names are kept whole, as there."""
+    if "(" in name and "hybrid" not in name:
+        return name[:name.index("(")].rstrip()
+    return name
+
+
+def fullSpeciesName(sighting):
+    """A sighting's full eBird name, subspecies group included when it has one
+    ("Red Crossbill (Douglas-fir or type 4)"); otherwise its common name.
+
+    This is the name media is assigned, saved and shown under.  The plain
+    commonName drops the subspecies, so two groups of one species on the same
+    checklist — Type 2 and Type 4 crossbills, Oregon and Slate-colored juncos
+    — were indistinguishable: media went to whichever came first, and a
+    choice could not survive a restart.  Lists, totals and filters keep using
+    commonName, which is right for counting species.
+    """
+    return sighting.get("subspeciesName") or sighting.get("commonName", "")
+
+
 def _photo_exif_fields(p):
     """Optional catalog fields carrying a photo's cached EXIF capture time.
 
@@ -1663,7 +1686,7 @@ class DataBase():
                         record = {
                             "type":        "photo",
                             "ChecklistID": s["checklistID"],
-                            "CommonName":  s["commonName"],
+                            "CommonName":  fullSpeciesName(s),
                             "Location":    s.get("location", ""),
                             "Date":        s.get("date", ""),
                             "FileName":    p["fileName"],
@@ -1685,7 +1708,7 @@ class DataBase():
                         record = {
                             "type":        "audio",
                             "ChecklistID": s["checklistID"],
-                            "CommonName":  s["commonName"],
+                            "CommonName":  fullSpeciesName(s),
                             "Location":    s.get("location", ""),
                             "Date":        s.get("date", ""),
                             "FileName":    a["fileName"],
@@ -1701,7 +1724,7 @@ class DataBase():
                         record.update(_recording_meta_fields(a))
                         f.write(json.dumps(record) + '\n')
                         written_audio.add((a["fileName"], s["checklistID"],
-                                           s["commonName"]))
+                                           fullSpeciesName(s)))
 
                 # Wave 3: records that never attached on load.  They are
                 # invisible to the two waves above — that is the whole problem
@@ -1738,7 +1761,7 @@ class DataBase():
         record = {
             "type":        "photo",
             "ChecklistID": sighting["checklistID"],
-            "CommonName":  sighting["commonName"],
+            "CommonName":  fullSpeciesName(sighting),
             # Where and when the sighting was: carried in the record so it can
             # still be identified to the user if the sighting ever drops out of
             # the open eBird data file.
@@ -1810,7 +1833,7 @@ class DataBase():
         species."""
         for s in self.sightingList:
             if "audio" in s:
-                if commonName is not None and s.get("commonName") != commonName:
+                if commonName is not None and fullSpeciesName(s) != commonName:
                     continue
                 s["audio"] = [a for a in s["audio"] if a["fileName"] != audioFileName]
                 if not s["audio"]:
@@ -1831,12 +1854,13 @@ class DataBase():
         return False
 
     def getSpeciesForRecordingFile(self, audioFileName):
-        """Sorted unique common names of every species this file is assigned to."""
+        """Sorted unique full names (subspecies included) of every sighting
+        this file is assigned to — the names its catalog records carry."""
         species = set()
         for s in self.sightingList:
             for a in s.get("audio", []):
                 if a["fileName"] == audioFileName:
-                    species.add(s.get("commonName", ""))
+                    species.add(fullSpeciesName(s))
         return sorted(species)
 
     def appendRecordingToJsonl(self, sighting, recordingData):
@@ -1847,7 +1871,7 @@ class DataBase():
             "ChecklistID": sighting["checklistID"],
             "Location":    sighting.get("location", ""),
             "Date":        sighting.get("date", ""),
-            "CommonName":  sighting["commonName"],
+            "CommonName":  fullSpeciesName(sighting),
             "FileName":    recordingData["fileName"],
             "Duration":    recordingData.get("duration", ""),
             "SampleRate":  recordingData.get("sampleRate", ""),
@@ -1955,28 +1979,37 @@ class DataBase():
         old = item.get("commonName", "")
         if not old:
             return ""
+        # Candidates by FULL name, the name media is saved under — so a
+        # checklist with two crossbill types offers both, and a suggestion
+        # names the exact group.
         peers = {}
         for s in self.checklistDict.get(item.get("checklistID", ""), []):
-            peers.setdefault(s["commonName"], s)
+            peers.setdefault(fullSpeciesName(s), s)
         peers.pop(old, None)
         if not peers:
             return ""
 
-        def _contains(name):
-            a, b = old.lower(), name.lower()
-            return a in b or b in a
+        # Compare on the species part: a saved subspecies group ("Willet
+        # (Western)") must still find "Prairie Willet", and its last word is
+        # "Willet", not "(Western)".
+        oldBase = baseSpeciesName(old).lower()
 
-        oldSci = self.sciNameByCommonName.get(old, "")
+        def _contains(name):
+            b = baseSpeciesName(name).lower()
+            return oldBase in b or b in oldBase
+
+        oldSci = (self.sciNameByCommonName.get(old)
+                  or self.sciNameByCommonName.get(baseSpeciesName(old), ""))
         oldGenus = oldSci.split(" ")[0] if oldSci else ""
 
         def _sameGenus(name):
             sci = peers[name].get("scientificName", "")
             return bool(oldGenus) and sci.split(" ")[0] == oldGenus
 
-        oldNoun = old.split(" ")[-1].lower()
+        oldNoun = oldBase.split(" ")[-1]
 
         def _sameNoun(name):
-            return name.split(" (")[0].split(" ")[-1].lower() == oldNoun
+            return baseSpeciesName(name).split(" ")[-1].lower() == oldNoun
 
         for test in (_contains, _sameGenus, _sameNoun):
             hits = [n for n in peers if test(n)]
@@ -2156,15 +2189,32 @@ class DataBase():
                             # A CommonName on the deletion scopes it to that
                             # species; older records have none and drop the
                             # file for every species.
+                            # A scoped deletion also retires a record saved
+                            # under the plain species name before records
+                            # carried the full (subspecies) name: that plain
+                            # record is the same assignment, older.
                             cn = record.get("CommonName", "")
+                            cnBase = baseSpeciesName(cn)
                             for k in [k for k in recordings_state
-                                      if k[0] == fn and (not cn or k[2] == cn)]:
+                                      if k[0] == fn and (not cn or k[2] == cn
+                                                         or k[2] == cnBase)]:
                                 del recordings_state[k]
                         else:
                             key = (fn, record.get("ChecklistID", ""), record.get("CommonName", ""))
                             recordings_state[key] = record
                     else:
                         photo_state[fn] = None if record.get("deleted") else record
+
+            # A recording saved under its plain species name before records
+            # carried the full name, then saved again under the full name,
+            # leaves both records live — and the plain one would attach to the
+            # FIRST sighting of that species on the checklist, which may be a
+            # different subspecies group.  The full-name record supersedes it.
+            fullKeys = {(fn, chk, baseSpeciesName(cn))
+                        for (fn, chk, cn) in recordings_state
+                        if baseSpeciesName(cn) != cn}
+            for k in [k for k in recordings_state if k in fullKeys]:
+                del recordings_state[k]
 
             self.photoRecordsInCatalog = (
                 sum(1 for v in photo_state.values() if v is not None) + len(recordings_state)
@@ -3124,17 +3174,22 @@ class DataBase():
 
 
     def GetSpeciesWithPhotos(self, filter):
+        """Every taxon with a photo under the filter — the Media Filter's
+        "Photographed" list (and, by subtraction, "Not photographed").
+
+        Slashes and spuhs count too.  This is a filter on which sightings to
+        show, not a species tally: excluding them hid every sighting of a
+        photographed "Saltmarsh/Prairie Willet" from a Photographed map, and
+        listed it under Not photographed, since allSpeciesList includes them.
+        """
         returnSet = set()
 
         filteredSightingList = self.GetMinimalFilteredSightingsList(filter)
 
         cf = self.CompileFilter(filter)
         for s in filteredSightingList:
-            commonName = s["commonName"]
-            if "/" not in commonName and "sp." not in commonName:
-                if self.TestSightingCompiled(s, cf) is True:
-                    if "photos" in s:
-                        returnSet.add(s["commonName"])
+            if "photos" in s and self.TestSightingCompiled(s, cf) is True:
+                returnSet.add(s["commonName"])
 
         return(returnSet)
 
@@ -3156,12 +3211,10 @@ class DataBase():
         returnSet = set()
         filteredSightingList = self.GetMinimalFilteredSightingsList(filter)
         cf = self.CompileFilter(filter)
+        # Slashes and spuhs count, as in GetSpeciesWithPhotos.
         for s in filteredSightingList:
-            commonName = s["commonName"]
-            if "/" not in commonName and "sp." not in commonName:
-                if self.TestSightingCompiled(s, cf) is True:
-                    if "audio" in s:
-                        returnSet.add(commonName)
+            if "audio" in s and self.TestSightingCompiled(s, cf) is True:
+                returnSet.add(s["commonName"])
         return returnSet
 
     def GetSpeciesWithoutRecordings(self, filter):
@@ -3351,6 +3404,22 @@ class DataBase():
                     speciesList.append(s["commonName"])
 
         return(speciesList)
+
+
+    def GetFullSpeciesNames(self, filter, filteredSightingList=[]):
+        """GetSpecies, but each sighting's full name, subspecies group included
+        (see fullSpeciesName) — what the media pickers offer, so a Type 4
+        crossbill can be told from a Type 2 on the same checklist."""
+        names = []
+        if filteredSightingList == []:
+            filteredSightingList = self.GetMinimalFilteredSightingsList(filter)
+        cf = self.CompileFilter(filter)
+        for s in filteredSightingList:
+            if self.TestSightingCompiled(s, cf) is True:
+                name = fullSpeciesName(s)
+                if name not in names:
+                    names.append(name)
+        return names
 
 
     def GetMinimalFilteredSightingsList(self, filter):

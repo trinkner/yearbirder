@@ -1,5 +1,6 @@
 import form_Enlargement
 import code_Filter
+from code_DataBase import fullSpeciesName
 import code_Stylesheet
 import code_NotesDialog
 import datetime
@@ -1088,7 +1089,7 @@ class Enlargement(QMdiSubWindow, form_Enlargement.Ui_frmEnlargement):
         currentPhoto = self.photoList[self.currentIndex][0]["fileName"]
         photoRating = self.photoList[self.currentIndex][0]["rating"]
         
-        photoCommonName = self.photoList[self.currentIndex][1]["commonName"]
+        photoCommonName = fullSpeciesName(self.photoList[self.currentIndex][1])
         photoScientificName = self.photoList[self.currentIndex][1]["scientificName"]
         photoLocation = self.photoList[self.currentIndex][1]["location"]
         

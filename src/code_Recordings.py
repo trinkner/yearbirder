@@ -2,6 +2,7 @@ import form_Recordings
 from code_Stylesheet import YBFont
 from code_ManageRecordings import SpectrogramLabel   # UI widget stays in its module
 import code_Filter
+from code_DataBase import fullSpeciesName
 import code_SeasonalSort
 from code_Audio import (
     render_spectrogram_qimage as _render_spectrogram_qimage,
@@ -210,7 +211,7 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
         self.audioList = [(a, s) for (a, s) in self.audioList
                           if not (a.get("fileName") == filename
                                   and (species is None
-                                       or s.get("commonName") == species))]
+                                       or fullSpeciesName(s) == species))]
         if len(self.audioList) == orig_len:
             return
         # A species-scoped removal can leave the file on other species' cards;
@@ -780,7 +781,7 @@ class Recordings(QMdiSubWindow, form_Recordings.Ui_frmRecordings):
         # time axis; the blank line matches the Photos browser caption.
         captionText = (
             "<br><br>"
-            '<span style="font-size: 1.1em; font-weight: bold;">' + s["commonName"] + "</span><br>"
+            '<span style="font-size: 1.1em; font-weight: bold;">' + fullSpeciesName(s) + "</span><br>"
             "<i>" + s["scientificName"] + "</i><br><br>"
             + s["location"] + "<br>"
             + dateLine + "<br><br>"

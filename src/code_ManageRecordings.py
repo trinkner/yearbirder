@@ -5,7 +5,7 @@ import code_Stylesheet
 import code_ThumbnailCache
 import code_ChecklistTree
 import code_NotesDialog
-from code_DataBase import SPECIES_MATCH_LOW, SPECIES_MATCH_NONE
+from code_DataBase import SPECIES_MATCH_LOW, SPECIES_MATCH_NONE, fullSpeciesName
 from code_ManagePhotos import _unattachedLabel
 import os
 import queue
@@ -346,7 +346,7 @@ class threadGetAudioData(QThread):
                     "recordingDate": s["date"],
                     "recordingTime": s["time"],
                     "recordingLocation": s["location"],
-                    "recordingCommonName": s["commonName"],
+                    "recordingCommonName": fullSpeciesName(s),
                     "dateMatchFound": True,
                     "timeMatchFound": True,
                 }
@@ -958,7 +958,7 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         # species tag strip (multiple chips) is fed by the checklist tree picker.
         isExisting = self.audioAlreadyInDb
         if allSightings:
-            initialSpecies = [s["commonName"] for s in allSightings]
+            initialSpecies = [fullSpeciesName(s) for s in allSightings]
         elif recordingCommonName:
             initialSpecies = [recordingCommonName]
         else:
@@ -1725,7 +1725,7 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
             meta = self.metaDataByRow[r]
 
             if self.audioAlreadyInDb:
-                old_species = [s["commonName"] for s in meta.get("allSightings", [])]
+                old_species = [fullSpeciesName(s) for s in meta.get("allSightings", [])]
                 new_species = meta.get("newCommonNames", [])
                 changed = (
                     meta["location"] != meta["newLocation"] or

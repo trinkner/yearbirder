@@ -6,7 +6,7 @@ import code_Stylesheet
 import code_ThumbnailCache
 import code_ChecklistTree
 import code_NotesDialog
-from code_DataBase import SPECIES_MATCH_HIGH, SPECIES_MATCH_LOW, SPECIES_MATCH_NONE
+from code_DataBase import SPECIES_MATCH_HIGH, SPECIES_MATCH_LOW, SPECIES_MATCH_NONE, fullSpeciesName
 import os
 
 import piexif
@@ -748,7 +748,7 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         # A real Filter, not the built-in filter(): other methods call
         # self.filter's accessors, and the window title is built from it.
         self.filter = code_Filter.Filter()
-        self.filter.setSpeciesName(sightingData["commonName"])
+        self.filter.setSpeciesName(fullSpeciesName(sightingData))
         self.filter.setLocationName(sightingData["location"])
         self.filter.setLocationType("Location")
         self.filter.setStartDate(sightingData["date"])
@@ -808,23 +808,23 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         thisPhotoMetaData["location"] = s["location"]
         thisPhotoMetaData["date"] = s["date"]
         thisPhotoMetaData["time"] = s["time"]
-        thisPhotoMetaData["commonName"] = s["commonName"]
+        thisPhotoMetaData["commonName"] = fullSpeciesName(s)
         thisPhotoMetaData["photoData"] = p
         thisPhotoMetaData["rating"] = p["rating"]
         thisPhotoMetaData["notes"] = p.get("notes", "")
         thisPhotoMetaData["cascadeMode"] = "location_first"
-        thisPhotoMetaData["selectedCommonName"] = s["commonName"]
+        thisPhotoMetaData["selectedCommonName"] = fullSpeciesName(s)
         thisPhotoMetaData["skip"] = False
         thisPhotoMetaData["newLocation"] = s["location"]
         thisPhotoMetaData["newDate"] = s["date"]
         thisPhotoMetaData["newTime"] = s["time"]
-        thisPhotoMetaData["newCommonName"] = s["commonName"]
+        thisPhotoMetaData["newCommonName"] = fullSpeciesName(s)
         # The stored assignment is the auto-derived baseline; every
         # field is green until the user overrides it via the tree.
         thisPhotoMetaData["autoDate"] = s["date"]
         thisPhotoMetaData["autoLocation"] = s["location"]
         thisPhotoMetaData["autoTime"] = s["time"]
-        thisPhotoMetaData["autoSpecies"] = s["commonName"]
+        thisPhotoMetaData["autoSpecies"] = fullSpeciesName(s)
         thisPhotoMetaData["autoGreen"] = {"date": True, "location": True,
                                           "time": True, "species": True}
         # a stored assignment was confirmed once already — not a fresh guess

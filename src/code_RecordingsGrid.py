@@ -20,6 +20,7 @@
 # below would not change.
 
 import code_Recordings
+from code_DataBase import fullSpeciesName
 import code_ThumbnailCache
 
 from PySide6.QtCore import Qt, QSize, QTimer
@@ -137,7 +138,7 @@ class RecordingsGrid(code_Recordings.Recordings):
         nameLabel.setAlignment(Qt.AlignHCenter | Qt.AlignTop)
         nameLabel.setObjectName("mediaCaptionName")
         nameLabel.setText(QFontMetrics(nameLabel.font()).elidedText(
-            s["commonName"], Qt.ElideRight, CELL_W - 6))
+            fullSpeciesName(s), Qt.ElideRight, CELL_W - 6))
 
         dateLabel = QLabel(self.captureDate(a, s))
         dateLabel.setFixedWidth(CELL_W)
@@ -157,7 +158,7 @@ class RecordingsGrid(code_Recordings.Recordings):
         # card itself is NOT click-to-open: the Play button and scrubber live
         # inside it, so opening the Enlargement stays on the spectrogram.
         cell.setToolTip(
-            f'{s["commonName"]}\n{s["scientificName"]}\n'
+            f'{fullSpeciesName(s)}\n{s["scientificName"]}\n'
             f'{s["location"]}\n{self.captureDateLine(a, s)}\n'
             f'Rating: {a.get("rating", "0")}'
         )
@@ -294,7 +295,7 @@ class RecordingsGrid(code_Recordings.Recordings):
         keep = [i for i, (a, s) in enumerate(self.audioList)
                 if not (a.get("fileName") == filename
                         and (species is None
-                             or s.get("commonName") == species))]
+                             or fullSpeciesName(s) == species))]
         if len(keep) == orig_len:
             return
 
