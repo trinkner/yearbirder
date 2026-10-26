@@ -772,6 +772,7 @@ class DataBase():
         self.familySpeciesDict = {}
         self.orderSpeciesDict = {}
         self.bblCodeDict = {}
+        self.bblCodeByCommonName = {} # commonName -> BBL code, fallback when the sci name moved genus
         self.eBirdCodeDict = {}       # sciName -> eBird species code, populated by ReadTaxonomyDataFile
         self.taxonOrderBySciName = {} # sciName -> float taxon order, populated by ReadTaxonomyDataFile
         self.sciNameByCommonName = {} # commonName -> sciName for the whole taxonomy, populated by ReadTaxonomyDataFile
@@ -3129,9 +3130,12 @@ class DataBase():
         # so this is insurance against a future update carrying accents.
         with open(bblFile, "r", encoding="utf-8", errors='replace') as csvfile:
             csvdata = csv.reader(csvfile, delimiter=',', quotechar='"')
-            # store the BBL code in a dictionary, using the sci name as the key
+            next(csvdata, None)  # header row
+            # store the BBL code in a dictionary, using the sci name as the key,
+            # and again by common name for GetBBLCode's fallback
             for row in csvdata:
-                self.bblCodeDict[str(row[2]).strip()] = row[0].strip()                    
+                self.bblCodeDict[str(row[2]).strip()] = row[0].strip()
+                self.bblCodeByCommonName[str(row[1]).strip()] = row[0].strip()
         
                 
     def GetFamilies(self, filter, filteredSightingList=[]):
@@ -4087,7 +4091,7 @@ class DataBase():
             elif nameSearchMode == "banding":
                 # the code is filed by scientific name, and not every species
                 # has one — those simply never match a b: search
-                bblCode = self.bblCodeDict.get(sighting["scientificName"], "")
+                bblCode = self.BBLCodeForNames(sighting["scientificName"], sighting["commonName"])
                 if not nameSearchNeedle or nameSearchNeedle not in bblCode.lower():
                     return(False)
 
@@ -5507,14 +5511,19 @@ class DataBase():
 
     def GetBBLCode(self, species):
 
-        thisScientificName = self.GetScientificName(species)
+        return self.BBLCodeForNames(self.GetScientificName(species), species)
 
-        if thisScientificName in self.bblCodeDict:
-            bblCode = self.bblCodeDict[thisScientificName]
-        else:
-            bblCode = ""
 
-        return(bblCode)
+    def BBLCodeForNames(self, scientificName, commonName):
+
+        # The bundled codes are keyed to the bundled eBird taxonomy.  A user's
+        # export from a newer taxonomy can move a species to another genus
+        # (Dryobates -> Leuconotopicus) while its common name stays put, so a
+        # scientific-name miss falls back to the common name.
+        bblCode = self.bblCodeDict.get(scientificName)
+        if bblCode is None:
+            bblCode = self.bblCodeByCommonName.get(commonName, "")
+        return bblCode
 
 
     def GeteBirdCode(self, species):

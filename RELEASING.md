@@ -39,6 +39,10 @@ workflow's `on:` triggers). The final **merge to `master`** is the one deliberat
    versionDate   = "Month D, YYYY"
    ```
 
+   If the bundled eBird taxonomy (`src/eBird_Taxonomy_*.csv`) changed, or IBP has
+   published a new alpha code list, rebuild the banding codes before going further
+   (see **Banding codes** below).
+
 3. **Update the website** in `web/` — e.g. the version text and the macOS DMG link
    in `web/download.html`, plus any new screenshots. Both download buttons point at
    this release's own assets — `download/vX.YY/Yearbirder_vX.YY.dmg` and
@@ -90,6 +94,28 @@ workflow's `on:` triggers). The final **merge to `master`** is the one deliberat
    missing — in practice the `.msix` — and leaves your `.exe` untouched: it skips any
    asset the release already carries, because re-uploading resets that asset's download
    count to zero.
+
+## Banding codes
+
+`src/eBird_BBLCodes.csv` is generated, not edited. `build_bbl_codes.py` reads IBP's
+alpha code list (a PDF, updated each year after the AOS supplement, usually summer)
+and keys every code to the bundled eBird taxonomy's own names. Rerun it whenever
+either source changes; the October eBird taxonomy update always counts:
+
+```
+python3 -m venv /tmp/ybbuild && /tmp/ybbuild/bin/pip install pdfplumber
+/tmp/ybbuild/bin/python build_bbl_codes.py --refresh
+```
+
+`--refresh` downloads the PDF again; without it the cached copy in
+`build/bbl-codes-cache/` is reused. Read the report it prints, comparing it with the
+previous run's:
+
+- **Split daughters given the parent's code** — eBird splits that AOS has not adopted
+  yet (Willet, Marsh Wren). Each daughter carries the parent's code until IBP assigns
+  its own; check that none landed on an unrelated species.
+- **Unmatched** — should be only `+` rows (subspecies, morphs, hybrids,
+  "Unidentified"). A `SPECIES` row there means a name the script could not resolve.
 
 ## Ship exactly what you tested
 
