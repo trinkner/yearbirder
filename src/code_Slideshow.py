@@ -1,5 +1,5 @@
 import os
-from code_Stylesheet import YBFont
+from code_Stylesheet import YBFont, ybPoints
 
 from PySide6.QtWidgets import (
     QDialog, QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
@@ -56,12 +56,12 @@ class SlideshowDialog(QDialog):
         speedRow = QHBoxLayout()
         speedRow.setSpacing(10)
         speedLabel = QLabel("Seconds per photo:")
-        speedLabel.setStyleSheet("font-size: 14pt;")
+        speedLabel.setStyleSheet(f"font-size: {ybPoints(14):g}pt;")
         speedRow.addWidget(speedLabel)
         self.spinSpeed = QSpinBox()
         self.spinSpeed.setRange(1, 60)
         self.spinSpeed.setValue(5)
-        self.spinSpeed.setStyleSheet("font-size: 14pt;")
+        self.spinSpeed.setStyleSheet(f"font-size: {ybPoints(14):g}pt;")
         speedRow.addWidget(self.spinSpeed)
         speedRow.addStretch()
         layout.addLayout(speedRow)
@@ -220,13 +220,16 @@ class SlideshowWindow(QWidget):
             detail_y  = top_pad + name_h - 7   # pull detail 7px closer to name
             detail_h  = BAR_H - detail_y
 
-            f1 = QFont(YBFont, 20, QFont.Weight.Bold)
+            f1 = QFont(YBFont)
+            f1.setPointSizeF(ybPoints(20))
+            f1.setBold(True)
             painter.setFont(f1)
             painter.setPen(QColor("white"))
             painter.drawText(QRect(0, photo_area_h + top_pad, w, name_h),
                              Qt.AlignmentFlag.AlignCenter, species)
 
-            f2 = QFont(YBFont, 13)
+            f2 = QFont(YBFont)
+            f2.setPointSizeF(ybPoints(13))
             painter.setFont(f2)
             painter.setPen(QColor(190, 190, 190))
             parts  = [p for p in (date, location, counter) if p]

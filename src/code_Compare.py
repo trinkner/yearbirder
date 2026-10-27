@@ -78,7 +78,9 @@ class _ListCard(QFrame):
         self._badge = QLabel("", self)
         self._badge.setAlignment(Qt.AlignCenter)
         self._badge.setFixedSize(20, 20)
-        badge_font = QFont(YBFont, 9, QFont.Bold)
+        badge_font = QFont(YBFont)
+        badge_font.setPointSizeF(code_Stylesheet.ybPoints(9))
+        badge_font.setBold(True)
         self._badge.setFont(badge_font)
 
         self._title_lbl = QLabel(self._display, self)

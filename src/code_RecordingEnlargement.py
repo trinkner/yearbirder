@@ -465,7 +465,7 @@ class ZoomedSpectroWidget(QWidget):
             return
 
         font = painter.font()
-        font.setPointSize(11)
+        font.setPointSizeF(code_Stylesheet.ybPoints(11))
         painter.setFont(font)
         fm   = painter.fontMetrics()
         tick = QColor(68, 68, 68)
@@ -579,7 +579,7 @@ class ZoomedSpectroWidget(QWidget):
         text = f"{t:.2f} s  ·  {hz / 1000.0:.2f} kHz"
 
         font = painter.font()
-        font.setPointSize(11)
+        font.setPointSizeF(code_Stylesheet.ybPoints(11))
         painter.setFont(font)
         fm = painter.fontMetrics()
         pad_x, pad_y = 7, 4
@@ -759,7 +759,7 @@ class OverviewSpectroWidget(QWidget):
 
     def _drawTimeLabels(self, painter, data_left, data_width, h):
         font = painter.font()
-        font.setPointSize(9)
+        font.setPointSizeF(code_Stylesheet.ybPoints(9))
         painter.setFont(font)
         fm   = painter.fontMetrics()
         tick = QColor(68, 68, 68)
