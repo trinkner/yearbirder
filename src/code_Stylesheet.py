@@ -203,6 +203,19 @@ elif sys.platform == "darwin":
 else:
     YBFont = ""
 
+# Base UI point size — single source of truth for MainWindow.fontSize and the
+# application default font.  A point is 1 px on the Mac (72 points per inch of
+# logical screen) but 1.33 px on Windows (96 dpi), so the same 11 pt drew
+# Windows text a third larger than the Mac's, and its filter panes and buttons
+# grew to match.  8 pt on Windows renders at the Mac's 11 px.
+YBFontSize = 8 if sys.platform == "win32" else 11
+
+
+def ybPoints(macPoints):
+    """A fixed point size written for the Mac, scaled for this platform."""
+    return macPoints * YBFontSize / 11
+
+
 # Chart colour palette — single source of truth for code_Graphs.py and code_Web.py
 CHART_PRIMARY   = "#4f8ef7"   # thematic blue — standard-filter charts
 CHART_SECONDARY = "#28384c"   # dark muted blue — repeat / extension bars
@@ -623,6 +636,14 @@ def _writeChevron(name, colour):
 
 _chevron_path = _writeChevron("yearbirder_chevron.svg", "#b8bccb")
 _chevron_disabled_path = _writeChevron("yearbirder_chevron_disabled.svg", "#5c6070")
+
+if sys.platform == "win32":
+    # Windows' theme gives lists, trees, tables and their headers its own
+    # 9 pt font instead of the application font, so they drew larger than the
+    # labels around them once the base dropped to 8 pt.
+    stylesheetBase += f"""
+    QAbstractItemView, QHeaderView {{ font-size: {YBFontSize}pt; }}
+"""
 
 stylesheetBase += f"""
     QCheckBox::indicator {{

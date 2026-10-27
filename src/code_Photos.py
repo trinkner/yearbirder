@@ -1,6 +1,6 @@
 # import project files
 import form_Photos
-from code_Stylesheet import YBFont
+from code_Stylesheet import YBFont, ybPoints
 import code_Enlargement
 from code_DataBase import fullSpeciesName
 import code_Filter
@@ -818,7 +818,7 @@ td { width: 50%; vertical-align: top; padding: 6px; text-align: center; }
                         f"File not found:\n{os.path.basename(photoFile)}")
                     # note: btn is a QLabel; the card provides the background
                     btn.setStyleSheet(
-                        "QLabel { color: #e2e4ec; font-size: 10pt; }")
+                        f"QLabel {{ color: #e2e4ec; font-size: {ybPoints(10):g}pt; }}")
             else:
                 self.pixmapCache[photoFile] = pm
                 btn = self._photoButtons.get(row)

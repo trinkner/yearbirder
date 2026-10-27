@@ -248,7 +248,10 @@
       </ul></li>
     <li><a href="#recording-enlargement">The Recording Enlargement View</a></li>
     <li><a href="#managing-recordings">Managing Your Recordings</a></li>
-    <li><a href="#recordings-reports">Recordings Charts and Reports</a></li>
+    <li><a href="#recordings-reports">Recordings Charts and Reports</a>
+      <ul>
+        <li><a href="#recording-statistics">Technical Statistics</a></li>
+      </ul></li>
   </ul>
   <p class="toc-group">Viewing Community Sightings</p>
   <ul>
@@ -518,6 +521,7 @@
 </table>
 <p>The count of locations is shown in the window title, e.g., <em>"Locations: All species, locations, and dates (702 Locations)"</em>.</p>
 <p>Right-clicking a location lets you set it as the active location filter, or open it on a map.</p>
+<p>Double-clicking a location opens its <strong>Location window</strong>. In its Species, Dates and Checklists tabs, right-click a row to set the main filter to that species or date — on the Species tab, to the species or its first or last date there.</p>
 
 <p class="back-to-top"><a href="#top">Back to top &uarr;</a></p>
 
@@ -870,10 +874,11 @@
 <p>It shows a comprehensive view of your sightings of one particular species:</p>
 <ul>
   <li><strong>All sightings</strong> — every checklist on which you recorded this species, with date, location, and count.</li>
-  <li><strong>Locations summary</strong> — a breakdown of sightings by location.</li>
+  <li><strong>Locations summary</strong> — a breakdown of sightings by country, state, county and location. Right-click any of them to set the main filter to it (<strong>Set Filter to Country</strong>, <strong>State</strong>, <strong>County</strong> or <strong>Location</strong>). Select one to list the dates you recorded the species there; right-click a date and choose <strong>Set Filter to Date</strong> to set the main filter to that day.</li>
   <li><strong>Yearly summary</strong> — how many times you recorded the species in each year.</li>
   <li><strong>Monthly summary</strong> — which months you most often record this species (useful for understanding migration timing).</li>
-  <li><strong>Links</strong> — direct links to the species' page on Wikipedia and AllAboutBirds.org.</li>
+  <li><strong>Conservation status</strong> — under the order and family, the species' IUCN Red List category (Least Concern, Near Threatened, Vulnerable, Endangered, Critically Endangered, and so on), from the AviList global checklist. Species AviList gives no category, and slashes, spuhs and hybrids, read <strong>Not Available</strong>.</li>
+  <li><strong>Links</strong> — direct links to the species' page on Wikipedia, All About Birds, Birds of the World, the IUCN Red List and Audubon. The IUCN Red List button opens the species' Red List page; for a species whose status reads Not Available it opens IUCN's search instead, which IUCN shows only after you sign in with a free IUCN account. Birds of the World is a subscription site: sign in once in its window and Yearbirder remembers the sign-in from then on, as it does for any site you open from these links. Yearbirder never sees or stores your password; the site's own sign-in cookie is kept, as a browser would keep it.</li>
   <li><strong>Photos</strong> — if you have photos of this species in your media catalog, thumbnails are shown. Click a thumbnail to open the Enlargement view.</li>
 </ul>
 <h3>Photo thumbnail in the header</h3>
@@ -916,6 +921,15 @@
 <h3>Managing photos</h3>
 <p>Choose <strong>File → Manage Photos…</strong> to open the Manage Photos window, where you can view and edit the details of individual photos that match the current filter — for example, to reassign a photo to a different species or correct a date.</p>
 
+<h3>Subspecies and forms</h3>
+<p>When you entered a sighting in eBird at the subspecies level &mdash; "Red Crossbill (Douglas-fir or type 4)", "Dark-eyed Junco (Oregon)" &mdash; your photos and recordings are assigned to that exact entry. The species picker behind <strong>Select</strong> lists each one by its full eBird name, so a checklist with Type 2 and Type 4 crossbills offers both, and the photo and recording cards and the Enlargement views show the full name too. Lists, totals and filters still count at the species level, so a Type 4 crossbill counts as Red Crossbill there.</p>
+
+<h3 id="unattached-media">Reattaching media after an eBird update</h3>
+<p>Yearbirder links each photo and recording to a sighting by its eBird checklist and species name. When eBird renames or splits a species in a taxonomy update &mdash; Warbling Vireo becoming Western Warbling Vireo, say &mdash; the next eBird data file you download uses the new name, and media saved under the old one no longer matches its sighting. It isn't lost: the catalog keeps it, but it stops appearing in Yearbirder until it is attached again.</p>
+<p>When you open a catalog and some of its media has come unattached, Yearbirder tells you how many photos and recordings are affected and offers to show them. You can also open them at any time with <strong>File &rarr; Unattached Media&hellip;</strong>, which is available whenever something in the catalog is unattached. They open in Manage Photos and Manage Recordings, one card per file, grouped by the name they were saved under. Each card shows that old name and why it no longer matches, and opens on the media's original checklist with the date, location and time already filled in.</p>
+<p>Where the checklist has exactly one species the media most likely became &mdash; a name that contains the old one, a species in the same genus, or failing that the same kind of bird &mdash; it is filled in for you and shown in amber as a suggestion. Check the suggestions, use <strong>Select</strong> for the rest, and click <strong>Save</strong>. Anything you leave without a species stays unattached, and isn't mentioned again on startup until something new comes unattached.</p>
+<p>Media whose whole checklist is missing from the eBird file can be attached the same way, by choosing a checklist with <strong>Select</strong>. More often, though, this means the eBird file is older than the media, and downloading a current one is the real fix. Unattached files that are no longer on your computer can't be shown here; <strong>Compact catalog and cache</strong> (below) lists them and offers to remove them.</p>
+
 <h3>Updating EXIF data</h3>
 <p>If you have moved or re-exported your photo files, choose <strong>File → Refresh camera data from photos</strong>. Yearbirder re-reads the EXIF metadata from every file referenced in the catalog and updates its records. This is also useful after photo editing software writes new EXIF tags.</p>
 
@@ -925,7 +939,7 @@
 <p>Because the cache is shared across catalogs, running this command while one catalog is open will also clear cached images belonging to a <em>different</em> catalog. This is harmless — nothing is lost — but the other catalog's photos and recordings may take a moment to re-cache the first time you browse them after switching back to it.</p>
 
 <p>Compacting rewrites the catalog from what Yearbirder currently has loaded, so it can only keep records it can see. A record is only visible when the open eBird data file contains both the checklist and the species it is attached to. If some records aren't matched, Yearbirder shows you exactly which media is affected &mdash; file, species, date and location &mdash; and asks what to do, with <strong>Keep them</strong> as the default. The same check runs before <strong>File &rarr; Backup media catalog&hellip;</strong>, so a backup can never quietly come out smaller than the catalog it was made from.</p>
-<p>Media can go unmatched for more than one reason, and the <em>date</em> and <em>location</em> columns are the quickest way to tell which you are looking at. Media from the last few weeks points to an out-of-date eBird file &mdash; download a current one and it all comes back. A cluster on one date and place points to an outing you deleted on the eBird web site, in which case those records really are dead. Media whose species no longer appears on its checklist usually means the identification was refined or eBird revised its taxonomy; reassign that media to the species the checklist now lists rather than removing it.</p>
+<p>Media can go unmatched for more than one reason, and the <em>date</em> and <em>location</em> columns are the quickest way to tell which you are looking at. Media from the last few weeks points to an out-of-date eBird file &mdash; download a current one and it all comes back. A cluster on one date and place points to an outing you deleted on the eBird web site, in which case those records really are dead. Media whose species no longer appears on its checklist usually means the identification was refined or eBird revised its taxonomy; reassign that media to the species the checklist now lists rather than removing it &mdash; see <a href="#unattached-media">Reattaching media after an eBird update</a>.</p>
 <p>In a catalog created by an older version of Yearbirder the location may not have been recorded yet, in which case the column shows the eBird checklist number instead &mdash; you can look that up on the eBird web site. Compacting once with a current eBird data file open fills in the missing locations for good.</p>
 <p>Choosing <strong>Keep them</strong> writes the unmatched records back out untouched, so nothing is lost and you can decide later. <strong>Remove them</strong> takes them out of the catalog permanently, and is only the right answer when you know those checklists are gone from eBird for good. Either way your photo and recording files are left alone on your computer &mdash; only the catalog's record of which sighting they belong to is affected.</p>
 <p>Nothing else in Yearbirder rewrites the catalog. Every rating, note, assignment, removal and rename is written to the catalog the moment you make it, so your work is safe without compacting and safe if the app closes unexpectedly. Compacting is housekeeping you choose: it collapses the file to one line per record and reclaims the space superseded entries leave behind.</p>
@@ -1073,7 +1087,7 @@
 <p class="back-to-top"><a href="#top">Back to top &uarr;</a></p>
 
 <h3 id="photo-statistics">Technical Statistics</h3>
-<p>Open with <strong>Photos &rarr; Technical Statistics</strong>. Available only when a media catalog is loaded. The Photos menu itself holds only ways of looking at your photographs; its two submenus hold the reports. <strong>Birding Statistics</strong> reports on the birds, the places and the dates — and opens with <strong>Photo Overview</strong>, the summary of your whole collection. <strong>Technical Statistics</strong>, described here, reports on the photographs themselves — the gear, the settings and the conditions. Every report in it respects the current Sighting Filter and Media Filter, so you can narrow any of them to a year, a region, a single lens, or an ISO range before opening it.</p>
+<p>Open with <strong>Photos &rarr; Technical Statistics</strong>. Available only when a media catalog is loaded. The Photos menu itself holds only ways of looking at your photographs; its two submenus hold the reports. <strong>Birding Statistics</strong> reports on the birds, the places and the dates — and opens with <strong>Photos Overview</strong>, the summary of your whole collection. <strong>Technical Statistics</strong>, described here, reports on the photographs themselves — the gear, the settings and the conditions. Every report in it respects the current Sighting Filter and Media Filter, so you can narrow any of them to a year, a region, a single lens, or an ISO range before opening it.</p>
 
 <p>It opens with one tabular report:</p>
 <ul>
@@ -1090,7 +1104,7 @@
 
 <p><strong>Time of Day</strong> breaks your photos down by the hour they were taken, from each photo's own EXIF timestamp. As on Photos &amp; Ratings by Setting, a pair of radio buttons above the chart chooses what the bars measure: <strong>Photographs</strong>, how many you took in each hour, or <strong>Average Rating</strong>, how those photos turned out — which can separate the hour you shoot most from the hour you shoot best. Hovering an hour lists the species photographed in it, and clicking one opens that hour's photos in Browse Grid. It answers which part of the day your photographs actually come from, which is often not the part you would guess.</p>
 
-<p>Camera Gear, and Photo Overview and Photo Coverage of Species under Birding Statistics, can all be saved with <strong>File &rarr; Save as PDF</strong>.</p>
+<p>Camera Gear, and Photos Overview and Photo Coverage of Species under Birding Statistics, can all be saved with <strong>File &rarr; Save as PDF</strong>.</p>
 
 <p class="back-to-top"><a href="#top">Back to top &uarr;</a></p>
 
@@ -1379,8 +1393,9 @@
 <hr>
 
 <h2 id="recordings-reports">30. Recordings Charts and Reports</h2>
-<p>The <strong>Recordings</strong> menu mirrors the Photos menu: the menu itself holds the ways of listening to your recordings — Browse Grid, Browse Cards, Species Gallery, Recording Map and Animated Recording Map — and its <strong>Birding Statistics</strong> submenu holds the charts and reports described here. They count your sound recordings instead of photos, appear once a media catalog is open, and are rendered in a <strong>green</strong> color palette to distinguish them from the yellow photo charts. Each respects the current Sighting Filter and Media Filter. There is no Technical Statistics submenu for recordings: the gear and exposure reports photos have do not apply to audio.</p>
+<p>The <strong>Recordings</strong> menu mirrors the Photos menu: the menu itself holds the ways of listening to your recordings — Browse Grid, Browse Cards, Species Gallery, Recording Map and Animated Recording Map — and its two submenus hold the charts and reports: <strong>Birding Statistics</strong>, described here, and <strong>Technical Statistics</strong>, described below. They count your sound recordings instead of photos, appear once a media catalog is open, and are rendered in a <strong>green</strong> color palette to distinguish them from the yellow photo charts. Each respects the current Sighting Filter and Media Filter.</p>
 <ul>
+  <li><strong>Recordings Overview</strong> — the summary of your recording collection, the counterpart of Photos Overview: how many recordings, species, families, locations, checklists and days with recordings, and your total recorded time; your first and latest recording, recordings per day and your busiest day; and, if you rate your recordings, how your ratings are distributed. A recording assigned to several species counts once. It can be saved with <strong>File &rarr; Save as PDF</strong>.</li>
   <li><strong>Total Recordings per Species</strong> — a gallery grouped by species, showing a representative spectrogram for each species you have recorded.</li>
   <li><strong>Year to Date by Recordings</strong> — a horizontal bar chart comparing your year-to-date recording count against your full-year totals for every year in your data.</li>
   <li><strong>Families &amp; Orders by Recordings</strong> — a pie chart where each wedge is a bird family (or order), sized by the total number of recordings you have of species in that group. Toggle between Families and Orders with the radio buttons.</li>
@@ -1389,6 +1404,14 @@
   <li><strong>Recorded Species Growth Over Time</strong> — a cumulative line curve tracking the total number of distinct species you have recorded over time.</li>
 </ul>
 <p>As with the photo charts, hovering over a bar, wedge, or point shows details, and clicking opens a filtered window or gallery for that selection.</p>
+
+<h3 id="recording-statistics">Technical Statistics</h3>
+<p>Open with <strong>Recordings &rarr; Technical Statistics</strong>. Where Birding Statistics reports on the birds, these two report on the recordings themselves — the gear you used and when. They are the recording counterparts of two reports under <a href="#photo-statistics">Photos &rarr; Technical Statistics</a>; the photo reports about exposure have no audio equivalent, so they have no counterpart here. Both respect the current Sighting Filter and Media Filter, so you can narrow them to one recorder, one microphone or one year before opening them.</p>
+<ul>
+  <li><strong>Recording Gear</strong> — one table for your recorders and one for your microphones, each with recording count, share, how many species it has recorded, and the first and last date you used it. When you use more than one microphone on the same recorder, a third table shows each recorder-and-microphone pair. Alongside sit your typical settings — the sample rate and bit depth you use most, how many recordings are mono and how many stereo, and your median, longest and total recording length — and a <strong>Formats</strong> table listing each sample-rate and bit-depth combination you have recorded in. Recording files do not store the microphone, so a recording counts toward a microphone only once you have assigned one with a rig (see <a href="#recording-gear">Recording gear</a>); the rest are listed as <em>not assigned</em>. Recording Gear can be saved with <strong>File &rarr; Save as PDF</strong>.</li>
+  <li><strong>Time of Day</strong> — your recordings broken down by the hour they were made. The time comes from the recording file's own metadata where the recorder wrote one, otherwise from a time in the filename, and only as a last resort from the checklist's start time. A pair of radio buttons above the chart chooses what the bars measure: <strong>Recordings</strong>, or <strong>Average Rating</strong> for rated recordings. Hovering an hour lists the species recorded in it, and clicking one opens that hour's recordings in Browse Grid.</li>
+</ul>
+<p>A recording assigned to several species is counted once in both reports, though it adds to the species count of each of them.</p>
 
 <p class="back-to-top"><a href="#top">Back to top &uarr;</a></p>
 

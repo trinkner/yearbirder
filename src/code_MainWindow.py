@@ -643,7 +643,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
 
     # initialize main database that will be used throughout program
     db = code_DataBase.DataBase()
-    fontSize = 11
+    fontSize = code_Stylesheet.YBFontSize
     scaleFactor = 1
     rowHeight = 16  # default; recomputed in ScaleDisplay() and __init__
     # Free-form string, not a number: it is only ever displayed (title bar,
@@ -1580,7 +1580,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.scaleFactor = 1 + modf(self.scaleFactor)[0] * 3
         if self.scaleFactor < 1:
             self.scaleFactor = (1 + self.scaleFactor) / 2
-        self.fontSize = floor(11 * self.scaleFactor)
+        self.fontSize = floor(code_Stylesheet.YBFontSize * self.scaleFactor)
         MainWindow.fontSize = self.fontSize
         MainWindow.scaleFactor = self.scaleFactor
         MainWindow.rowHeight = int(QFontMetrics(QFont(YBFont, MainWindow.fontSize)).boundingRect("2222-22-22").height() * 1.1)
