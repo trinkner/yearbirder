@@ -13,18 +13,36 @@
 
 **Current release: v2.18** (October 2026)
 
-A desktop application for exploring and analysing your personal [eBird](https://ebird.org) data, bird photos, and sound recordings.
+A desktop application for exploring and analyzing your personal [eBird](https://ebird.org) data, bird photos, and sound recordings.
 
-Yearbirder lets you filter, browse, and visualise your personal eBird sightings in ways the eBird website does not — across every location, species, date, and season in your personal history. If you photograph or record birds, Yearbirder catalogues that media alongside your sightings: browse and rate your photos, study your recordings as spectrograms with synchronised playback, and filter both by the same criteria as your sightings.
+Yearbirder lets you filter, browse, and visualize your personal eBird sightings in ways the eBird website does not — across every location, species, date, and season in your personal history. If you photograph or record birds, Yearbirder catalogs that media alongside your sightings: browse and rate your photos, study your recordings as spectrograms with synchronized playback, and filter both by the same criteria as your sightings.
 
 Full version history and downloads: [yearbirder.org](https://yearbirder.org)
 
 ---
 
+## What's New in v2.21
+
+- **2026 eBird taxonomy** — bundled, with banding codes rebuilt from the latest IBP list. Species eBird has split and IBP has not yet show their eBird entry code.
+- **Unattached Media** — a new File menu command lets the user reattach photos and recordings left behind when eBird renames or splits a species, suggesting the likely new species for each.
+- **Conservation status** — the Individual window shows each species’ IUCN Red List category from AviList 2026, and gains Birds of the World and IUCN Red List buttons.
+- **Stay signed in** — sign-ins to Birds of the World and other sites opened from Yearbirder now last between sessions.
+- **Subspecies media** — photos and recordings can be assigned to a sighting’s subspecies group.
+- **Recordings reports** — Recordings Overview, Recording Gear and Time of Day, matching the photo reports.
+- **Set the filter by right-clicking** — countries, states, counties, locations, dates and species in the Individual and Location windows.
+- **PDF footers** — every saved PDF shows the Yearbirder version, the date and page numbers.
+- **Fixes** — the Photographed and Recorded filters include slash taxa; Enlargements show a renamed file’s new name and follow a reassigned photo; open Individual windows pick up media changes; untimed checklists appear in the Manage Photos and Manage Recordings picker; community map location dots open reports over the map’s date range; the Species List’s Find box no longer clips letters; Photo Overview is renamed Photos Overview.
+
+## What's New in v2.20
+
+- **Hotspot maps** — now allow display of states (previously just counties), and country maps for small countries that do not have state-level regions.
+- **Photo and recording details panes** — now list the media's region after the location.
+- **Fixes** — on Windows, state and province names with accented characters are no longer mangled; “Family” is spelled correctly on the Sighting Filter; Check for Updates opens the download page rather than the GitHub release, so Microsoft Store users are not offered an installer that would sit alongside the copy they already have.
+
 ## What's New in v2.18
 
 - **Shaded region maps for Europe** — thirteen European countries now map by their own administrative regions (French régions, Italian regioni, Spanish comunidades and the rest), alongside the existing US, Canadian, Indian and British maps. A continent menu groups them, and a toggle inside the map switches between shading by species count and by checklist count.
-- **Photo statistics** — new **Birding Statistics** and **Technical Statistics** submenus under Photos: totals per species and per time period, coverage of the species you have seen, and the camera settings you actually shoot at — ISO, shutter speed, aperture and focal length, against photo count or average rating. Two-setting charts plot one against another with dot size for quantity and colour for average rating; clicking a dot opens a Browse Grid of exactly those photos. Every report respects the current filter.
+- **Photo statistics** — new **Birding Statistics** and **Technical Statistics** submenus under Photos: totals per species and per time period, coverage of the species you have seen, and the camera settings you actually shoot at — ISO, shutter speed, aperture and focal length, against photo count or average rating. Two-setting charts plot one against another with dot size for quantity and color for average rating; clicking a dot opens a Browse Grid of exactly those photos. Every report respects the current filter.
 - **Your media catalog is safer** — compacting now happens only when you ask for it, and tells you first if any media is attached to sightings the open eBird data file does not contain, listing them with their dates and locations and keeping them unless you say otherwise. The same check guards Backup, so a backup can never come out smaller than the catalog it was made from.
 - **More in the Trip Report** — the Dates tab lists the species seen only on the selected date, and hovering a location dot on the trip map shows the species recorded there.
 - **Media files match the names birders type** — filename matching accepts four-letter alpha codes, including both valid forms for hyphenated names, so COWP and CWPI both find Common Wood-Pigeon.
@@ -44,7 +62,7 @@ Full version history and downloads: [yearbirder.org](https://yearbirder.org)
 - **A day-by-day Itinerary** — a new **Itinerary** tab retells a trip in the order you birded it: checklists grouped by date, each stop with its time, location, protocol, duration, distance, and comments beside the species recorded there. The **Map** tab numbers each location by the order you first birded it, to match.
 - **A redesigned Trip Report PDF** — a title block, summary strip, banded sections, striped tables, the Itinerary as its own section, and a footer with the date and page number on every page. The map no longer prints with blank patches, and the Species table prints the count, first date, and last date under the right headings.
 - **Much better species guesses from file names** — file names are read word by word, weighting the words that tell a checklist's birds apart, so `LincolnSparrow` is no longer read as a House Sparrow. Typos such as `Linclon` are forgiven, a tie leaves the species for you to choose, and American Goldfinch photos are no longer read as Canada Goose (whose code CANG hides inside "AmeriCANGoldfinch").
-- **See how sure a guess is** — Add and Manage Photos and Recordings colour a suggested species **green** for an exact code or name match and **amber** for a partial or typo-corrected one.
+- **See how sure a guess is** — Add and Manage Photos and Recordings color a suggested species **green** for an exact code or name match and **amber** for a partial or typo-corrected one.
 - **Search by banding code** — `b:OSFL` in **Name Search** finds the Olive-sided Flycatcher, alongside `s:` for scientific names.
 - **Interface refinements** — slimmer drop-down arrows throughout, Sighting Filter date fields that match the menus beside them, and photo and recording browsers that open sized to fit a small set of results.
 
@@ -84,7 +102,7 @@ Full version history and downloads: [yearbirder.org](https://yearbirder.org)
 - **Instant previews for new recordings** — spectrogram views are prepared when a recording is added, so it opens immediately in the browser and enlargement view.
 - **Compact catalog and cache** — a new command tidies the media catalog and sweeps cached previews that no longer belong to it; removing media frees its cache automatically.
 - **Past-days slider in the Community Sightings Explorer** — set how many days of eBird history the community reports cover, from one day to a full month.
-- **Filter-aware refresh** — re-reading technical data from your files honours both the Sighting and Media filters, preserving each item's rating and notes.
+- **Filter-aware refresh** — re-reading technical data from your files honors both the Sighting and Media filters, preserving each item's rating and notes.
 - **Navigation conveniences** — double-click an enlarged photo to return to best fit; the space bar toggles playback in a recording enlargement; setting only the top of a rating range fills in the bottom.
 
 ## What's New in v2.0
@@ -108,14 +126,14 @@ Later 2.0x releases refined this work; see the [full version history](https://ye
 ## What's New in v1.492
 
 - **Windows: eBird API fixed** — Resolved a Windows-only issue where all Community features silently failed to contact the eBird API in the installer build due to SSL certificate handling in the bundled runtime.
-- **Windows: map tile backgrounds fixed** — Resolved a Windows-only issue where sightings maps, hotspot maps, animated maps, and choropleth maps showed a plain grey background instead of the map tile layer.
+- **Windows: map tile backgrounds fixed** — Resolved a Windows-only issue where sightings maps, hotspot maps, animated maps, and choropleth maps showed a plain gray background instead of the map tile layer.
 
 ## What's New in v1.49
 
 - **Community menu** — A new **Community** menu consolidates the reports that contact eBird's servers: Regional Taxonomy, Notable Community Sightings (Past 3 days), All Community Sightings (Past 3 days), Hotspot Map, and Community Sightings Explorer. All community features require a free eBird API key (set in Preferences).
 - **Hotspot Map** — A new **Community → Hotspot Map** command displays all public eBird hotspots in the selected region as bubble markers, with each bubble sized by checklist count. Also accessible from the Community Sightings Explorer. Requires an eBird API key.
-- **Species List** — The former “Regional Species” report was renamed and moved to **Community → Species List** (previously “Regional Taxonomy”). When a specific eBird location is selected in the Sighting Filter, the report queries that exact location’s species list. Private locations are automatically detected and labelled “(Personal Location)” in the report header.
-- **”(Past 3 days)” labelling** — The Notable Community Sightings and All Community Sightings menu items and Explorer buttons now include “(Past 3 days)” to make the reporting window explicit.
+- **Species List** — The former “Regional Species” report was renamed and moved to **Community → Species List** (previously “Regional Taxonomy”). When a specific eBird location is selected in the Sighting Filter, the report queries that exact location’s species list. Private locations are automatically detected and labeled “(Personal Location)” in the report header.
+- **”(Past 3 days)” labeling** — The Notable Community Sightings and All Community Sightings menu items and Explorer buttons now include “(Past 3 days)” to make the reporting window explicit.
 - **Single-location All Community Sightings** — When a specific location is selected, the All Community Sightings report now shows **All-time List** and **Map** buttons in the header, opening the Species List and Hotspot Map respectively for that location — even when no checklists have been submitted in the past three days.
 - **Community Sightings Explorer** — Now includes a **Hotspot Map** button alongside the existing Notable and All Community Sightings buttons.
 - **Photo Filter keyboard shortcut** — Press **Cmd-P** (Mac) or **Ctrl-P** (Windows) to show or hide the Photo Filter panel.
@@ -130,9 +148,9 @@ Later 2.0x releases refined this work; see the [full version history](https://ye
 
 ## What's New in v1.47
 
-- **Regional Taxonomy report** — Generates an interactive species checklist for the currently selected region using live eBird API data. Seen species are marked with a checkmark; unseen species appear in grey. When a media catalog is open, a blue dot marks each species you have photographed. Filter buttons let you focus on seen, unseen, photographed, or not-yet-photographed species. Requires a free eBird API key (set in Preferences).
+- **Regional Taxonomy report** — Generates an interactive species checklist for the currently selected region using live eBird API data. Seen species are marked with a checkmark; unseen species appear in gray. When a media catalog is open, a blue dot marks each species you have photographed. Filter buttons let you focus on seen, unseen, photographed, or not-yet-photographed species. Requires a free eBird API key (set in Preferences).
 - **eBird API key in Preferences** — A new field in Preferences stores your personal eBird API key, required for community reports. Get a free key at [ebird.org/api/keygen](https://ebird.org/api/keygen).
-- **Notable Community Sightings** — **Community → Notable Community Sightings (Past 3 days)** queries the eBird API for species flagged as notable in the selected region over the past three days, sorted taxonomically. Colour-coded badge bubbles mark Life, State, County, and Year firsts relative to your data. Click **+** to expand each species’ checklist entries; duplicate entries (same location, time, and observer) are removed automatically. Hybrid species appear in grey without badges. Requires an eBird API key.
+- **Notable Community Sightings** — **Community → Notable Community Sightings (Past 3 days)** queries the eBird API for species flagged as notable in the selected region over the past three days, sorted taxonomically. Color-coded badge bubbles mark Life, State, County, and Year firsts relative to your data. Click **+** to expand each species’ checklist entries; duplicate entries (same location, time, and observer) are removed automatically. Hybrid species appear in gray without badges. Requires an eBird API key.
 - **All Community Sightings** — **Community → All Community Sightings (Past 3 days)** shows every species reported in the selected region over the past three days, one row per species showing the most recent sighting. An **All Locations** button opens a new window listing all sightings of that species across the region. The same taxonomic ordering, badge bubbles, and filter bar from Notable Sightings apply here too. Requires an eBird API key.
 
 ## What's New in v1.44
@@ -156,7 +174,7 @@ Later 2.0x releases refined this work; see the [full version history](https://ye
 - **eBird species code in Rename Photos** — the Species Name Format picker now includes *eBird Species Code* (e.g. `gretit1`) alongside Common Name and Scientific Name
 - **Smarter photo-to-species matching** — when adding photos to the catalog, filename matching now checks eBird codes, BBL banding codes, common names, and scientific names as substrings, handling arbitrary filename patterns from any camera or workflow; previously only whole-word token matching was used
 - **Duration-aware checklist matching** — photo EXIF timestamps are now matched to the checklist whose *window* (start time + duration) is closest, so a photo taken mid-checklist correctly matches that checklist rather than the next one to start
-- **Sighting Filter** — the filter panel is now labelled *Sighting Filter* to distinguish it from the Photo Filter
+- **Sighting Filter** — the filter panel is now labeled *Sighting Filter* to distinguish it from the Photo Filter
 - **Chart names updated** — photo-related charts are now named *Families & Orders by Photos*, *Total Photos*, *New Species Photographed Each Year*, and *Photographed Species Growth Over Time*
 
 ---
@@ -171,7 +189,7 @@ Later 2.0x releases refined this work; see the [full version history](https://ye
 - **Powerful filter panel** — filter everything simultaneously by region, country, state, county, location, taxonomic order, family, species, date range, and seasonal range; the Date Options picker includes a **Select Year** mode that reveals a second dropdown listing every year in your data, so you can filter to any specific calendar year in one step
 - **Trip Report** — comprehensive multi-tab report combining species, dates, locations, and checklists
 - **Compare Lists** — compare any two species lists side by side
-- **Species List** — interactive regional species checklist from the eBird API showing seen/unseen status and, when a media catalog is open, photographed status; filter by seen, unseen, photographed, or not-yet-photographed. When a specific location is selected, queries that location directly; private locations are labelled "(Personal Location)"
+- **Species List** — interactive regional species checklist from the eBird API showing seen/unseen status and, when a media catalog is open, photographed status; filter by seen, unseen, photographed, or not-yet-photographed. When a specific location is selected, queries that location directly; private locations are labeled "(Personal Location)"
 - **Hotspot Map** — map of public eBird hotspots in the selected region, with bubbles sized by checklist count; accessible from the Community menu or the Community Sightings Explorer
 - **Community Sightings Explorer** — browse Notable and All Community Sightings, open a Species List, or open a Hotspot Map for any country, state/province, or county worldwide, independently of the Sighting Filter; country list loaded live from the eBird API with US and Canada at the top
 - **Notable Community Sightings** — live eBird report of species flagged as notable in the selected region over the past three days; Life/State/County/Year badge bubbles highlight firsts relative to your data; collapsible checklist entries; duplicate entries removed automatically; click any blue species name to open an Individual Species window
@@ -182,7 +200,7 @@ Later 2.0x releases refined this work; see the [full version history](https://ye
   - *Species Heatmap* — species count by month and year
   - *Species Accumulation* — new species added each year vs. repeats
   - *Top Locations* — top 20 locations by species count
-  - *Checklist Scatter* — duration vs. species count per checklist, coloured by season
+  - *Checklist Scatter* — duration vs. species count per checklist, colored by season
   - *Locations by Species & Checklists* — locations plotted by species count vs. checklist count
   - *Species by Locations & Count* — species plotted by distinct location count vs. individual count
   - *Phenology Chart* — sighting dates by day-of-year across years
@@ -287,5 +305,15 @@ The finished app will be in `dist/Yearbirder.app`.
 ## License
 
 Yearbirder is free, open-source software licensed under the [GNU General Public License v3](https://www.gnu.org/licenses/gpl-3.0.html).
+
+### Third-party data
+
+Some data files in `src/` are not Yearbirder's own work and are **not** covered by the GPL. Each keeps its own terms:
+
+- **`src/AviList_data.csv`** is adapted from *AviList: The Global Avian Checklist*, v2026, © 2026 by the AviList Core Team ([doi.org/10.2173/avilist.v2026](https://doi.org/10.2173/avilist.v2026)), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Yearbirder's version is an extract of four columns (Cornell Lab species code, IUCN Red List category, Birds of the World URL, and the species number from the BirdLife DataZone URL), made by `build_avilist_data.py`. The Red List categories are BirdLife International's assessments as recorded by AviList. If you reuse this file, keep this attribution and the license.
+- **`src/eBird_Taxonomy_*.csv`** is the eBird taxonomy, built from the eBird API by `build_taxonomy.py`. eBird data is provided by the Cornell Lab of Ornithology; see the [eBird Terms of Use](https://www.birds.cornell.edu/home/ebird-api-terms-of-use/).
+- **`src/eBird_BBLCodes.csv`** holds the four-letter alpha codes published by [The Institute for Bird Populations](https://www.birdpop.org/pages/birdSpeciesCodes.php), matched to eBird's names by `build_bbl_codes.py`.
+
+Yearbirder is not affiliated with or endorsed by AviList, BirdLife International, the IUCN, the Cornell Lab of Ornithology or The Institute for Bird Populations.
 
 Created by Richard Trinkner.
