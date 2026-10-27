@@ -285,7 +285,6 @@ WTNE,White-throated Needletail,Hirundapus caudacutus
 MASW,Mariana Swiftlet,Aerodramus bartschi
 ALSW,Alpine Swift,Tachymarptis melba
 COSW,Common Swift,Apus apus
-FTSW,Pacific Swift,Apus pacificus
 WTSW,White-throated Swift,Aeronautes saxatalis
 LSTS,Lesser Swallow-tailed Swift,Panyptila cayennensis
 GSTS,Great Swallow-tailed Swift,Panyptila sanctihieronymi
@@ -448,7 +447,6 @@ HACO,Hawaiian Coot,Fulica alai
 AMCO,American Coot,Fulica americana
 PUGA,Purple Gallinule,Porphyrio martinica
 AZGA,Azure Gallinule,Porphyrio flavirostris
-PUSW,Western Swamphen,Porphyrio porphyrio
 LARA,Laysan Rail,Zapornia palmeri
 HARA,Hawaiian Rail,Zapornia sandwichensis
 OCCR,Ocellated Crake,Rufirallus schomburgkii
@@ -499,8 +497,6 @@ NOJA,Northern Jacana,Jacana spinosa
 WAJA,Wattled Jacana,Jacana jacana
 UPSA,Upland Sandpiper,Bartramia longicauda
 BTCU,Bristle-thighed Curlew,Numenius tahitiensis
-WHIM,Hudsonian Whimbrel,Numenius hudsonicus
-WHIM,Eurasian Whimbrel,Numenius phaeopus
 LICU,Little Curlew,Numenius minutus
 ESCU,Eskimo Curlew,Numenius borealis
 LBCU,Long-billed Curlew,Numenius americanus
@@ -534,7 +530,6 @@ MASA,Marsh Sandpiper,Tringa stagnatilis
 WOSA,Wood Sandpiper,Tringa glareola
 CREH,Common Redshank,Tringa totanus
 LEYE,Lesser Yellowlegs,Tringa flavipes
-WILL,Willet,Tringa semipalmata
 SPRE,Spotted Redshank,Tringa erythropus
 COMG,Common Greenshank,Tringa nebularia
 GRYE,Greater Yellowlegs,Tringa melanoleuca
@@ -630,8 +625,8 @@ WGWH,Western x Glaucous-winged Gull (hybrid),Larus occidentalis x glaucescens
 SBAG,Slaty-backed Gull,Larus schistisagus
 ICGU,Iceland Gull,Larus glaucoides
 THGU,Iceland Gull (Thayer's),Larus glaucoides thayeri
-KUGU,Iceland Gull (kumlieni),Larus glaucoides kumlieni
-TKGU,Iceland Gull (thayeri/kumlieni),Larus glaucoides thayeri/kumlieni
+KUGU,Iceland Gull (Kumlien's),Larus glaucoides kumlieni
+TKGU,Iceland Gull (Thayer's/Kumlien's),Larus glaucoides thayeri/kumlieni
 BLSK,Black Skimmer,Rynchops niger
 BBWT,Blue-billed White-Tern,Gygis candida
 LIWT,Little White-Tern,Gygis microrhyncha
@@ -660,7 +655,7 @@ SATE,Sandwich Tern,Thalasseus sandvicensis
 CAYT,Sandwich Tern (Cayenne),Thalasseus sandvicensis eurygnathus
 ELTE,Elegant Tern,Thalasseus elegans
 ROYT,Royal Tern,Thalasseus maximus
-GCTE,Great Crested Tern,Thalasseus bergii
+GCTE,Greater Crested Tern,Thalasseus bergii
 AMFL,American Flamingo,Phoenicopterus ruber
 LEGR,Least Grebe,Tachybaptus dominicus
 PBGR,Pied-billed Grebe,Podilymbus podiceps
@@ -680,15 +675,12 @@ ARLO,Arctic Loon,Gavia arctica
 PALO,Pacific Loon,Gavia pacifica
 COLO,Common Loon,Gavia immer
 YBLO,Yellow-billed Loon,Gavia adamsii
-WAAL,Snowy Albatross,Diomedea exulans
 WAVA,Waved Albatross,Phoebastria irrorata
 LAAL,Laysan Albatross,Phoebastria immutabilis
 BFAL,Black-footed Albatross,Phoebastria nigripes
 LBFH,Laysan x Black-footed Albatross (hybrid),Phoebastria immutabilis x nigripes
 STAL,Short-tailed Albatross,Phoebastria albatrus
 LMAL,Light-mantled Albatross,Phoebetria palpebrata
-YNAL,Atlantic Yellow-nosed Albatross,Thalassarche chlororhynchos
-YNAL,Indian Yellow-nosed Albatross,Thalassarche carteri
 WCAL,White-capped Albatross,Thalassarche cauta
 SAAL,Salvin's Albatross,Thalassarche salvini
 CHAL,Chatham Albatross,Thalassarche eremita
@@ -720,7 +712,6 @@ HEPE,Herald Petrel,Pterodroma heraldica
 MUPE,Murphy's Petrel,Pterodroma ultima
 PRPE,Providence Petrel,Pterodroma solandri
 ZIPE,Zino's Petrel,Pterodroma madeira
-FEPE,Cape Verde Petrel,Pterodroma feae
 MOPE,Mottled Petrel,Pterodroma inexpectata
 BEPE,Bermuda Petrel,Pterodroma cahow
 BCPE,Black-capped Petrel,Pterodroma hasitata
@@ -844,6 +835,7 @@ CHIS,Chinese Sparrowhawk,Tachyspiza soloensis
 GBEH,Gray-bellied Hawk,Accipiter poliogaster
 ESPA,Eurasian Sparrowhawk,Accipiter nisus
 SSHA,Sharp-shinned Hawk,Accipiter striatus
+PSSH,Sharp-shinned Hawk (Puerto Rican),Accipiter striatus venator
 BIHA,Bicolored Hawk,Astur bicolor
 COHA,Cooper's Hawk,Astur cooperii
 GUHA,Gundlach's Hawk,Astur gundlachi
@@ -965,7 +957,7 @@ JATO,Jamaican Tody,Todus todus
 PRTO,Puerto Rican Tody,Todus mexicanus
 TOMO,Tody Motmot,Hylomanes momotula
 BTMO,Blue-throated Motmot,Aspatha gularis
-RCMO,Russet-crowned Motmot,Momotus mexicanus
+RCMO,Mexican Motmot,Momotus mexicanus
 BCMO,Blue-capped Motmot,Momotus coeruliceps
 LEMO,Lesson's Motmot,Momotus lessonii
 WHMO,Whooping Motmot,Momotus subrufescens
@@ -1155,8 +1147,6 @@ WFLA,White-flanked Antwren,Myrmotherula axillaris
 SLAN,Slaty Antwren,Myrmotherula schisticolor
 RWAN,Rusty-winged Antwren,Herpsilochmus frater
 DWAN,Dot-winged Antwren,Microrhopias quixensis
-WFRA,Northern White-fringed Antwren,Formicivora intermedia
-WFRA,Southern White-fringed Antwren,Formicivora grisea
 DUAN,Dusky Antbird,Cercomacroides tyrannina
 JEAN,Jet Antbird,Cercomacra nigricans
 BACA,Bare-crowned Antbird,Gymnocichla nudiceps
@@ -1178,15 +1168,10 @@ TATA,Tacarcuna Tapaculo,Scytalopus panamensis
 CHTA,Choco Tapaculo,Scytalopus chocoensis
 MAAN,Mayan Antthrush,Formicarius moniliger
 BFAN,Black-faced Antthrush,Formicarius analis
-BHEA,Black-capped Antthrush,Formicarius nigricapillus
 RBAN,Rufous-breasted Antthrush,Formicarius rufipectus
-TTLE,Middle American Leaftosser,Sclerurus mexicanus
 STLE,Scaly-throated Leaftosser,Sclerurus guatemalensis
 GTLE,Gray-throated Leaftosser,Sclerurus albigularis
 OLWO,Olivaceous Woodcreeper,Sittasomus griseicapillus
-LTWO,Piping Long-tailed Woodcreeper,Deconychura typica
-LTWO,Whistling Long-tailed Woodcreeper,Deconychura longicauda
-LTWO,Mournful Long-tailed Woodcreeper,Deconychura pallida
 RUWO,Ruddy Woodcreeper,Dendrocincla homochroa
 TWWO,Tawny-winged Woodcreeper,Dendrocincla anabatina
 PBRW,Plain-brown Woodcreeper,Dendrocincla fuliginosa
@@ -1217,7 +1202,6 @@ SBTR,Streak-breasted Treehunter,Thripadectes rufobrunneus
 FTFG,Fawn-throated Foliage-gleaner,Automolus cervinigularis
 CHFG,Chiriqui Foliage-gleaner,Automolus exsertus
 OTFG,Ochre-throated Foliage-gleaner,Automolus ochrolaemus
-STPW,Eastern Woodhaunter,Automolus subulatus
 SPBA,Spotted Barbtail,Premnoplex brunnescens
 BETR,Beautiful Treerunner,Margarornis bellulus
 RUTR,Ruddy Treerunner,Margarornis rubiginosus
@@ -1263,8 +1247,6 @@ RTBE,Rose-throated Becard,Pachyramphus aglaiae
 JABE,Jamaican Becard,Pachyramphus niger
 OCBE,One-colored Becard,Pachyramphus homochrous
 SHAR,Sharpbill,Oxyruncus cristatus
-ROFL,Tropical Royal Flycatcher,Onychorhynchus coronatus
-ROFL,Atlantic Royal Flycatcher,Onychorhynchus swainsoni
 RDTF,Ruddy-tailed Flycatcher,Terenotriccus erythrurus
 TBFL,Tawny-breasted Flycatcher,Myiobius villosus
 SRFL,Sulphur-rumped Flycatcher,Myiobius sulphureipygius
@@ -1273,7 +1255,6 @@ GHPI,Gray-headed Piprites,Piprites griseiceps
 SBTS,Stub-tailed Spadebill,Platyrinchus cancrominus
 WTRS,White-throated Spadebill,Platyrinchus mystaceus
 GCRS,Golden-crowned Spadebill,Platyrinchus coronatus
-OSTF,Olive-streaked Flycatcher,Mionectes olivaceus
 OBFL,Ochre-bellied Flycatcher,Mionectes oleagineus
 SECF,Sepia-capped Flycatcher,Leptopogon amaurocephalus
 SLCF,Slaty-capped Flycatcher,Leptopogon superciliaris
@@ -1290,21 +1271,17 @@ COTF,Common Tody-Flycatcher,Todirostrum cinereum
 BHTF,Black-headed Tody-Flycatcher,Todirostrum nigriceps
 BRTW,Brownish Twistwing,Cnipodectes subbrunneus
 ERFL,Eye-ringed Flatbill,Rhynchocyclus brevirostris
-OLIF,Western Olivaceous Flatbill,Rhynchocyclus aequinoctialis
-OLIF,Eastern Olivaceous Flatbill,Rhynchocyclus olivaceus
 YOFL,Yellow-olive Flatbill,Tolmomyias sulphurescens
 YWFL,Yellow-winged Flatbill,Tolmomyias flavotectus
 OLOF,Ochre-lored Flatbill,Tolmomyias flaviventris
 YBTY,Yellow-bellied Tyrannulet,Ornithion semiflavum
 BCTY,Brown-capped Tyrannulet,Ornithion brunneicapillus
 NOBT,Northern Beardless-Tyrannulet,Camptostoma imberbe
-SOBT,Southern Beardless-Tyrannulet,Camptostoma obsoletum
 COFL,Cocos Tyrannulet,Nesotriccus ridgwayi
 MCTY,Mouse-colored Tyrannulet,Nesotriccus murinus
 YETY,Yellow Tyrannulet,Capsiempis flaveola
 YCTY,Yellow-crowned Tyrannulet,Tyrannulus elatus
 FOEL,Forest Elaenia,Myiopagis gaimardii
-GRAE,Gray-headed Elaenia,Myiopagis caniceps
 JAEL,Jamaican Elaenia,Myiopagis cotta
 GREL,Greenish Elaenia,Myiopagis viridicata
 YBEL,Yellow-bellied Elaenia,Elaenia flavogaster
@@ -1313,7 +1290,6 @@ LEEL,Lesser Elaenia,Elaenia chiriquensis
 WCEL,White-crested Elaenia,Elaenia albiceps
 MOEL,Mountain Elaenia,Elaenia frantzii
 CAEL,Caribbean Elaenia,Elaenia martinica
-GAEL,Blue Mountain Elaenia,Elaenia fallax
 TOTY,Torrent Tyrannulet,Serpophaga cinerea
 SHTY,Sooty-headed Tyrannulet,Phyllomyias griseiceps
 WFTY,White-fronted Tyrannulet,Acrochordopus zeledoni
@@ -1325,15 +1301,12 @@ TCFL,Tawny-chested Flycatcher,Aphanotriccus capitalis
 BLBF,Black-billed Flycatcher,Aphanotriccus audax
 BEFL,Belted Flycatcher,Xenotriccus callizonus
 PILF,Pileated Flycatcher,Xenotriccus mexicanus
-TUFL,Tufted Flycatcher,Mitrephanes phaeocercus
 OSFL,Olive-sided Flycatcher,Contopus cooperi
 OCPE,Ochraceous Pewee,Contopus ochraceus
 GRPE,Greater Pewee,Contopus pertinax
 DAPE,Dark Pewee,Contopus lugubris
 JPEW,Jamaican Pewee,Contopus pallidus
-TROP,Southern Tropical Pewee,Contopus cinereus
 WEWP,Western Wood-Pewee,Contopus sordidulus
-TROP,Northern Tropical Pewee,Contopus bogotensis
 EAWP,Eastern Wood-Pewee,Contopus virens
 CUPE,Cuban Pewee,Contopus caribaeus
 HIPE,Hispaniolan Pewee,Contopus hispaniolensis
@@ -1342,7 +1315,6 @@ YBFL,Yellow-bellied Flycatcher,Empidonax flaviventris
 ACFL,Acadian Flycatcher,Empidonax virescens
 ALFL,Alder Flycatcher,Empidonax alnorum
 WIFL,Willow Flycatcher,Empidonax traillii
-SWFL,Willow Flycatcher (Southwestern),Empidonax traillii extimus
 TRFL,Alder/Willow Flycatcher (Traill's Flycatcher),Empidonax alnorum/traillii
 WTFL,White-throated Flycatcher,Empidonax albigularis
 LEFL,Least Flycatcher,Empidonax minimus
@@ -1411,7 +1383,7 @@ SCRG,Scrub Greenlet,Hylophilus flavipes
 CSSV,Chestnut-sided Shrike-Vireo,Vireolanius melitophrys
 GRSV,Green Shrike-Vireo,Vireolanius pulchellus
 YBSV,Yellow-browed Shrike-Vireo,Vireolanius eximius
-TCGR,Ochre-crowned Greenlet,Tunchiornis ochraceiceps
+TCGR,Ochre-crowned Brownlet,Tunchiornis ochraceiceps
 LESG,Lesser Greenlet,Pachysylvia decurtata
 GFGR,Golden-fronted Greenlet,Pachysylvia aurantiifrons
 GOVI,Golden Vireo,Vireo hypochryseus
@@ -1563,8 +1535,6 @@ LEWH,Lesser Whitethroat,Curruca curruca
 WREN,Wrentit,Chamaea fasciata
 WAWE,Warbling White-eye,Zosterops japonicus
 RBLE,Red-billed Leiothrix,Leiothrix lutea
-HWAM,Chinese Hwamei,Garrulax canorus
-HWAM,Taiwan Hwamei,Garrulax taewanus
 GNLA,Greater Necklaced Laughingthrush,Pterorhinus pectoralis
 RCKI,Ruby-crowned Kinglet,Corthylio calendula
 GCKI,Golden-crowned Kinglet,Regulus satrapa
@@ -1603,13 +1573,12 @@ SOCW,Socorro Wren,Troglodytes sissonii
 CLWR,Clarion Wren,Troglodytes tanneri
 RBWW,Rufous-browed Wren,Troglodytes rufociliatus
 OCWR,Ochraceous Wren,Troglodytes ochraceus
-PAWR,Pacific Wren,Troglodytes pacificus
-WIWR,Winter Wren,Troglodytes hiemalis
-PWWR,Pacific/Winter Wren,Troglodytes pacificus/hiemalis
-TIWR,Timberline Wren,Thryorchilus browni
+TIWR,Timberline Wren,Troglodytes browni
+PAWR,Pacific Wren,Nannus pacificus
+WIWR,Winter Wren,Nannus hiemalis
+PWWR,Pacific/Winter Wren,Nannus pacificus/hiemalis
 SEWR,Sedge Wren,Cistothorus stellaris
 GWRE,Grass Wren,Cistothorus platensis
-MAWR,Marsh Wren,Cistothorus palustris
 CARW,Carolina Wren,Thryothorus ludovicianus
 BEWR,Bewick's Wren,Thryomanes bewickii
 WHWR,White-headed Wren,Campylorhynchus albobrunneus
@@ -1715,8 +1684,6 @@ DUTH,Dusky Thrush,Turdus eunomus
 NATH,Naumann's Thrush,Turdus naumanni
 GCAT,Grand Cayman Thrush,Turdus ravidus
 WCTH,White-chinned Thrush,Turdus aurantius
-RLTH,Western Red-legged Thrush,Turdus plumbeus
-RLTH,Eastern Red-legged Thrush,Turdus ardosiaceus
 BLTH,Black Thrush,Turdus infuscatus
 SOOT,Sooty Thrush,Turdus nigrescens
 RCRO,Rufous-collared Robin,Turdus rufitorques
@@ -1749,7 +1716,6 @@ TAFL,Taiga Flycatcher,Ficedula albicilla
 CRET,Common Redstart,Phoenicurus phoenicurus
 RTRT,Rufous-tailed Rock-Thrush,Monticola saxatilis
 BLRT,Blue Rock-Thrush,Monticola solitarius
-ASST,Siberian Stonechat,Saxicola maurus
 NOWH,Northern Wheatear,Oenanthe oenanthe
 PIWH,Pied Wheatear,Oenanthe pleschanka
 BOWA,Bohemian Waxwing,Bombycilla garrulus
@@ -1898,14 +1864,14 @@ SNBU,Snow Bunting,Plectrophenax nivalis
 MKBU,McKay's Bunting,Plectrophenax hyperboreus
 ROTT,Rosy Thrush-Tanager,Rhodinocichla rosea
 PIBU,Pine Bunting,Emberiza leucocephalos
-YTBU,Yellow-throated Bunting,Emberiza elegans
-PALB,Pallas's Bunting,Emberiza pallasi
-REBU,Reed Bunting,Emberiza schoeniclus
-YBSB,Yellow-breasted Bunting,Emberiza aureola
-LIBU,Little Bunting,Emberiza pusilla
-RUBU,Rustic Bunting,Emberiza rustica
-YBWB,Yellow-browed Bunting,Emberiza chrysophrys
-GRBU,Gray Bunting,Emberiza variabilis
+YTBU,Yellow-throated Bunting,Schoeniclus elegans
+PALB,Pallas's Bunting,Schoeniclus pallasi
+REBU,Reed Bunting,Schoeniclus schoeniclus
+YBSB,Yellow-breasted Bunting,Schoeniclus aureolus
+LIBU,Little Bunting,Schoeniclus pusillus
+RUBU,Rustic Bunting,Schoeniclus rusticus
+YBWB,Yellow-browed Bunting,Schoeniclus chrysophrys
+GRBU,Gray Bunting,Schoeniclus variabilis
 YTCH,Yellow-throated Chlorospingus,Chlorospingus flavigularis
 ATCH,Ashy-throated Chlorospingus,Chlorospingus canigularis
 SCCH,Sooty-capped Chlorospingus,Chlorospingus pileatus
@@ -1944,8 +1910,8 @@ ATSP,American Tree Sparrow,Spizelloides arborea
 FOSP,Fox Sparrow,Passerella iliaca
 DEJU,Dark-eyed Junco,Junco hyemalis
 PSJU,Dark-eyed Junco (Pink-sided),Junco hyemalis mearnsi
-WWJU,Dark-eyed Junco (White-winged),Junco hyemalis aikeni
 GHJU,Dark-eyed Junco (Gray-headed),Junco hyemalis caniceps
+WWJU,Dark-eyed Junco (White-winged),Junco hyemalis aikeni
 RBJU,Dark-eyed Junco (Red-backed),Junco hyemalis dorsalis
 GUJU,Guadalupe Junco,Junco insularis
 YEJU,Yellow-eyed Junco,Junco phaeonotus
@@ -1963,7 +1929,7 @@ HASP,Harris's Sparrow,Zonotrichia querula
 WTSP,White-throated Sparrow,Zonotrichia albicollis
 SABS,Sagebrush Sparrow,Artemisiospiza nevadensis
 BESP,Bell's Sparrow,Artemisiospiza belli
-SCBS,Bell's Sparrow (clementeae),Artemisiospiza belli clementeae
+SCBS,Bell's Sparrow (San Clemente I.),Artemisiospiza belli clementeae
 SAGS,Sagebrush/Bell's Sparrow (Sage Sparrow),Artemisiospiza nevadensis/belli
 SSPA,Striped Sparrow,Oriturus superciliosus
 VESP,Vesper Sparrow,Pooecetes gramineus
@@ -2129,8 +2095,6 @@ TRPA,Tropical Parula,Setophaga pitiayumi
 MAWA,Magnolia Warbler,Setophaga magnolia
 BBWA,Bay-breasted Warbler,Setophaga castanea
 BLBW,Blackburnian Warbler,Setophaga fusca
-YEWA,Northern Yellow Warbler,Setophaga aestiva
-YEWA,Mangrove Yellow Warbler,Setophaga petechia
 CSWA,Chestnut-sided Warbler,Setophaga pensylvanica
 BLPW,Blackpoll Warbler,Setophaga striata
 BTBW,Black-throated Blue Warbler,Setophaga caerulescens
@@ -2172,9 +2136,9 @@ WIWA,Wilson's Warbler,Cardellina pusilla
 RFWA,Red-faced Warbler,Cardellina rubrifrons
 REWA,Red Warbler,Cardellina rubra
 PHWA,Pink-headed Warbler,Cardellina versicolor
-PARE,Painted Redstart,Myioborus pictus
-STRE,Slate-throated Redstart,Myioborus miniatus
-COLR,Collared Redstart,Myioborus torquatus
+PARE,Painted Whitestart,Myioborus pictus
+STRE,Slate-throated Whitestart,Myioborus miniatus
+COLR,Collared Whitestart,Myioborus torquatus
 DFTA,Dusky-faced Tanager,Mitrospingus cassinii
 RTTA,Rose-throated Tanager,Piranga roseogularis
 HETA,Hepatic Tanager,Piranga flava

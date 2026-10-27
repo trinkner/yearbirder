@@ -498,23 +498,23 @@ def resource_path(filename):
 # it labels the conservation status shown in the Individual window.
 AVILIST_YEAR = "2026"
 
-# IUCN Red List categories as AviList writes them: display name and the IUCN's
-# own badge color.  A taxon AviList gives no category is shown as Not
-# Available ("NA", not an IUCN category): AviList leaves the status blank
-# where its species concept does not match BirdLife's, so a true IUCN Not
-# Evaluated would be the wrong claim.
+# IUCN Red List categories as AviList writes them, with their display names.
+# A taxon AviList gives no category is shown as Not Available ("NA", not an
+# IUCN category): AviList leaves the status blank where its species concept
+# does not match BirdLife's, so a true IUCN Not Evaluated would be the wrong
+# claim.
 IUCN_CATEGORIES = {
-    "EX":       ("Extinct",                                    "#000000"),
-    "EW":       ("Extinct in the Wild",                        "#542344"),
-    "CR (PEW)": ("Critically Endangered (Possibly Extinct in the Wild)", "#D81E05"),
-    "CR (PE)":  ("Critically Endangered (Possibly Extinct)",   "#D81E05"),
-    "CR":       ("Critically Endangered",                      "#D81E05"),
-    "EN":       ("Endangered",                                 "#FC7F3F"),
-    "VU":       ("Vulnerable",                                 "#F9E814"),
-    "NT":       ("Near Threatened",                            "#CCE226"),
-    "LC":       ("Least Concern",                              "#60C659"),
-    "DD":       ("Data Deficient",                             "#D1D1C6"),
-    "NA":       ("Not Available",                              "#A0A0A0"),
+    "EX":       "Extinct",
+    "EW":       "Extinct in the Wild",
+    "CR (PEW)": "Critically Endangered (Possibly Extinct in the Wild)",
+    "CR (PE)":  "Critically Endangered (Possibly Extinct)",
+    "CR":       "Critically Endangered",
+    "EN":       "Endangered",
+    "VU":       "Vulnerable",
+    "NT":       "Near Threatened",
+    "LC":       "Least Concern",
+    "DD":       "Data Deficient",
+    "NA":       "Not Available",
 }
 
 
@@ -5578,7 +5578,7 @@ class DataBase():
 
 
     def GetConservationStatus(self, species):
-        """(IUCN category code, display name, badge color) for a species.
+        """(IUCN category code, display name) for a species.
         Species AviList gives no category, and slashes, spuhs and hybrids,
         are Not Available."""
 
@@ -5587,8 +5587,7 @@ class DataBase():
         status = self.aviListDict.get(self.GetSpeciesTaxonomyCode(species), ("", "", ""))[0]
         if status not in IUCN_CATEGORIES:
             status = "NA"
-        name, color = IUCN_CATEGORIES[status]
-        return status, name, color
+        return status, IUCN_CATEGORIES[status]
 
 
     def GetBirdsOfTheWorldURL(self, species):

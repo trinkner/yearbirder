@@ -18,7 +18,7 @@ datas = [
     ("src/europe-regions.json", "."),
     ("src/eBird_BBLCodes.csv", "."),
     ("src/AviList_data.csv", "."),
-    ("src/eBird_Taxonomy_2025.csv", "."),
+    ("src/eBird_Taxonomy_2026.csv", "."),
     ("src/ebird_api_ref_location_eBird_list_subnational1.csv", "."),
 ]
 

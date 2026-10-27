@@ -39,9 +39,10 @@ workflow's `on:` triggers). The final **merge to `master`** is the one deliberat
    versionDate   = "Month D, YYYY"
    ```
 
-   If the bundled eBird taxonomy (`src/eBird_Taxonomy_*.csv`) changed, or IBP has
-   published a new alpha code list, rebuild the banding codes before going further
-   (see **Banding codes** below).
+   If eBird has published a new taxonomy since the last release (each October),
+   rebuild the taxonomy file (see **eBird taxonomy** below). If the taxonomy changed,
+   or IBP has published a new alpha code list, rebuild the banding codes before going
+   further (see **Banding codes** below).
 
 3. **Update the website** in `web/` — e.g. the version text and the macOS DMG link
    in `web/download.html`, plus any new screenshots. Both download buttons point at
@@ -95,6 +96,27 @@ workflow's `on:` triggers). The final **merge to `master`** is the one deliberat
    asset the release already carries, because re-uploading resets that asset's download
    count to zero.
 
+## eBird taxonomy
+
+`src/eBird_Taxonomy_<year>.csv` is generated, not edited. `build_taxonomy.py` downloads
+the latest taxonomy from the eBird API (no key needed) and writes it in the column
+layout the app reads, named for the API's current version. It needs only the
+standard library:
+
+```
+python3 build_taxonomy.py
+```
+
+Then:
+
+- remove the previous year's file with `git rm` (the app loads the newest
+  `eBird_Taxonomy*.csv`, but both `.spec` files name the file explicitly);
+- update the file name in `yearbirder.spec` and `yearbirder_windows.spec` (the
+  Windows spec has CRLF line endings, so keep them);
+- check the new file against a fresh eBird data export: every Scientific Name and
+  Common Name in `MyEBirdData.csv` should match a row;
+- rebuild the banding codes (below).
+
 ## Banding codes
 
 `src/eBird_BBLCodes.csv` is generated, not edited. `build_bbl_codes.py` reads IBP's
@@ -111,9 +133,12 @@ python3 -m venv /tmp/ybbuild && /tmp/ybbuild/bin/pip install pdfplumber
 `build/bbl-codes-cache/` is reused. Read the report it prints, comparing it with the
 previous run's:
 
-- **Split daughters given the parent's code** — eBird splits that AOS has not adopted
-  yet (Willet, Marsh Wren). Each daughter carries the parent's code until IBP assigns
-  its own; check that none landed on an unrelated species.
+- **Split by eBird; code withheld** — eBird splits that IBP has not followed yet
+  (Willet, Marsh Wren). No daughter gets the parent's code, because IBP assigned it to
+  the species as a whole; the app shows the eBird entry code instead. When IBP adopts
+  a split, its new codes match by name and the entry drops off this list.
+- **Renamed by eBird; code kept** — check each new entry. If eBird split the species
+  rather than renaming it, add IBP's name to `EBIRD_SPLITS` in the script and rerun.
 - **Unmatched** — should be only `+` rows (subspecies, morphs, hybrids,
   "Unidentified"). A `SPECIES` row there means a name the script could not resolve.
 

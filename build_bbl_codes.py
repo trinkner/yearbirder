@@ -23,12 +23,16 @@ is resolved to eBird's own names here:
   2. exact common name (catches genus changes and IBP misspellings);
   3. slash taxa with their halves in either order.
 
-When step 1 lands on an eBird species with a DIFFERENT common name, eBird has
-often split IBP's species and kept the old scientific name for one daughter
-(Yellow Warbler -> Mangrove Yellow Warbler, Setophaga petechia).  The code then
-also goes to every same-genus eBird species whose name ends with IBP's name
-(Northern Yellow Warbler), so each daughter carries the parent's code until IBP
-assigns its own.
+When step 1 lands on an eBird species with a DIFFERENT common name, either
+eBird has only renamed IBP's species (Painted Redstart -> Painted Whitestart),
+and the code applies, or eBird has split it and kept the old scientific name
+for one daughter (Yellow Warbler -> Mangrove Yellow Warbler, Setophaga
+petechia).  IBP has assigned no code to any of a split's daughters, so none of
+them gets one: the app shows the eBird entry code instead until IBP follows
+the split.  A split is recognized when another eBird species in the genus is
+named "<something> <IBP name>" (Northern Yellow Warbler), or when IBP's name is
+in EBIRD_SPLITS, the reviewed list of splits the names do not reveal.  Each
+year, review the "renamed" list the script prints and add any new split.
 
 Output is Code,CommonName,ScientificName with eBird's names, one row per eBird
 taxon; a species row wins over a "+" row for the same taxon.  Rows that resolve
@@ -48,6 +52,23 @@ OUT_PATH   = os.path.join(SRC_DIR, "eBird_BBLCodes.csv")
 CACHE_DIR  = os.path.join(HERE, "build", "bbl-codes-cache")
 PDF_URL    = "https://birdpop.org/docs/misc/Alpha_codes_tax.pdf"
 PDF_PATH   = os.path.join(CACHE_DIR, "Alpha_codes_tax.pdf")
+
+# IBP species that eBird has split, where no daughter's eBird name ends with
+# IBP's name.  Reviewed against the 2026 eBird taxonomy.
+EBIRD_SPLITS = {
+    "Fork-tailed Swift",               # Pacific, Cook's, Blyth's, Salim Ali's
+    "Purple Swamphen",                 # Western, Gray-headed and others
+    "Wandering Albatross",             # Snowy, Tristan, Antipodean, Amsterdam
+    "Fea's Petrel",                    # Cape Verde, Desertas
+    "Olive-striped Flycatcher",        # Olive-streaked, Olive-striped
+    "Gray Elaenia",                    # Gray-headed, Choco, Amazonian
+    "Greater Antillean Elaenia",       # Blue Mountain, Hispaniolan
+    "Southern Beardless-Tyrannulet",   # Southeastern, Panama and others
+    "Black-headed Antthrush",          # Black-capped, Black-hooded
+    "Tawny-throated Leaftosser",       # Middle American, South American
+    "Striped Woodhaunter",             # Eastern, Western
+    "Asian Stonechat",                 # Siberian, Amur
+}
 
 # "Ou" carries a two-letter code, so the code is 2-4 letters.
 LINE_RE = re.compile(r'^(\+ )?(.+?) ([A-Z]{2,4})\*? (.+?) ([A-Z]{6})\*?$')
@@ -116,7 +137,7 @@ def main():
 
     codeFor   = {}          # eBird SCI_NAME -> (code, eBird row)
     renamed   = []          # matched by scientific name, names differ
-    daughters = []          # split daughters given the parent's code
+    withheld  = []          # (IBP row, eBird daughters) for eBird splits
     byCommon  = []          # matched only by common name
     unmatched = []
 
@@ -127,19 +148,19 @@ def main():
     for r in ibpRows:
         t = bySci.get(r["sci"])
         if t:
-            assign(t, r["code"])
-            if t["PRIMARY_COM_NAME"] != r["name"]:
+            if (t["PRIMARY_COM_NAME"] != r["name"] and t["CATEGORY"] == "species"
+                    and not r["nonSpecies"]):
+                genus = t["SCI_NAME"].split(" ")[0]
+                siblings = [s for s in species
+                            if s is not t
+                            and s["SCI_NAME"].split(" ")[0] == genus
+                            and norm_name(s["PRIMARY_COM_NAME"]).endswith(
+                                " " + norm_name(r["name"]))]
+                if siblings or r["name"] in EBIRD_SPLITS:
+                    withheld.append((r, [t] + siblings))
+                    continue
                 renamed.append((r, t))
-                if t["CATEGORY"] == "species" and not r["nonSpecies"]:
-                    genus = t["SCI_NAME"].split(" ")[0]
-                    for s in species:
-                        if (s is not t
-                                and s["SCI_NAME"].split(" ")[0] == genus
-                                and s["PRIMARY_COM_NAME"] != r["name"]
-                                and norm_name(s["PRIMARY_COM_NAME"]).endswith(
-                                    " " + norm_name(r["name"]))):
-                            assign(s, r["code"])
-                            daughters.append((r, s))
+            assign(t, r["code"])
             continue
         t = byName.get(r["name"]) or bySlash.get(slash_key(r["sci"]))
         if t:
@@ -165,14 +186,14 @@ def main():
     for r, t in byCommon:
         print(f"  {r['code']:5} {r['name']}: {r['sci']} -> {t['SCI_NAME']}")
 
-    print("\nSplit daughters given the parent's code (review these):")
-    for r, s in daughters:
-        print(f"  {r['code']:5} {r['name']} -> {s['PRIMARY_COM_NAME']}")
+    print("\nSplit by eBird; code withheld from every daughter until IBP splits it:")
+    for r, ds in withheld:
+        print(f"  {r['code']:5} {r['name']} -> "
+              + ", ".join(d["PRIMARY_COM_NAME"] for d in ds))
 
-    print("\nSpecies matched by scientific name under a different eBird name:")
+    print("\nRenamed by eBird; code kept.  Add any that are really splits to EBIRD_SPLITS:")
     for r, t in renamed:
-        if t["CATEGORY"] == "species" and not r["nonSpecies"]:
-            print(f"  {r['code']:5} {r['name']} -> {t['PRIMARY_COM_NAME']}")
+        print(f"  {r['code']:5} {r['name']} -> {t['PRIMARY_COM_NAME']}")
 
     print("\nUnmatched (no eBird taxon; expected for subspecies and morphs):")
     for r in unmatched:

@@ -1330,9 +1330,24 @@ td {{ border-bottom:1px solid #e8e8e8; vertical-align:middle; }}
       Yearbirder is not affiliated with or endorsed by eBird or the Cornell Lab.</li>
   <li><b>Conservation status</b> and the <b>Birds of the World</b> links come from
       <b>AviList: The Global Avian Checklist</b>, v2026, &copy; 2026 by the AviList
-      Core Team (https://doi.org/10.2173/avilist.v2026), used under the Creative
-      Commons Attribution 4.0 International License (CC BY 4.0). The status is the
-      IUCN Red List category as AviList records it.</li>
+      Core Team (<a href="https://doi.org/10.2173/avilist.v2026" style="color: #7aadff;">https://doi.org/10.2173/avilist.v2026</a>),
+      used under the Creative Commons Attribution 4.0 International License
+      (<a href="https://creativecommons.org/licenses/by/4.0/" style="color: #7aadff;">CC BY 4.0</a>).
+      Yearbirder uses an adapted extract: four of AviList's columns, with the
+      BirdLife DataZone links reduced to their species numbers and blank
+      categories shown as Not Available. The status is the IUCN Red List
+      category as AviList records it, from BirdLife International's assessments.
+      Yearbirder is not affiliated with or endorsed by AviList, BirdLife
+      International or the IUCN.</li>
+  <li><b>Banding codes</b> are the four-letter alpha codes published by
+      <b>The Institute for Bird Populations</b>
+      (<a href="https://www.birdpop.org/pages/birdSpeciesCodes.php" style="color: #7aadff;">birdpop.org</a>),
+      following Pyle, P., and D. F. DeSante. 2003. Four-letter and six-letter alpha
+      codes for birds recorded from the American Ornithologists' Union Check-list
+      area. <i>North American Bird Bander</i> 28:64&ndash;79. Yearbirder matches them
+      to eBird's names. A species eBird has split, and IBP has not yet, shows its
+      eBird entry code instead. With thanks to Peter Pyle and IBP for keeping the
+      list current each year.</li>
   <li><b>piexif</b>, by hMatoba, is used under the MIT License.</li>
   <li><b>natsort</b>, by Seth M. Morton, is used under the MIT License.</li>
   <li><b>SoundFile</b>, by Bastian Bechtold, used to read audio recordings, is

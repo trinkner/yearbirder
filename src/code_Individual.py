@@ -39,9 +39,7 @@ from PySide6.QtWidgets import (
     QMenu,
     QTreeWidgetItem,
     QPushButton,
-    QMessageBox,
-    QWidget,
-    QHBoxLayout
+    QMessageBox
     )
 
 from math import floor
@@ -96,21 +94,11 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
             self.verticalLayout_10.indexOf(self.buttonBirdsOfTheWorld) + 1,
             self.buttonIUCN)
 
-        # IUCN conservation status (AviList), under the scientific name: a
-        # caption, then the category in a badge of the IUCN's own color.
-        self.frameConservation = QWidget(self.frameNames)
-        conservationLayout = QHBoxLayout(self.frameConservation)
-        conservationLayout.setContentsMargins(0, 0, 0, 0)
-        conservationLayout.setSpacing(6)
-        self.lblConservationCaption = QLabel(
-            code_DataBase.AVILIST_YEAR + " Conservation Status:", self.frameConservation)
-        self.lblConservationStatus = QLabel(self.frameConservation)
-        conservationLayout.addWidget(self.lblConservationCaption, 0, Qt.AlignmentFlag.AlignVCenter)
-        conservationLayout.addWidget(self.lblConservationStatus, 0, Qt.AlignmentFlag.AlignVCenter)
-        conservationLayout.addStretch(1)
+        # IUCN conservation status (AviList), under the order and family.
+        self.lblConservationStatus = QLabel(self.frameNames)
         self.verticalLayout_3.insertWidget(
-            self.verticalLayout_3.indexOf(self.lblScientificName) + 1,
-            self.frameConservation)
+            self.verticalLayout_3.indexOf(self.lblOrderName) + 1,
+            self.lblConservationStatus)
         self.buttonMap.clicked.connect(self.CreateMap)
         self.buttonChecklists.clicked.connect(self.CreateChecklists)
 
@@ -167,14 +155,9 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
             orderAndFamilyText = orderAndFamilyText + "; " + self.mdiParent.db.GetFamilyName(Species)
         self.lblOrderName.setText(orderAndFamilyText)
 
-        statusCode, statusName, statusColor = self.mdiParent.db.GetConservationStatus(Species)
-        self.lblConservationStatus.setText(statusName)
-        # Dark text on the light categories, white on the dark ones.  No
-        # badge gets a border, so every badge is the same height.
-        textColor = "#FFFFFF" if statusCode in ("EX", "EW", "CR", "CR (PE)", "CR (PEW)") else "#000000"
-        self.lblConservationStatus.setStyleSheet(
-            "QLabel {background-color: " + statusColor + "; color: " + textColor
-            + "; border: none; border-radius: 4px; padding: 0px 6px;}")
+        statusCode, statusName = self.mdiParent.db.GetConservationStatus(Species)
+        self.lblConservationStatus.setText(
+            "Conservation Status (AviList " + code_DataBase.AVILIST_YEAR + "): " + statusName)
         
         # if available, add BBL banding code
         bblCode = self.mdiParent.db.GetBBLCode(Species)
@@ -984,17 +967,16 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
             )        
 
         html = html + (
-            "<H4>" +
-            self.lblConservationCaption.text() + " " +
-            self.lblConservationStatus.text() +
-            "</H4>"
-            )
-
-        html = html + (
             "<H4>" + 
             self.lblOrderName.text() + 
             "</H4>"
             )               
+
+        html = html + (
+            "<H4>" +
+            self.lblConservationStatus.text() +
+            "</H4>"
+            )
 
         html = html + (
             "<H4>" + 
@@ -1166,7 +1148,6 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
         self.lblScientificName.setFont(scientificFont)
         self.lblOrderName.setFont(detailFont)
         self.lblSpeciesCode.setFont(detailFont)
-        self.lblConservationCaption.setFont(detailFont)
         self.lblConservationStatus.setFont(detailFont)
         self.lblFirstSeen.setFont(detailFont)
         self.lblMostRecentlySeen.setFont(detailFont)
@@ -1178,14 +1159,9 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
         # so they always take the simple, non-justifying paint path.
         for _lbl in (self.lblCommonName, self.lblScientificName, self.lblOrderName,
                      self.lblSpeciesCode, self.lblFirstSeen, self.lblMostRecentlySeen,
-                     self.lblConservationCaption, self.lblConservationStatus):
+                     self.lblConservationStatus):
             _lbl.setTextFormat(Qt.TextFormat.PlainText)
             _lbl.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
-        # The status badge centers its text in the colored box, and its caption
-        # is centered vertically so the two share a midline.
-        self.lblConservationStatus.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lblConservationCaption.setAlignment(
-            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
 
         metrics = self.trDates.fontMetrics()
         textHeight = int(metrics.boundingRect("2222-22-22").height())

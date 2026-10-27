@@ -275,11 +275,11 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
             except:
                 pass
           
-        # fix the Find text box to a reasonable width; let the Location button size itself
+        # fix the Find text box to a reasonable width; its height comes from the
+        # stylesheet's padding, so descenders are not clipped.  Let the Location
+        # button size itself.
         metrics = self.btnShowLocation.fontMetrics()
-        fieldHeight = int(metrics.boundingRect("Ag").height() * 1.4)
         fieldWidth = int(metrics.boundingRect("Sample find text").width())
-        self.txtFind.setFixedHeight(fieldHeight)
         self.txtFind.setFixedWidth(fieldWidth)
 
         # scale the main window table
