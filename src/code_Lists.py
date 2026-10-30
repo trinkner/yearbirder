@@ -175,6 +175,14 @@ class _StatusItem(QTableWidgetItem):
                 < (other.data(Qt.ItemDataRole.UserRole), other.data(Qt.ItemDataRole.UserRole + 1)))
 
 
+class _SortKeyItem(QTableWidgetItem):
+    """Cell whose text is for display and whose UserRole value is what it
+    sorts by."""
+
+    def __lt__(self, other):
+        return self.data(Qt.ItemDataRole.UserRole) < other.data(Qt.ItemDataRole.UserRole)
+
+
 # Severity rank of each IUCN base category for sorting the Status column.
 _STATUS_RANK = {code: rank for rank, code in enumerate(code_DataBase.IUCN_COLORS)}
 
@@ -207,8 +215,19 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         self.tblList.horizontalHeader().sortIndicatorChanged.connect(self.afterSort)
         self.resized.connect(self.resizeMe)
 
+        # A single checklist's Photos and Recordings buttons, under Location;
+        # shown only when the checklist has media (see _updateMediaButtons).
+        self.btnPhotos = QPushButton("Photos", self.frmButtons)
+        self.btnPhotos.clicked.connect(self.CreatePhotos)
+        self.verticalLayout_3.addWidget(self.btnPhotos)
+        self.btnRecordings = QPushButton("Recordings", self.frmButtons)
+        self.btnRecordings.clicked.connect(self.CreateRecordings)
+        self.verticalLayout_3.addWidget(self.btnRecordings)
+
         self.btnShowLocation.setVisible(False)
         self.btnEbird.setVisible(False)
+        self.btnPhotos.setVisible(False)
+        self.btnRecordings.setVisible(False)
         self.lblDetails.setVisible(False)
 
         self.mdiParent = ""
@@ -364,8 +383,12 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
             # keeping the data-based width as a floor.
             arrowAllowance = int(28 * scaleFactor) + int(20 * scaleFactor)
             w0 = floor(2.5 * taxTextWidth)
-            w2 = floor(1.75 * firstDateTextWidth)
-            w3 = floor(1.75 * lastDateTextWidth)
+            # First, Last, Photos and Recordings: the wider of their data plus
+            # a little cell padding and the header's own size hint, which
+            # covers the bold title, the stylesheet padding and the sort arrow.
+            cellPadding = int(16 * scaleFactor)
+            w2 = max(firstDateTextWidth + cellPadding, header.sectionSizeHint(2))
+            w3 = max(lastDateTextWidth + cellPadding, header.sectionSizeHint(3))
             w4 = max(floor(1.3 * dateTextWidth), metrics.horizontalAdvance("Checklists") + arrowAllowance)
             w5 = max(floor(1.8 * dateTextWidth), metrics.horizontalAdvance("% of Checklists") + arrowAllowance)
 
@@ -382,6 +405,9 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
             header.resizeSection(4, w4)
             header.resizeSection(5, w5)
             header.resizeSection(6, w6)
+            mediaDataWidth = metrics.horizontalAdvance("9999") + cellPadding
+            header.resizeSection(7, max(mediaDataWidth, header.sectionSizeHint(7)))
+            header.resizeSection(8, max(mediaDataWidth, header.sectionSizeHint(8)))
 
         if self.listType == "Single Checklist":
             taxTextWidth = int(metrics.boundingRect("Tax").width())
@@ -428,7 +454,9 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
 
             speciesDataWidth = metrics.horizontalAdvance("9999")
             header.resizeSection(6, max(speciesDataWidth, metrics.horizontalAdvance("Species") + arrowAllowance))
-            header.resizeSection(7, 66)
+            tallyDataWidth = metrics.horizontalAdvance("99999+")
+            header.resizeSection(7, max(tallyDataWidth, metrics.horizontalAdvance("Tallies") + arrowAllowance))   # wider than "Media"
+            header.resizeSection(8, 66)
 
         if self.listType == "Find Results":
 
@@ -453,6 +481,8 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         self.lblFind.setFont(QFont(YBFont, fontSize))
         self.btnShowLocation.setFont(QFont(YBFont, fontSize))
         self.btnShowLocation.setStyleSheet("QLabel { font: bold }")
+        self.btnPhotos.setFont(QFont(YBFont, fontSize))
+        self.btnRecordings.setFont(QFont(YBFont, fontSize))
         charFmt = QTextCharFormat()
         charFmt.setFontPointSize(float(fontSize * 1.25))
         charFmt.setFontWeight(QFont.Weight.Normal)
@@ -463,9 +493,16 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         self.txtChecklistComments.setTextCursor(cur)
          
         windowWidth = int(1050 * scaleFactor) if self.listType == "Checklists" else int(800 * scaleFactor)
-        # The Species list is wider by its Status column, so Species keeps its width.
+        # The Species list is wider by its Status column and any media
+        # columns, and the Checklists list by its Tallies column, so the other
+        # columns keep their widths.
         if self.listType == "Species":
             windowWidth += header.sectionSize(6)
+            for column in (7, 8):
+                if not self.tblList.isColumnHidden(column):
+                    windowWidth += header.sectionSize(column)
+        if self.listType == "Checklists":
+            windowWidth += header.sectionSize(7)
         windowHeight = int(580 * scaleFactor)
         self.resize(windowWidth, windowHeight)
 
@@ -530,6 +567,72 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         sub.show()
         QApplication.processEvents()
         sub.scaleMe()
+
+
+    def _checklistMediaFilter(self):
+        """The single checklist's filter without its Media Filter settings, so
+        the Photos and Recordings buttons cover all of its listed species'
+        media."""
+        f = deepcopy(self.filter)
+        f.clearPhotoFilter()
+        f.clearRecordingFilter()
+        return f
+
+
+    def _updateMediaButtons(self):
+        if self.listType != "Single Checklist":
+            return
+        f = self._checklistMediaFilter()
+        db = self.mdiParent.db
+        self.btnPhotos.setVisible(len(db.GetSightingsWithPhotos(f)) > 0)
+        self.btnRecordings.setVisible(len(db.GetSightingsWithRecordings(f)) > 0)
+
+
+    def refreshMedia(self):
+        """Show or hide the Photos and Recordings buttons after a catalog
+        change — called by MainWindow.notifyMediaChanged."""
+        self._updateMediaButtons()
+
+
+    def CreatePhotos(self):
+        import code_Photos
+        sub = code_Photos.Photos()
+        sub.mdiParent = self.mdiParent
+        sub.FillPhotos(self._checklistMediaFilter())
+        self.parent().parent().addSubWindow(sub)
+        self.mdiParent.PositionChildWindow(sub, self)
+        sub.show()
+
+
+    def CreateRecordings(self):
+        import code_Recordings
+        sub = code_Recordings.Recordings()
+        sub.mdiParent = self.mdiParent
+        self.parent().parent().addSubWindow(sub)
+        self.mdiParent.PositionChildWindow(sub, self)
+        sub.FillRecordings(self._checklistMediaFilter())   # fill hidden, then show: see MainWindow._createRecordingsWindow
+        sub.show()
+
+
+    def CreateSpeciesMedia(self, speciesName, kind):
+        """Photos or recordings browser for one species under the list's filter."""
+        filter = deepcopy(self.filter)
+        filter.setSpeciesName(speciesName)
+        if kind == "photos":
+            import code_Photos
+            sub = code_Photos.Photos()
+            sub.mdiParent = self.mdiParent
+            sub.FillPhotos(filter)
+            self.parent().parent().addSubWindow(sub)
+            self.mdiParent.PositionChildWindow(sub, self)
+        else:
+            import code_Recordings
+            sub = code_Recordings.Recordings()
+            sub.mdiParent = self.mdiParent
+            self.parent().parent().addSubWindow(sub)
+            self.mdiParent.PositionChildWindow(sub, self)
+            sub.FillRecordings(filter)   # fill hidden, then show: see MainWindow._createRecordingsWindow
+        sub.show()
 
 
     def html(self):
@@ -687,6 +790,7 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
                 "<th>Date</th>" +
                 "<th>Time</th>" +
                 "<th>Species</th>" +
+                "<th>" + self.tblList.horizontalHeaderItem(7).text() + "</th>" +
                 "</tr>"
                 )
                 
@@ -714,6 +818,9 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
                 "<td>" +
                 self.tblList.item(r, 6).text() +
                 "</td>" +
+                "<td>" +
+                self.tblList.item(r, 7).text() +
+                "</td>" +
                 "</tr>"
                 )
             html = html + "</table>"                
@@ -727,12 +834,20 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         return(html)
         
 
-    @code_MediaRefresh.media_report()
+    # A Species list's Photos and Recordings columns are about media, so it
+    # rebuilds when the catalog changes — even with the columns hidden, so
+    # they come back when a catalog is opened.
+    @code_MediaRefresh.media_report(is_content=lambda w: w.listType == "Species")
     def FillSpecies(self, filter):
         
         self.filter = filter
         self.listType = "Species"
         checklistDetails = ""
+
+        # No sorting while rows are filled: a media-change rebuild refills a
+        # table that may already be sorted, and each setItem would re-sort it
+        # mid-fill.  Re-enabled at the end, which sorts by the indicator.
+        self.tblList.setSortingEnabled(False)
 
         # set up a bold font to use in columns as needed
         font = QFont()
@@ -749,19 +864,30 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         # if this is a species list (not a single checklist), get data and set 4 columns
         if filter.getChecklistID() == "":
                         
-            thisWindowList = self.mdiParent.db.GetSpeciesWithData(filter,  [], "Subspecies")
+            thisWindowList = self.mdiParent.db.GetSpeciesWithData(filter,  [], "Subspecies", mediaCounts=True)
 
             if len(thisWindowList) == 0:
                 return(False)
 
             self.tblList.setRowCount(len(thisWindowList))
-            self.tblList.setColumnCount(7)
-            self.tblList.setHorizontalHeaderLabels(['Tax', 'Species', 'First',  'Last', 'Checklists', '% of Checklists', 'Status'])
-            # Status is the last logical column, so the other columns keep the
-            # indexes the click handlers and filters use; it is only SHOWN
-            # right after Species.  The pill matches the Individual window's,
-            # whose status label uses the font one point larger.
+            self.tblList.setColumnCount(9)
+            self.tblList.setHorizontalHeaderLabels(['Tax', 'Species', 'First',  'Last', 'Checklists', '% of Checklists', 'Status',
+                                                    'Photos', 'Recordings'])
+            # Status, Photos and Recordings are the last logical columns, so
+            # the other columns keep the indexes the click handlers and filters
+            # use; they are only SHOWN elsewhere: Status right after Species,
+            # Photos and Recordings just before Checklists.  The pill matches
+            # the Individual window's, whose status label uses the font one
+            # point larger.
+            # A media-change rebuild replays this fill, so move only columns
+            # not already in place.
             header.moveSection(header.visualIndex(6), 2)
+            for column in (7, 8):
+                if header.visualIndex(column) > header.visualIndex(4):
+                    header.moveSection(header.visualIndex(column), header.visualIndex(4))
+            # Each media column appears only if the catalog has that kind of media.
+            self.tblList.setColumnHidden(7, not self.mdiParent.db.hasPhotos())
+            self.tblList.setColumnHidden(8, not self.mdiParent.db.hasRecordings())
             self.tblList.setItemDelegateForColumn(6, _ConservationPillDelegate(
                 code_Individual.conservationPillDiameter(QFont(YBFont, self.mdiParent.fontSize + 1)),
                 self.tblList))
@@ -810,6 +936,14 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
                 statusItem.setData(Qt.ItemDataRole.UserRole, _STATUS_RANK[statusCode])
                 statusItem.setData(Qt.ItemDataRole.UserRole + 1, R)
                 self.tblList.setItem(R, 6, statusItem)
+
+                # Media counts; a species with none shows a blank cell.
+                for column, mediaCount in ((7, species[8]), (8, species[9])):
+                    mediaItem = _SortKeyItem()
+                    mediaItem.setText(str(mediaCount) if mediaCount else "")
+                    mediaItem.setData(Qt.UserRole, mediaCount)
+                    mediaItem.setTextAlignment(Qt.AlignCenter|Qt.AlignVCenter)
+                    self.tblList.setItem(R, column, mediaItem)
                 self.currentSpeciesList.append(species[0])
                 R = R + 1    
                 
@@ -926,6 +1060,8 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
             self.tblList.addAction(self.actionSetDateFilter)
             self.tblList.addAction(self.actionSetSpeciesFilter)
             self.tblList.addAction(self.actionSetLocationFilter)
+
+            self._updateMediaButtons()
                             
         speciesCount = self.mdiParent.db.CountSpecies(self.currentSpeciesList)
         
@@ -956,6 +1092,7 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         if self.listType == "Species":
             code_SeasonalSort.install(self.tblList, (2, 3))   # First, Last
         self.showDefaultSortIndicator()
+        self.tblList.setSortingEnabled(True)
 
         # tell MainWindow that we succeeded filling the list
         return(True)
@@ -966,23 +1103,35 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
 
         self.filter = filter
         self.listType = "Checklists"
+
+        # A media-change rebuild (see code_MediaRefresh) replays this fill on
+        # a window already on screen: keep the user's width, and fill with
+        # sorting off so each setItem does not re-sort a sorted table.
+        isRebuild = hasattr(self, "_mediaRebuildName")
+        self.tblList.setSortingEnabled(False)
         
         # get species data from db 
-        checklists = self.mdiParent.db.GetChecklists(filter)
+        # Species and Tallies count only the sightings that match the filter.
+        # A Media Filter matches photo and recording files, which do not
+        # correspond one to one with tallies, so the column then counts the
+        # matching media files instead.
+        checklists = self.mdiParent.db.GetChecklists(filter, filteredCounts=True)
+        showMedia = filter.hasPositiveMediaFilter()
         
         # abort if no checklists matched filter
         if len(checklists) == 0:
             return(False)
        
        # set up tblList column headers and widths
-        self.tblList.setColumnCount(8)
+        self.tblList.setColumnCount(9)
         self.tblList.setRowCount(len(checklists))
         self.tblList.horizontalHeader().setVisible(True)
-        self.tblList.setHorizontalHeaderLabels(['Country', 'State', 'County', 'Location', 'Date', 'Time', 'Species', ''])
+        self.tblList.setHorizontalHeaderLabels(['Country', 'State', 'County', 'Location', 'Date', 'Time', 'Species',
+                                                'Media' if showMedia else 'Tallies', ''])
         header = self.tblList.horizontalHeader()
         header.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
-        header.setSectionResizeMode(7, QHeaderView.ResizeMode.Fixed)
-        self.tblList.setColumnWidth(7, 66)
+        header.setSectionResizeMode(8, QHeaderView.ResizeMode.Fixed)
+        self.tblList.setColumnWidth(8, 66)
         self.tblList.setShowGrid(False)
 
         # add species and dates to table row by row        
@@ -1009,8 +1158,23 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
             timeItem.setText(c[5])
             
             speciesCountItem = QTableWidgetItem()
-            speciesCountItem.setData(Qt.DisplayRole, c[6])  
+            speciesCountItem.setData(Qt.DisplayRole, c[8])  
             speciesCountItem.setTextAlignment(Qt.AlignCenter|Qt.AlignVCenter)
+
+            # Individuals counted on the matching sightings.  A species
+            # counted as X adds an unknown number, so the tally reads "12+",
+            # or just "X" when nothing was counted.
+            tally, hasX = c[9], c[10]
+            tallyItem = _SortKeyItem()
+            if showMedia:
+                tallyItem.setText(str(c[11]))
+                tallyItem.setData(Qt.UserRole, c[11])
+            else:
+                tallyItem.setText(("X" if tally == 0 else str(tally) + "+") if hasX else str(tally))
+                tallyItem.setData(Qt.UserRole, tally)
+                if hasX:
+                    tallyItem.setToolTip("Includes species counted as X (present, not counted)")
+            tallyItem.setTextAlignment(Qt.AlignCenter|Qt.AlignVCenter)
             
             ebirdBtn = QPushButton("eBird")
             ebirdBtn.setStyleSheet(
@@ -1029,7 +1193,8 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
             self.tblList.setItem(R, 4, dateItem)
             self.tblList.setItem(R, 5, timeItem)
             self.tblList.setItem(R, 6, speciesCountItem)
-            self.tblList.setCellWidget(R, 7, ebirdBtn)
+            self.tblList.setItem(R, 7, tallyItem)
+            self.tblList.setCellWidget(R, 8, ebirdBtn)
             R = R + 1
         
         self.lblSpecies.setText("Checklists: " + str(self.tblList.rowCount()))
@@ -1050,10 +1215,12 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         self.tblList.addAction(self.actionSetCountyFilter)
         self.tblList.addAction(self.actionSetLocationFilter)
 
-        self.resize(1050, self.height())
+        if not isRebuild:
+            self.resize(1050 + self.tblList.horizontalHeader().sectionSize(7), self.height())
 
         code_SeasonalSort.install(self.tblList, (4,))     # Date
         self.showDefaultSortIndicator()
+        self.tblList.setSortingEnabled(True)
 
         # alert MainWindow that we finished fill data successfully
         return(True)
@@ -1235,6 +1402,15 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
                 QApplication.restoreOverrideCursor()     
                 return
                 
+            if self.listType == "Species" and currentColumn in [7, 8]:
+                # a media count was clicked, so open that species' photos or
+                # recordings under the list's filter, if it has any
+                QApplication.restoreOverrideCursor()
+                if self.tblList.item(currentRow, currentColumn).data(Qt.UserRole):
+                    self.CreateSpeciesMedia(self.tblList.item(currentRow, 1).text(),
+                                            "photos" if currentColumn == 7 else "audio")
+                return
+
             if currentColumn in [1, 6]:
                 # species or status column has been clicked so create individual window for that species
                 speciesName = self.tblList.item(currentRow,  1).text()

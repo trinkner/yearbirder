@@ -406,6 +406,16 @@ class Filter():
         pure-sightings reports when the media catalog changes."""
         return self.hasPhotoFilter() or self.hasRecordingFilter()
 
+    def hasPositiveMediaFilter(self):
+        """True when the filter selects sightings BY their photos or
+        recordings, so it matches particular media files.  A "No photo",
+        "Not photographed" or "Not recorded" setting selects sightings for
+        their LACK of media, so there are no files to count."""
+        negative = (self.sightingHasPhoto == "No photo"
+                    or self.speciesHasPhoto == "Not photographed"
+                    or self.speciesHasRecording == "Not recorded")
+        return self.hasMediaConstraint() and not negative
+
     def clearPhotoFilter(self):
         self.sightingHasPhoto = ""
         self.speciesHasPhoto = ""

@@ -424,6 +424,8 @@
     <tr><td>Status</td><td>IUCN Red List conservation status, as a colored circle with its two-letter code (hover for the full name). Sorting by it puts the most threatened species first</td></tr>
     <tr><td>First</td><td>Date of your first sighting of this species</td></tr>
     <tr><td>Last</td><td>Date of your most recent sighting</td></tr>
+    <tr><td>Photos</td><td>Number of photos of this species in your media catalog (blank for none). When a photo setting in the Media Filter is active, only the photos that match it. Double-click to open them. Shown only when your catalog has photos</td></tr>
+    <tr><td>Recordings</td><td>Number of recordings of this species, counted the same way. Shown only when your catalog has recordings</td></tr>
     <tr><td>Checklists</td><td>Number of checklists on which this species appears</td></tr>
     <tr><td>% of Checklists</td><td>The percentage of your total checklists that include this species</td></tr>
   </tbody>
@@ -490,13 +492,15 @@
     <tr><td>Location</td><td>Location name</td></tr>
     <tr><td>Date</td><td>Checklist date</td></tr>
     <tr><td>Time</td><td>Start time</td></tr>
-    <tr><td>Species</td><td>Number of species on that checklist</td></tr>
+    <tr><td>Species</td><td>Number of species on that checklist that match the current filter. With no species, family or media filter set, that is every species on the checklist</td></tr>
+    <tr><td>Tallies</td><td>Number of individual birds counted for those species. A <strong>+</strong> means some were recorded with an X (present, not counted), so the true total is higher; a tally of only X species reads <strong>X</strong>. When a Media Filter setting is active, this column becomes <strong>Media</strong>: the number of photos or recordings on the checklist that match the filter, since photos and recordings don't correspond one to one with birds counted</td></tr>
     <tr><td>eBird</td><td>Green button — click to open this checklist on the eBird website in your browser (requires an eBird API key in Preferences)</td></tr>
   </tbody>
 </table>
 <p>Click any row to see the comments recorded for that checklist.</p>
 <p>Right-clicking a row lets you set the checklist's date, country, state, county, or location as the active filter.</p>
 <p>When the Checklists List is filtered to a <strong>single checklist</strong> (showing only that checklist's species), an <strong>eBird</strong> button also appears in the sidebar panel on the left, opening the same checklist on the eBird website.</p>
+<p>A single checklist with photos or recordings also shows <strong>Photos</strong> and <strong>Recordings</strong> buttons beneath the <strong>Location</strong> button. They open the photo or recording browser on that checklist's media. Each button appears only when the checklist has media of that kind.</p>
 
 <p class="back-to-top"><a href="#top">Back to top &uarr;</a></p>
 
@@ -860,7 +864,7 @@
 <p>Changes to your photo associations are written to the media catalog automatically as you make them, so there is no separate save step. To keep a safety copy, choose <strong>File → Backup media catalog…</strong>, which writes a dated backup copy of your catalog without disturbing the working file.</p>
 
 <h3>Closing the media catalog</h3>
-<p>Choose <strong>File → Close media catalog</strong>. This unloads all photo data from memory. The Media Filter panel becomes inactive.</p>
+<p>Choose <strong>File → Close media catalog</strong>. This unloads all photo and recording data from memory and closes every open media window: browse cards and grids, enlargements, species galleries, photo and recording stats, Manage Photos, Manage Recordings, Rename Media and any slideshow. If Manage Photos or Manage Recordings holds unsaved work, it asks first; choosing to keep working leaves the catalog open. The Media Filter panel becomes inactive, and open lists drop their Photos and Recordings columns and buttons.</p>
 
 <h3>Adding more photos</h3>
 <p>With a media catalog already loaded, choose <strong>File → Add photos…</strong> to import additional photos. The new associations are merged into the existing catalog; save afterwards. After you select files, Yearbirder reports how many are already tracked and how many are new — so you can confirm you have selected the right files before any associations are created.</p>

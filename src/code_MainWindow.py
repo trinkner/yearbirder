@@ -1884,6 +1884,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionRenameMedia.setVisible(True)
         self.actionOptimizePhotoSettings.setVisible(True)
 
+        # Open reports pick up the catalog's media, as on any catalog change.
+        self.notifyMediaChanged()
+
         self.CreateStatsOnLoad()
         QTimer.singleShot(0, self._noticeUnattachedMedia)
 
@@ -2050,7 +2053,49 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionRenameMedia.setVisible(False)
         self.actionOptimizePhotoSettings.setVisible(False)
 
+    def closeMediaWindows(self):
+        """Close every window that shows or edits catalog media: browse cards
+        and grids, enlargements (a full-screen one too), species galleries,
+        photo and recording stats, Manage Photos and Recordings, Rename Media
+        and the slideshow.  The editing windows go first, since one holding
+        unsaved work asks before closing; returns False, leaving the rest
+        open, when the user keeps working."""
+        import code_Enlargement
+        import code_RecordingEnlargement
+        editors = (code_ManagePhotos.ManagePhotos,
+                   code_ManageRecordings.ManageRecordings,
+                   code_RenameMedia.RenameMedia)
+        viewers = (code_Photos.Photos,                  # and PhotosGrid
+                   code_Recordings.Recordings,          # and RecordingsGrid
+                   code_Enlargement.Enlargement,
+                   code_RecordingEnlargement.RecordingEnlargement,
+                   code_SpeciesGallery.SpeciesGallery,
+                   code_RecordingsSpeciesGallery.RecordingsSpeciesGallery,
+                   code_PhotoStats.PhotoStats)          # and RecordingStats
+        for kinds in (editors, viewers):
+            for w in self.openWindowsIncludingFullScreen():
+                if isinstance(w, kinds):
+                    if not w.close():
+                        return False
+                    if w is self._fullScreenChild:
+                        self._fullScreenChild = None
+
+        slideshow = getattr(self, "_slideshow", None)
+        if slideshow is not None:
+            try:
+                slideshow.close()
+            except RuntimeError:      # C++ side already deleted
+                pass
+            self._slideshow = None
+        return True
+
+
     def closePhotoSettings(self):
+
+        # Media windows close first, so none is left showing media from a
+        # closed catalog; an editing window with unsaved work can cancel this.
+        if not self.closeMediaWindows():
+            return
 
         # The media catalog is written to disk continuously, so there is no
         # unsaved state to prompt about — just compact the .jsonl quietly before
@@ -2067,6 +2112,10 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         # Catalog is now closed — both media menus grey out.
         self._updateActionStates()
         self._hidePhotoCatalogMenuItems()
+
+        # Open reports drop their media: the Species list hides its Photos and
+        # Recordings columns, a single checklist its media buttons.
+        self.notifyMediaChanged()
 
 
     def addPhotos(self):
@@ -2493,9 +2542,10 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         for w in self.mdiArea.subWindowList():
             if hasattr(w, "_mediaRebuildName"):
                 code_MediaRefresh.maybeRefresh(w)
-            elif hasattr(w, "refreshMedia"):
+            if hasattr(w, "refreshMedia"):
                 # Windows whose media is one part of a larger, non-media report
-                # (the Individual species header) update just that part.
+                # (the Individual species header, a single checklist's media
+                # buttons) update just that part.
                 w.refreshMedia()
 
 

@@ -3546,8 +3546,11 @@ class DataBase():
 
         return(returnList)
 
-    def GetSpeciesWithData(self, filter, filteredSightingList=[], includeSpecies="Species"):
+    def GetSpeciesWithData(self, filter, filteredSightingList=[], includeSpecies="Species", mediaCounts=False):
+        # With mediaCounts, each row adds its number of photo files and of
+        # recording files (see _countFilteredMedia for how they are counted).
         filteredDictWithDates = {}
+        matchedSightings = {}   # key -> sightings that match the filter
         checklistIDs = {}
         returnList = []
         allChecklists = set()
@@ -3592,6 +3595,9 @@ class DataBase():
        
                 # add checklistID to allChecklist set so we can count all the checklists later
                 allChecklists.add(sighting["checklistID"])
+
+                if mediaCounts:
+                    matchedSightings.setdefault(key, []).append(sighting)
     
         # get the total number of checklists so we can compute percentages 
         # of checklists for each species
@@ -3619,7 +3625,7 @@ class DataBase():
                     else:
                         count = count + int(sighting[4])
                 
-                returnList.append([
+                row = [
                     thisCommonName,
                     thisFirstDate,
                     thisLastDate,
@@ -3628,7 +3634,11 @@ class DataBase():
                     thisChecklistCount,
                     percentageOfChecklists,
                     count
-                    ])
+                    ]
+                if mediaCounts:
+                    row += [self._countFilteredMedia(matchedSightings[s], filter, "photos"),
+                            self._countFilteredMedia(matchedSightings[s], filter, "audio")]
+                returnList.append(row)
                 
         returnList = sorted(returnList, key=lambda x: (x[3]))
         
@@ -4786,9 +4796,17 @@ class DataBase():
         self.photoDataFileOpenFlag = False
         
 
-    def GetChecklists(self, filter):
+    def GetChecklists(self, filter, filteredCounts=False):
+        """Checklists with a sighting that matches the filter, as lists of
+        (id, state, county, location, date, time, speciesCount, duration).
+        speciesCount counts the whole checklist.  With filteredCounts, each
+        row adds, for the matching sightings only: their species count; their
+        tally (the sum of their counts); True when any of them was counted as
+        X; and the number of their photo or recording files that pass the
+        Media Filter (0 when the filter has no media settings)."""
         returnList = []
         checklistIDs = set()
+        matchedSightings = {}   # checklistID -> sightings that match the filter
         
         # speed retreaval by choosing minimal set of sightings to search
         minimalSightingList = self.GetMinimalFilteredSightingsList(filter)
@@ -4798,6 +4816,8 @@ class DataBase():
         for s in minimalSightingList:
             if self.TestSightingCompiled(s, cf) is True:
                 checklistIDs.add(s["checklistID"])
+                if filteredCounts:
+                    matchedSightings.setdefault(s["checklistID"], []).append(s)
         
         # get all the sightings that match these checklistIDs
         for c in checklistIDs:
@@ -4825,6 +4845,16 @@ class DataBase():
                 speciesCount,
                 sighting["duration"]
                 ]
+
+            if filteredCounts:
+                matched = matchedSightings[c]
+                counts = [m["count"] for m in matched]
+                checklistData += [
+                    self.CountSpecies([m["commonName"] for m in matched]),
+                    sum(int(n) for n in counts if n.isdigit()),
+                    any(n.strip().upper() == "X" for n in counts),
+                    self._countFilteredMedia(matched, filter),
+                    ]
             
             returnList.append(checklistData)    
             
@@ -4832,6 +4862,29 @@ class DataBase():
         returnList = sorted(returnList, key=lambda x: (x[1], x[2], x[3], x[4], x[5]))
 
         return(returnList)
+
+    def _countFilteredMedia(self, sightings, filter, kind=None):
+        """Media files on these sightings.  With no kind, the photo and
+        recording files that pass the Media Filter (none when it has no media
+        settings).  With kind "photos" or "audio", every file of that kind,
+        except that when the filter has settings for that kind only the files
+        passing them count.  A sighting passes when ANY of its files matches,
+        so each file gets the individual test too; a recording tagged to
+        several species is counted once."""
+        files = set()
+        if kind == "photos" or (kind is None and filter.hasPhotoFilter()):
+            test = filter.hasPhotoFilter()
+            for s in sightings:
+                for p in s.get("photos", []):
+                    if not test or self.TestIndividualPhoto(p, filter):
+                        files.add(p["fileName"])
+        if kind == "audio" or (kind is None and filter.hasRecordingFilter()):
+            test = filter.hasRecordingFilter()
+            for s in sightings:
+                for a in s.get("audio", []):
+                    if not test or self.TestIndividualRecording(a, filter):
+                        files.add(a["fileName"])
+        return len(files)
 
     def GetFindResults(self, searchString, checkedBoxes):
         # Every result is a 6-tuple: (category, checklistID, location, date,
