@@ -4988,6 +4988,9 @@ class DataBase():
         # "OnlyLocations" returns just the location names
         # "Checklist"returns  locationName, count, checklistID, and time
         # "LocationHierarchy" returns country, county, and location (country includes the state code)
+        # "Dates" returns location, first and last date-times, checklist count,
+        #   state (which includes the country prefix), county, and the numbers
+        #   of photo and recording files (see _countFilteredMedia)
         
         returnList = []
         
@@ -5036,10 +5039,12 @@ class DataBase():
                     keyName = s["location"]
 
                     if keyName not in tempDateDict:
-                        tempDateDict[keyName] = {"dates": [s["date"] + " " + s["time"]], "checklists": {s["checklistID"]}}
+                        tempDateDict[keyName] = {"dates": [s["date"] + " " + s["time"]], "checklists": {s["checklistID"]},
+                                                 "sightings": [s]}
                     else:
                         tempDateDict[keyName]["dates"].append(s["date"] + " " + s["time"])
                         tempDateDict[keyName]["checklists"].add(s["checklistID"])
+                        tempDateDict[keyName]["sightings"].append(s)
                 
                 if queryType != "Dates":
                     # add entry to returnList if it's not a duplicate
@@ -5056,7 +5061,11 @@ class DataBase():
                 tempFirstDate = tempDateList[0]
                 tempLastDate = tempDateList[-1]
                 checklistCount = len(tempDateDict[k]["checklists"])
-                thisLocationList = [k, tempFirstDate, tempLastDate, checklistCount]
+                sightings = tempDateDict[k]["sightings"]
+                thisLocationList = [k, tempFirstDate, tempLastDate, checklistCount,
+                                    sightings[0]["state"], sightings[0]["county"],
+                                    self._countFilteredMedia(sightings, filter, "photos"),
+                                    self._countFilteredMedia(sightings, filter, "audio")]
                 returnList.append(thisLocationList)
         
         # sort the list and return it

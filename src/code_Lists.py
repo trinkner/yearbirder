@@ -253,18 +253,24 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
    
     def setCountyFilter(self):
         
-        if self.listType in ["Checklists"]:
+        if self.listType in ["Checklists", "Locations"]:
             if self.listType == "Checklists":
                 countyName= self.tblList.item(self.tblList.currentRow(), 2).text()
-            self.mdiParent.setCountyFilter(countyName)
+            if self.listType == "Locations":
+                countyName= self.tblList.item(self.tblList.currentRow(), 6).text()
+            # nor a county, nor does a location eBird files under no county
+            if countyName:
+                self.mdiParent.setCountyFilter(countyName)
    
    
     def setCountryFilter(self):
         
-        if self.listType in ["Checklists"]:
+        if self.listType in ["Checklists", "Locations"]:
             if self.listType == "Checklists":
                 countryName= self.tblList.item(self.tblList.currentRow(), 0).text()
-                self.mdiParent.setCountryFilter(countryName)
+            if self.listType == "Locations":
+                countryName= self.tblList.item(self.tblList.currentRow(), 4).text()
+            self.mdiParent.setCountryFilter(countryName)
 
 
     def setDateFilter(self):   
@@ -318,10 +324,14 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
    
     def setStateFilter(self):
         
-        if self.listType in ["Checklists"]:
+        if self.listType in ["Checklists", "Locations"]:
             if self.listType == "Checklists":
                 stateName= self.tblList.item(self.tblList.currentRow(), 1).text()
-            self.mdiParent.setStateFilter(stateName)
+            if self.listType == "Locations":
+                stateName= self.tblList.item(self.tblList.currentRow(), 5).text()
+            # a location that is a whole country has no state to filter on
+            if stateName:
+                self.mdiParent.setStateFilter(stateName)
             
    
     def scaleMe(self):
@@ -425,9 +435,22 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
             self.tblList.resizeRowsToContents()
         
         if self.listType == "Locations":
-            dateTextWidth = int(metrics.boundingRect("2222-22-22 22:22").width())
-            header.resizeSection(1, floor(1.75 * dateTextWidth))
-            header.resizeSection(2, floor(1.75 * dateTextWidth))
+            # First and Last fit the widest possible timestamp — written with
+            # the font's widest digit, as digit widths can differ — plus a
+            # little cell padding, or the header with its sort arrow if wider.
+            widestDigit = max("0123456789", key=metrics.horizontalAdvance)
+            timestamp = "{0}{0}{0}{0}-{0}{0}-{0}{0} {0}{0}:{0}{0}".format(widestDigit)
+            dateTextWidth = metrics.horizontalAdvance(timestamp) + int(16 * scaleFactor)
+            header.resizeSection(1, max(dateTextWidth, header.sectionSizeHint(1)))
+            header.resizeSection(2, max(dateTextWidth, header.sectionSizeHint(2)))
+            # Country, State and County at the Checklists list's width; Photos
+            # and Recordings as in the Species list.
+            placeWidth = floor(1.5 * int(metrics.boundingRect("Sample Names").width()))
+            for column in (4, 5, 6):
+                header.resizeSection(column, placeWidth)
+            mediaDataWidth = metrics.horizontalAdvance("9999") + int(16 * scaleFactor)
+            header.resizeSection(7, max(mediaDataWidth, header.sectionSizeHint(7)))
+            header.resizeSection(8, max(mediaDataWidth, header.sectionSizeHint(8)))
             # Reserve room for the sort-indicator arrow plus cell padding so the
             # Checklists title and arrow never overlap, while still fitting the data.
             arrowAllowance = int(28 * scaleFactor) + int(20 * scaleFactor)
@@ -436,26 +459,26 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
 
         if self.listType == "Checklists":
 
+            # Country, State and County share one width.
             thisColumnWidth = int(metrics.boundingRect("Sample Names").width())
             header.resizeSection(0,  floor(1.5 * thisColumnWidth))                
-            header.resizeSection(1,  floor(1.75 * thisColumnWidth))                
-            header.resizeSection(2,  floor(1.75 * thisColumnWidth))                
+            header.resizeSection(1,  floor(1.5 * thisColumnWidth))                
+            header.resizeSection(2,  floor(1.5 * thisColumnWidth))                
             
             # Don't set Location width. It stretches to fill remaining vacant width
 
-            dateTextWidth = int(metrics.boundingRect("2222-22-22").width())
-            header.resizeSection(4,  floor(1.75 * dateTextWidth))
-
-            # Reserve room for the sort-indicator arrow plus cell padding so the
-            # header title and arrow never overlap, while still fitting the data.
+            # Date, Time, Species and Tallies share one width: Tallies' title
+            # with room for the sort-indicator arrow and cell padding ("Tallies"
+            # is wider than its alternative, "Media"), widened only if a date
+            # would not fit.
             arrowAllowance = int(28 * scaleFactor) + int(20 * scaleFactor)
-            timeDataWidth = metrics.horizontalAdvance("22:22")
-            header.resizeSection(5, max(timeDataWidth, metrics.horizontalAdvance("Time") + arrowAllowance))
-
-            speciesDataWidth = metrics.horizontalAdvance("9999")
-            header.resizeSection(6, max(speciesDataWidth, metrics.horizontalAdvance("Species") + arrowAllowance))
+            dateTextWidth = int(metrics.boundingRect("2222-22-22").width())
             tallyDataWidth = metrics.horizontalAdvance("99999+")
-            header.resizeSection(7, max(tallyDataWidth, metrics.horizontalAdvance("Tallies") + arrowAllowance))   # wider than "Media"
+            sharedWidth = max(tallyDataWidth,
+                              metrics.horizontalAdvance("Tallies") + arrowAllowance,
+                              dateTextWidth + int(16 * scaleFactor))
+            for column in (4, 5, 6, 7):
+                header.resizeSection(column, sharedWidth)
             header.resizeSection(8, 66)
 
         if self.listType == "Find Results":
@@ -503,6 +526,13 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
                     windowWidth += header.sectionSize(column)
         if self.listType == "Checklists":
             windowWidth += header.sectionSize(7)
+        # The Locations list is wider by its place and any media columns, then
+        # 15% narrower overall; the stretching Location column gives it up.
+        if self.listType == "Locations":
+            for column in (4, 5, 6, 7, 8):
+                if not self.tblList.isColumnHidden(column):
+                    windowWidth += header.sectionSize(column)
+            windowWidth = int(windowWidth * 0.85)
         windowHeight = int(580 * scaleFactor)
         self.resize(windowWidth, windowHeight)
 
@@ -619,6 +649,12 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         filter."""
         filter = deepcopy(self.filter)
         filter.setSpeciesName(speciesName)
+        self._openMediaGrid(filter, kind)
+
+
+    def _openMediaGrid(self, filter, kind):
+        """Browse Grid of the photos ("photos") or recordings ("audio") that
+        match filter."""
         if kind == "photos":
             self.mdiParent.createPhotosGridForFilter(filter)
         else:
@@ -717,6 +753,9 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         if self.listType == "Locations":
             html=html + (
                 "<th>Location</th>" +
+                "<th>Country</th>" +
+                "<th>State</th>" +
+                "<th>County</th>" +
                 "<th>First</th>" +
                 "<th>Latest</th>" +
                 "<th>Checklists</th>" +
@@ -729,6 +768,7 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
                 "<td>" +
                 self.tblList.item(r, 0).text() +
                 "</td>" +
+                "".join("<td>" + self.tblList.item(r, c).text() + "</td>" for c in (4, 5, 6)) +
                 "<td>" +
                 self.tblList.item(r, 1).text() +
                 "</td>" +
@@ -1316,11 +1356,17 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         self.showDefaultSortIndicator()
 
 
-    @code_MediaRefresh.media_report()
+    # The Photos and Recordings columns are about media, so the list rebuilds
+    # when the catalog changes, as the Species list does.
+    @code_MediaRefresh.media_report(is_content=lambda w: w.listType == "Locations")
     def FillLocations(self, filter):
         
         self.filter = filter
         self.listType = "Locations"
+
+        # No sorting while rows are filled: a media-change rebuild refills a
+        # table that may already be sorted.  Re-enabled at the end.
+        self.tblList.setSortingEnabled(False)
        
         self.btnShowLocation.setVisible(False)
         self.lblDetails.setVisible(False)
@@ -1335,11 +1381,22 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         if len(thisWindowList) == 0:
             return(False)
 
-        # set 4 columns and header titles
+        # set columns and header titles.  Country, State, County, Photos and
+        # Recordings are the last logical columns, so First, Last and
+        # Checklists keep the indexes the click handlers and filter actions
+        # use; they are only SHOWN in the order Location, Country, State,
+        # County, First, Last, Photos, Recordings, Checklists.  Moving by
+        # target position makes this safe to replay on a rebuild.
         self.tblList.setRowCount(len(thisWindowList))
-        self.tblList.setColumnCount(4)
-        self.tblList.setHorizontalHeaderLabels(['Location', 'First', 'Last', 'Checklists'])
+        self.tblList.setColumnCount(9)
+        self.tblList.setHorizontalHeaderLabels(['Location', 'First', 'Last', 'Checklists',
+                                                'Country', 'State', 'County', 'Photos', 'Recordings'])
+        for visual, logical in enumerate((0, 4, 5, 6, 1, 2, 7, 8, 3)):
+            header.moveSection(header.visualIndex(logical), visual)
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        # Each media column appears only if the catalog has that kind of media.
+        self.tblList.setColumnHidden(7, not self.mdiParent.db.hasPhotos())
+        self.tblList.setColumnHidden(8, not self.mdiParent.db.hasRecordings())
 
         # add locations and dates to table row by row
         R = 0
@@ -1355,6 +1412,21 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
             self.tblList.setItem(R, 1, firstItem)
             self.tblList.setItem(R, 2, lastItem)
             self.tblList.setItem(R, 3, checklistCountItem)
+
+            countryItem = QTableWidgetItem(self.mdiParent.db.GetCountryName(loc[4][0:2]))
+            stateItem = QTableWidgetItem(self.mdiParent.db.GetStateName(loc[4]))
+            countyItem = QTableWidgetItem(loc[5])
+            self.tblList.setItem(R, 4, countryItem)
+            self.tblList.setItem(R, 5, stateItem)
+            self.tblList.setItem(R, 6, countyItem)
+
+            # Media counts; a location with none shows a blank cell.
+            for column, mediaCount in ((7, loc[6]), (8, loc[7])):
+                mediaItem = _SortKeyItem()
+                mediaItem.setText(str(mediaCount) if mediaCount else "")
+                mediaItem.setData(Qt.UserRole, mediaCount)
+                mediaItem.setTextAlignment(Qt.AlignCenter|Qt.AlignVCenter)
+                self.tblList.setItem(R, column, mediaItem)
             R = R + 1
             
             # hide the checklist comments box, since  we're not showing a single checklist
@@ -1376,11 +1448,15 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         self.setWindowIcon(icon)  
 
         self.tblList.addAction(self.actionSetLocationFilter)
+        self.tblList.addAction(self.actionSetCountryFilter)
+        self.tblList.addAction(self.actionSetStateFilter)
+        self.tblList.addAction(self.actionSetCountyFilter)
         self.tblList.addAction(self.actionSetFirstDateFilter)
         self.tblList.addAction(self.actionSetLastDateFilter)
 
         code_SeasonalSort.install(self.tblList, (1, 2))   # First, Last
         self.showDefaultSortIndicator()
+        self.tblList.setSortingEnabled(True)
 
         return(True)
 
@@ -1475,6 +1551,22 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
                     sub.FillChecklists(filter)
 
         if self.listType == "Locations":
+
+            if currentColumn in [7, 8]:
+                # a media count was clicked, so open that location's photos or
+                # recordings under the list's filter, if it has any
+                QApplication.restoreOverrideCursor()
+                if self.tblList.item(currentRow, currentColumn).data(Qt.UserRole):
+                    filter = deepcopy(self.filter)
+                    filter.setLocationName(self.tblList.item(currentRow, 0).text())
+                    filter.setLocationType("Location")
+                    self._openMediaGrid(filter, "photos" if currentColumn == 7 else "audio")
+                return
+
+            if currentColumn not in [0, 1, 2]:
+                # Checklists and the place columns open nothing
+                QApplication.restoreOverrideCursor()
+                return
                 
             if currentColumn == 0:
                 # species column has been clicked so create individual window for that species
@@ -1484,7 +1576,7 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
                 sub.mdiParent = self.mdiParent
                 sub.FillLocation(locationName)
                 
-            if currentColumn > 0:
+            if currentColumn in [1, 2]:
 
                 # date column has been clicked so create species list frame for that dateArray
                 clickedText = self.tblList.item(currentRow,  self.tblList.currentColumn()).text()
