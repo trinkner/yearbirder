@@ -459,15 +459,42 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
     # Window lifecycle
     # ------------------------------------------------------------------
 
+    # Card fields a user's edit changes; _hasUnsavedEdits compares them with
+    # the snapshot taken when the card was built.
+    _EDIT_FIELDS = ("newLocation", "newDate", "newTime", "newCommonNames",
+                    "newNotes", "newRating", "newDevice", "newMicrophone", "skip")
+
+    def _snapshotCard(self, row):
+        md = self.metaDataByRow[row]
+        md["openedAs"] = {f: (list(md[f]) if isinstance(md.get(f), list) else md.get(f))
+                          for f in self._EDIT_FIELDS}
+
+    def _hasUnsavedEdits(self):
+        """True when any card has been edited since the window opened.
+        Compared with the card as built, not with the catalog, so values the
+        window fills in by itself on opening (a microphone inferred from the
+        recorder's rig) are not mistaken for edits."""
+        return any(md.get("openedAs") is not None
+                   and any(md.get(f) != md["openedAs"][f] for f in self._EDIT_FIELDS)
+                   for md in self.metaDataByRow.values())
+
     def closeEvent(self, event):
+        # Recordings new to the catalog are all unsaved work; recordings
+        # already in it are only if a card has been edited and not saved.  The
+        # second case went unguarded, so closing the window, or the media
+        # catalog, threw away edits without a word.
+        unsavedNew = (not self.audioAlreadyInDb and
+                      not self._unattached and   # unsaved = still unattached; nothing lost
+                      bool(self.metaDataByRow))
+        unsavedEdits = self.audioAlreadyInDb and self._hasUnsavedEdits()
         if (not self._skipCloseGuard and
                 not self._changesSaved and
-                not self.audioAlreadyInDb and
-                not self._unattached and   # unsaved = still unattached; nothing lost
-                self.metaDataByRow):
+                (unsavedNew or unsavedEdits)):
             reply = code_Stylesheet.question(
                 self, "Unsaved Recordings",
-                "Your recording information has not been saved to a catalog.\n\n"
+                ("Your changes to these recordings have not been saved."
+                 if unsavedEdits else
+                 "Your recording information has not been saved to a catalog.") + "\n\n"
                 "Close anyway and discard your work?",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No,
@@ -1058,6 +1085,7 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         self.gridAudio.addWidget(rowWidget, row, 0, 1, 2)
 
         self.saveNewMetaData(row)
+        self._snapshotCard(row)
         self.fillingCombos = False
 
     # ------------------------------------------------------------------
