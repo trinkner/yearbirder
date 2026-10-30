@@ -3167,15 +3167,22 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         """Recordings > Browse Grid — the same recordings as a grid."""
         self._createRecordingsWindow(code_RecordingsGrid.RecordingsGrid)
 
-    def _createRecordingsWindow(self, viewClass):
-        """Spawn a recordings browser of the given class for the current filter.
+    def createRecordingsGridForFilter(self, filter):
+        """Recordings Browse Grid for an explicit filter, as
+        createPhotosGridForFilter is for photos."""
+        self._createRecordingsWindow(code_RecordingsGrid.RecordingsGrid, filter)
+
+    def _createRecordingsWindow(self, viewClass, filter=None):
+        """Spawn a recordings browser of the given class.
         Both views differ only in layout (RecordingsGrid subclasses Recordings),
-        so the guards and no-results messaging live here once."""
+        so the guards and no-results messaging live here once.  `filter`
+        defaults to the current filter."""
         if MainWindow.db.eBirdFileOpenFlag is not True:
             self.CreateMessageNoFile()
             return
 
-        filter = self.GetRecordingsFilter()
+        if filter is None:
+            filter = self.GetRecordingsFilter()
 
         if not MainWindow.db.GetSightingsWithRecordings(filter):
             QMessageBox.information(

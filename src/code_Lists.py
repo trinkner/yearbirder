@@ -615,24 +615,14 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
 
 
     def CreateSpeciesMedia(self, speciesName, kind):
-        """Photos or recordings browser for one species under the list's filter."""
+        """Browse Grid of one species' photos or recordings under the list's
+        filter."""
         filter = deepcopy(self.filter)
         filter.setSpeciesName(speciesName)
         if kind == "photos":
-            import code_Photos
-            sub = code_Photos.Photos()
-            sub.mdiParent = self.mdiParent
-            sub.FillPhotos(filter)
-            self.parent().parent().addSubWindow(sub)
-            self.mdiParent.PositionChildWindow(sub, self)
+            self.mdiParent.createPhotosGridForFilter(filter)
         else:
-            import code_Recordings
-            sub = code_Recordings.Recordings()
-            sub.mdiParent = self.mdiParent
-            self.parent().parent().addSubWindow(sub)
-            self.mdiParent.PositionChildWindow(sub, self)
-            sub.FillRecordings(filter)   # fill hidden, then show: see MainWindow._createRecordingsWindow
-        sub.show()
+            self.mdiParent.createRecordingsGridForFilter(filter)
 
 
     def html(self):
@@ -783,10 +773,10 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
 
         if self.listType == "Checklists":
             html=html + (    
+                "<th>Location</th>" +
                 "<th>Country</th>" +
                 "<th>State</th> " +
                 "<th>County</th>" +
-                "<th>Location</th>" +
                 "<th>Date</th>" +
                 "<th>Time</th>" +
                 "<th>Species</th>" +
@@ -798,6 +788,9 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
                 html = html + (
                 "<tr>" +
                 "<td>" +
+                self.tblList.item(r, 3).text() +
+                "</td>" +
+                "<td>" +
                 self.tblList.item(r, 0).text() +
                 "</td>" +
                 "<td>" +
@@ -805,9 +798,6 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
                 "</td>" +
                 "<td>" +
                 self.tblList.item(r, 2).text() +
-                "</td>" +
-                "<td>" +
-                self.tblList.item(r, 3).text() +
                 "</td>" +
                 "<td>" +            
                 self.tblList.item(r, 4).text() +
@@ -1129,6 +1119,12 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         self.tblList.setHorizontalHeaderLabels(['Country', 'State', 'County', 'Location', 'Date', 'Time', 'Species',
                                                 'Media' if showMedia else 'Tallies', ''])
         header = self.tblList.horizontalHeader()
+        # Shown Location, Country, State, County.  Only the display order
+        # changes: the logical indexes, which the click handlers, filter
+        # actions and widths use, stay Country 0 to Location 3.  Moving by
+        # target position makes this safe to replay on a rebuild.
+        for visual, logical in enumerate((3, 0, 1, 2)):
+            header.moveSection(header.visualIndex(logical), visual)
         header.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(8, QHeaderView.ResizeMode.Fixed)
         self.tblList.setColumnWidth(8, 66)
