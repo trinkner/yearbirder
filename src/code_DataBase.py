@@ -5772,6 +5772,12 @@ class DataBase():
         if shortCode == "All States":
             return("All States")
 
+        # A location that is a whole country (eBird's "Costa Rica") carries
+        # just the country prefix, "CR-", which names no state: blank, rather
+        # than showing the bare code wherever a state name is displayed.
+        if shortCode.endswith("-"):
+            return ""
+
         if self.countryStateCodeFileFound is True:
             return self._stateLookup.get(shortCode, shortCode)
         else:

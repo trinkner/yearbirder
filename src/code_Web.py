@@ -5199,6 +5199,10 @@ applySort();
                 if s_abbr == state_abbr:
                     code = f"US-{state_abbr}-{fips[2:]}"
                     return code, county_raw
+            # A whole-country location ("CR-") falls back to its country,
+            # whose eBird code drops the hyphen; otherwise to its state.
+            if state_code.endswith("-"):
+                return state_code[:-1], db.GetCountryName(state_code[:-1])
             # Non-US: fall back to state
             return state_code, db.GetStateName(state_code)
 

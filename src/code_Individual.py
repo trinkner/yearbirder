@@ -341,7 +341,9 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
             theseStates.sort()
             
             for s in theseStates:
-                thisState = self.mdiParent.db.GetStateName(s)
+                # a whole-country location has no state; label the branch
+                # as the tree labels a missing county
+                thisState = self.mdiParent.db.GetStateName(s) or "No State Name"
                 stateTreeItem = QTreeWidgetItem()
                 stateTreeItem.setText(0, thisState)
                 thisCountryItem.addChild(stateTreeItem)
