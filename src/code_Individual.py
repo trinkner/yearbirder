@@ -18,12 +18,16 @@ from PySide6.QtGui import (
     QCursor,
     QFont,
     QFontMetrics,
+    QColor,
     QImageReader,
+    QPainter,
+    QPen,
     QPixmap,
     )
 
 from PySide6.QtCore import (
     Qt,
+    QRectF,
     QSize,
     QTimer,
     Signal,
@@ -39,10 +43,87 @@ from PySide6.QtWidgets import (
     QMenu,
     QTreeWidgetItem,
     QPushButton,
-    QMessageBox
+    QMessageBox,
+    QWidget,
+    QHBoxLayout
     )
 
 from math import floor
+
+
+def conservationPillDiameter(font):
+    """Pill diameter for text in `font`: half again as tall as a capital M,
+    so the code inside is legible."""
+    return round(QFontMetrics(font).tightBoundingRect("M").height() * 1.5)
+
+
+def paintConservationPill(painter, x, y, diameter, code):
+    """Paint the circle for IUCN base category `code` (LC, NT, ... or NA) with
+    its top-left corner at (x, y).  Shared by the Individual window and the
+    Species list, so both look the same."""
+    painter.save()
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+    # Extinct categories get a white outline: their black and dark purple
+    # fills vanish against the dark window background.
+    if code in ("EX", "EW"):
+        pen = QPen(QColor("#FFFFFF"))
+        pen.setWidthF(1.0)
+        painter.setPen(pen)
+    else:
+        painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(QColor(code_DataBase.IUCN_COLORS[code]))
+    painter.drawEllipse(QRectF(x + 0.5, y + 0.5, diameter - 1, diameter - 1))
+
+    # Largest bold font in which the widest code, EW, fits inside the circle,
+    # so every code is lettered at the same size.
+    font = QFont(YBFont)
+    font.setBold(True)
+    pixelSize = max(1, int(diameter * 0.6))
+    while pixelSize > 1:
+        font.setPixelSize(pixelSize)
+        m = QFontMetrics(font)
+        if (m.horizontalAdvance("EW") <= diameter * 0.8
+                and m.tightBoundingRect("M").height() <= diameter * 0.5):
+            break
+        pixelSize -= 1
+    painter.setFont(font)
+    painter.setPen(QColor("#FFFFFF" if code in ("EX", "EW", "CR") else "#000000"))
+    painter.drawText(QRectF(x, y, diameter, diameter), Qt.AlignmentFlag.AlignCenter, code)
+    painter.restore()
+
+
+class ConservationPill(QWidget):
+    """Conservation status pill beside the Individual window's status label,
+    centered on the label's capitals."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.code = "NA"
+        self.capTop = 0
+        self.diameter = 0
+
+    def setCode(self, code):
+        self.code = code
+        self.update()
+
+    def fitTo(self, font):
+        # The widget is one line of the label's font tall, so with both
+        # top-aligned the circle's center sits at the middle of the label's
+        # capitals.
+        metrics = QFontMetrics(font)
+        capHeight = metrics.tightBoundingRect("M").height()
+        self.diameter = conservationPillDiameter(font)
+        self.capTop = max(0, round(metrics.ascent() - capHeight / 2 - self.diameter / 2))
+        self.setFixedSize(self.diameter + 1, max(metrics.height(), self.capTop + self.diameter + 1))
+        self.update()
+
+    def paintEvent(self, event):
+        if self.diameter <= 0:
+            return
+        painter = QPainter(self)
+        paintConservationPill(painter, 0, self.capTop, self.diameter, self.code)
+        painter.end()
 
 
 class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
@@ -85,7 +166,7 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
             self.buttonBirdsOfTheWorld)
 
         # IUCN Red List under it: the authority behind the status badge, and
-        # the only answer for species AviList gives no status (Not Available).
+        # the only answer for species BirdLife gives no status (Not Available).
         self.buttonIUCN = QPushButton("IUCN Red List", self.frameButtons)
         self.buttonIUCN.setSizePolicy(self.buttonAllAboutBirds.sizePolicy())
         self.buttonIUCN.setObjectName("buttonIUCN")
@@ -94,11 +175,19 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
             self.verticalLayout_10.indexOf(self.buttonBirdsOfTheWorld) + 1,
             self.buttonIUCN)
 
-        # IUCN conservation status (AviList), under the order and family.
-        self.lblConservationStatus = QLabel(self.frameNames)
+        # IUCN conservation status (BirdLife), under the order and family: a
+        # color-coded pill, then the label.
+        self.frameConservation = QWidget(self.frameNames)
+        conservationLayout = QHBoxLayout(self.frameConservation)
+        conservationLayout.setContentsMargins(0, 0, 0, 0)
+        conservationLayout.setSpacing(6)
+        self.pillConservation = ConservationPill(self.frameConservation)
+        self.lblConservationStatus = QLabel(self.frameConservation)
+        conservationLayout.addWidget(self.pillConservation, 0, Qt.AlignmentFlag.AlignTop)
+        conservationLayout.addWidget(self.lblConservationStatus, 1, Qt.AlignmentFlag.AlignTop)
         self.verticalLayout_3.insertWidget(
             self.verticalLayout_3.indexOf(self.lblOrderName) + 1,
-            self.lblConservationStatus)
+            self.frameConservation)
         self.buttonMap.clicked.connect(self.CreateMap)
         self.buttonChecklists.clicked.connect(self.CreateChecklists)
 
@@ -156,8 +245,8 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
         self.lblOrderName.setText(orderAndFamilyText)
 
         statusCode, statusName = self.mdiParent.db.GetConservationStatus(Species)
-        self.lblConservationStatus.setText(
-            "Conservation Status (AviList " + code_DataBase.AVILIST_YEAR + "): " + statusName)
+        self.lblConservationStatus.setText("Conservation Status: " + statusName)
+        self.pillConservation.setCode(statusCode.split()[0])
         
         # if available, add BBL banding code
         bblCode = self.mdiParent.db.GetBBLCode(Species)
@@ -846,7 +935,7 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
 
     def CreateWebPageForIUCN(self):
 
-        # The species' own Red List page when AviList supplies its IUCN id.
+        # The species' own Red List page when BirdLife supplies its IUCN id.
         # Without one (the Not Available species) fall back to IUCN's search
         # on the scientific name, which IUCN shows only to signed-in users;
         # the persistent web profile keeps that sign-in.  The taxonomy's
@@ -1149,6 +1238,7 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
         self.lblOrderName.setFont(detailFont)
         self.lblSpeciesCode.setFont(detailFont)
         self.lblConservationStatus.setFont(detailFont)
+        self.pillConservation.fitTo(detailFont)
         self.lblFirstSeen.setFont(detailFont)
         self.lblMostRecentlySeen.setFont(detailFont)
 

@@ -6,6 +6,7 @@ import code_SeasonalSort
 import code_MediaRefresh
 import code_Location
 import code_Individual
+import code_DataBase
 import code_FloatDelegate
 import code_Stylesheet
 
@@ -137,6 +138,45 @@ class _FoundHighlightDelegate(QStyledItemDelegate):
                     x += w
 
         painter.restore()
+
+
+class _ConservationPillDelegate(QStyledItemDelegate):
+    """Paints the Status column's conservation pill, centered in the cell, at
+    the size the Individual window uses."""
+
+    def __init__(self, diameter, parent=None):
+        super().__init__(parent)
+        self.diameter = diameter
+
+    def paint(self, painter, option, index):
+        opt = QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
+        style = opt.widget.style() if opt.widget else QApplication.style()
+
+        # Draw background (selection, hover, etc.) without any text
+        opt.text = ""
+        style.drawControl(QStyle.ControlElement.CE_ItemViewItem, opt, painter, opt.widget)
+
+        code = index.data(Qt.ItemDataRole.DisplayRole) or "NA"
+        rect = option.rect
+        code_Individual.paintConservationPill(
+            painter,
+            rect.x() + (rect.width() - self.diameter) / 2,
+            rect.y() + (rect.height() - self.diameter) / 2,
+            self.diameter, code)
+
+
+class _StatusItem(QTableWidgetItem):
+    """Status cell that sorts by severity (Extinct first), then taxonomic
+    order, instead of alphabetically by code."""
+
+    def __lt__(self, other):
+        return ((self.data(Qt.ItemDataRole.UserRole), self.data(Qt.ItemDataRole.UserRole + 1))
+                < (other.data(Qt.ItemDataRole.UserRole), other.data(Qt.ItemDataRole.UserRole + 1)))
+
+
+# Severity rank of each IUCN base category for sorting the Status column.
+_STATUS_RANK = {code: rank for rank, code in enumerate(code_DataBase.IUCN_COLORS)}
 
 
 class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
@@ -329,6 +369,9 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
             w4 = max(floor(1.3 * dateTextWidth), metrics.horizontalAdvance("Checklists") + arrowAllowance)
             w5 = max(floor(1.8 * dateTextWidth), metrics.horizontalAdvance("% of Checklists") + arrowAllowance)
 
+            w6 = max(code_Individual.conservationPillDiameter(QFont(YBFont, fontSize + 1)) * 2,
+                     metrics.horizontalAdvance("Status") + arrowAllowance)
+
             # give species name column the remaining width
             header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
 
@@ -338,6 +381,7 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
             header.resizeSection(3, w3)
             header.resizeSection(4, w4)
             header.resizeSection(5, w5)
+            header.resizeSection(6, w6)
 
         if self.listType == "Single Checklist":
             taxTextWidth = int(metrics.boundingRect("Tax").width())
@@ -419,6 +463,9 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
         self.txtChecklistComments.setTextCursor(cur)
          
         windowWidth = int(1050 * scaleFactor) if self.listType == "Checklists" else int(800 * scaleFactor)
+        # The Species list is wider by its Status column, so Species keeps its width.
+        if self.listType == "Species":
+            windowWidth += header.sectionSize(6)
         windowHeight = int(580 * scaleFactor)
         self.resize(windowWidth, windowHeight)
 
@@ -708,8 +755,16 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
                 return(False)
 
             self.tblList.setRowCount(len(thisWindowList))
-            self.tblList.setColumnCount(6)
-            self.tblList.setHorizontalHeaderLabels(['Tax', 'Species', 'First',  'Last', 'Checklists', '% of Checklists'])
+            self.tblList.setColumnCount(7)
+            self.tblList.setHorizontalHeaderLabels(['Tax', 'Species', 'First',  'Last', 'Checklists', '% of Checklists', 'Status'])
+            # Status is the last logical column, so the other columns keep the
+            # indexes the click handlers and filters use; it is only SHOWN
+            # right after Species.  The pill matches the Individual window's,
+            # whose status label uses the font one point larger.
+            header.moveSection(header.visualIndex(6), 2)
+            self.tblList.setItemDelegateForColumn(6, _ConservationPillDelegate(
+                code_Individual.conservationPillDiameter(QFont(YBFont, self.mdiParent.fontSize + 1)),
+                self.tblList))
             #header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch) 
             # header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
             self.tblList.setItemDelegateForColumn(5, code_FloatDelegate.FloatDelegate(2))
@@ -745,6 +800,16 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
                 self.tblList.setItem(R, 3, lastItem)
                 self.tblList.setItem(R, 4, checklistCountItem)
                 self.tblList.setItem(R, 5, percentageItem)
+
+                # The code is the cell's text, so the Find box matches it.
+                statusCode, statusName = self.mdiParent.db.GetConservationStatus(species[0])
+                statusCode = statusCode.split()[0]
+                statusItem = _StatusItem()
+                statusItem.setText(statusCode)
+                statusItem.setToolTip(statusName)
+                statusItem.setData(Qt.ItemDataRole.UserRole, _STATUS_RANK[statusCode])
+                statusItem.setData(Qt.ItemDataRole.UserRole + 1, R)
+                self.tblList.setItem(R, 6, statusItem)
                 self.currentSpeciesList.append(species[0])
                 R = R + 1    
                 
@@ -1170,8 +1235,8 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
                 QApplication.restoreOverrideCursor()     
                 return
                 
-            if currentColumn== 1:
-                # species column has been clicked so create individual window for that species
+            if currentColumn in [1, 6]:
+                # species or status column has been clicked so create individual window for that species
                 speciesName = self.tblList.item(currentRow,  1).text()
                 
                 # abort if a spuh or slash species was clicked (we can't show an individual for this)

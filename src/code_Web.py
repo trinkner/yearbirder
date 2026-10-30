@@ -1328,17 +1328,19 @@ td {{ border-bottom:1px solid #e8e8e8; vertical-align:middle; }}
       files, and the live data retrieved from the eBird API &mdash; is provided by
       the <b>Cornell Lab of Ornithology</b> and is used with attribution.
       Yearbirder is not affiliated with or endorsed by eBird or the Cornell Lab.</li>
-  <li><b>Conservation status</b> and the <b>Birds of the World</b> links come from
+  <li><b>Conservation status</b> is the IUCN Red List category from
+      <b>BirdLife International</b> (2026), IUCN Red List for birds, downloaded from the
+      <a href="https://datazone.birdlife.org" style="color: #7aadff;">BirdLife DataZone</a>
+      and used with BirdLife's permission. BirdLife International is the Red List
+      authority for birds. Yearbirder bundles only each species' scientific name,
+      Red List category and species number; species BirdLife does not recognize
+      read Not Available. eBird species are matched to BirdLife's using
       <b>AviList: The Global Avian Checklist</b>, v2026, &copy; 2026 by the AviList
       Core Team (<a href="https://doi.org/10.2173/avilist.v2026" style="color: #7aadff;">https://doi.org/10.2173/avilist.v2026</a>),
       used under the Creative Commons Attribution 4.0 International License
       (<a href="https://creativecommons.org/licenses/by/4.0/" style="color: #7aadff;">CC BY 4.0</a>).
-      Yearbirder uses an adapted extract: four of AviList's columns, with the
-      BirdLife DataZone links reduced to their species numbers and blank
-      categories shown as Not Available. The status is the IUCN Red List
-      category as AviList records it, from BirdLife International's assessments.
-      Yearbirder is not affiliated with or endorsed by AviList, BirdLife
-      International or the IUCN.</li>
+      Yearbirder is not affiliated with or endorsed by BirdLife International,
+      the IUCN or AviList.</li>
   <li><b>Banding codes</b> are the four-letter alpha codes published by
       <b>The Institute for Bird Populations</b>
       (<a href="https://www.birdpop.org/pages/birdSpeciesCodes.php" style="color: #7aadff;">birdpop.org</a>),

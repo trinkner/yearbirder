@@ -25,7 +25,7 @@ Full version history and downloads: [yearbirder.org](https://yearbirder.org)
 
 - **2026 eBird taxonomy** — bundled, with banding codes rebuilt from the latest IBP list. Species eBird has split and IBP has not yet show their eBird entry code.
 - **Unattached Media** — a new File menu command lets the user reattach photos and recordings left behind when eBird renames or splits a species, suggesting the likely new species for each.
-- **Conservation status** — the Individual window shows each species’ IUCN Red List category from AviList 2026, and gains Birds of the World and IUCN Red List buttons.
+- **Conservation status** — the Individual window shows each species’ IUCN Red List category from BirdLife International, and gains Birds of the World and IUCN Red List buttons.
 - **Stay signed in** — sign-ins to Birds of the World and other sites opened from Yearbirder now last between sessions.
 - **Subspecies media** — photos and recordings can be assigned to a sighting’s subspecies group.
 - **Recordings reports** — Recordings Overview, Recording Gear and Time of Day, matching the photo reports.
@@ -310,10 +310,10 @@ Yearbirder is free, open-source software licensed under the [GNU General Public 
 
 Some data files in `src/` are not Yearbirder's own work and are **not** covered by the GPL. Each keeps its own terms:
 
-- **`src/AviList_data.csv`** is adapted from *AviList: The Global Avian Checklist*, v2026, © 2026 by the AviList Core Team ([doi.org/10.2173/avilist.v2026](https://doi.org/10.2173/avilist.v2026)), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Yearbirder's version is an extract of four columns (Cornell Lab species code, IUCN Red List category, Birds of the World URL, and the species number from the BirdLife DataZone URL), made by `build_avilist_data.py`. The Red List categories are BirdLife International's assessments as recorded by AviList. If you reuse this file, keep this attribution and the license.
+- **`src/RedList_data.csv`** holds IUCN Red List categories from BirdLife International (2026), *IUCN Red List for birds*, downloaded from the [BirdLife DataZone](https://datazone.birdlife.org) and redistributed with BirdLife's written permission (October 2026). It is **not** openly licensed: permission covers its use in Yearbirder only, so do not reuse it elsewhere without asking BirdLife. It keeps three fields per species (eBird species code, Red List category, BirdLife SIS ID), made by `build_redlist_data.py`, which matches eBird species to BirdLife's using the species-code-to-DataZone links in *AviList: The Global Avian Checklist*, v2026, © 2026 by the AviList Core Team ([doi.org/10.2173/avilist.v2026](https://doi.org/10.2173/avilist.v2026)), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 - **`src/eBird_Taxonomy_*.csv`** is the eBird taxonomy, built from the eBird API by `build_taxonomy.py`. eBird data is provided by the Cornell Lab of Ornithology; see the [eBird Terms of Use](https://www.birds.cornell.edu/home/ebird-api-terms-of-use/).
 - **`src/eBird_BBLCodes.csv`** holds the four-letter alpha codes published by [The Institute for Bird Populations](https://www.birdpop.org/pages/birdSpeciesCodes.php), matched to eBird's names by `build_bbl_codes.py`.
 
-Yearbirder is not affiliated with or endorsed by AviList, BirdLife International, the IUCN, the Cornell Lab of Ornithology or The Institute for Bird Populations.
+Yearbirder is not affiliated with or endorsed by BirdLife International, the IUCN, AviList, the Cornell Lab of Ornithology or The Institute for Bird Populations.
 
 Created by Richard Trinkner.

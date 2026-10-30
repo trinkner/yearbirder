@@ -494,15 +494,10 @@ def resource_path(filename):
     return filename
 
 
-# AviList version that src/AviList_data.csv was built from (build_avilist_data.py);
-# it labels the conservation status shown in the Individual window.
-AVILIST_YEAR = "2026"
-
-# IUCN Red List categories as AviList writes them, with their display names.
-# A taxon AviList gives no category is shown as Not Available ("NA", not an
-# IUCN category): AviList leaves the status blank where its species concept
-# does not match BirdLife's, so a true IUCN Not Evaluated would be the wrong
-# claim.
+# IUCN Red List categories as RedList_data.csv writes them, with their display
+# names.  A species with no row is shown as Not Available ("NA", not an IUCN
+# category): it is one BirdLife does not recognize as a species, usually an
+# eBird split, so a true IUCN Not Evaluated would be the wrong claim.
 IUCN_CATEGORIES = {
     "EX":       "Extinct",
     "EW":       "Extinct in the Wild",
@@ -515,6 +510,23 @@ IUCN_CATEGORIES = {
     "LC":       "Least Concern",
     "DD":       "Data Deficient",
     "NA":       "Not Available",
+}
+
+# Pill colors for the Individual window, keyed by the base category (PE and
+# PEW are shown as CR).  The IUCN's own colors, except NT and VU: the IUCN's
+# yellow-green (#CCE226) and yellow (#F9E814) are too alike to tell apart at
+# pill size, so NT leans green (lime) and VU leans orange (amber), keeping
+# the scale's green-to-red order.
+IUCN_COLORS = {
+    "EX": "#000000",
+    "EW": "#542344",
+    "CR": "#D81E05",
+    "EN": "#FC7F3F",
+    "VU": "#FFC20E",
+    "NT": "#A6D140",
+    "LC": "#60C659",
+    "DD": "#D1D1C6",
+    "NA": "#A0A0A0",
 }
 
 
@@ -797,7 +809,7 @@ class DataBase():
         self.orderSpeciesDict = {}
         self.bblCodeDict = {}
         self.bblCodeByCommonName = {} # commonName -> BBL code, fallback when the sci name moved genus
-        self.aviListDict = None       # eBird code -> (IUCN status, BoW URL, IUCN id); loaded on first use
+        self.redListDict = None       # eBird code -> (IUCN status, IUCN id); loaded on first use
         self.eBirdCodeDict = {}       # sciName -> eBird species code, populated by ReadTaxonomyDataFile
         self.taxonOrderBySciName = {} # sciName -> float taxon order, populated by ReadTaxonomyDataFile
         self.sciNameByCommonName = {} # commonName -> sciName for the whole taxonomy, populated by ReadTaxonomyDataFile
@@ -5551,20 +5563,18 @@ class DataBase():
         return bblCode
 
 
-    def _loadAviListData(self):
+    def _loadRedListData(self):
 
         # Loaded the first time an Individual window asks, not at startup.
         # A missing file leaves the dict empty, so every species reads as
-        # Not Available and the Birds of the World link falls back to the
-        # URL built from the eBird code.
-        self.aviListDict = {}
-        aviListFile = resource_path("AviList_data.csv")
-        if not os.path.isfile(aviListFile):
+        # Not Available.
+        self.redListDict = {}
+        redListFile = resource_path("RedList_data.csv")
+        if not os.path.isfile(redListFile):
             return
-        with open(aviListFile, "r", encoding="utf-8", newline="") as csvfile:
+        with open(redListFile, "r", encoding="utf-8", newline="") as csvfile:
             for row in csv.DictReader(csvfile):
-                self.aviListDict[row["eBirdCode"]] = (
-                    row["Status"], row["BoWURL"], row.get("IUCNID") or "")
+                self.redListDict[row["eBirdCode"]] = (row["Status"], row["SISID"])
 
 
     def GetSpeciesTaxonomyCode(self, species):
@@ -5579,12 +5589,12 @@ class DataBase():
 
     def GetConservationStatus(self, species):
         """(IUCN category code, display name) for a species.
-        Species AviList gives no category, and slashes, spuhs and hybrids,
+        Species BirdLife does not recognize, and slashes, spuhs and hybrids,
         are Not Available."""
 
-        if self.aviListDict is None:
-            self._loadAviListData()
-        status = self.aviListDict.get(self.GetSpeciesTaxonomyCode(species), ("", "", ""))[0]
+        if self.redListDict is None:
+            self._loadRedListData()
+        status = self.redListDict.get(self.GetSpeciesTaxonomyCode(species), ("", ""))[0]
         if status not in IUCN_CATEGORIES:
             status = "NA"
         return status, IUCN_CATEGORIES[status]
@@ -5592,20 +5602,19 @@ class DataBase():
 
     def GetBirdsOfTheWorldURL(self, species):
 
-        if self.aviListDict is None:
-            self._loadAviListData()
+        # Birds of the World pages are keyed by the eBird species code.
         code = self.GetSpeciesTaxonomyCode(species)
         if not code:
             return ""
-        url = self.aviListDict.get(code, ("", "", ""))[1]
-        return url or "https://birdsoftheworld.org/bow/species/" + code
+        return "https://birdsoftheworld.org/bow/species/" + code
 
 
     def GetIUCNTaxonID(self, species):
 
-        if self.aviListDict is None:
-            self._loadAviListData()
-        return self.aviListDict.get(self.GetSpeciesTaxonomyCode(species), ("", "", ""))[2]
+        # BirdLife's SIS ID, which is also IUCN's taxon id.
+        if self.redListDict is None:
+            self._loadRedListData()
+        return self.redListDict.get(self.GetSpeciesTaxonomyCode(species), ("", ""))[1]
 
 
     def GeteBirdCode(self, species):
