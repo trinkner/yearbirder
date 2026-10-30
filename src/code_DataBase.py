@@ -902,12 +902,14 @@ class DataBase():
             })            
         self.regionNameDict = ({
             "ABA":"ABA Area",
+            "ABC":"ABA Continental",
             "AOU":"AOU Area",
             "NAM":"North America",
             "SAM":"South America",
             "AFR":"Africa",
             "EUR":"Europe",
             "ASI":"Asia",
+            "EUA":"Eurasia",
             "SPO":"South Polar",
             "WHE":"Western Hemisphere",
             "EHE":"Eastern Hemisphere",
@@ -916,26 +918,21 @@ class DataBase():
             "USL":"USA Lower 48",
             "AUA":"Australasia (ABA)",
             "AUE":"Australasia (eBird)",
-            "AUS":"Australia and Territories"
-            }) 
-        self.regionCodeDict = ({
-            "ABA Area":"ABA",
-            "AOU Area":"AOU",
-            "North America":"NAM",
-            "South America":"SAM",
-            "Africa":"AFR",
-            "Europe":"EUR",
-            "Asia":"ASI",
-            "South Polar":"SPO",
-            "Western Hemisphere":"WHE",
-            "Eastern Hemisphere":"EHE",
-            "West Indies":"WIN",
-            "Central America":"CAM",
-            "USA Lower 48":"USL",
-            "Australasia (ABA)":"AUA",
-            "Australasia (eBird)":"AUE",
-            "Australia and Territories":"AUS"
-            }) 
+            "AUS":"Australia and Territories",
+            "ATL":"Atlantic/Arctic Oceans",
+            "IOC":"Indian Ocean",
+            "PAC":"Pacific Ocean",
+            "MDE":"Middle East",
+            "ISC":"Indian Subcontinent",
+            "SEA":"Southeast Asia",
+            "SSA":"Sub-Saharan Africa",
+            "WPA":"Western Palearctic",
+            "OSM":"OSME Region",
+            "NTR":"Neotropics",
+            "NEA":"Nearctic"
+            })
+        # The reverse lookup, derived so each region is named in one place.
+        self.regionCodeDict = {name: code for code, name in self.regionNameDict.items()}
 
         # Use resource_path helper routine (in module, below) to open files in way safe for PyInstaller app bundle
         # Load JSON files using resource_path
@@ -2533,7 +2530,13 @@ class DataBase():
 
 
     def _computeRegionCodes(self, country, state):
-        """Compute region code list for a (country, state) pair, with caching."""
+        """Compute region code list for a (country, state) pair, with caching.
+
+        The eBird listing regions follow the eBird Glossary
+        (support.ebird.org, article 48000948655), at the country or state
+        level: eBird's own boundaries sometimes follow coordinates or ocean
+        limits that a country or state code cannot express.  The regions after
+        them are Yearbirder's own."""
         key = (country, state)
         cached = self._regionCache.get(key)
         if cached is not None:
@@ -2541,268 +2544,274 @@ class DataBase():
 
         regionCodes = []
 
-        # ----------------------------------------
-        # add ABA if in US, Canada, or St. Pierre et Miquelon, but exclude Hawaii
-        if country in ["US", "CA", "PM"]:
-            if state != "US-HI":
-                regionCodes.append("ABA")
+        # Asian Russia: the provinces roughly east of the Urals
+        asianRussia = [
+            "RU-YAN", "RU-KHM", "RU-TYU", "RU-OMS", "RU-TOM", "RU-NVS",
+            "RU-ALT", "RU-KEM", "RU-AL", "RU-KK", "RU-KYA", "RU-TY",
+            "RU-IRK", "RU-SA", "RU-BU", "RU-ZAB", "RU-AMU", "RU-KHA",
+            "RU-YEV", "RU-PRI", "RU-MAG", "RU-CHU", "RU-KAM", "RU-SAK"
+            ]
+        # European Turkey: west of the Bosporus and north of the Sea of
+        # Marmara, with Istanbul and Çanakkale
+        europeanTurkey = ["TR-22", "TR-39", "TR-59", "TR-34", "TR-17"]
+        # Egypt east of Suez, which eBird counts as Asia
+        asianEgypt = ["EG-PTS", "EG-JS", "EG-SIN"]
+        # Mexico's tropical south and southeast, which the Neotropics take;
+        # the other states are Nearctic.  A location filed as all of Mexico
+        # ("MX-") is in neither.
+        neotropicalMexico = ["MX-CHP", "MX-TAB", "MX-CAM", "MX-YUC",
+                             "MX-ROO", "MX-OAX", "MX-VER", "MX-GRO"]
+        # Bonaire is South America; Saba and St. Eustatius, the rest of
+        # Caribbean Netherlands, are West Indies
+        bonaire = state == "BQ-BO"
 
         # ----------------------------------------
-        # add AOU if if in US, Canada, St. Pierre et Miquelon, Mexico, Central America
+        # ABA Area: the 50 states (with Hawaii and Midway), Canada and
+        # St. Pierre et Miquelon.  ABA Continental leaves out Hawaii and Midway.
+        if country in ["US", "CA", "PM"] or state == "UM-71":
+            regionCodes.append("ABA")
+        if country in ["US", "CA", "PM"] and state != "US-HI":
+            regionCodes.append("ABC")
+
+        # ----------------------------------------
+        # AOU Area: the ABA Area, Mexico, Central America and the West
+        # Indies, plus Johnston Atoll, Bermuda, Clipperton and San Andrés;
+        # not Trinidad and Tobago, Aruba, Bonaire or Curaçao
         if country in [
-            "US", "CA", "PM", "MX", "GT", "SV", "HN", "CR", "PA",
-            "CU", "HT", "DO", "JM", "KY", "PR", "VG", "VI", "AI",
-            "MF", "BL", "BQ", "KN", "AG", "MS", "GP", "DM", "BS",
-            "BB", "GD", "LC", "VC", "BM", "CP", "NI"
-            ]:
+            "US", "CA", "PM", "MX", "BZ", "GT", "SV", "HN", "NI", "CR", "PA",
+            "BS", "CU", "KY", "JM", "HT", "DO", "PR", "VI", "VG", "TC",
+            "AI", "MF", "SX", "BL", "KN", "AG", "MS", "GP", "DM", "MQ",
+            "LC", "VC", "BB", "GD", "BM", "CP"
+            ] or (country == "BQ" and not bonaire):
+            regionCodes.append("AOU")
+        if state in ["CO-SAP", "UM-67", "UM-71"]:
             regionCodes.append("AOU")
 
-        if state in [
-            "CO-SAP", "UM-67", "UM-71"
-            ]:
-            regionCodes.append("AOU")
+        # ----------------------------------------
+        # USA Lower 48
+        if country == "US" and state not in ["US-AK", "US-HI"]:
+            regionCodes.append("USL")
 
         # ----------------------------------------
-        # add USL if if in Lower 48 US states listing region as designated by eBird
-
-        if country == "US":
-            if state not in ["US-AK", "US-HI"]:
-                regionCodes.append("USL")
-
-
-        #---------------------------------------
-        # add AFR if if in Africa
+        # West Indies: the Bahamas, Greater Antilles, Lesser Antilles to
+        # Barbados and Grenada, and San Andrés and Providencia; not the
+        # islands in South America (Aruba, Curaçao, Bonaire, Trinidad and
+        # Tobago)
         if country in [
-            "DZ", "AO", "SH", "BJ", "BW", "BF", "BI", "CM", "CV", "CF", "TD",
-            "KM", "CG", "CD", "DJ", "GQ", "ER", "SZ", "ET", "GA", "GM",
-            "GH", "GN", "GW", "CI", "KE", "LS", "LR", "LY", "MG", "MW", "ML",
-            "MR", "MU", "YT", "MA", "MZ", "NA", "NE", "NG", "ST", "RE", "RW",
-            "ST", "SN", "SC", "SL", "SO", "ZA", "SS", "SH", "SD", "SZ", "TZ",
-            "TG", "TN", "UG", "CD", "ZM", "TZ", "ZW"
-            ]:
-            regionCodes.append("AFR")
-
-        if state == "ES-CN":
-            regionCodes.append("AFR")
-
-        if country == "EG":
-            if state not in ["EG-PTS", "EG-JS", "EG-SIN"]:
-                regionCodes.append("AFR")
-
-        # ----------------------------------------
-        # add ASI if if in Asia
-        if country in [
-            "AF", "AM", "AZ", "BH", "BD", "BT", "BN", "KH", "CN", "CX", "CC",
-            "IO", "GE", "HK", "IN", "IR", "IQ", "IL", "JP", "JO",
-            "KW", "KG", "LA", "LB", "MO", "MY", "MV", "MN", "MM", "NP", "KP",
-            "OM", "PK", "PS", "PH", "QA", "SA", "SG", "KR", "LK", "SY", "TW",
-            "TJ", "TH", "TM", "AE", "UZ", "VN", "YE", "SD", "SZ", "TZ",
-            "TG", "TN", "UG", "CD", "ZM", "TZ", "ZW"
-            ]:
-            regionCodes.append("ASI")
-
-        if country == "TR":
-            if state not in ["TR-22", "TR-39", "TR-59"]:
-                regionCodes.append("ASI")
-
-        if country == "KZ":
-            if state not in ["KZ-ATY", "KZ-ZAP"]:
-                regionCodes.append("ASI")
-
-        if country == "ID":
-            if state != "ID-IJ":
-                regionCodes.append("ASI")
-
-        if country == "EG":
-            if state in ["EG-PTS", "EG-JS", "EG-SIN"]:
-                regionCodes.append("ASI")
-
-        if country == "RU":
-            if state in [
-                "RU-YAN", "RU-KHM", "RU-TYU", "RU-OMS", "RU-TOM", "RU-NVS",
-                "RU-ALT", "RU-KEM", "RU-AL", "RU-KK", "RU-KYA", "RU-TY",
-                "RU-IRK", "RU-SA", "RU-BU", "RU-ZAB", "RU-AMU", "RU-KHA",
-                "RU-YEV", "RU-PRI", "RU-MAG", "RU-CHU", "RU-KAM", "RU-SAK"
-                ]:
-                regionCodes.append("ASI")
-
-        # ----------------------------------------
-        # add ATL if if in Atlantic listing region
-
-        # Note that pelagic sightings more than 200 miles from a state
-        # will not be counted here because I don't know how to calculate
-        # if a log/lat sighting is 200 miles from a state
-
-        if country in [
-            "BM", "FK", "SH"
-            ]:
-            regionCodes.append("ATL")
-
-
-        # ----------------------------------------
-        # add AUE if if in Australasia (eBird) listing region
-
-        if country in [
-            "AU", "AC", "NF", "NZ", "SB", "VU", "NC", "PG",
-            ]:
-            regionCodes.append("AUE")
-
-        if state in [
-            "ID-IJ", "ID-MA"
-            ]:
-            regionCodes.append("AUE")
-
-
-        # ----------------------------------------
-        # add AUA if if in Australasia (ABA) listing region
-
-        if country in [
-            "AU", "ID"
-            ]:
-            regionCodes.append("AUA")
-
-
-        # ----------------------------------------
-        # add AUS if if in Australia listing region as designated by eBird
-
-        if country in [
-            "AU", "HM", "CX", "CC", "NF", "AC"
-            ]:
-            regionCodes.append("AUS")
-
-
-        # ----------------------------------------
-        # add EUR if if in Europe listing region as designated by eBird
-
-        if country in [
-            "AL", "AD", "AT", "BY", "BE", "BA", "BG", "HR", "CY", "CZ", "DK",
-            "EE", "FO", "FI", "FR", "DE", "GI", "GR", "HU", "IS", "IE", "IM",
-            "IT", "RS", "LV", "LI", "LT", "LU", "MK", "MT", "MD", "MC", "ME",
-            "NL", "NO", "PL", "PT", "RO", "RU", "SM", "RS", "SK", "SI",
-            "SE", "CH", "UA", "GB", "VA", "JE"
-            ]:
-            regionCodes.append("EUR")
-
-        # include Spain, but not Canaries
-        if country == "ES":
-            if state != "ES-CN":
-                regionCodes.append("EUR")
-
-        # include Russia, but exclude Asian regions of Russia
-        if country == "RU":
-            if state not in [
-                "RU-YAN", "RU-KHM", "RU-TYU", "RU-OMS", "RU-TOM", "RU-NVS",
-                "RU-ALT", "RU-KEM", "RU-AL", "RU-KK", "RU-KYA", "RU-TY",
-                "RU-IRK", "RU-SA", "RU-BU", "RU-ZAB", "RU-AMU", "RU-KHA",
-                "RU-YEV", "RU-PRI", "RU-MAG", "RU-CHU", "RU-KAM", "RU-SAK"
-                ]:
-                    regionCodes.append("EUR")
-
-        # include European areas of Turkey
-        if state in ["TR-22", "TR-39", "TR-59"]:
-            regionCodes.append("EUR")
-
-        # include European areas of Kazakhstan
-        if state in ["KZ-ATY", "KZ-ZAP"]:
-            regionCodes.append("EUR")
-
-
-        # ----------------------------------------
-        # add NAM if if in North America listing region as designated by eBird
-
-        if country in [
-            "CA", "PM", "MX", "GT", "SV", "HN", "CR", "PA",
-            "CU", "HT", "DO", "JM", "KY", "PR", "VG", "VI", "AI",
-            "MF", "BL", "BQ", "KN", "AG", "MS", "GP", "DM", "BS",
-            "BB", "GD", "LC", "VC", "BM", "CP", "GL", "NI"
-            ]:
-            regionCodes.append("NAM")
-
-        if state in [
-            "CO-SAP"
-            ]:
-            regionCodes.append("NAM")
-
-        if country == "US":
-            if state != "US-HI":
-                regionCodes.append("NAM")
-
-
-        # ----------------------------------------
-        # add SAM if if in South America listing region as designated by eBird
-
-        if country in [
-            "AR", "BO", "BR", "CL", "CO", "FK", "GF",
-            "GY", "GY", "PY", "PE", "SR", "UY", "VE", "TT", "CW", "AW"
-            ]:
-            regionCodes.append("SAM")
-
-        if state in [
-            "BQ-BO"
-            ]:
-            regionCodes.append("SAM")
-
-        if country == "EC" and state != "EC-W":
-            regionCodes.append("SAM")
-
-
-        # ----------------------------------------
-        # add WIN if if in West Indies listing region as designated by eBird
-
-        if country in [
-            "AI", "AG", "AW", "BS", "BB", "VG", "KY", "VI"
-            "CU", "DM", "DO", "GD", "GP", "HT", "JM", "MQ",
-            "MS", "AN", "PR", "KN", "LC", "VC", "TT", "TC"
-            ]:
+            "BS", "TC", "CU", "KY", "JM", "HT", "DO", "PR", "VI", "VG",
+            "AI", "MF", "SX", "BL", "KN", "AG", "MS", "GP", "DM", "MQ",
+            "LC", "VC", "BB", "GD"
+            ] or (country == "BQ" and not bonaire):
             regionCodes.append("WIN")
-
         if state == "CO-SAP":
             regionCodes.append("WIN")
 
-
         # ----------------------------------------
-        # add CAM if if in Central America listing region as designated by eBird
-
-        if country in [
-            "BZ", "CR", "SV", "GT", "HN", "NI", "PA"
-            ]:
+        # Central America: Belize to Panama
+        if country in ["BZ", "GT", "SV", "HN", "NI", "CR", "PA"]:
             regionCodes.append("CAM")
 
+        # ----------------------------------------
+        # North America: the ABA Area, Greenland, Mexico, the West Indies and
+        # Central America; not Hawaii, Midway, Johnston, Bermuda or Clipperton
+        if ((country in ["US", "CA", "PM"] and state != "US-HI")
+                or country in ["GL", "MX"]
+                or "WIN" in regionCodes or "CAM" in regionCodes):
+            regionCodes.append("NAM")
 
         # ----------------------------------------
-        # add SPO if if in South Polar listing region as designated by eBird
-
+        # South America: the continent with Trinidad and Tobago, Aruba,
+        # Curaçao and Bonaire; not the Galápagos or the Falklands
         if country in [
-            "AQ", "BV", "GS", "HM"
+            "AR", "BO", "BR", "CL", "CO", "GF", "GY", "PY", "PE", "SR",
+            "UY", "VE", "TT", "AW", "CW"
+            ] or bonaire or (country == "EC" and state != "EC-W"):
+            regionCodes.append("SAM")
+
+        # ----------------------------------------
+        # Atlantic/Arctic Oceans: Bermuda, the Falklands, and St. Helena,
+        # Ascension and Tristan da Cunha.  Pelagic waters beyond 200 miles
+        # cannot be told from a country code.
+        if country in ["BM", "FK", "SH"]:
+            regionCodes.append("ATL")
+
+        # ----------------------------------------
+        # Africa: the continent with Cape Verde, the Canaries, São Tomé and
+        # Annobón; Egypt but its Asian governorates.  The islands of the
+        # Indian Ocean and St. Helena belong to the ocean regions.
+        if country in [
+            "DZ", "AO", "BJ", "BW", "BF", "BI", "CM", "CV", "CF", "TD",
+            "CG", "CD", "DJ", "GQ", "ER", "SZ", "ET", "GA", "GM", "GH",
+            "GN", "GW", "CI", "KE", "LS", "LR", "LY", "MW", "ML", "MR",
+            "MA", "MZ", "NA", "NE", "NG", "ST", "RW", "SN", "SL", "SO",
+            "ZA", "SS", "SD", "TZ", "TG", "TN", "UG", "ZM", "ZW", "EH"
+            ] or state == "ES-CN":
+            regionCodes.append("AFR")
+        if country == "EG" and state not in asianEgypt:
+            regionCodes.append("AFR")
+
+        # ----------------------------------------
+        # Indian Ocean: Madagascar, the Comoros, the Seychelles, the
+        # Maldives and the other islands of the Indian Ocean
+        if country in ["MG", "KM", "SC", "MV", "MU", "RE", "YT", "IO"]:
+            regionCodes.append("IOC")
+
+        # ----------------------------------------
+        # Europe: with its Atlantic and Mediterranean islands, European
+        # Turkey, western Kazakhstan and Russia west of the Urals; not the
+        # Canaries, Cyprus or the Caucasus
+        if country in [
+            "AL", "AD", "AT", "BY", "BE", "BA", "BG", "HR", "CZ", "DK",
+            "EE", "FO", "FI", "FR", "DE", "GI", "GR", "HU", "IS", "IE",
+            "IM", "IT", "LV", "LI", "LT", "LU", "MK", "MT", "MD", "MC",
+            "ME", "NL", "NO", "PL", "PT", "RO", "SM", "RS", "SK", "SI",
+            "SE", "CH", "UA", "GB", "VA", "JE", "GG", "XK", "AX", "SJ"
             ]:
+            regionCodes.append("EUR")
+        if country == "ES" and state != "ES-CN":
+            regionCodes.append("EUR")
+        if country == "RU" and state not in asianRussia:
+            regionCodes.append("EUR")
+        if state in europeanTurkey or state in ["KZ-ATY", "KZ-ZAP"]:
+            regionCodes.append("EUR")
+
+        # ----------------------------------------
+        # Asia: with Cyprus, the Caucasus, Asian Turkey, Kazakhstan but its
+        # west, Russia east of the Urals, Indonesia but Papua, and Egypt's
+        # Asian governorates
+        if country in [
+            "AF", "AM", "AZ", "BH", "BD", "BT", "BN", "KH", "CN", "CX",
+            "CC", "CY", "GE", "HK", "IN", "IR", "IQ", "IL", "JP", "JO",
+            "KW", "KG", "LA", "LB", "MO", "MY", "MN", "MM", "NP", "KP",
+            "OM", "PK", "PS", "PH", "QA", "SA", "SG", "KR", "LK", "SY",
+            "TW", "TJ", "TH", "TL", "TM", "AE", "UZ", "VN", "YE"
+            ]:
+            regionCodes.append("ASI")
+        if country == "TR" and state not in europeanTurkey:
+            regionCodes.append("ASI")
+        if country == "KZ" and state not in ["KZ-ATY", "KZ-ZAP"]:
+            regionCodes.append("ASI")
+        if country == "ID" and state != "ID-IJ":
+            regionCodes.append("ASI")
+        if state in asianEgypt or state in asianRussia:
+            regionCodes.append("ASI")
+
+        # Eurasia: Europe and Asia together
+        if "EUR" in regionCodes or "ASI" in regionCodes:
+            regionCodes.append("EUA")
+
+        # ----------------------------------------
+        # Australasia (eBird): Australia without Cocos, Christmas and Heard,
+        # New Zealand, Papua New Guinea, the Solomons, Vanuatu, New
+        # Caledonia, and Indonesia's Papua and Maluku
+        if country in ["AU", "AC", "NF", "NZ", "PG", "SB", "VU", "NC"]:
+            regionCodes.append("AUE")
+        if state in ["ID-IJ", "ID-MA"]:
+            regionCodes.append("AUE")
+
+        # Australasia (ABA): Australia and Papua New Guinea, with Indonesia's
+        # Papua and Maluku
+        if country in ["AU", "PG"] or state in ["ID-IJ", "ID-MA"]:
+            regionCodes.append("AUA")
+
+        # Australia and its territories
+        if country in ["AU", "AC", "NF", "CC", "CX", "HM"]:
+            regionCodes.append("AUS")
+
+        # ----------------------------------------
+        # Pacific Ocean: its islands, New Zealand included, except those in
+        # Australasia, North America or South America — so Hawaii, Midway,
+        # Johnston, Clipperton and the Galápagos are in
+        if country in [
+            "NZ", "FJ", "FM", "MH", "PW", "KI", "NR", "GU", "MP", "WS",
+            "AS", "TO", "TV", "PF", "NU", "CK", "TK", "WF", "PN", "UM", "CP"
+            ] or state in ["US-HI", "EC-W"]:
+            regionCodes.append("PAC")
+
+        # ----------------------------------------
+        # South Polar: Antarctica, Bouvet, South Georgia and the South
+        # Sandwich Islands, and Heard and McDonald
+        if country in ["AQ", "BV", "GS", "HM"]:
             regionCodes.append("SPO")
 
-
         # ----------------------------------------
-        # add WH if if in Western Hemisphere listing region as designated by eBird
-
-        if "NAM" in regionCodes:
+        # Western Hemisphere: North and South America, with Hawaii, Midway,
+        # Johnston, Clipperton, Bermuda, the Galápagos and the Falklands
+        if ("NAM" in regionCodes or "SAM" in regionCodes
+                or country in ["CP", "BM", "FK"]
+                or state in ["US-HI", "UM-67", "UM-71", "EC-W"]):
             regionCodes.append("WHE")
 
-        if "SAM" in regionCodes:
-            regionCodes.append("WHE")
-
-        if country in [
-            "CP", "BM", "FK"
-            ]:
-            regionCodes.append("WHE")
-
-        if state in [
-            "US-HI", "UM-67", "UM-71", "EC-W"
-            ]:
-            regionCodes.append("WHE")
-
-
-        # ------------------------------------------------------
-        # add EH if in Eastern Hemisphere  (not Western, and not South Polar)
-
+        # Eastern Hemisphere: everything else but South Polar
         if "WHE" not in regionCodes and "SPO" not in regionCodes:
             regionCodes.append("EHE")
+
+
+        # ----------------------------------------
+        # Regions beyond eBird's and the ABA's listing areas.  Regions may
+        # overlap (Middle East sits inside Asia), and each is built from
+        # whole countries except where a state split is noted.
+
+        # Middle East: Arabia, the Levant, Iraq, Iran, plus Turkey and Cyprus,
+        # and Egypt only east of Suez (the governorates the Asia rule uses).
+        if country in [
+            "BH", "IR", "IQ", "IL", "JO", "KW", "LB", "OM", "PS", "QA",
+            "SA", "SY", "AE", "YE", "TR", "CY"
+            ] or state in asianEgypt:
+            regionCodes.append("MDE")
+
+        # Indian Subcontinent
+        if country in ["IN", "PK", "NP", "BT", "BD", "LK", "MV"]:
+            regionCodes.append("ISC")
+
+        # Southeast Asia: Indonesia without Papua, as the Asia rule has it
+        if country in ["MM", "TH", "LA", "KH", "VN", "MY", "SG", "BN", "PH", "TL"]:
+            regionCodes.append("SEA")
+        if country == "ID" and state != "ID-IJ":
+            regionCodes.append("SEA")
+
+        # Sub-Saharan Africa: Africa without the Mediterranean north and the
+        # Canaries
+        if ("AFR" in regionCodes and country not in ["DZ", "EG", "LY", "MA", "TN", "EH"]
+                and state != "ES-CN"):
+            regionCodes.append("SSA")
+
+        # Western Palearctic, eBird's countries (after Cramp and Simmons):
+        # Europe, the Canaries and Cape Verde, North Africa, the Levant,
+        # Iraq, Kuwait, Cyprus, the Caucasus and Turkey.  eBird also takes in
+        # some provinces of Mauritania, Mali, Niger, Chad and Saudi Arabia,
+        # which the glossary does not name, so they are left out.
+        if "EUR" in regionCodes or country in [
+            "CV", "EH", "MA", "TN", "DZ", "LY", "EG", "PS", "IL", "JO",
+            "LB", "KW", "IQ", "SY", "CY", "AZ", "AM", "GE", "TR"
+            ] or state == "ES-CN":
+            regionCodes.append("WPA")
+
+        # OSME Region (Ornithological Society of the Middle East, the Caucasus
+        # and Central Asia): the Middle East plus the Caucasus, Central Asia
+        # and Afghanistan
+        if "MDE" in regionCodes or country in [
+            "GE", "AM", "AZ", "KZ", "KG", "TJ", "TM", "UZ", "AF"
+            ]:
+            regionCodes.append("OSM")
+
+        # Neotropics: South and Central America, the West Indies, the
+        # Galápagos, and Mexico's tropical south and southeast
+        if ("SAM" in regionCodes or "CAM" in regionCodes or "WIN" in regionCodes
+                or state == "EC-W" or state in neotropicalMexico):
+            regionCodes.append("NTR")
+
+        # Nearctic: the Neotropics' northern counterpart — the US but Hawaii,
+        # Canada, St. Pierre et Miquelon, Greenland, Bermuda, and the rest of
+        # Mexico
+        if ((country in ["US", "CA", "PM", "GL", "BM"] and state != "US-HI")
+                or (country == "MX" and state != "MX-"
+                    and state not in neotropicalMexico)):
+            regionCodes.append("NEA")
+
+        # Several rules can name the same region; list each region once, so
+        # nothing that counts by region counts a sighting twice.
+        regionCodes = list(dict.fromkeys(regionCodes))
 
         self._regionCache[key] = regionCodes
         return regionCodes
