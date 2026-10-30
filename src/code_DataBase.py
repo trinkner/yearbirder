@@ -2948,9 +2948,13 @@ class DataBase():
             self.speciesDict.setdefault(commonName, []).append(thisSightingDict)
 
             # also add subspecies as key to speciesDict
-            # to facilitate lookup
+            # to facilitate lookup.  A sighting with no subspecies has the
+            # species name here too; filing it again under the same key listed
+            # it twice, which double-counted every sum over a species-filtered
+            # list (tallies, checklist counts).
             subspeciesName = thisSightingDict["subspeciesName"]
-            self.speciesDict.setdefault(subspeciesName, []).append(thisSightingDict)
+            if subspeciesName != commonName:
+                self.speciesDict.setdefault(subspeciesName, []).append(thisSightingDict)
 
             # add sighting to yearDict
             # use 4-digit year as the key
