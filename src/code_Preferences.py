@@ -2,6 +2,7 @@
 import form_Preferences
 from code_Stylesheet import YBFont
 import code_Audio
+import code_DataBase
 
 from PySide6.QtGui import QFont
 
@@ -9,6 +10,7 @@ from PySide6.QtCore import Signal, Qt, QTimer
 
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QCheckBox,
     QFileDialog,
     QFrame,
     QHBoxLayout,
@@ -57,6 +59,7 @@ class Preferences(QMdiSubWindow, form_Preferences.Ui_frmPreferences):
         self.tabWidget.currentChanged.connect(self.tabChanged)
         self.btnAddRig.clicked.connect(self._addRig)
         self.btnRemoveRig.clicked.connect(self._removeRig)
+        self._buildStartupTab()
         self._buildPlaybackTab()
 
     def fillPreferences(self):
@@ -73,6 +76,9 @@ class Preferences(QMdiSubWindow, form_Preferences.Ui_frmPreferences):
 
         self._fillMyLocationCombos()
         self._refreshRigTable()
+
+        for key, chk in self.startupChecks.items():
+            chk.setChecked(self.mdiParent.db.startupWindows.get(key, False))
 
     def _refreshRigTable(self):
         """Show the saved rigs.  Cells are edited in place; the table is the
@@ -197,6 +203,25 @@ class Preferences(QMdiSubWindow, form_Preferences.Ui_frmPreferences):
         else:
             self._deviceTimer.stop()
             self._stopTick()
+
+    # ── Startup tab: windows to open when Yearbirder starts ─────────────
+    def _buildStartupTab(self):
+        tab = QWidget()
+        lay = QVBoxLayout(tab)
+        lay.setSpacing(10)
+
+        self.lblStartup = QLabel("Show these windows when Yearbirder starts.")
+        lay.addWidget(self.lblStartup)
+
+        self.startupChecks = {}
+        for key, label in code_DataBase.STARTUP_WINDOWS:
+            chk = QCheckBox(label)
+            self.startupChecks[key] = chk
+            lay.addWidget(chk)
+        lay.addStretch(1)
+
+        # Right of Default Files, the first tab.
+        self.tabWidget.insertTab(1, tab, "Startup")
 
     # ── Playback tab: per-device audio/cursor sync calibration ──────────
     #
@@ -478,6 +503,8 @@ class Preferences(QMdiSubWindow, form_Preferences.Ui_frmPreferences):
             self.btnSelectPhotoDataFile,
             self.btnToggleApiKey,
             self.tabWidget,
+            self.lblStartup,
+            *self.startupChecks.values(),
         ]):
             try:
                 w.setFont(QFont(YBFont, fontSize))
@@ -516,6 +543,9 @@ class Preferences(QMdiSubWindow, form_Preferences.Ui_frmPreferences):
                 "and each name must be unique.\n\n" + "\n".join(rigProblems))
             return
         self.mdiParent.db.rigs = rigs
+
+        self.mdiParent.db.startupWindows = {
+            key: chk.isChecked() for key, chk in self.startupChecks.items()}
 
         self.mdiParent.db.writePreferences()
         self.mdiParent.updateMyLocationButtons()

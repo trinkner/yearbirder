@@ -796,6 +796,11 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.actionTileWindows.triggered.connect(self.TileWindows)
         self.actionCascade.triggered.connect(self.CascadeWindows)
         self.actionCloseAllWindows.triggered.connect(self.CloseAllWindows)
+        # Option-Command-W is the Mac's standard Close All (Qt reads "Ctrl" as
+        # Command and "Alt" as Option there).  Elsewhere Ctrl+Alt doubles as
+        # AltGr on many keyboards, so Windows gets Ctrl+Shift+W instead.
+        self.actionCloseAllWindows.setShortcut(QKeySequence(
+            "Ctrl+Alt+W" if sys.platform == "darwin" else "Ctrl+Shift+W"))
         self.actionSpecies.triggered.connect(self.CreateSpeciesList)
         self.actionChecklists.triggered.connect(self.CreateChecklistsList)
         self.actionLocations.triggered.connect(self.CreateLocationsList)
@@ -1549,7 +1554,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.FillMainComboBoxes()
             self.fillingLocationComboBoxesFlag = False
             self.showStandardFilter()
-            self.CreateSpeciesList()
             self.actionClose.setVisible(True)
             self.actionOpenPhotoSettings.setVisible(True)
             self.actionAddPhotos.setVisible(True)
@@ -1568,7 +1572,67 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 self.actionRenameMedia.setVisible(True)
                 self.actionOptimizePhotoSettings.setVisible(True)
 
-            self.showFileDataMessage()
+            self.openStartupWindows()
+
+
+    def openStartupWindows(self):
+        """Open the windows chosen in Preferences > Startup, all for the whole
+        data file (no filter is set yet at startup).  Statistics opens last,
+        so it lands centered on top as it always has.  With more than one
+        window chosen they are laid out together (see _arrangeStartupWindows)
+        instead of cascading as new windows normally do."""
+        chosen = MainWindow.db.startupWindows
+        opened = {}
+
+        def _open(key, create):
+            before = set(self.mdiArea.subWindowList())
+            create()
+            new = [w for w in self.mdiArea.subWindowList() if w not in before]
+            if new:
+                opened[key] = new[-1]
+
+        if chosen.get("lifelist"):
+            _open("lifelist", self.CreateSpeciesList)
+        if chosen.get("dateTotals"):
+            _open("dateTotals", self.CreateDateTotals)
+        if chosen.get("locationTotals"):
+            _open("locationTotals", self.CreateLocationTotals)
+
+        # Date and Location Totals size themselves in a QTimer(0) scaleMe, so
+        # arrange after those have run.
+        if sum(1 for key in chosen if chosen[key]) > 1:
+            QTimer.singleShot(0, lambda: self._arrangeStartupWindows(opened))
+
+        if chosen.get("statistics"):
+            self.CreateStatsOnLoad()
+
+    def _arrangeStartupWindows(self, opened):
+        """Startup layout: the Lifelist at top left, Location Totals at top
+        right, Date Totals at left beneath the Lifelist (moved up if it would
+        run off the bottom).  Statistics centers itself on top of them."""
+        gap = int(6 * self.scaleFactor)
+        areaWidth = self.mdiArea.viewport().width()
+        areaHeight = self.mdiArea.viewport().height()
+
+        def _alive(key):
+            w = opened.get(key)
+            try:
+                return w if w is not None and w.isVisible() else None
+            except RuntimeError:      # closed and deleted already
+                return None
+
+        lifelist = _alive("lifelist")
+        if lifelist is not None:
+            lifelist.move(gap, gap)
+
+        locationTotals = _alive("locationTotals")
+        if locationTotals is not None:
+            locationTotals.move(max(gap, areaWidth - locationTotals.width() - gap), gap)
+
+        dateTotals = _alive("dateTotals")
+        if dateTotals is not None:
+            top = lifelist.geometry().bottom() + gap if lifelist is not None else gap
+            dateTotals.move(gap, max(gap, min(top, areaHeight - dateTotals.height() - gap)))
             
             
           
@@ -1693,10 +1757,6 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         for w in self.mdiArea.subWindowList():        
             w.scaleMe()
             
-
-    def showFileDataMessage(self):
-        self.CreateStatsOnLoad()
-        
 
     def clearAllFilters(self):
         self.clearStandardFilter()

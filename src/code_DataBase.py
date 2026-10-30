@@ -498,6 +498,18 @@ def resource_path(filename):
 # names.  A species with no row is shown as Not Available ("NA", not an IUCN
 # category): it is one BirdLife does not recognize as a species, usually an
 # eBird split, so a true IUCN Not Evaluated would be the wrong claim.
+# Windows Preferences > Startup can open when Yearbirder starts, in the order
+# they open, with their checkbox labels and defaults.  The Lifelist (the
+# unfiltered Species list) and Statistics were what startup always opened.
+STARTUP_WINDOWS = (
+    ("lifelist",       "Lifelist"),
+    ("statistics",     "Statistics"),
+    ("dateTotals",     "Date Totals"),
+    ("locationTotals", "Location Totals"),
+)
+STARTUP_WINDOW_DEFAULTS = {"lifelist": True, "statistics": True,
+                           "dateTotals": False, "locationTotals": False}
+
 IUCN_CATEGORIES = {
     "EX":       "Extinct",
     "EW":       "Extinct in the Wild",
@@ -854,6 +866,9 @@ class DataBase():
         # (see unattachedFingerprint), so the notice after a load appears only
         # when something new has come unattached, not on every launch.
         self.unattachedMediaNotice = ""
+        # Windows to open when Yearbirder starts (Preferences > Startup).  The
+        # defaults are what startup always opened before the setting existed.
+        self.startupWindows = dict(STARTUP_WINDOW_DEFAULTS)
         self._countryLookup = {}   # shortCode -> longName, built by ReadCountryStateCodeFile
         self._stateLookup = {}     # shortCode -> longName, built by ReadCountryStateCodeFile
         self._countriesWithoutStates = set()   # countries eBird does NOT subdivide
@@ -5961,6 +5976,19 @@ class DataBase():
                 elif line.startswith("unattachedMediaNotice="):
                     self.unattachedMediaNotice = (
                         line[len("unattachedMediaNotice="):].strip())
+
+                elif line.startswith("startupWindows="):
+                    # Only known windows, and any missing keep their default,
+                    # so a hand-edited file or a later window added to the
+                    # list does not break startup.
+                    try:
+                        loaded = json.loads(line[len("startupWindows="):].strip()) or {}
+                    except (ValueError, TypeError):
+                        loaded = {}
+                    if isinstance(loaded, dict):
+                        for key in STARTUP_WINDOW_DEFAULTS:
+                            if key in loaded:
+                                self.startupWindows[key] = bool(loaded[key])
                 
     
     def writePreferences(self):
@@ -5990,5 +6018,6 @@ class DataBase():
             f.write("explorerBackDays=" + str(self.explorerBackDays) + "\n")
             f.write("showBatchOptions=" + str(bool(self.showBatchOptions)) + "\n")
             f.write("unattachedMediaNotice=" + self.unattachedMediaNotice + "\n")
+            f.write("startupWindows=" + json.dumps(self.startupWindows) + "\n")
         
             
