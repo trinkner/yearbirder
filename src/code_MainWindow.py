@@ -1657,7 +1657,11 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         MainWindow.scaleFactor = self.scaleFactor
         MainWindow.rowHeight = int(QFontMetrics(QFont(YBFont, MainWindow.fontSize)).boundingRect("2222-22-22").height() * 1.1)
         
-        self.menuBar.setFont(QFont(YBFont, self.fontSize))
+        # Windows draws the menu bar in the window, where the 8 pt body size
+        # (the Mac's 11 px) reads small; 9 pt is Windows' own menu bar size.
+        # The Mac's menu bar is the system's, so this font never shows there.
+        menuBarSize = self.fontSize + 1 if sys.platform == "win32" else self.fontSize
+        self.menuBar.setFont(QFont(YBFont, menuBarSize))
         for _menu in self.menuBar.findChildren(QMenu):
             _menu.setFont(QFont(YBFont, self.fontSize))
                         

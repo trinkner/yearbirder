@@ -31,7 +31,7 @@ Full version history and downloads: [yearbirder.org](https://yearbirder.org)
 - **Regions follow the eBird Glossary** — eBird’s listing regions match its own definitions, the ABA Area includes Hawaii, and new regions include the Middle East, Indian Subcontinent, Southeast Asia, Sub-Saharan Africa, Western Palearctic, Neotropics and Nearctic.
 - **Startup windows** — a new Preferences tab chooses which windows open at startup: Lifelist, Statistics, Date Totals and Location Totals.
 - **Close All Windows shortcut** — ⌥⌘W on the Mac, Ctrl+Shift+W on Windows.
-- **Fixes** — data files with sightings in Bermuda, the Falklands or St Helena load; Belize, Martinique, Turks and Caicos, Russia, Cuba, the US Virgin Islands and nine African countries fall in the right regions; whole-country locations no longer show a bare state code such as “CR-”; Manage Photos and Manage Recordings warn before discarding edits to cataloged media; closing the media catalog closes every media window; the Compare Lists cards are shorter.
+- **Fixes** — data files with sightings in Bermuda, the Falklands or St Helena load; Belize, Martinique, Turks and Caicos, Russia, Cuba, the US Virgin Islands and nine African countries fall in the right regions; whole-country locations no longer show a bare state code such as “CR-”; Manage Photos and Manage Recordings warn before discarding edits to cataloged media; closing the media catalog closes every media window; the Compare Lists cards are shorter; the Location Totals window shows its icon; the Windows menu bar text is larger.
 
 ## What's New in v2.21
 
