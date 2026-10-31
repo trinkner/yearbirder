@@ -941,6 +941,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         for d in range(1,  32):
             self.cboStartSeasonalRangeDate.addItem(str(d))
             self.cboEndSeasonalRangeDate.addItem(str(d))
+        self.cboConservationStatus.addItem("All Statuses")
+        self.cboConservationStatus.insertSeparator(1)
+        self.cboConservationStatus.addItems(list(code_DataBase.CONSERVATION_FILTER_CHOICES))
         self.cboDateOptions.addItems(["No Date Filter",  "Use Calendars Below",  "This Year",  "Last Year",  "This Month",  "This Week (M-Su)",  "Today",  "Yesterday", "Last Weekend", "Select Year"])
         self.cboSeasonalRangeOptions.addItems([
             "No Seasonal Range",  
@@ -981,6 +984,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.cboFamilies.currentIndexChanged.connect(self.ComboFamiliesChanged)
         self.cboSpecies.currentIndexChanged.connect(self.ComboSpeciesChanged)
         self.txtCommonNameSearch.textChanged.connect(self.textCommonNameSearchChanged)
+        self.cboConservationStatus.currentIndexChanged.connect(self.ComboConservationStatusChanged)
         self.cboDateOptions.currentIndexChanged.connect(self.ComboDateOptionsChanged)
         self.cboYear.currentIndexChanged.connect(self.ComboYearChanged)
         self.cboSeasonalRangeOptions.currentIndexChanged.connect(self.ComboSeasonalRangeOptionsChanged)
@@ -1019,6 +1023,10 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             "Filter by a word or phrase in the common name or subspecies name.\n"
             "Use s: prefix to search scientific names instead (e.g., s:Buteo).\n"
             "Use b: prefix to search banding codes (e.g., b:OSFL).")
+        self.cboConservationStatus.setToolTip(
+            "Filter by IUCN Red List category (BirdLife International).\n"
+            "Not Available covers species BirdLife does not recognize,\n"
+            "and slashes, spuhs, and hybrids.")
         self.cboDateOptions.setToolTip(
             "Choose how to filter by date: use the calendars below, select a\n"
             "preset (Today, This Year, etc.), or apply no date filter.")
@@ -1806,6 +1814,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self.cboYear.setStyleSheet("")
         self.cboSeasonalRangeOptions.setCurrentIndex(0)
         self.txtCommonNameSearch.setText("")
+        self.cboConservationStatus.setCurrentIndex(0)
 
         self._dropFilterFocus(self.dckFilter)
 
@@ -4041,6 +4050,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             filter.getFamily() == "" and
             filter.getChecklistID() == "" and
             filter.getCommonNameSearch() == "" and
+            filter.getConservationStatus() == "" and
             filter.getStartSeasonalMonth() == ""
         )
         if filterIsEmpty:
@@ -5543,6 +5553,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         family = ""
         order = ""
         commonNameSearch = ""
+        conservationStatus = ""
         startRating = ""
         endRating = ""
         speciesHasPhoto = ""
@@ -5964,6 +5975,10 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 
             commonNameSearch = self.txtCommonNameSearch.text().rstrip()               
 
+        # check conservation status combobox
+        if self.cboConservationStatus.currentIndex() != 0:
+            conservationStatus = self.cboConservationStatus.currentText()
+
 
         # check sighting combobox
         if self.cboStartRatingRange.currentIndex() != 0:
@@ -6033,6 +6048,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         newFilter.setFamily(family)
         newFilter.setOrder(order)
         newFilter.setCommonNameSearch(commonNameSearch)
+        newFilter.setConservationStatus(conservationStatus)
         
         newFilter.setStartRating(startRating)
         newFilter.setEndRating(endRating)
@@ -6276,6 +6292,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         family = filter.getFamily()                                                         # str family name
         order = filter.getOrder()
         commonNameSearch = filter.getCommonNameSearch()
+        conservationStatus = filter.getConservationStatus()
         sightingPhotographed = filter.getSightingHasPhoto()
         speciesPhotographed = filter.getSpeciesHasPhoto()
         camera = filter.getCamera()
@@ -6352,6 +6369,9 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                            "common":     "Common name"}[searchMode]
             detailsText = (detailsText + "; " + searchLabel + " includes '"
                            + searchNeedle + "'")
+
+        if conservationStatus != "":
+            detailsText = detailsText + "; " + conservationStatus
 
         if sightingPhotographed == "Has photo":
             detailsText = detailsText + "; " + "Sightings with photos"
@@ -7024,6 +7044,14 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             self.txtCommonNameSearch.setStyleSheet("")
             
         
+    def ComboConservationStatusChanged(self):
+
+        if self.cboConservationStatus.currentIndex() == 0:
+            self.cboConservationStatus.setStyleSheet("")
+        else:
+            self.highlightFilterElement(self.cboConservationStatus)
+
+
     def ComboSeasonalRangeOptionsChanged(self):
         if self.fillingLocationComboBoxesFlag is False:
 

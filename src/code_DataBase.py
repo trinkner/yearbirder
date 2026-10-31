@@ -541,6 +541,22 @@ IUCN_COLORS = {
     "NA": "#A0A0A0",
 }
 
+# The Sighting Filter's Conservation Status choices, most to least severe,
+# with the base categories each one matches.  PE and PEW match Critically
+# Endangered, as their pills do; Threatened is the IUCN's own grouping.
+CONSERVATION_FILTER_CHOICES = {
+    "Threatened (CR, EN, VU)": ("CR", "EN", "VU"),
+    "Extinct":               ("EX",),
+    "Extinct in the Wild":   ("EW",),
+    "Critically Endangered": ("CR",),
+    "Endangered":            ("EN",),
+    "Vulnerable":            ("VU",),
+    "Near Threatened":       ("NT",),
+    "Least Concern":         ("LC",),
+    "Data Deficient":        ("DD",),
+    "Not Available":         ("NA",),
+}
+
 
 def _safe_rating(val, default=0):
     """Return val as an int in 0-5, or default if val is missing/invalid."""
@@ -4039,6 +4055,9 @@ class DataBase():
             # parsed once here, not per sighting — TestSightingCompiled runs
             # over the whole database
             'nameSearch':         _parse_name_search(filter.getCommonNameSearch()),
+            'conservationCodes':  CONSERVATION_FILTER_CHOICES.get(filter.getConservationStatus(), ()),
+            # common name -> base IUCN category, filled as sightings are tested
+            'conservationCache':  {},
             'sightingHasPhoto':   filter.getSightingHasPhoto(),
             'speciesHasPhoto':    filter.getSpeciesHasPhoto(),
             'validPhotoSpecies':  filter.getValidPhotoSpecies(),
@@ -4088,6 +4107,7 @@ class DataBase():
         time = cf['time']
         commonNameSearch = cf['commonNameSearch']
         nameSearchMode, nameSearchNeedle = cf['nameSearch']
+        conservationCodes = cf['conservationCodes']
 
         sightingHasPhoto = cf['sightingHasPhoto']
         speciesHasPhoto = cf['speciesHasPhoto']
@@ -4174,6 +4194,18 @@ class DataBase():
                 if nameSearchNeedle not in sighting["commonName"].lower():
                     if nameSearchNeedle not in sighting["subspeciesName"].lower():
                         return(False)
+
+        # if a conservation status has been specified, check the species' IUCN
+        # category, looked up once per species rather than once per sighting
+        if conservationCodes:
+            conservationCache = cf['conservationCache']
+            commonName = sighting["commonName"]
+            status = conservationCache.get(commonName)
+            if status is None:
+                status = self.GetConservationStatus(commonName)[0].split()[0]
+                conservationCache[commonName] = status
+            if status not in conservationCodes:
+                return(False)
 
         # if a checklistID has been specified, check if sighting matches
         if checklistID != "":
@@ -5655,7 +5687,8 @@ class DataBase():
 
     def _loadRedListData(self):
 
-        # Loaded the first time an Individual window asks, not at startup.
+        # Loaded the first time an Individual window or the Conservation
+        # Status filter asks, not at startup.
         # A missing file leaves the dict empty, so every species reads as
         # Not Available.
         self.redListDict = {}

@@ -16,6 +16,7 @@ class Filter():
     time = ""                   #str  format HH:MM in 24-hour format
     order = "" 
     commonNameSearch = ""       #str commonNameSearch string
+    conservationStatus = ""     #str a code_DataBase.CONSERVATION_FILTER_CHOICES key, or ""
 
     sightingHasPhoto = ""
     speciesHasPhoto = ""
@@ -165,6 +166,14 @@ class Filter():
 
     def setCommonNameSearch(self, commonNameSearch):
         self.commonNameSearch = commonNameSearch
+
+
+    def getConservationStatus(self):
+        return(self.conservationStatus)
+
+
+    def setConservationStatus(self, conservationStatus):
+        self.conservationStatus = conservationStatus
 
         
     def setTime(self,  time):
@@ -466,6 +475,7 @@ class Filter():
         family             = self.getFamily()
         order              = self.getOrder()
         commonNameSearch   = self.getCommonNameSearch()
+        conservationStatus = self.getConservationStatus()
 
         # Taxonomy: use only the most specific level that has been set
         if speciesName != "":
@@ -481,6 +491,9 @@ class Filter():
 
         if commonNameSearch != "":
             windowTitle = windowTitle + "; Search: " + commonNameSearch
+
+        if conservationStatus != "":
+            windowTitle = windowTitle + "; " + conservationStatus
 
         # Location: the filter carries at most one active level
         if locationName != "":

@@ -5272,6 +5272,8 @@ body {{ background:#16171d; color:#e2e4ec;
                      "banding":    "Banding code",
                      "common":     "Name"}[searchMode]
             parts.append(f"{label} includes '{searchNeedle}'")
+        if filter.getConservationStatus():
+            parts.append(filter.getConservationStatus())
 
         # --- Date range ---
         sd, ed = filter.getStartDate(), filter.getEndDate()
