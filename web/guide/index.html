@@ -334,7 +334,7 @@
 </table>
 
 <h3>Working with multiple windows</h3>
-<p>Any number of windows can be open at the same time. Use <strong>Windows → Tile Windows</strong> or <strong>Windows → Cascade Windows</strong> to arrange them. Close individual windows with their close button, or close all at once with <strong>Windows → Close All Windows</strong>.</p>
+<p>Any number of windows can be open at the same time. Use <strong>Windows → Tile Windows</strong> or <strong>Windows → Cascade Windows</strong> to arrange them. Close individual windows with their close button, or close all at once with <strong>Windows → Close All Windows</strong> (<strong>⌥⌘W</strong> on the Mac, <strong>Ctrl+Shift+W</strong> on Windows).</p>
 <p>Each window's title bar shows a descriptive label that reflects the active filter — for example, <em>"Species: Warbler; New York; 2024 (42 Species)"</em>.</p>
 
 <p class="back-to-top"><a href="#top">Back to top &uarr;</a></p>
@@ -375,7 +375,7 @@
 <table>
   <thead><tr><th>Filter</th><th>Description</th></tr></thead>
   <tbody>
-    <tr><td>Region</td><td>A broad geographic region (e.g., North America)</td></tr>
+    <tr><td>Region</td><td>A broad geographic region. The list shows only regions your data reaches. eBird's listing regions follow the eBird Glossary: the ABA Area (with Hawaii and Midway) and ABA Continental (without them), the AOU Area, the continents (North America, South America, Africa, Europe, Asia, South Polar) and Eurasia, Central America, the West Indies, the Atlantic/Arctic, Indian and Pacific Oceans, Australasia by both eBird's and the ABA's definitions, Australia and Territories, the Western Palearctic, and the Western and Eastern Hemispheres. Yearbirder adds USA Lower 48, the Middle East, Indian Subcontinent, Southeast Asia, Sub-Saharan Africa, the OSME Region (Middle East, Caucasus and Central Asia), the Neotropics and the Nearctic, which between them divide the Americas, with Mexico split by state. Regions overlap, so a sighting in Israel counts toward Asia, the Middle East, the Western Palearctic and the OSME Region. Regions are worked out from each location's country and state, so where eBird draws a line by coordinates or ocean limits (pelagic waters, parts of the Western Palearctic) the edges are approximate</td></tr>
     <tr><td>Country</td><td>A specific country (e.g., United States)</td></tr>
     <tr><td>State</td><td>A state or province</td></tr>
     <tr><td>County</td><td>A county or sub-region within a state</td></tr>
@@ -392,6 +392,7 @@
     <tr><td>Family</td><td>Bird family (e.g., Parulidae – Wood-Warblers)</td></tr>
     <tr><td>Species</td><td>A single species name</td></tr>
     <tr><td>Name Search</td><td>Free-text search; matches any part of a species' common name. Prefix with <code>s:</code> to search scientific names (<code>s:Buteo</code>) or <code>b:</code> to search banding codes (<code>b:OSFL</code>)</td></tr>
+    <tr><td>Conservation Status</td><td>IUCN Red List category from BirdLife International (e.g., Vulnerable). Threatened covers Critically Endangered, Endangered, and Vulnerable. Not Available covers species BirdLife does not recognize, and slashes, spuhs, and hybrids</td></tr>
   </tbody>
 </table>
 <p>The taxonomic filters also follow a hierarchy for the purposes of the window title: if a Species is selected, Family and Order are not shown in the title (they are implied). If only a Family is selected, Order is not shown. Only the most specific level selected is displayed.</p>
@@ -475,8 +476,11 @@
   <tbody>
     <tr><td>Tax</td><td>Taxonomic sort order number</td></tr>
     <tr><td>Species</td><td>Common name (click to open the Individual Species window)</td></tr>
+    <tr><td>Status</td><td>IUCN Red List conservation status, as a colored circle with its two-letter code (hover for the full name). Sorting by it puts the most threatened species first</td></tr>
     <tr><td>First</td><td>Date of your first sighting of this species</td></tr>
     <tr><td>Last</td><td>Date of your most recent sighting</td></tr>
+    <tr><td>Photos</td><td>Number of photos of this species in your media catalog (blank for none). When a photo setting in the Media Filter is active, only the photos that match it. Double-click to open them in Browse Grid. Shown only when your catalog has photos</td></tr>
+    <tr><td>Recordings</td><td>Number of recordings of this species, counted the same way; double-click to open them in Browse Grid. Shown only when your catalog has recordings</td></tr>
     <tr><td>Checklists</td><td>Number of checklists on which this species appears</td></tr>
     <tr><td>% of Checklists</td><td>The percentage of your total checklists that include this species</td></tr>
   </tbody>
@@ -515,12 +519,18 @@
   <thead><tr><th>Column</th><th>Description</th></tr></thead>
   <tbody>
     <tr><td>Location</td><td>The eBird location name</td></tr>
+    <tr><td>Country</td><td>Country of the location</td></tr>
+    <tr><td>State</td><td>State/province</td></tr>
+    <tr><td>County</td><td>County (if recorded)</td></tr>
     <tr><td>First</td><td>Date of your first visit</td></tr>
     <tr><td>Last</td><td>Date of your most recent visit</td></tr>
+    <tr><td>Photos</td><td>Number of photos taken at this location (blank for none). When a photo setting in the Media Filter is active, only the photos that match it. Double-click to open them in Browse Grid. Shown only when your catalog has photos</td></tr>
+    <tr><td>Recordings</td><td>Number of recordings made at this location, counted the same way; double-click to open them in Browse Grid. Shown only when your catalog has recordings</td></tr>
+    <tr><td>Checklists</td><td>Number of checklists at this location</td></tr>
   </tbody>
 </table>
 <p>The count of locations is shown in the window title, e.g., <em>"Locations: All species, locations, and dates (702 Locations)"</em>.</p>
-<p>Right-clicking a location lets you set it as the active location filter, or open it on a map.</p>
+<p>Right-clicking a location lets you set it, or its country, state or county, as the active location filter, or open it on a map.</p>
 <p>Double-clicking a location opens its <strong>Location window</strong>. In its Species, Dates and Checklists tabs, right-click a row to set the main filter to that species or date — on the Species tab, to the species or its first or last date there.</p>
 
 <p class="back-to-top"><a href="#top">Back to top &uarr;</a></p>
@@ -537,19 +547,21 @@
 <table>
   <thead><tr><th>Column</th><th>Description</th></tr></thead>
   <tbody>
+    <tr><td>Location</td><td>Location name</td></tr>
     <tr><td>Country</td><td>Country where the checklist was submitted</td></tr>
     <tr><td>State</td><td>State/province</td></tr>
     <tr><td>County</td><td>County (if recorded)</td></tr>
-    <tr><td>Location</td><td>Location name</td></tr>
     <tr><td>Date</td><td>Checklist date</td></tr>
     <tr><td>Time</td><td>Start time</td></tr>
-    <tr><td>Species</td><td>Number of species on that checklist</td></tr>
+    <tr><td>Species</td><td>Number of species on that checklist that match the current filter. With no species, family or media filter set, that is every species on the checklist</td></tr>
+    <tr><td>Tallies</td><td>Number of individual birds counted for those species. A <strong>+</strong> means some were recorded with an X (present, not counted), so the true total is higher; a tally of only X species reads <strong>X</strong>. When a Media Filter setting is active, this column becomes <strong>Media</strong>: the number of photos or recordings on the checklist that match the filter, since photos and recordings don't correspond one to one with birds counted</td></tr>
     <tr><td>eBird</td><td>Green button — click to open this checklist on the eBird website in your browser (requires an eBird API key in Preferences)</td></tr>
   </tbody>
 </table>
 <p>Click any row to see the comments recorded for that checklist.</p>
 <p>Right-clicking a row lets you set the checklist's date, country, state, county, or location as the active filter.</p>
 <p>When the Checklists List is filtered to a <strong>single checklist</strong> (showing only that checklist's species), an <strong>eBird</strong> button also appears in the sidebar panel on the left, opening the same checklist on the eBird website.</p>
+<p>A single checklist with photos or recordings also shows <strong>Photos</strong> and <strong>Recordings</strong> buttons beneath the <strong>Location</strong> button. They open the photo or recording browser on that checklist's media. Each button appears only when the checklist has media of that kind.</p>
 
 <p class="back-to-top"><a href="#top">Back to top &uarr;</a></p>
 
@@ -877,7 +889,7 @@
   <li><strong>Locations summary</strong> — a breakdown of sightings by country, state, county and location. Right-click any of them to set the main filter to it (<strong>Set Filter to Country</strong>, <strong>State</strong>, <strong>County</strong> or <strong>Location</strong>). Select one to list the dates you recorded the species there; right-click a date and choose <strong>Set Filter to Date</strong> to set the main filter to that day.</li>
   <li><strong>Yearly summary</strong> — how many times you recorded the species in each year.</li>
   <li><strong>Monthly summary</strong> — which months you most often record this species (useful for understanding migration timing).</li>
-  <li><strong>Conservation status</strong> — under the order and family, the species' IUCN Red List category (Least Concern, Near Threatened, Vulnerable, Endangered, Critically Endangered, and so on), from the AviList global checklist. Species AviList gives no category, and slashes, spuhs and hybrids, read <strong>Not Available</strong>.</li>
+  <li><strong>Conservation status</strong> — under the order and family, the species' IUCN Red List category (Least Concern, Near Threatened, Vulnerable, Endangered, Critically Endangered, and so on), after a small circle in the category's color holding its two-letter code (LC, NT, VU, EN, CR, EW, EX, DD, or NA for Not Available), from BirdLife International, the Red List authority for birds. Species BirdLife does not recognize (usually recent eBird splits), and slashes, spuhs and hybrids, read <strong>Not Available</strong>.</li>
   <li><strong>Links</strong> — direct links to the species' page on Wikipedia, All About Birds, Birds of the World, the IUCN Red List and Audubon. The IUCN Red List button opens the species' Red List page; for a species whose status reads Not Available it opens IUCN's search instead, which IUCN shows only after you sign in with a free IUCN account. Birds of the World is a subscription site: sign in once in its window and Yearbirder remembers the sign-in from then on, as it does for any site you open from these links. Yearbirder never sees or stores your password; the site's own sign-in cookie is kept, as a browser would keep it.</li>
   <li><strong>Photos</strong> — if you have photos of this species in your media catalog, thumbnails are shown. Click a thumbnail to open the Enlargement view.</li>
 </ul>
@@ -913,7 +925,7 @@
 <p>Changes to your photo associations are written to the media catalog automatically as you make them, so there is no separate save step. To keep a safety copy, choose <strong>File → Backup media catalog…</strong>, which writes a dated backup copy of your catalog without disturbing the working file.</p>
 
 <h3>Closing the media catalog</h3>
-<p>Choose <strong>File → Close media catalog</strong>. This unloads all photo data from memory. The Media Filter panel becomes inactive.</p>
+<p>Choose <strong>File → Close media catalog</strong>. This unloads all photo and recording data from memory and closes every open media window: browse cards and grids, enlargements, species galleries, photo and recording stats, Manage Photos, Manage Recordings, Rename Media and any slideshow. If Manage Photos or Manage Recordings holds unsaved work, it asks first; choosing to keep working leaves the catalog open. The Media Filter panel becomes inactive, and open lists drop their Photos and Recordings columns and buttons.</p>
 
 <h3>Adding more photos</h3>
 <p>With a media catalog already loaded, choose <strong>File → Add photos…</strong> to import additional photos. The new associations are merged into the existing catalog; save afterwards. After you select files, Yearbirder reports how many are already tracked and how many are new — so you can confirm you have selected the right files before any associations are created.</p>
@@ -1682,13 +1694,16 @@
 
 <h2 id="preferences">39. Saving Preferences</h2>
 
-<p>Click <strong>Yearbirder → Preferences</strong> on the menu bar to set your preferences. Settings are organized across five tabs:</p>
+<p>Click <strong>Yearbirder → Preferences</strong> on the menu bar to set your preferences. Settings are organized across six tabs:</p>
 
 <h3>Default Files</h3>
 <ul>
   <li><strong>Startup Folder</strong> — The folder where you save your eBird data files. When checked, Yearbirder automatically opens the most recent eBird file from this folder at startup.</li>
   <li><strong>Media Catalog</strong> — The path to your default media catalog. When checked, Yearbirder opens this catalog automatically at startup.</li>
 </ul>
+
+<h3>Startup</h3>
+<p>Choose which windows open when Yearbirder starts with your eBird file: <strong>Lifelist</strong> (the Species list for all your data), <strong>Statistics</strong>, <strong>Date Totals</strong> and <strong>Location Totals</strong>. Each covers all your data. Lifelist and Statistics are checked to begin with; uncheck everything to start with no windows open.</p>
 
 <h3>My Locations</h3>
 <p>Save your home county and regular birding location ("patch") so you can jump to them instantly from the Sighting Filter.</p>
