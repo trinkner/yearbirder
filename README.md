@@ -21,6 +21,18 @@ Full version history and downloads: [yearbirder.org](https://yearbirder.org)
 
 ---
 
+## What's New in v2.22
+
+- **Conservation status from BirdLife** — status now comes from BirdLife International, the Red List authority for birds, and covers far more eBird species. A color-coded circle shows the category in the Individual window and in a new Status column in the Species list, which sorts the most threatened first.
+- **Conservation Status filter** — the Sighting Filter limits any report to one IUCN Red List category, or to all threatened species (Critically Endangered, Endangered and Vulnerable).
+- **Media counts in the lists** — the Species and Locations lists gain Photos and Recordings columns that follow the filter; double-click a count to open those files in Browse Grid. A single checklist gains Photos and Recordings buttons.
+- **Checklists list tallies** — a Tallies column sums the birds counted, and Species counts only the species that match the filter.
+- **Locations list** — Country, State and County columns, any of which a right-click sets as the filter.
+- **Regions follow the eBird Glossary** — eBird’s listing regions match its own definitions, the ABA Area includes Hawaii, and new regions include the Middle East, Indian Subcontinent, Southeast Asia, Sub-Saharan Africa, Western Palearctic, Neotropics and Nearctic.
+- **Startup windows** — a new Preferences tab chooses which windows open at startup: Lifelist, Statistics, Date Totals and Location Totals.
+- **Close All Windows shortcut** — ⌥⌘W on the Mac, Ctrl+Shift+W on Windows.
+- **Fixes** — data files with sightings in Bermuda, the Falklands or St Helena load; Belize, Martinique, Turks and Caicos, Russia, Cuba, the US Virgin Islands and nine African countries fall in the right regions; whole-country locations no longer show a bare state code such as “CR-”; Manage Photos and Manage Recordings warn before discarding edits to cataloged media; closing the media catalog closes every media window; the Compare Lists cards are shorter.
+
 ## What's New in v2.21
 
 - **2026 eBird taxonomy** — bundled, with banding codes rebuilt from the latest IBP list. Species eBird has split and IBP has not yet show their eBird entry code.
@@ -54,7 +66,7 @@ Full version history and downloads: [yearbirder.org](https://yearbirder.org)
 - **The date on every grid card** — Browse Grid shows each photo's and recording's capture date beneath the species name.
 - **Sort direction moved to the right** — Ascending and Descending sit at the right-hand end of the browse banner, separated from the sort keys.
 - **What's New, in the app** — a What's New item joins the User Guide menu, showing the notes for the version you are running rather than the newest published, so it never describes features your build lacks.
-- **The User Guide is on the web** — the complete guide now lives at [yearbirder.org/guide](https://yearbirder.org/guide), readable and searchable without opening the app.
+- **The User Guide is on the web** — the complete guide now lives at [yearbirder.org/guide](https://yearbirder.org/guide/), readable and searchable without opening the app.
 
 ## What's New in v2.16
 
@@ -112,7 +124,7 @@ Full version history and downloads: [yearbirder.org](https://yearbirder.org)
 - **Audio calibration** — correct for Bluetooth or interface latency so the spectrogram's playback cursor stays aligned with what you hear.
 - **My County and My Patch** — quick-jump buttons that set the Sighting Filter to your saved county or regular birding location.
 
-Later 2.0x releases refined this work; see the [full version history](https://yearbirder.org/history.html).
+Later 2.0x releases refined this work; see the [full version history](https://yearbirder.org/history).
 
 ## What's New in v1.50
 
