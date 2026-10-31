@@ -46,7 +46,7 @@ _COLOR_IDLE     = "#3a3c4a"   # unselected card background
 _COLOR_IDLE_HV  = "#4a4d5e"   # unselected card hover
 _COLOR_BORDER   = "#5a5e73"   # idle border
 _CARD_W         = 160         # px
-_CARD_H         = 64          # px (20% shorter than the original 80)
+_CARD_H         = 96          # px, fixed (20% shorter than the 120 the gallery used to stretch them to)
 
 
 class _ListCard(QFrame):
@@ -65,9 +65,9 @@ class _ListCard(QFrame):
         # an objectName a bare "QFrame { border }" rule also matches the child
         # QLabels (QLabel subclasses QFrame), drawing a stray inner border.
         self.setObjectName("listCard")
-        self.setMinimumHeight(_CARD_H)
+        self.setFixedHeight(_CARD_H)
         self.setMinimumWidth(_CARD_W)
-        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         self.setCursor(Qt.PointingHandCursor)
         self.setMouseTracking(True)
 
@@ -202,8 +202,10 @@ class Compare(QMdiSubWindow):
         gallery_scroll.setFrameShape(QFrame.Shape.NoFrame)
         gallery_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         gallery_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        gallery_scroll.setMinimumHeight(_CARD_H + 20)
-        gallery_scroll.setMaximumHeight(_CARD_H * 2)
+        # Cards plus the gallery margins (4 + 4) and the 8px horizontal
+        # scroll bar, so the bar never squeezes the cards.  A min/max range
+        # here let the cards stretch to fill the maximum instead.
+        gallery_scroll.setFixedHeight(_CARD_H + 16)
         gallery_scroll.setWidgetResizable(True)
 
         gallery_widget = QWidget()
@@ -339,7 +341,8 @@ class Compare(QMdiSubWindow):
         for title in titles:
             card = _ListCard(title)
             card.clicked.connect(self._on_card_clicked)
-            self._gallery_layout.insertWidget(self._gallery_layout.count() - 1, card)
+            self._gallery_layout.insertWidget(self._gallery_layout.count() - 1, card,
+                                              alignment=Qt.AlignTop)
             self._cards.append(card)
 
         # Watch the MDI viewport for windows being added or removed.
@@ -549,7 +552,8 @@ class Compare(QMdiSubWindow):
             card = _ListCard(title)
             card.clicked.connect(self._on_card_clicked)
             # Insert before the trailing stretch (last item)
-            self._gallery_layout.insertWidget(self._gallery_layout.count() - 1, card)
+            self._gallery_layout.insertWidget(self._gallery_layout.count() - 1, card,
+                                              alignment=Qt.AlignTop)
             self._cards.append(card)
 
     def closeEvent(self, event):
