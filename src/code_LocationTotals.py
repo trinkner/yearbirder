@@ -56,6 +56,9 @@ class LocationTotals(QMdiSubWindow, form_LocationTotals.Ui_frmLocationTotals):
         _container = QWidget()
         self.setupUi(_container)
         self.setWidget(_container)
+        # setupUi's window icon also went to the container; the title bar
+        # draws the subwindow's own
+        self.setWindowIcon(_container.windowIcon())
         self.setObjectName("frmLocationTotals")
         self.setAttribute(Qt.WA_DeleteOnClose,True)
         self.mdiParent = ""        
