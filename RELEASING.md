@@ -91,10 +91,11 @@ workflow's `on:` triggers). The final **merge to `master`** is the one deliberat
    ```
 
    Attaching the tested `.exe` yourself closes the window where the release exists but
-   the Windows asset does not. The master build (~8 minutes later) adds only what is
-   missing — in practice the `.msix` — and leaves your `.exe` untouched: it skips any
-   asset the release already carries, because re-uploading resets that asset's download
-   count to zero.
+   the Windows asset does not. The master build (~8 minutes later) leaves your `.exe`
+   untouched: it skips any asset the release already carries, because re-uploading
+   resets that asset's download count to zero. It never attaches the `.msix`, which is
+   unsigned and cannot be installed from GitHub (0x800B010A); that stays a CI artifact
+   for the Microsoft Store submission (see `STORE_SUBMISSION.md`).
 
 ## eBird taxonomy
 
