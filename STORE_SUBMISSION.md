@@ -30,7 +30,7 @@ photos, preferences).
 | Package tested | Yes — v2.17 installs and runs when signed |
 | Privacy policy URL | Yes — https://yearbirder.org/privacy |
 | Support contact | Yes — support@yearbirder.org (iCloud+ custom domain, live 2026-09-20) |
-| Screenshots | Yes — reuse `web/images/demo_*.png` (1366x768 minimum) |
+| Screenshots | Yes — Windows screenshots in `web/images/MS Store Submission/` (1366x768 minimum) |
 | Description text | Yes — adapt `web/index.html` or the BirdForum post |
 
 So the work tomorrow is navigation and form-filling, not production.
@@ -109,9 +109,12 @@ The part that takes the longest. Per language (en-us only, per the manifest):
   birder, not a feature list.
 - **What's new in this version**: paste the current release's entry from
   `web/history.html`.
-- **Screenshots**: 1–10, minimum 1366x768. `web/images/demo_AppMain.png` and
-  friends are 4608x2592 and will downscale fine. Choose the visually distinctive
-  ones — the maps, a photo grid, a spectrogram — rather than tables.
+- **Screenshots**: 1–10, minimum 1366x768, taken **on Windows**. Microsoft
+  rejected the v2.22 update because one showed the macOS app, so the website's
+  `web/images/demo_*.png` (Mac screenshots) cannot be reused. Keep the Store set
+  in `web/images/MS Store Submission/` (git-ignored, named `yb_<version>_<subject>.png`).
+  Choose the visually distinctive ones — the maps, a photo grid, a spectrogram —
+  rather than tables.
 - **Short description** (up to 500 chars) — used in search results, so make the
   first sentence answer "what is this?".
 - **Search terms**: eBird, birding, bird photography, life list, birdwatching,
