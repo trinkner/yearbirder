@@ -79,6 +79,7 @@ from PySide6.QtCore import (
     Qt,
     QDate,
     QMarginsF,
+    QRect,
     QRectF,
     QSize,
     QSizeF,
@@ -1143,6 +1144,13 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         self._windowBeingClosed = None
         self.mdiArea.subWindowActivated.connect(self.onSubWindowActivated)
 
+        # The child-window layout from just before the MDI area went into
+        # maximized mode: [(subwindow, wasMinimized, normalGeometry), ...].
+        # Replayed when a maximized child closes; see _onSubWindowStateChanged.
+        self._preMaximizeLayout = None
+        self._closingWasMaximized = False
+        self._closingDisplacedParent = None
+
         # The photo/recording enlargement currently shown full screen, if any.
         # Registered by their toggleFullScreen; see _onAppStateChanged.
         self._fullScreenChild = None
@@ -1322,6 +1330,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         # restore focus to the correct window afterward.
         if event.type() == QEvent.Close and obj in self.subWindowFocusOrder:
             self._windowBeingClosed = obj
+            self._closingWasMaximized = obj.isMaximized()
+            self._closingDisplacedParent = getattr(obj, "_displacedMaximized", None)
             QTimer.singleShot(0, self.restorePreviousFocus)
         return False
 
@@ -1374,6 +1384,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         if not getattr(window, '_focusFilterInstalled', False):
             window.installEventFilter(self)
             window._focusFilterInstalled = True
+            window.windowStateChanged.connect(
+                lambda old, new, w=window: self._onSubWindowStateChanged(w, old, new))
         # Ignore Qt's automatic re-activation that fires while a close is in progress.
         if self._windowBeingClosed is not None:
             return
@@ -1386,9 +1398,92 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         openWindows = set(self.mdiArea.subWindowList())
         self.subWindowFocusOrder = [w for w in self.subWindowFocusOrder
                                     if w in openWindows]
-        self._windowBeingClosed = None
+        closed = self._windowBeingClosed
+        # Still flagged as closing while re-activating, so a maximize handed to
+        # the re-activated window is not mistaken for entering maximized mode
+        # (see _onSubWindowStateChanged).  It is already last in the order.
         if self.subWindowFocusOrder:
             self.mdiArea.setActiveSubWindow(self.subWindowFocusOrder[-1])
+        self._windowBeingClosed = None
+        # A close can be vetoed (e.g. an unsaved-changes prompt), so act only
+        # if the window really went away.
+        wasMaximized = self._closingWasMaximized
+        self._closingWasMaximized = False
+        if wasMaximized and (not isValid(closed) or closed not in openWindows):
+            self._restorePreMaximizeLayout(self._closingDisplacedParent)
+        self._closingDisplacedParent = None
+
+
+    def _onSubWindowStateChanged(self, w, oldState, newState):
+        """Snapshot the other windows' layout as the MDI area enters maximized
+        mode, so closing the maximized window can return to it.
+
+        Qt only ever keeps one subwindow maximized, but the MDI area stays in
+        maximized mode after it closes: the next window activated is maximized
+        in its place.  Taken only when no OTHER window is maximized, i.e. on
+        entering maximized mode, not when the maximize passes between windows
+        (activating another window while maximized), so the snapshot is the
+        layout the user saw before maximizing."""
+        M = Qt.WindowState.WindowMaximized
+        if not (newState & M) or (oldState & M):
+            return
+        # Qt hands the maximize to another window as one closes; that is not
+        # the user entering maximized mode.
+        if self._windowBeingClosed is not None:
+            return
+        others = [o for o in self.mdiArea.subWindowList() if o is not w]
+        if any(o.isMaximized() for o in others):
+            return
+        self._preMaximizeLayout = [
+            (o, o.isMinimized(), QRect(o.geometry())) for o in others]
+
+
+    def _restorePreMaximizeLayout(self, parent):
+        """After a maximized child closes, put the remaining children back the
+        way they were before maximized mode began: restored windows restored
+        at their old geometry, minimized ones minimized.  Windows opened during
+        maximized mode are restored.
+
+        Not when the closed window was opened from a maximized window: that one
+        is re-maximized instead (see PositionChildWindow), since the maximized
+        parent IS the previous view."""
+        layout = self._preMaximizeLayout
+        self._preMaximizeLayout = None
+        if layout is None:
+            return
+        if parent is not None and isValid(parent) and parent in self.mdiArea.subWindowList():
+            self._preMaximizeLayout = layout   # still in maximized mode
+            return
+
+        current = self.mdiArea.subWindowList()
+        known = {}
+        for o, wasMin, geom in layout:
+            if isValid(o) and o in current:
+                known[o] = (wasMin, geom)
+        active = self.mdiArea.activeSubWindow()
+        # Leave maximized mode first, then minimize, so a minimized window is
+        # not re-maximized by Qt's maximized-mode activation.
+        for o in current:
+            if o.isMaximized():
+                o.showNormal()
+        for o in current:
+            wasMin, geom = known.get(o, (False, None))
+            if wasMin:
+                if not o.isMinimized():
+                    o.showMinimized()
+            else:
+                if o.isMinimized():
+                    o.showNormal()
+                if geom is not None:
+                    o.setGeometry(geom)
+        # Re-activate the most recently used window that is not minimized.
+        for o in reversed(self.subWindowFocusOrder):
+            if o in current and not o.isMinimized():
+                self.mdiArea.setActiveSubWindow(o)
+                break
+        else:
+            if active is not None and not active.isMinimized():
+                self.mdiArea.setActiveSubWindow(active)
 
 
     def processPreferences(self):
@@ -3766,6 +3861,7 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
             # set, so a child closed while still maximized is correctly seen as
             # maximized here and does hand the state back.
             if displaced_maximized is not None:
+                child._displacedMaximized = displaced_maximized
                 childMaximized = [True]
                 child.windowStateChanged.connect(
                     lambda _old, newState, flag=childMaximized:
