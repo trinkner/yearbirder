@@ -3306,9 +3306,43 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
                 )
                 return
 
-        photo_sightings = MainWindow.db.GetSightingsWithPhotos(self.GetFilter())
-        recording_file_to_sightings = MainWindow.db.GetSightingsByRecordingFile(
-            self.GetFilter())
+        # Each media kind answers only to its own Media Filter section.  When
+        # only one section has settings, that kind alone is listed (the same
+        # rule as the media counts in the lists); with neither or both, both
+        # kinds are listed.  Files are tested individually too: a sighting
+        # passes when ANY of its files matches, so a sighting's other files
+        # must not ride along.
+        db = MainWindow.db
+        f = self.GetFilter()
+        photo_active = f.hasPhotoFilter()
+        recording_active = f.hasRecordingFilter()
+        want_photos = photo_active or not recording_active
+        want_recordings = recording_active or not photo_active
+
+        photo_sightings = []
+        photo_files = None
+        if want_photos:
+            pf = self.GetPhotoFilter()
+            photo_sightings = db.GetSightingsWithPhotos(pf)
+            if photo_active:
+                photo_files = {p["fileName"]
+                               for s in photo_sightings
+                               for p in s.get("photos", [])
+                               if db.TestIndividualPhoto(p, pf)}
+                photo_sightings = [s for s in photo_sightings
+                                   if any(p["fileName"] in photo_files
+                                          for p in s.get("photos", []))]
+
+        recording_file_to_sightings = {}
+        if want_recordings:
+            rf = self.GetRecordingsFilter()
+            recording_file_to_sightings = db.GetSightingsByRecordingFile(rf)
+            if recording_active:
+                recording_file_to_sightings = {
+                    fn: ss for fn, ss in recording_file_to_sightings.items()
+                    if any(db.TestIndividualRecording(a, rf)
+                           for a in ss[0].get("audio", [])
+                           if a["fileName"] == fn)}
 
         if not photo_sightings and not recording_file_to_sightings:
             self.CreateMessageNoResults()
@@ -3323,7 +3357,8 @@ class MainWindow(QMainWindow, form_MDIMain.Ui_MainWindow):
         sub.scaleMe()
         sub.resizeMe()
 
-        sub.FillRenameMedia(photo_sightings, recording_file_to_sightings)
+        sub.FillRenameMedia(photo_sightings, recording_file_to_sightings,
+                            photo_files)
 
 
     def rebuildThumbnailCache(self):

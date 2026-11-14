@@ -292,12 +292,15 @@ class RenameMedia(QMdiSubWindow, form_RenameMedia.Ui_frmRenameMedia):
 
     # ── Public ─────────────────────────────────────────────────────────────────
 
-    def FillRenameMedia(self, photo_sightings, recording_file_to_sightings):
+    def FillRenameMedia(self, photo_sightings, recording_file_to_sightings,
+                        photo_files=None):
         """Populate the table with photos and recording files.
 
         photo_sightings  — list of sightings-with-photos (same as FillRenameMedia).
         recording_file_to_sightings — {filename: [sightings]} from GetSightingsByRecordingFile.
         Each photo and each unique recording file becomes one table row.
+        photo_files — when given, only photos whose fileName is in it are listed
+        (the photos that individually pass the Media Filter).
         """
         self._rows = []
         self._frozen_paths = set()
@@ -315,6 +318,8 @@ class RenameMedia(QMdiSubWindow, form_RenameMedia.Ui_frmRenameMedia):
         row_index = 0
         for s in photo_sightings:
             for p in s.get("photos", []):
+                if photo_files is not None and p["fileName"] not in photo_files:
+                    continue
                 # Use the catalog-cached EXIF capture time when present; otherwise
                 # read it from the file once and cache it back on the live photo
                 # record, so the compaction on window-close persists it and future
