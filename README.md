@@ -21,6 +21,10 @@ Full version history and downloads: [yearbirder.org](https://yearbirder.org)
 
 ---
 
+## What's New in v2.23
+
+- **Fixes** — fixed a bug that caused crashes on macOS 26.7.3; closing a maximized window restores the earlier window layout; Rename Media lists only the media kind the Media Filter selects.
+
 ## What's New in v2.22
 
 - **Conservation status from BirdLife** — status now comes from BirdLife International, the Red List authority for birds, and covers far more eBird species. A color-coded circle shows the category in the Individual window and in a new Status column in the Species list, which sorts the most threatened first.
