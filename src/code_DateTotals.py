@@ -1,4 +1,5 @@
 # import GUI form for this class
+import code_Cursors
 import form_DateTotals
 from code_Stylesheet import YBFont
 
@@ -120,7 +121,7 @@ class DateTotals(QMdiSubWindow, form_DateTotals.Ui_frmDateTotals):
 
     def html(self):
     
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        QApplication.setOverrideCursor(code_Cursors.waitCursor())
 
         html = """
             <!DOCTYPE html>

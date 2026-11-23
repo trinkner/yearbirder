@@ -1,4 +1,5 @@
 # import GUI form for this class
+import code_Cursors
 import form_LocationTotals
 from code_Stylesheet import YBFont
 # import pandas
@@ -126,7 +127,7 @@ class LocationTotals(QMdiSubWindow, form_LocationTotals.Ui_frmLocationTotals):
 
     def html(self):
     
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        QApplication.setOverrideCursor(code_Cursors.waitCursor())
 
         html = """
             <!DOCTYPE html>

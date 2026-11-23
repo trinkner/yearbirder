@@ -1,4 +1,5 @@
 # import project files
+import code_Cursors
 import form_Find
 from code_Stylesheet import YBFont
 import code_Lists
@@ -36,7 +37,7 @@ class Find(QMdiSubWindow, form_Find.Ui_frmFind):
 
     def CreateFindResults(self):
 
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        QApplication.setOverrideCursor(code_Cursors.waitCursor())
         
         #The user has accepted the has clicked OK
         searchString = self.txtFind.text()

@@ -1,4 +1,5 @@
 # import project files
+import code_Cursors
 import form_TripReport
 from code_Stylesheet import YBFont
 import code_Filter
@@ -352,7 +353,7 @@ class TripReport(QMdiSubWindow, form_TripReport.Ui_frmTripReport):
         
         
     def CreateLocation(self,  callingWidget):
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        QApplication.setOverrideCursor(code_Cursors.waitCursor())
         if callingWidget.objectName() == "lstLocations":
             locationName = callingWidget.currentItem().text()
         if callingWidget.objectName() == "tblNewLocationSpecies":
@@ -373,7 +374,7 @@ class TripReport(QMdiSubWindow, form_TripReport.Ui_frmTripReport):
     
     def CreateIndividual(self,  callingWidget):
         species = None
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        QApplication.setOverrideCursor(code_Cursors.waitCursor())
         if callingWidget.objectName() in (["lstSpecies", 
                                                                             "lstLocationSpecies", 
                                                                             "lstLocationUniqueSpecies", 
@@ -406,7 +407,7 @@ class TripReport(QMdiSubWindow, form_TripReport.Ui_frmTripReport):
     
     
     def CreateSpeciesList(self,  callingWidget):
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        QApplication.setOverrideCursor(code_Cursors.waitCursor())
         if callingWidget.objectName() == "lstDates":
             date = callingWidget.currentItem().text()
         
@@ -552,22 +553,22 @@ class TripReport(QMdiSubWindow, form_TripReport.Ui_frmTripReport):
     def onTabChanged(self, index):
         tabIndex = self.tabAnalysis.indexOf
         if index == tabIndex(self.tabNewDates) and not self.newDatesLoaded:
-            QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+            QApplication.setOverrideCursor(code_Cursors.waitCursor())
             self._fillNewDates()
             self.newDatesLoaded = True
             QApplication.restoreOverrideCursor()
         elif index == tabIndex(self.tabNewRegions) and not self.newRegionsLoaded:
-            QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+            QApplication.setOverrideCursor(code_Cursors.waitCursor())
             self._fillNewRegions()
             self.newRegionsLoaded = True
             QApplication.restoreOverrideCursor()
         elif index == tabIndex(self.tabNewLocations) and not self.newLocationsLoaded:
-            QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+            QApplication.setOverrideCursor(code_Cursors.waitCursor())
             self._fillNewLocations()
             self.newLocationsLoaded = True
             QApplication.restoreOverrideCursor()
         elif index == tabIndex(self.tabItinerary) and not self.itineraryLoaded:
-            QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+            QApplication.setOverrideCursor(code_Cursors.waitCursor())
             self.FillItinerary()
             self.itineraryLoaded = True
             QApplication.restoreOverrideCursor()
@@ -1398,7 +1399,7 @@ document.addEventListener('click', function(e) {
 
 
     def TblSpeciesClicked(self):
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        QApplication.setOverrideCursor(code_Cursors.waitCursor())
         
         currentColumn = self.tblSpecies.currentColumn()
         currentRow = self.tblSpecies.currentRow()
@@ -1708,7 +1709,7 @@ document.addEventListener('click', function(e) {
             self._fillNewLocations()
             self.newLocationsLoaded = True
 
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        QApplication.setOverrideCursor(code_Cursors.waitCursor())
 
         db = self.mdiParent.db
         speciesCount   = db.CountSpecies(self.speciesList)

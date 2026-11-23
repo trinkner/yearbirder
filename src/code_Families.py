@@ -1,4 +1,5 @@
 # import the GUI forms that we create with Qt Creator
+import code_Cursors
 import form_Families
 from code_Stylesheet import YBFont
 
@@ -193,7 +194,7 @@ class Families(QMdiSubWindow, form_Families.Ui_frmFamilies):
         
     def html(self):
     
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        QApplication.setOverrideCursor(code_Cursors.waitCursor())
 
         html = """
             <!DOCTYPE html>

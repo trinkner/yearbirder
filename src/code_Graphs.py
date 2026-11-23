@@ -1,3 +1,4 @@
+import code_Cursors
 import base64
 import copy
 import calendar
@@ -4118,7 +4119,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
 
     def _spawn_individual_window(self, species_name):
         import code_Individual
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        QApplication.setOverrideCursor(code_Cursors.waitCursor())
         sub = code_Individual.Individual()
         sub.mdiParent = self.mdiParent
         sub.FillIndividual(species_name)
@@ -4130,7 +4131,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
 
     def _spawn_location_window(self, location_name):
         import code_Location
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        QApplication.setOverrideCursor(code_Cursors.waitCursor())
         sub = code_Location.Location()
         sub.mdiParent = self.mdiParent
         sub.FillLocation(location_name)
@@ -4329,7 +4330,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
             self._spawn_species_list(new_filter)
 
     def _spawn_species_list(self, filter):
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        QApplication.setOverrideCursor(code_Cursors.waitCursor())
         sub = code_Lists.Lists()
         sub.mdiParent = self.mdiParent
         if sub.FillSpecies(filter) is True:
@@ -4343,7 +4344,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         QApplication.restoreOverrideCursor()
 
     def _spawn_locations_list(self, filter):
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        QApplication.setOverrideCursor(code_Cursors.waitCursor())
         sub = code_Lists.Lists()
         sub.mdiParent = self.mdiParent
         if sub.FillLocations(filter) is True:
@@ -4357,7 +4358,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         QApplication.restoreOverrideCursor()
 
     def _spawn_species_gallery(self, filter):
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        QApplication.setOverrideCursor(code_Cursors.waitCursor())
         sub = code_SpeciesGallery.SpeciesGallery()
         sub.mdiParent = self.mdiParent
         self.mdiParent.mdiArea.addSubWindow(sub)
@@ -4433,7 +4434,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         self.mdiParent.createPhotosGridForFilter(new_filter)
 
     def _spawn_photos_window(self, filter):
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        QApplication.setOverrideCursor(code_Cursors.waitCursor())
         sub = code_Photos.Photos()
         sub.mdiParent = self.mdiParent
         self.mdiParent.mdiArea.addSubWindow(sub)
@@ -4450,7 +4451,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         Pre-checks for results before touching the MDI area — adding then
         removing a window makes the sibling windows visibly jerk.
         recordingTest and titleText pass through to FillRecordings."""
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        QApplication.setOverrideCursor(code_Cursors.waitCursor())
         import code_RecordingsGrid
         if not self.mdiParent.db.GetSightingsWithRecordings(filter):
             QApplication.restoreOverrideCursor()
@@ -4471,7 +4472,7 @@ class Graphs(QMdiSubWindow, form_Graphs.Ui_frmGraphs):
         sub.show()
 
     def _spawn_recordings_browser(self, filter):
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        QApplication.setOverrideCursor(code_Cursors.waitCursor())
         import code_Recordings
         if not self.mdiParent.db.GetSightingsWithRecordings(filter):
             self.mdiParent.CreateMessageNoResults()

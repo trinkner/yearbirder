@@ -1,3 +1,4 @@
+import code_Cursors
 import csv
 import json
 import ssl
@@ -680,7 +681,7 @@ class Explorer(QMdiSubWindow):
         url = f"https://api.ebird.org/v2/ref/region/list/subnational2/{state_code}"
         req = urllib.request.Request(url, headers={"X-eBirdApiToken": self._api_key})
         try:
-            QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+            QApplication.setOverrideCursor(code_Cursors.waitCursor())
             with urllib.request.urlopen(req, timeout=20, context=_SSL_CTX) as resp:
                 regions = json.loads(resp.read().decode("utf-8"))
         except Exception:

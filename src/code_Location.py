@@ -1,4 +1,5 @@
 # import the GUI forms that we create with Qt Creator
+import code_Cursors
 import form_Location
 from code_Stylesheet import YBFont
 
@@ -195,7 +196,7 @@ class Location(QMdiSubWindow, form_Location.Ui_frmLocation):
 
 
     def CreateSpeciesList(self,  filter):
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        QApplication.setOverrideCursor(code_Cursors.waitCursor())
         
         sub = code_Lists.Lists()
         sub.mdiParent = self.mdiParent
@@ -542,7 +543,7 @@ class Location(QMdiSubWindow, form_Location.Ui_frmLocation):
 
     def html(self):
     
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        QApplication.setOverrideCursor(code_Cursors.waitCursor())
 
         # create start to basic html format
         html = """

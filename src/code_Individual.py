@@ -1,4 +1,5 @@
 # import the GUI forms that we create with Qt Creator
+import code_Cursors
 import form_Individual
 from code_Stylesheet import YBFont
 import code_Filter 
@@ -817,7 +818,7 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
 
     def CreateSpeciesList(self, callingWidget):
 
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        QApplication.setOverrideCursor(code_Cursors.waitCursor())
         filter = code_Filter.Filter()
         filter.setSpeciesName(self.lblCommonName.text())
         
@@ -1020,7 +1021,7 @@ class Individual(QMdiSubWindow, form_Individual.Ui_frmIndividual):
 
     def html(self):
     
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        QApplication.setOverrideCursor(code_Cursors.waitCursor())
 
         html = """
             <!DOCTYPE html>

@@ -1,3 +1,4 @@
+import code_Cursors
 from PySide6.QtCore import QLibraryInfo
 import json
 import os
@@ -146,7 +147,7 @@ class CommunitySightingsMapBridge(QObject):
         badge_state   = None
         badge_county  = None
         if api_key:
-            QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+            QApplication.setOverrideCursor(code_Cursors.waitCursor())
             info = self._web._ebirdGet(f"/v2/ref/hotspot/info/{loc_id}", api_key)
             QApplication.restoreOverrideCursor()
             if isinstance(info, dict):
@@ -908,7 +909,7 @@ class Web(QMdiSubWindow, form_Web.Ui_frmWeb):
    
     def html(self):
 
-#         QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+#         QApplication.setOverrideCursor(code_Cursors.waitCursor())
 
         if self.contentType in ("Notable Sightings", "All Community Sightings", "Species List"):
             return self._buildCommunityPdfHtml()
@@ -1431,7 +1432,7 @@ td {{ border-bottom:1px solid #e8e8e8; vertical-align:middle; }}
         self._fsPage = _FullScreenPage(self, self.webView, externalWebProfile())
         self.webView.setPage(self._fsPage)
         oldPage.deleteLater()
-#         QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+#         QApplication.setOverrideCursor(code_Cursors.waitCursor())
         self.webView.load(QUrl(url))
         self.resizeMe()
         self.scaleMe()
@@ -5385,7 +5386,7 @@ body {{ background:#16171d; color:#e2e4ec;
         stripped_filter.setSpeciesHasPhoto("")
         stripped_filter.setSpeciesHasRecording("")
 
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        QApplication.setOverrideCursor(code_Cursors.waitCursor())
         try:
             species_codes = self._ebirdGet(f"/v2/product/spplist/{region_code}", api_key)
             if species_codes is None:
@@ -5956,7 +5957,7 @@ body {{ background:#16171d; color:#e2e4ec;
             )
             return False
 
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        QApplication.setOverrideCursor(code_Cursors.waitCursor())
         try:
             observations = self._ebirdGet(api_path, api_key)
         except Exception as exc:
@@ -6541,7 +6542,7 @@ body {{ background:#16171d; color:#e2e4ec;
         self._communityRegionId    = region_id
         self._communityRegionLabel = region_label
 
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        QApplication.setOverrideCursor(code_Cursors.waitCursor())
         observations = self._ebirdGet(
             f"/v2/data/obs/{region_id}/recent?detail=full&back={BACK_DAYS}&includeProvisional=true",
             api_key,
@@ -7515,7 +7516,7 @@ function handleShowChecklist(el) {{
             )
             return False
 
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        QApplication.setOverrideCursor(code_Cursors.waitCursor())
         try:
             observations = self._ebirdGet(api_path, api_key)
         except Exception:
@@ -7906,7 +7907,7 @@ function handleShowChecklist(el) {{
         self._communityRegionId    = region_id
         self._communityRegionLabel = region_label
 
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        QApplication.setOverrideCursor(code_Cursors.waitCursor())
         observations = self._ebirdGet(
             f"/v2/data/obs/{region_id}/recent/{species_code}"
             f"?detail=full&back={back_days}&includeProvisional=true",
@@ -8379,7 +8380,7 @@ function openChecklist(subId) {{
             )
             return False
 
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        QApplication.setOverrideCursor(code_Cursors.waitCursor())
         url = f"https://api.ebird.org/v2/ref/hotspot/{region_id}"
         req = urllib.request.Request(url, headers={"X-eBirdApiToken": api_key})
         # 90s, not 20s: a whole-country region is a genuinely large download
@@ -8660,7 +8661,7 @@ function openChecklist(subId) {{
         self._communityRegionId    = region_id
         self._communityRegionLabel = region_label
 
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        QApplication.setOverrideCursor(code_Cursors.waitCursor())
         observations = self._ebirdGet(
             f"/v2/data/obs/{region_id}/recent/{species_code}"
             f"?detail=full&back={back_days}&includeProvisional=true",

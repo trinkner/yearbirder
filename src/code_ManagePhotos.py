@@ -1,4 +1,5 @@
 # import project files
+import code_Cursors
 import form_ManagePhotos
 from code_Stylesheet import YBFont
 import code_Filter
@@ -410,7 +411,7 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
 
     def FillPhotosByFiles(self, files): 
         
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        QApplication.setOverrideCursor(code_Cursors.waitCursor())
 
         # set flag so other routines will know that we're adding new files to db
         self.photosAlreadyInDb = False
@@ -483,7 +484,7 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         if not items:
             return False
 
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        QApplication.setOverrideCursor(code_Cursors.waitCursor())
         self.photosAlreadyInDb = False
         items.sort(key=lambda u: (u["commonName"].lower(), u["date"], u["fileName"]))
         counts = Counter(u["commonName"] for u in items)
@@ -727,7 +728,7 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         if len(photoSightings) == 0:
             return False
 
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        QApplication.setOverrideCursor(code_Cursors.waitCursor())
 
         self.setWindowTitle("Manage Photos")
 
@@ -779,7 +780,7 @@ class ManagePhotos(QMdiSubWindow, form_ManagePhotos.Ui_frmManagePhotos):
         self.filter.setStartDate(sightingData["date"])
         self.filter.setEndDate(sightingData["date"])
 
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        QApplication.setOverrideCursor(code_Cursors.waitCursor())
 
         self.setWindowTitle("Manage Photos")
 

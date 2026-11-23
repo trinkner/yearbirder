@@ -1,4 +1,5 @@
 # import project files
+import code_Cursors
 import form_Lists
 from code_Stylesheet import YBFont
 import code_Filter
@@ -1462,7 +1463,7 @@ class Lists(QMdiSubWindow, form_Lists.Ui_frmSpeciesList):
 
 
     def tblListClicked(self):
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        QApplication.setOverrideCursor(code_Cursors.waitCursor())
         
         currentRow = self.tblList.currentRow()
         currentColumn = self.tblList.currentColumn()

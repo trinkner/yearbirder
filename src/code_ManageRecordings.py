@@ -1,3 +1,4 @@
+import code_Cursors
 import form_ManageRecordings
 from code_Stylesheet import YBFont
 import code_Filter
@@ -670,7 +671,7 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
     # ------------------------------------------------------------------
 
     def FillRecordingsByFiles(self, files):
-        QApplication.setOverrideCursor(Qt.WaitCursor)
+        QApplication.setOverrideCursor(code_Cursors.waitCursor())
         self.audioAlreadyInDb = False
 
         allowed = []
@@ -709,7 +710,7 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         QTimer.singleShot(0, self._startThreads)
 
     def FillRecordingsByFilter(self, filter):
-        QApplication.setOverrideCursor(Qt.WaitCursor)
+        QApplication.setOverrideCursor(code_Cursors.waitCursor())
         self.scaleMe()
         self.resizeMe()
         self.fillingCombos = True
@@ -771,7 +772,7 @@ class ManageRecordings(QMdiSubWindow, form_ManageRecordings.Ui_frmManageRecordin
         if not items:
             return False
 
-        QApplication.setOverrideCursor(Qt.WaitCursor)
+        QApplication.setOverrideCursor(code_Cursors.waitCursor())
         self.audioAlreadyInDb = False
         items.sort(key=lambda u: (u["commonName"].lower(), u["date"], u["fileName"]))
         counts = Counter(u["commonName"] for u in items)
